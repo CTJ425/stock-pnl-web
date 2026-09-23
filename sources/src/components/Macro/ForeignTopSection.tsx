@@ -22,14 +22,18 @@ export function ForeignTopSection() {
   const [data, setData] = useState<ForeignTopData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  /** MA-06: a snapshot that came back but failed the format checks, distinct from "no snapshot yet". */
+  const [invalid, setInvalid] = useState(false)
   const [tab, setTab] = useState<Tab>('buy')
   const [limit, setLimit] = useState(10)
 
   useEffect(() => {
     let alive = true
     fetchForeignTop()
-      .then((d) => {
-        if (alive) setData(d)
+      .then((result) => {
+        if (!alive) return
+        setData(result.kind === 'ok' ? result.data : null)
+        setInvalid(result.kind === 'invalid')
       })
       .catch(() => {
         if (alive) setError(true)
@@ -50,7 +54,7 @@ export function ForeignTopSection() {
       <div className="rpt-section-head">
         <h3 className="head-tight">外資買賣超 TOP 50</h3>
         {data && <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(data.asOf)}</span>}
-        <div className="inst-metric-seg" role="group" aria-label="切換買超賣超">
+        <div className="inst-metric-seg" role="tablist" aria-label="切換買超賣超">
           <button
             type="button"
             role="tab"
@@ -95,6 +99,10 @@ export function ForeignTopSection() {
         <div className="notice notice-error" style={{ marginTop: 8 }}>
           讀取外資買賣超資料失敗，請稍後重新整理。
         </div>
+      ) : invalid ? (
+        <p className="hint" style={{ marginTop: 8 }}>
+          資料格式不符，無法顯示
+        </p>
       ) : rows.length === 0 ? (
         <p className="hint" style={{ marginTop: 8 }}>
           尚無外資買賣超資料

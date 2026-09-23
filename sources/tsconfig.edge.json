@@ -8,8 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "types": [],
-    "lib": ["ES2023", "DOM"],
-    "noImplicitAny": false
+    "lib": ["ES2023", "DOM"]
   },
   "include": ["supabase/functions/**/*.ts"]
 }

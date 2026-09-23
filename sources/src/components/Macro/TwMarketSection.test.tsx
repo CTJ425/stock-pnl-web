@@ -12,7 +12,7 @@ vi.mock('../../services/marketProxy', () => ({ fetchMarketDaily }))
 // VITE_SUPABASE_URL for the whole suite — an unrelated setting this file should not depend on.
 const { fetchForeignTop } = vi.hoisted(() => ({ fetchForeignTop: vi.fn() }))
 vi.mock('../../services/foreignTopProxy', () => ({ fetchForeignTop }))
-fetchForeignTop.mockResolvedValue(null)
+fetchForeignTop.mockResolvedValue({ kind: 'empty' })
 
 // Since 0.9.19 TwMarketSection also mounts <TwIndexToday />, which fetches its own intraday
 // series. Stub that boundary for the same reason as the one above: this file tests
@@ -78,13 +78,13 @@ describe('TwMarketSection', () => {
   })
 
   it('金額一律換算成億元顯示（來源是元，直接印沒有人讀得懂）', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
         day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000)),
       ],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -99,13 +99,13 @@ describe('TwMarketSection', () => {
 
   it('最新一天還沒補到法人金額時，退回最近一筆有的並說明是哪一天', async () => {
     // The legal person amount is not announced until about 15:00–15:30 and is replenished daily. There will be a shortage in the hours just after the market closes.
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
         day('2026-08-04', 1_087_045_875_836, null),
       ],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByText('2026-08-03 全市場合計')
 
@@ -116,13 +116,13 @@ describe('TwMarketSection', () => {
   })
 
   it('開高低還沒補到的日子不畫 K 線，不用收盤價冒充（會變成一排十字線）', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
         { ...day('2026-08-04', 1_087_045_875_836, null), taiexOpen: null, taiexHigh: null, taiexLow: null },
       ],
-    })
+    } })
     render(<TwMarketSection />)
     // The title will indicate how many roots were actually drawn.
     expect(await screen.findByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
@@ -132,7 +132,7 @@ describe('TwMarketSection', () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
     )
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: many })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-04T08:30:00.000Z', days: many } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -169,7 +169,7 @@ describe('TwMarketSection', () => {
       day('2026-07-29', 8.5e11, null),
       day('2026-07-30', 8.8e11, null),
     ]
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-04T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -197,10 +197,10 @@ describe('TwMarketSection', () => {
   })
 
   it('成交股數與筆數缺料時給「—」，不用 0 冒充', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [{ ...day('2026-08-04', 8e11, null), tradeVolumeShares: null, transactions: null }],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -221,7 +221,7 @@ describe('TwMarketSection', () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
     )
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: many })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-04T08:30:00.000Z', days: many } })
     const { container } = render(<TwMarketSection />)
 
     await screen.findByText(/三大法人買賣超（億元）・近 7 個交易日/)
@@ -242,13 +242,13 @@ describe('TwMarketSection', () => {
   })
 
   it('列為日期、末欄合計；缺料的那天給「—」而不是把整列變空', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
         day('2026-08-04', 1_087_045_875_836, null),
       ],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -272,13 +272,13 @@ describe('TwMarketSection', () => {
 
   it('買進／賣出改用口徑切換，不再常駐兩個欄位', async () => {
     const user = userEvent.setup()
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         day('2026-08-03', 8e11, inst(-1.65e10, -1.9e10)),
         day('2026-08-04', 8e11, instFull(1.445e10, 1.127e10)),
       ],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -307,7 +307,7 @@ describe('TwMarketSection', () => {
     const days = Array.from({ length: 10 }, (_, i) =>
       day(`2026-08-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9 * (i + 1), 1e9)),
     )
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-10T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-10T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -320,7 +320,7 @@ describe('TwMarketSection', () => {
       day('2026-08-02', 8e11, inst(-2e9, -1e9)),
       day('2026-08-03', 8e11, inst(5e9, 1e9)), // 合計由賣超轉買超
     ]
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-03T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -343,10 +343,10 @@ describe('TwMarketSection', () => {
         buy: null,
         sell: null,
       })
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [custom('2026-08-03', 1e11, 1e9), custom('2026-08-04', 1e10, 1e10)],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -361,10 +361,10 @@ describe('TwMarketSection', () => {
   })
 
   it('抓取週期不寫在卡片上，班次常數只有後台一份（0.6.33）', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [day('2026-08-04', 8e11, inst(1e9, 1e9))],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -373,13 +373,13 @@ describe('TwMarketSection', () => {
   })
 
   it('三張圖上中下疊放，滑到某一天時三張一起給出那天的提示（0.6.34）', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
         day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000)),
       ],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByText('加權指數走勢（收盤）')
     const wraps = container.querySelectorAll('.chart-wrap')
@@ -394,13 +394,13 @@ describe('TwMarketSection', () => {
   })
 
   it('開高低沒補到的日子仍佔一欄——過濾掉會讓三張圖的索引錯開（0.6.34）', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
         { ...day('2026-08-03', 8e11, inst(-1.6e10, -1.9e10)), taiexOpen: null },
         day('2026-08-04', 1e12, inst(2.3e10, 1.2e10)),
       ],
-    })
+    } })
     const { container } = render(<TwMarketSection />)
     await screen.findByText('加權指數走勢（收盤）')
     expect(screen.getByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
@@ -415,7 +415,7 @@ describe('TwMarketSection', () => {
       day('2026-08-02', 8e11, inst(-2e9, -1e9)),
       day('2026-08-03', 8e11, inst(5e9, 1e9)),
     ]
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-03T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
@@ -430,7 +430,7 @@ describe('TwMarketSection', () => {
       { ...day('2026-08-02', 8e11, null), tradeVolumeShares: 12e8, transactions: 25e4, changePoints: 150 },
       { ...day('2026-08-03', 9e11, null), tradeVolumeShares: 14e8, transactions: 30e4, changePoints: 200 },
     ]
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-03T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -453,7 +453,7 @@ describe('TwMarketSection', () => {
       { ...day('2026-08-01', 8e11, null), changePoints: 100 },
       { ...day('2026-08-02', 8e11, null), changePoints: -50 },
     ]
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-02T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-02T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -483,7 +483,7 @@ describe('TwMarketSection', () => {
         changePoints: 100,
       },
     ]
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-02T08:30:00.000Z', days })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-02T08:30:00.000Z', days } })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
@@ -504,9 +504,16 @@ describe('TwMarketSection', () => {
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {
-    fetchMarketDaily.mockResolvedValue(null)
+    fetchMarketDaily.mockResolvedValue({ kind: 'empty' })
     render(<TwMarketSection />)
     await waitFor(() => expect(screen.getByText(/市場資料尚未產生/)).toBeTruthy())
+  })
+
+  it('檔案存在但格式不符時說明是格式問題，不冒充成尚未產生（MA-06）', async () => {
+    fetchMarketDaily.mockResolvedValue({ kind: 'invalid' })
+    render(<TwMarketSection />)
+    await waitFor(() => expect(screen.getByText(/資料格式不符/)).toBeTruthy())
+    expect(screen.queryByText(/市場資料尚未產生/)).toBeNull()
   })
 })
 
@@ -539,13 +546,13 @@ describe('TwMarketSection — 當日大盤 panel', () => {
   })
 
   it('KPI 卡整併進當日大盤面板，頁面上不再有獨立的 kpi-grid', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-26T07:00:00.000Z',
       days: [
         day('2026-08-25', 8.1e11, instFull(5.2e10, 3.1e10)),
         day('2026-08-26', 8.36e11, instFull(5.93e10, 3.65e10)),
       ],
-    })
+    } })
     fetchIntraday.mockResolvedValue(intraday())
 
     const { container } = render(<TwMarketSection />)
@@ -560,10 +567,10 @@ describe('TwMarketSection — 當日大盤 panel', () => {
   })
 
   it('當日大盤取不到資料時，既有區塊照常顯示', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-26T07:00:00.000Z',
       days: [day('2026-08-26', 8.36e11, instFull(5.93e10, 3.65e10))],
-    })
+    } })
     fetchIntraday.mockResolvedValue(null)
 
     const { container } = render(<TwMarketSection />)
@@ -611,7 +618,7 @@ describe('TwMarketSection — 側欄自營商合計', () => {
   })
 
   it('兩腳都落地時才相加', async () => {
-    fetchMarketDaily.mockResolvedValue(withDealer(-1e8, -2e8))
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: withDealer(-1e8, -2e8) })
     const { container } = render(<TwMarketSection />)
 
     await waitFor(() => expect(container.querySelector('.inst-day-card')).toBeTruthy())
@@ -619,7 +626,7 @@ describe('TwMarketSection — 側欄自營商合計', () => {
   })
 
   it('只有一腳落地時顯示「—」，不把缺的那腳當 0', async () => {
-    fetchMarketDaily.mockResolvedValue(withDealer(-1e8, null))
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: withDealer(-1e8, null) })
     const { container } = render(<TwMarketSection />)
 
     await waitFor(() => expect(container.querySelector('.inst-day-card')).toBeTruthy())
@@ -634,10 +641,10 @@ describe('TwMarketSection — onBack 返回按鈕', () => {
   })
 
   it('正常狀態下透傳 onBack，點擊返回按鈕觸發回呼', async () => {
-    fetchMarketDaily.mockResolvedValue({
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000))],
-    })
+    } })
     const onBack = vi.fn()
     render(<TwMarketSection onBack={onBack} />)
 
@@ -669,17 +676,17 @@ describe('TwMarketSection — onBack 返回按鈕', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
 
     // Retry via 重新整理 button
-    fetchMarketDaily.mockResolvedValueOnce({
+    fetchMarketDaily.mockResolvedValueOnce({ kind: 'ok', data: {
       asOf: '2026-08-04T08:30:00.000Z',
       days: [day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000))],
-    })
+    } })
     const refreshBtn = screen.getByRole('button', { name: /重新整理/ })
     fireEvent.click(refreshBtn)
     await screen.findByRole('table', { name: '每日成交量' })
   })
 
   it('查無資料狀態下若提供 onBack，顯示返回按鈕且具備重新整理按鈕', async () => {
-    fetchMarketDaily.mockResolvedValueOnce(null)
+    fetchMarketDaily.mockResolvedValueOnce({ kind: 'empty' })
     const onBack = vi.fn()
     render(<TwMarketSection onBack={onBack} />)
 
@@ -693,7 +700,7 @@ describe('TwMarketSection — onBack 返回按鈕', () => {
   })
 
   it('market 為 null（無盤後歷史檔案）時，頂部 TwIndexToday 依然正常渲染', async () => {
-    fetchMarketDaily.mockResolvedValue(null)
+    fetchMarketDaily.mockResolvedValue({ kind: 'empty' })
     render(<TwMarketSection />)
 
     await waitFor(() => expect(screen.getByTestId('tw-index-today')).toBeTruthy())

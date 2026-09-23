@@ -6,8 +6,9 @@
  * There is a big gap in magnitude between financing and securities lending, so draw one for each and do not share the Y-axis.
  * Days with missing data are cut off (not interpolated) to avoid looking like there are real numbers for that day.
  */
-import { useId } from 'react'
+import { useId, useMemo } from 'react'
 import { ChartFrame } from './chartFrame'
+import type { PlotGeometry } from './chartFrame'
 import { areaSegments, lineSegments } from './chartPath'
 import { CHART_COLORS } from './chartColors'
 import { niceDomain } from './chartScale'
@@ -24,6 +25,49 @@ export interface LinePoint {
  * The exchange rate is 260 points a year, 260 dots will paste the line into a caterpillar, but not see the trend.
  */
 const DOT_LIMIT = 20
+
+/**
+ * The area/line path strings are the static layer: they only depend on `values` and on the
+ * geometry, never on `hover`. Split into its own component (rather than computed inline in
+ * the `ChartFrame` render-prop below) so `useMemo` has a real component render to attach to —
+ * a hook called inside a render-prop callback would attach to `ChartFrame`'s own render instead.
+ */
+function LineSeriesPaths({
+  values,
+  geo,
+  color,
+  gradId,
+}: {
+  values: Array<number | null>
+  geo: PlotGeometry
+  color: string
+  gradId: string
+}) {
+  const areaPaths = useMemo(
+    () => areaSegments(values, geo),
+    [values, geo.bandCenter, geo.y, geo.innerH],
+  )
+  const linePaths = useMemo(() => lineSegments(values, geo), [values, geo.bandCenter, geo.y])
+  return (
+    <>
+      {/* Area below the line: drawn first so it cannot cover the line and its dots */}
+      {areaPaths.map((d, i) => (
+        <polygon key={`area-${i}`} points={d} fill={`url(#${gradId})`} stroke="none" />
+      ))}
+      {linePaths.map((d, i) => (
+        <polyline
+          key={i}
+          points={d}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+    </>
+  )
+}
 
 interface LineSeriesChartProps {
   points: LinePoint[]
@@ -93,22 +137,7 @@ export function LineSeriesChart({
             </linearGradient>
           </defs>
 
-          {/* Area below the line: drawn first so it cannot cover the line and its dots */}
-          {areaSegments(values, geo).map((d, i) => (
-            <polygon key={`area-${i}`} points={d} fill={`url(#${gradId})`} stroke="none" />
-          ))}
-
-          {lineSegments(values, geo).map((d, i) => (
-            <polyline
-              key={i}
-              points={d}
-              fill="none"
-              stroke={color}
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
+          <LineSeriesPaths values={values} geo={geo} color={color} gradId={gradId} />
 
           {points.map((p, i) =>
             p.value === null || (!showDots && geo.hover !== i) ? null : (

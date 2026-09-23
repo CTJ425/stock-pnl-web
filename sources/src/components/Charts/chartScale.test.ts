@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { niceDomain, domainTicks, scaleY, fmtAxisNumber } from './chartScale'
+import { niceDomain, domainTicks, scaleY, fmtAxisNumber, thinLabelStep } from './chartScale'
 
 describe('niceDomain', () => {
   it('跨零資料含正負兩側，且級距對齊好看的數字', () => {
@@ -90,5 +90,18 @@ describe('fmtAxisNumber', () => {
     expect(fmtAxisNumber(2350, 50)).toBe('2,350')
     expect(fmtAxisNumber(850)).toBe('850')
     expect(fmtAxisNumber(0.4)).toBe('0')
+  })
+})
+
+describe('thinLabelStep', () => {
+  it('標籤放得下時每個都顯示', () => {
+    expect(thinLabelStep(7, 490)).toBe(1)
+  })
+  it('寬度不夠時依寬度抽稀（244 點、490px → 每 22 點一個）', () => {
+    expect(thinLabelStep(244, 490)).toBe(22)
+  })
+  it('沒有資料或寬度為 0 時不除以零', () => {
+    expect(thinLabelStep(0, 490)).toBe(1)
+    expect(thinLabelStep(10, 0)).toBe(1)
   })
 })

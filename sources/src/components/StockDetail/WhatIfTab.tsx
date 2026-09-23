@@ -83,6 +83,13 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
   // fights the user mid-typing (unlike TransactionForm, which does rewrite in place).
   const shares = unit === '張' ? qtyNum * 1000 : qtyNum
 
+  // Per-field validation (DT-07): one message under the field that is actually wrong, instead
+  // of a single generic sentence below the whole form. `whatIf`/`sellLadder` still gate on all
+  // three together — these are only what gets displayed, not a second source of truth.
+  const buyPriceError = Number.isFinite(buyPriceNum) && buyPriceNum > 0 ? null : '請輸入大於 0 的價格'
+  const qtyError = Number.isFinite(qtyNum) && qtyNum > 0 ? null : '請輸入大於 0 的股數'
+  const sellPriceError = Number.isFinite(sellPriceNum) && sellPriceNum > 0 ? null : '請輸入大於 0 的價格'
+
   // Scoped to the workspace like every other caller (AnalysisPage, DashboardPage,
   // TransactionForm): an unscoped read would price the estimate with the global rate
   // while the workspace has its own, and the difference would be invisible.
@@ -201,6 +208,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
       {ladder.length > 0 && (
         <>
           <h3>{heading}</h3>
+          <p className="hint">僅供試算參考，非交易所公告之漲跌停價</p>
           <div className="table-scroll">
             <table className="data-table whatif-ladder" data-testid="whatif-ladder">
               <thead>
@@ -275,6 +283,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
                 setBuyPrice(e.target.value)
               }}
             />
+            {buyPriceError && <p className="field-error">{buyPriceError}</p>}
           </div>
         </div>
         <div className="whatif-ledger-cell">
@@ -290,6 +299,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
               value={sellPrice}
               onChange={(e) => setSellPrice(e.target.value)}
             />
+            {sellPriceError && <p className="field-error">{sellPriceError}</p>}
           </div>
         </div>
 
@@ -305,6 +315,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
               />
+              {qtyError && <p className="field-error">{qtyError}</p>}
             </div>
             <div className="field">
               <select
@@ -370,7 +381,6 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
         </div>
       )}
 
-      {!result && <div className="hint">請輸入大於 0 的買進價格、股數與賣出價格。</div>}
       {result && (
         <div className="hint" data-testid="whatif-fees">
           含手續費與證交稅 -{fmtMoney(result.buyFee + result.sellFeeTax, 'TWD')}

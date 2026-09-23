@@ -6,6 +6,7 @@
  * `supabase/functions/stock-report/twForeignTop.ts`.
  */
 import { downloadReportsJson } from './reportsBucket'
+import type { ProxyResult } from './marketProxy'
 
 export interface ForeignTopItem {
   ticker: string
@@ -49,12 +50,13 @@ function normalizeItem(v: unknown): ForeignTopItem | null {
   }
 }
 
-/** Read the foreign-investors TOP 50 snapshot; return null if none/format mismatch. */
-export async function fetchForeignTop(): Promise<ForeignTopData | null> {
+/** Read the foreign-investors TOP 50 snapshot; `empty` = no file yet, `invalid` = a file exists but fails the checks below. */
+export async function fetchForeignTop(): Promise<ProxyResult<ForeignTopData>> {
   const stored = await downloadReportsJson<StoredForeignTop>('market/foreign_top50.json')
-  if (!stored || typeof stored !== 'object') return null
-  if (typeof stored.schema !== 'number' || stored.schema < MIN_FOREIGN_TOP_SCHEMA) return null
-  if (typeof stored.date !== 'string') return null
+  if (stored === null || stored === undefined) return { kind: 'empty' }
+  if (typeof stored !== 'object') return { kind: 'invalid' }
+  if (typeof stored.schema !== 'number' || stored.schema < MIN_FOREIGN_TOP_SCHEMA) return { kind: 'invalid' }
+  if (typeof stored.date !== 'string') return { kind: 'invalid' }
   const buyTop = (Array.isArray(stored.buyTop) ? stored.buyTop : [])
     .map(normalizeItem)
     .filter((x): x is ForeignTopItem => x !== null)
@@ -62,9 +64,12 @@ export async function fetchForeignTop(): Promise<ForeignTopData | null> {
     .map(normalizeItem)
     .filter((x): x is ForeignTopItem => x !== null)
   return {
-    date: stored.date,
-    asOf: typeof stored.asOf === 'string' ? stored.asOf : '',
-    buyTop,
-    sellTop,
+    kind: 'ok',
+    data: {
+      date: stored.date,
+      asOf: typeof stored.asOf === 'string' ? stored.asOf : '',
+      buyTop,
+      sellTop,
+    },
   }
 }

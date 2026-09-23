@@ -7,7 +7,9 @@
  *
  * The calling end must also attach a legend (SPEC: two or more sequences must be attached with a legend, and the identification cannot be based on color alone).
  */
+import { useMemo } from 'react'
 import { ChartFrame } from './chartFrame'
+import type { PlotGeometry } from './chartFrame'
 import { lineSegments } from './chartPath'
 import { niceDomain, type Domain } from './chartScale'
 import { CHART_COLORS } from './chartColors'
@@ -16,6 +18,35 @@ export interface LineSeries {
   name: string
   color: string
   values: Array<number | null>
+}
+
+/**
+ * Series path strings depend only on `series` and geometry, never on `hover` — memoised in its
+ * own component so `useMemo` attaches to a real render rather than to `ChartFrame`'s (a hook
+ * called inside the render-prop callback below would do exactly that).
+ */
+function MultiLinePaths({ series, geo }: { series: LineSeries[]; geo: PlotGeometry }) {
+  const paths = useMemo(
+    () => series.map((s) => ({ name: s.name, color: s.color, segs: lineSegments(s.values, geo) })),
+    [series, geo.bandCenter, geo.y],
+  )
+  return (
+    <>
+      {paths.map(({ name, color, segs }) =>
+        segs.map((d, i) => (
+          <polyline
+            key={`${name}-${i}`}
+            points={d}
+            fill="none"
+            stroke={color}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )),
+      )}
+    </>
+  )
 }
 
 interface MultiLineChartProps {
@@ -73,19 +104,7 @@ export function MultiLineChart({
               strokeDasharray="3 3"
             />
           ))}
-          {series.map((s) =>
-            lineSegments(s.values, geo).map((d, i) => (
-              <polyline
-                key={`${s.name}-${i}`}
-                points={d}
-                fill="none"
-                stroke={s.color}
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            )),
-          )}
+          <MultiLinePaths series={series} geo={geo} />
         </>
       )}
     </ChartFrame>

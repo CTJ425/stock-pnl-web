@@ -127,16 +127,17 @@ export function WatchSection({
   const [undoItem, setUndoItem] = useState<WatchItem | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleRemove = async (ticker: string, name: string) => {
+  const handleRemove = async (item: WatchItem) => {
     if (removing) return
-    setRemoving(ticker)
+    setRemoving(item.ticker)
     try {
-      await removeWatch(ticker)
+      await removeWatch(item.ticker)
       await load()
       onChanged?.()
-      show(`已移除 ${ticker} ${name}`)
+      show(`已移除 ${item.ticker} ${item.name}`)
       if (undoTimer.current) clearTimeout(undoTimer.current)
-      setUndoItem({ ticker, name, sortOrder: 0 })
+      // DA-04: keep the original sort_order so 復原 puts it back where it was, not at the end.
+      setUndoItem(item)
       undoTimer.current = setTimeout(() => setUndoItem(null), 5000)
     } finally {
       setRemoving(null)
@@ -148,7 +149,7 @@ export function WatchSection({
     const restored = undoItem
     if (undoTimer.current) clearTimeout(undoTimer.current)
     setUndoItem(null)
-    await addWatch(restored.ticker, restored.name)
+    await addWatch(restored.ticker, restored.name, restored.sortOrder)
     await load()
     onChanged?.()
     show(`已復原 ${restored.ticker} ${restored.name}`)
@@ -344,10 +345,10 @@ export function WatchSection({
                               type="button"
                               className="watchlist-card-del"
                               aria-label={`移除 ${item.ticker} ${item.name}`}
-                              disabled={removing !== null}
+                              disabled={removing === item.ticker}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                void handleRemove(item.ticker, item.name)
+                                void handleRemove(item)
                               }}
                             >
                               ×
@@ -449,10 +450,10 @@ export function WatchSection({
                                 type="button"
                                 className="btn btn-sm"
                                 aria-label={`移除 ${item.ticker} ${item.name}`}
-                                disabled={removing !== null}
+                                disabled={removing === item.ticker}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  void handleRemove(item.ticker, item.name)
+                                  void handleRemove(item)
                                 }}
                               >
                                 ×

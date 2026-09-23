@@ -1209,11 +1209,17 @@ CREATE INDEX IF NOT EXISTS app_log_request_idx  ON app_log (request_id)
   WHERE request_id IS NOT NULL;
 
 -- Reader for the admin console. SECURITY DEFINER, because app_log has no SELECT policy.
+-- AD-07: the cursor is (at, id), not just at — two rows sharing an `at` (routine within the
+-- same batch, or plain clock coarseness) used to make the boundary row a coin flip between
+-- "included again" and "skipped", so a page reload could duplicate or drop a row.
+DROP FUNCTION IF EXISTS public.admin_recent_app_logs(int, text, text, timestamptz);
+
 CREATE OR REPLACE FUNCTION public.admin_recent_app_logs(
-  p_limit  int         DEFAULT 100,
-  p_level  text        DEFAULT NULL,
-  p_source text        DEFAULT NULL,
-  p_before timestamptz DEFAULT NULL
+  p_limit     int         DEFAULT 100,
+  p_level     text        DEFAULT NULL,
+  p_source    text        DEFAULT NULL,
+  p_before    timestamptz DEFAULT NULL,
+  p_before_id bigint      DEFAULT NULL
 )
 RETURNS TABLE (
   id bigint, at timestamptz, level text, source text, action text,
@@ -1228,14 +1234,15 @@ AS $fn$
   FROM public.app_log l
   WHERE (p_level  IS NULL OR l.level  = p_level)
     AND (p_source IS NULL OR l.source = p_source)
-    AND (p_before IS NULL OR l.at     < p_before)
-  ORDER BY l.at DESC
+    AND (p_before IS NULL OR l.at < p_before
+         OR (p_before_id IS NOT NULL AND l.at = p_before AND l.id < p_before_id))
+  ORDER BY l.at DESC, l.id DESC
   LIMIT least(greatest(coalesce(p_limit, 100), 1), 500);
 $fn$;
 
-REVOKE ALL ON FUNCTION public.admin_recent_app_logs(int, text, text, timestamptz)
+REVOKE ALL ON FUNCTION public.admin_recent_app_logs(int, text, text, timestamptz, bigint)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_recent_app_logs(int, text, text, timestamptz)
+GRANT EXECUTE ON FUNCTION public.admin_recent_app_logs(int, text, text, timestamptz, bigint)
   TO service_role;
 
 -- 30-day retention. This job is pure SQL: it carries no URL and no secret, so the §6e

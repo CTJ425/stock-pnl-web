@@ -130,6 +130,19 @@ export function usZhName(symbol: string): string | null {
   return US_STOCK_ZH_NAMES[symbol.toUpperCase()] ?? null
 }
 
+/**
+ * Ranking of matching degree, mirroring `twMatchScore` in stockSearch.ts: exact match >
+ * match at the beginning of the name > code prefix > name contains; the smaller the score,
+ * the higher it is (PR-06).
+ */
+function usMatchScore(symbol: string, name: string, query: string, upperQuery: string): number {
+  if (name === query || symbol === upperQuery) return 0
+  if (name.startsWith(query)) return 1
+  if (symbol.startsWith(upperQuery)) return 2
+  if (name.includes(query)) return 3
+  return -1
+}
+
 /** Search the comparison table using Chinese keywords or code prefixes*/
 export function searchUsZhNames(
   query: string,
@@ -138,14 +151,12 @@ export function searchUsZhNames(
   const q = query.trim()
   if (!q) return []
   const upper = q.toUpperCase()
-  const out: Array<{ symbol: string; name: string; market: Market }> = []
-  for (const [symbol, name] of Object.entries(US_STOCK_ZH_NAMES)) {
-    if (symbol.startsWith(upper) || name.includes(q)) {
-      out.push({ symbol, name, market: 'US' })
-      if (out.length >= limit) break
-    }
-  }
-  return out
+  return Object.entries(US_STOCK_ZH_NAMES)
+    .map(([symbol, name]) => ({ symbol, name, score: usMatchScore(symbol, name, q, upper) }))
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => a.score - b.score || a.symbol.localeCompare(b.symbol))
+    .slice(0, limit)
+    .map(({ symbol, name }) => ({ symbol, name, market: 'US' as const }))
 }
 
 /** Display layer name: U.S. stocks give priority to Chinese translations, and the rest (including Taiwan stocks) maintain their original names.*/

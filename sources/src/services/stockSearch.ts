@@ -8,6 +8,7 @@ import type { Market } from '../types/models'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { getTwStockList } from './twMarketData'
 import { searchUsZhNames, usZhName } from './usStockNames'
+import { logClient } from './appLog'
 
 export interface StockSearchResult {
   symbol: string
@@ -52,7 +53,8 @@ async function searchTw(query: string): Promise<StockSearchResult[]> {
       )
       .slice(0, MAX_RESULTS)
       .map(({ row: r }) => ({ symbol: r.symbol, name: r.name, market: 'TPE' as const }))
-  } catch {
+  } catch (err) {
+    logClient('warn', 'stockSearch.searchTw', err instanceof Error ? err.message : String(err), {})
     return []
   }
 }
@@ -77,7 +79,8 @@ async function searchViaEdge(query: string): Promise<StockSearchResult[]> {
         market: (r.market === 'TPE' ? 'TPE' : 'US') as Market,
       }))
       .slice(0, MAX_RESULTS)
-  } catch {
+  } catch (err) {
+    logClient('warn', 'stockSearch.searchViaEdge', err instanceof Error ? err.message : String(err), {})
     return []
   }
 }

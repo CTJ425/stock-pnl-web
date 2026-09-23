@@ -32,6 +32,28 @@ function segments(values: Array<number | null>, geo: PlotGeometry): Array<Array<
 const pt = ([x, y]: [number, number]) => `${x.toFixed(2)},${y.toFixed(2)}`
 
 /**
+ * Coordinates of every non-null value that `segments()` drops because it has no adjacent
+ * non-null neighbour — a single point with null (or nothing) on both sides never forms a
+ * 2+ point segment, so `lineSegments`/`areaSegments` render it as nothing at all (DT-09).
+ * That is correct for *them* (a "line" of one point is not a line, and that behaviour is
+ * guarded by chartPath.test.ts), but the value itself should not just vanish — the caller
+ * can draw these as a small dot so a lone data point (e.g. the first minute of a session)
+ * still shows up as a visible mark.
+ */
+export function soloPoints(values: Array<number | null>, geo: PlotGeometry): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  values.forEach((v, i) => {
+    if (v === null || v === undefined) return
+    const prev = values[i - 1]
+    const next = values[i + 1]
+    const hasPrev = prev !== null && prev !== undefined
+    const hasNext = next !== null && next !== undefined
+    if (!hasPrev && !hasNext) out.push([geo.bandCenter(i), geo.y(v)])
+  })
+  return out
+}
+
+/**
  * A string of points that cuts a continuous value segment into multiple polylines (breaks when null is encountered and does not interpolate).
  * The line chart, the moving average overlay chart, and the KD chart are shared in three places - writing one for each will inevitably lead to a delay in "should the missing information be connected?"
  */

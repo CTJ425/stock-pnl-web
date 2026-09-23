@@ -82,7 +82,7 @@ const macro: MacroData = {
 describe('MacroPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: [] })
+    fetchMarketDaily.mockResolvedValue({ kind: 'ok', data: { asOf: '2026-08-04T08:30:00.000Z', days: [] } })
     fetchIndexQuotes.mockResolvedValue({})
   })
   afterEach(() => cleanup())

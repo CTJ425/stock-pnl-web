@@ -77,14 +77,28 @@ export function shortDate(date: string): string {
   return date.length >= 10 ? `${date.slice(5, 7)}/${date.slice(8, 10)}` : date
 }
 
+const UPDATED_AT_PARTS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Taipei',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
 /**
- * Report generation time (ISO UTC) → `YYYY-MM-DD HH:mm` in the viewer's time zone.
- * The reason for not using toLocaleString is to fix the format and avoid different output in different locales.
+ * Report generation time (ISO UTC) → `YYYY-MM-DD HH:mm` in Asia/Taipei, explicitly (Task 166 FU-05).
+ *
+ * Not the viewer's local zone: every report on this site is about the TW market, so a viewer
+ * abroad must see the same wall-clock time a Taipei user sees, not their own browser's zone.
+ * Intl with a fixed `timeZone` does that; `Date.getHours()` etc. would silently use the browser's.
  */
 export function fmtUpdatedAt(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  const parts = UPDATED_AT_PARTS.formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`
 }

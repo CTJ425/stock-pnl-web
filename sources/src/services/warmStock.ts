@@ -70,6 +70,29 @@ const lastCore = new Map<string, WarmResult>()
 const lastHistory = new Map<string, WarmResult>()
 
 /**
+ * PR-03: a long session that pages through many distinct tickers must not grow these
+ * module-level caches without limit. Insertion order doubles as recency here — entries are
+ * only re-added, never re-ordered on read — so a simple "evict the oldest" bound is enough.
+ */
+const MAX_TICKERS = 200
+
+function capMap<V>(map: Map<string, V>): void {
+  while (map.size > MAX_TICKERS) {
+    const oldest = map.keys().next().value
+    if (oldest === undefined) break
+    map.delete(oldest)
+  }
+}
+
+function capSet(set: Set<string>): void {
+  while (set.size > MAX_TICKERS) {
+    const oldest = set.values().next().value
+    if (oldest === undefined) break
+    set.delete(oldest)
+  }
+}
+
+/**
  * Chip backfill (三大法人 / 融資券 / 借券) for a newly added symbol (Task 130).
  * Separate result shape from `WarmResult` — the server slices the already-cached
  * whole-market payload for one ticker, so there is no daily/fundamental count here.
@@ -105,6 +128,23 @@ export function resetWarmState(): void {
   attemptedChips.clear()
   lastChips.clear()
 }
+
+/**
+ * PR-02: the seals above are per-session but the module is per-tab, not per-user. Without
+ * this, switching accounts in the same tab (sign out, sign back in as someone else) would
+ * keep the previous user's seals — the new user's tickers would silently return stale
+ * `lastCore`/`lastHistory`/`lastChips` results instead of ever calling the Edge Function.
+ * `supabase` is null in local mode (guarded); test doubles that omit `auth` are also safe
+ * since every step of the chain is optional.
+ */
+let lastAuthUserId: string | null | undefined // undefined = no auth event observed yet
+supabase?.auth?.onAuthStateChange?.((_event, session) => {
+  const userId = session?.user?.id ?? null
+  if (lastAuthUserId !== undefined && userId !== lastAuthUserId) {
+    resetWarmState()
+  }
+  lastAuthUserId = userId
+})
 
 function parseWarmResult(data: Record<string, unknown>, phase: WarmPhase): WarmResult {
   return {
@@ -162,11 +202,13 @@ export async function warmStockCore(ticker: string, name?: string): Promise<Warm
   }
 
   attemptedCore.add(ticker)
+  capSet(attemptedCore)
 
   const task = (async (): Promise<WarmResult> => {
     try {
       const result = await invokeWarm(ticker, name, 'core')
       lastCore.set(ticker, result)
+      capMap(lastCore)
       return result
     } finally {
       inflightCore.delete(ticker)
@@ -174,6 +216,7 @@ export async function warmStockCore(ticker: string, name?: string): Promise<Warm
   })()
 
   inflightCore.set(ticker, task)
+  capMap(inflightCore)
   return task
 }
 
@@ -193,11 +236,13 @@ export async function warmStockHistory(ticker: string, name?: string): Promise<W
   }
 
   attemptedHistory.add(ticker)
+  capSet(attemptedHistory)
 
   const task = (async (): Promise<WarmResult> => {
     try {
       const result = await invokeWarm(ticker, name, 'history')
       lastHistory.set(ticker, result)
+      capMap(lastHistory)
       maybeUnsealHistory(ticker, result)
       return result
     } finally {
@@ -206,6 +251,7 @@ export async function warmStockHistory(ticker: string, name?: string): Promise<W
   })()
 
   inflightHistory.set(ticker, task)
+  capMap(inflightHistory)
   return task
 }
 
@@ -271,11 +317,13 @@ export async function warmStockChips(ticker: string, name?: string): Promise<War
   }
 
   attemptedChips.add(ticker)
+  capSet(attemptedChips)
 
   const task = (async (): Promise<WarmChipsResult> => {
     try {
       const result = await invokeWarmChips(ticker, name)
       lastChips.set(ticker, result)
+      capMap(lastChips)
       return result
     } finally {
       inflightChips.delete(ticker)
@@ -283,5 +331,6 @@ export async function warmStockChips(ticker: string, name?: string): Promise<War
   })()
 
   inflightChips.set(ticker, task)
+  capMap(inflightChips)
   return task
 }

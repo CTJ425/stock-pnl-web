@@ -236,6 +236,7 @@ import {
   type RunOutcome,
   type SendEdition,
   type SendLogRow,
+  type SendLogStatus,
   type SummaryDeps,
   type WebhookAdminDeps,
 } from './discordRun.ts'
@@ -460,7 +461,9 @@ async function cachedDayDatasets(candidates: string[]): Promise<Set<string>> {
       .in('dataset', ['T86', 'MI_MARGN_D'])
       .in('ymd', candidates)
     if (error || !data) return new Set()
-    return new Set(data.map((r) => `${String(r.ymd)}:${String(r.dataset)}`))
+    return new Set(
+      data.map((r: { ymd: unknown; dataset: unknown }) => `${String(r.ymd)}:${String(r.dataset)}`),
+    )
   } catch {
     return new Set()
   }
@@ -708,6 +711,8 @@ interface GenerateReportRequestBody {
   level?: string
   source?: string
   before?: string
+  /** app-logs (AD-07): paired with `before` to break ties when two rows share the same `at`. */
+  beforeId?: number
   /** discord-summary (x-cron-secret): which edition to send, see schema.sql's two `discord-summary-*` cron jobs */
   edition?: string
 }
@@ -3778,7 +3783,10 @@ async function handleAdminStatus(): Promise<Response> {
 
   const [schedules, manifest, macro, fx, lastRun, probe, probeTicks, chip, coverage, market] =
     await Promise.all([
-      db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
+      db
+        .rpc('admin_schedule_status')
+        .then((r: { data: unknown }) => r.data ?? null)
+        .catch(() => null),
       downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
       downloadJson<MacroFile>('macro/us.json'),
       downloadJson<FxFile>('fx/twd.json'),
@@ -3790,7 +3798,7 @@ async function handleAdminStatus(): Promise<Response> {
         )
         .order('id', { ascending: false })
         .limit(1)
-        .then((r) => r.data?.[0] ?? null)
+        .then((r: { data: unknown[] | null }) => r.data?.[0] ?? null)
         .catch(() => null),
       // BUG-066: `.limit(2000)` here is dead — PostgREST's server-side max_rows (1000) caps the
       // response before a client-side `.limit()` above it can have any effect, so this used to
@@ -3952,7 +3960,9 @@ async function storageCoverage(): Promise<Record<string, number | null>> {
       // lookup into "0 files", which an operator cannot tell apart from a genuinely empty directory
       // (AUDIT-2026-09-04 #5). `null` here means "lookup failed", not "empty".
       const { data, error } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000 })
-      out[d] = error ? null : (data ?? []).filter((f) => f.name.endsWith('.json')).length
+      out[d] = error
+        ? null
+        : (data ?? []).filter((f: { name: string }) => f.name.endsWith('.json')).length
     }),
   )
   try {
@@ -4218,7 +4228,7 @@ async function handleAdminBackups(): Promise<Response> {
       const summary = summarizeAccountBackups(
         u.id,
         u.email ?? '',
-        (objects ?? []).map((o) => ({
+        (objects ?? []).map((o: { name: string; metadata: unknown; created_at: string | null }) => ({
           name: o.name,
           size: (o.metadata as { size?: number } | null)?.size ?? 0,
           createdAt: o.created_at ?? null,
@@ -4356,11 +4366,13 @@ const APP_LOGS_MAX_LIMIT = 200
 
 async function handleAppLogs(body: GenerateReportRequestBody): Promise<Response> {
   const p_limit = typeof body.limit === 'number' ? Math.min(body.limit, APP_LOGS_MAX_LIMIT) : undefined
+  const p_before_id = typeof body.beforeId === 'number' && Number.isFinite(body.beforeId) ? body.beforeId : null
   const { data, error } = await db.rpc('admin_recent_app_logs', {
     p_limit,
     p_level: body.level ?? undefined,
     p_source: body.source ?? undefined,
     p_before: body.before ?? undefined,
+    p_before_id,
   })
   if (error) return json({ error: error.message }, 500)
   return json({ ok: true, logs: data ?? [] })
@@ -4423,14 +4435,23 @@ async function recentDiscordSends(limit: number): Promise<SendLogRow[]> {
     .order('created_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []
-  return data.map((row) => ({
-    taipeiYmd: row.taipei_ymd,
-    edition: row.edition,
-    status: row.status,
-    httpStatus: row.http_status,
-    reason: row.reason,
-    at: row.created_at,
-  }))
+  return data.map(
+    (row: {
+      taipei_ymd: string
+      edition: SendEdition
+      status: SendLogStatus
+      http_status: number | null
+      reason: string | null
+      created_at: string
+    }) => ({
+      taipeiYmd: row.taipei_ymd,
+      edition: row.edition,
+      status: row.status,
+      httpStatus: row.http_status,
+      reason: row.reason,
+      at: row.created_at,
+    }),
+  )
 }
 
 /**
@@ -4502,16 +4523,27 @@ async function listDiscordTickAccounts(): Promise<AccountRow[]> {
     if (error) throw new Error(error.message)
     const page = data ?? []
     out.push(
-      ...page.map((row) => ({
-        userId: row.user_id,
-        marketWebhookUrl: row.market_webhook_url,
-        marketEnabled: row.market_enabled,
-        marketBriefTime: row.market_brief_time,
-        marketFullTime: row.market_full_time,
-        holdingsWebhookUrl: row.webhook_url,
-        holdingsEnabled: row.enabled,
-        holdingsTime: row.holdings_time,
-      })),
+      ...page.map(
+        (row: {
+          user_id: string
+          market_webhook_url: string | null
+          market_enabled: boolean
+          market_brief_time: string | null
+          market_full_time: string | null
+          webhook_url: string | null
+          enabled: boolean
+          holdings_time: string | null
+        }) => ({
+          userId: row.user_id,
+          marketWebhookUrl: row.market_webhook_url,
+          marketEnabled: row.market_enabled,
+          marketBriefTime: row.market_brief_time,
+          marketFullTime: row.market_full_time,
+          holdingsWebhookUrl: row.webhook_url,
+          holdingsEnabled: row.enabled,
+          holdingsTime: row.holdings_time,
+        }),
+      ),
     )
     if (page.length < 1000) break
   }
@@ -4683,7 +4715,10 @@ async function listEnabledHoldingsUsers(): Promise<Array<{ userId: string; webho
     .eq('enabled', true)
     .not('webhook_url', 'is', null)
   if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => ({ userId: row.user_id, webhookUrl: row.webhook_url as string }))
+  return (data ?? []).map((row: { user_id: string; webhook_url: string | null }) => ({
+    userId: row.user_id,
+    webhookUrl: row.webhook_url as string,
+  }))
 }
 
 /** `23505` means another call already claimed this user+day first — the unique index is the actual guard. */
@@ -4816,7 +4851,12 @@ async function listDiscordAccounts(): Promise<Array<{ userId: string; email: str
     const { data, error } = await db.auth.admin.listUsers({ page, perPage })
     if (error) throw new Error(error.message)
     const batch = data?.users ?? []
-    users.push(...batch.map((u) => ({ userId: u.id, email: u.email ?? null })))
+    users.push(
+      ...batch.map((u: { id: string; email: string | null | undefined }) => ({
+        userId: u.id,
+        email: u.email ?? null,
+      })),
+    )
     if (batch.length < perPage) break
   }
   return users
@@ -4833,13 +4873,21 @@ async function listDiscordAccountSettings(): Promise<AccountSettingsRow[]> {
     if (error) throw new Error(error.message)
     const page = data ?? []
     out.push(
-      ...page.map((row) => ({
-        userId: row.user_id,
-        enabled: row.enabled,
-        webhookUrl: row.webhook_url,
-        marketWebhookUrl: row.market_webhook_url,
-        marketEnabled: row.market_enabled,
-      })),
+      ...page.map(
+        (row: {
+          user_id: string
+          enabled: boolean
+          webhook_url: string | null
+          market_webhook_url: string | null
+          market_enabled: boolean
+        }) => ({
+          userId: row.user_id,
+          enabled: row.enabled,
+          webhookUrl: row.webhook_url,
+          marketWebhookUrl: row.market_webhook_url,
+          marketEnabled: row.market_enabled,
+        }),
+      ),
     )
     if (page.length < 1000) break
   }

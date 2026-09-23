@@ -155,6 +155,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const deleteWorkspace = useCallback(
     async (id: string) => {
       await runSafely(async () => {
+        // AppShell already blocks this in the UI; this is the backstop so the invariant
+        // holds for any other caller too.
+        if (workspaces.length <= 1) throw new Error('至少需保留一個工作區。')
         await provider.deleteWorkspace(id)
         setWorkspaces((prev) => {
           const next = prev.filter((w) => w.id !== id)
@@ -163,7 +166,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         })
       })
     },
-    [provider, runSafely, currentId],
+    [provider, runSafely, currentId, workspaces],
   )
 
   const addTransactions = useCallback(

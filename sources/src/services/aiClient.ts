@@ -61,6 +61,12 @@ export interface AiRequest {
    */
   messages: AiMessage[]
   timeoutMs?: number
+  /**
+   * AI-03: lets the caller cancel an in-flight request (e.g. the component unmounted) without
+   * waiting out the full `AI_TIMEOUT_MS`. Combined with the internal per-request timeout below —
+   * either one aborts the same underlying `fetch`.
+   */
+  signal?: AbortSignal
 }
 
 /**
@@ -311,9 +317,18 @@ async function requestJson(
   url: string,
   options: RequestInit,
   timeoutMs: number = AI_TIMEOUT_MS,
+  externalSignal?: AbortSignal,
 ): Promise<{ ok: boolean; status: number; json: unknown }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  // AI-03: an externally aborted signal (component unmounted) cancels the same fetch a timeout
+  // would — one internal AbortController either way, so the rest of this function stays unaware
+  // of which one fired.
+  const abortFromOutside = () => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort()
+    else externalSignal.addEventListener('abort', abortFromOutside)
+  }
   try {
     const res = await fetch(url, {
       ...options,
@@ -340,6 +355,7 @@ async function requestJson(
     )
   } finally {
     clearTimeout(timer)
+    externalSignal?.removeEventListener('abort', abortFromOutside)
   }
 }
 
@@ -380,7 +396,12 @@ class GoogleProviderImpl implements AiProvider {
       Authorization: `Bearer ${accessToken}`,
     }
     const post = (googleBody: object) =>
-      requestJson(url, { method: 'POST', headers, body: JSON.stringify({ googleBody }) }, req.timeoutMs)
+      requestJson(
+        url,
+        { method: 'POST', headers, body: JSON.stringify({ googleBody }) },
+        req.timeoutMs,
+        req.signal,
+      )
 
     let res = await post(this.buildBody(req, true))
 
@@ -460,7 +481,7 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
     }
 
     const post = (body: string) =>
-      requestJson(url, { method: 'POST', headers, body }, req.timeoutMs)
+      requestJson(url, { method: 'POST', headers, body }, req.timeoutMs, req.signal)
 
     let res = await post(this.buildBody(req, true))
 

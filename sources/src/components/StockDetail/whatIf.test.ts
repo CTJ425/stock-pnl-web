@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { whatIf, sellLadder } from './whatIf'
+import { whatIf, sellLadder, priceLimits } from './whatIf'
 import { breakEvenPrice, calculateFee } from '../../utils/fees'
 
 const RATE = 0.001425
@@ -392,5 +392,23 @@ describe('sellLadder 現價簇：現價在均價 ±10% 之外時另成一簇', (
 
     expect(rows.every((r) => r.group === 'anchor')).toBe(true)
     expect(rows.filter((r) => r.kind === 'step')).toHaveLength(8)
+  })
+})
+
+describe('priceLimits（DT-02/03：昨收 ±10% 取到升降單位）', () => {
+  it.each([
+    [1000, 1100, 900], // 漲停價 ≥1000 用 5 元跳動，跌停價 500–1000 用 1 元
+    [595, 654, 536], // 654.5 往下取整、535.5 往上取整
+    [21.1, 23.2, 19], // 0.05 跳動
+    [50, 55, 45], // 剛好落在跳動上不可被浮點誤差推一格
+    [10, 11, 9],
+  ])('昨收 %s → 漲停 %s／跌停 %s', (prev, up, down) => {
+    expect(priceLimits(prev)).toEqual({ limitUp: up, limitDown: down })
+  })
+
+  it('沒有可用的昨收時回 null', () => {
+    expect(priceLimits(null)).toBeNull()
+    expect(priceLimits(0)).toBeNull()
+    expect(priceLimits(Number.NaN)).toBeNull()
   })
 })

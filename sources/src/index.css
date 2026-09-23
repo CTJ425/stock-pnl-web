@@ -3552,6 +3552,18 @@ a.hmenu-item {
   padding-bottom: 4px;
 }
 
+/* DT-02: 漲停/跌停 badge beside the big price. Colour comes from .pnl-up/.pnl-down (already
+   applied alongside this class), this rule only draws the pill around it. */
+.quote-limit-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--type-label-01);
+  font-weight: 700;
+  padding: 1px 6px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+}
+
 /* 試撮 (08:30–09:00, 13:25–13:30): MIS's price is a simulated match, not a trade. */
 .trial-marker {
   font-size: var(--type-label-01);
@@ -4771,6 +4783,14 @@ a.hmenu-item {
 .inst-matrix .col-total {
   border-left: 1px solid var(--border-strong);
   font-weight: 650;
+}
+
+/* 三大法人合計 cross-check marker (Task 166 FU-04): only ever rendered when the total actually
+   disagrees with the sum of its four legs, so it stays invisible on the common, consistent case. */
+.chip-total-mismatch {
+  color: var(--cds-support-warning);
+  vertical-align: -1px;
+  margin-left: 3px;
 }
 
 .inst-matrix .row-total td {

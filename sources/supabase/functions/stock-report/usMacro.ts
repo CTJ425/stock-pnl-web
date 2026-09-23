@@ -287,8 +287,8 @@ export function collapseRateSteps(
   const upByDate = new Map(upper.map((p) => [p.period, p.value]))
 
   for (const d of sorted) {
-    const u = upByDate.has(d) ? upByDate.get(d)! : lastU
-    const l = lowByDate.has(d) ? lowByDate.get(d)! : lastL
+    const u: number | null = upByDate.has(d) ? upByDate.get(d)! : lastU
+    const l: number | null = lowByDate.has(d) ? lowByDate.get(d)! : lastL
     if (u === null && l === null) continue
     if (u === lastU && l === lastL && steps.length > 0) continue
     // First row or a real change

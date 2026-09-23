@@ -75,6 +75,40 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
   return { buyFee, cost, sellFeeTax, proceeds, pnl, roi, breakEven }
 }
 
+/**
+ * TWSE tick size for a price band (NT$) — the same bands the exchange uses to validate order
+ * prices. No table like this existed anywhere in the repo before DT-02/DT-03 (grep
+ * `limitUp|漲停|tickSize` came back empty), so it lives here rather than duplicating a second
+ * one elsewhere.
+ */
+function tickSizeFor(price: number): number {
+  if (price < 10) return 0.01
+  if (price < 50) return 0.05
+  if (price < 100) return 0.1
+  if (price < 500) return 0.5
+  if (price < 1000) return 1
+  return 5
+}
+
+export interface PriceLimits {
+  limitUp: number
+  limitDown: number
+}
+
+/**
+ * TW daily price limit band: ±10% of 昨收, rounded to the exchange's tick size (DT-02's quote
+ * badge, DT-03's chart reference lines). Null when there is no usable 昨收 to compute it from.
+ */
+export function priceLimits(prevClose: number | null): PriceLimits | null {
+  if (prevClose === null || !Number.isFinite(prevClose) || prevClose <= 0) return null
+  const rawUp = prevClose * 1.1
+  const rawDown = prevClose * 0.9
+  // 1e-9 absorbs float noise (e.g. 54.99999999 / 0.1) so an exact tick is not pushed one step inward.
+  const limitUp = Math.floor(rawUp / tickSizeFor(rawUp) + 1e-9) * tickSizeFor(rawUp)
+  const limitDown = Math.ceil(rawDown / tickSizeFor(rawDown) - 1e-9) * tickSizeFor(rawDown)
+  return { limitUp: roundPrice(limitUp), limitDown: roundPrice(limitDown) }
+}
+
 export type LadderKind = 'step' | 'current' | 'breakEven' | 'avgCost'
 
 export interface LadderRow {

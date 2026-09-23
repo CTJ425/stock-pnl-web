@@ -24,30 +24,48 @@ export interface AdminUser {
   admin: boolean
 }
 
-/** Read the account list. Check if there is no / no permission and return null (error will not be thrown, compare with other proxies)*/
+/**
+ * AD-06: a 403 (caller lost admin rights mid-session), a network/server failure, and a
+ * malformed-but-received response used to all collapse into `null`, leaving the admin to
+ * guess. Only the last case (backend answered, but not with the expected shape — most often
+ * because it predates this action) still resolves `null`; the caller's existing "可能尚未
+ * 部署" hint already covers that one. The other two now throw a distinguishable message.
+ */
 export async function fetchAdminUsers(): Promise<AdminUser[] | null> {
   if (!supabase) return null
+  let data: unknown
+  let error: unknown
   try {
-    const { data, error } = await supabase.functions.invoke('stock-report', {
+    const res = await supabase.functions.invoke('stock-report', {
       body: { action: 'admin-users' },
       timeout: 20_000,
     })
-    if (error || !data || (data as { ok?: boolean }).ok !== true) return null
-    const rows = (data as { users?: unknown }).users
-    if (!Array.isArray(rows)) return []
-    return rows.map((r) => {
-      const u = r as Partial<AdminUser>
-      return {
-        id: typeof u.id === 'string' ? u.id : '',
-        email: typeof u.email === 'string' ? u.email : '',
-        createdAt: typeof u.createdAt === 'string' ? u.createdAt : null,
-        lastActiveAt: typeof u.lastActiveAt === 'string' ? u.lastActiveAt : null,
-        admin: u.admin === true,
-      }
-    })
+    data = res.data
+    error = res.error
   } catch {
-    return null
+    // supabase-js threw before any response came back at all — a network-layer failure.
+    throw new Error('網路或伺服器錯誤，請稍後重試')
   }
+  if (error) {
+    const ctx = (error as { context?: unknown })?.context
+    if (ctx instanceof Response && ctx.status === 403) {
+      throw new Error('權限不足：這個帳號目前沒有管理員權限（HTTP 403）')
+    }
+    throw new Error('網路或伺服器錯誤，請稍後重試')
+  }
+  if (!data || (data as { ok?: boolean }).ok !== true) return null
+  const rows = (data as { users?: unknown }).users
+  if (!Array.isArray(rows)) return []
+  return rows.map((r) => {
+    const u = r as Partial<AdminUser>
+    return {
+      id: typeof u.id === 'string' ? u.id : '',
+      email: typeof u.email === 'string' ? u.email : '',
+      createdAt: typeof u.createdAt === 'string' ? u.createdAt : null,
+      lastActiveAt: typeof u.lastActiveAt === 'string' ? u.lastActiveAt : null,
+      admin: u.admin === true,
+    }
+  })
 }
 
 /**

@@ -28,7 +28,14 @@ import { isClosed, tradeDateLabel, type PriceQuote } from '../../services/priceP
 import type { Market } from '../../types/models'
 import { fetchIntraday } from '../../services/intradayProxy'
 import { fetchRemoteDaily, type DailySeries } from '../../services/dailyProxy'
-import { fmtPercent, fmtPrice, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
+import {
+  fmtPercent,
+  fmtPrice,
+  fmtSignedMoney,
+  fmtSignedPercent,
+  pnlClass,
+  roundPrice,
+} from '../../utils/formatters'
 import { fmtInt, fmtLotsFromShares, shortDate } from './chipFormat'
 import { IntradayChart, finalVwap, type TrendSeries } from './IntradayChart'
 import { getStockCategory } from '../../utils/stockCategory'
@@ -43,6 +50,7 @@ import {
 } from './trendRange'
 import type { DailyStatus } from './useDailySeries'
 import type { ChipDay, ReportHolding } from '../../services/reportProxy'
+import { priceLimits } from './whatIf'
 
 type TechnicalLatest = TechnicalView['latest']
 
@@ -63,8 +71,8 @@ export function quoteMeta(quote: PriceQuote | null, market?: Market): string {
 function Cell({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
     <div className="rpt-card">
-      <div className="k">{label}</div>
-      <div className={className ? `v ${className}` : 'v'}>{value}</div>
+      <dt className="k">{label}</dt>
+      <dd className={className ? `v ${className}` : 'v'}>{value}</dd>
     </div>
   )
 }
@@ -133,6 +141,7 @@ export function QuoteTab({
   history = null,
   dailySeries = null,
   dailyStatus = 'ready',
+  market = 'TPE',
 }: {
   quote: PriceQuote | null
   latest?: TechnicalLatest | null
@@ -142,6 +151,7 @@ export function QuoteTab({
   history?: ChipDay[] | null
   dailySeries?: DailySeries | null
   dailyStatus?: DailyStatus
+  market?: Market
 }) {
   const [range, setRange] = useState<TrendRange>('1d')
   const [series, setSeries] = useState<TrendSeries | null>(null)
@@ -201,7 +211,8 @@ export function QuoteTab({
           setIntradayLoading(false)
           return
         }
-        setSeries(seriesFromDailyRows(ticker, remote.rows, range))
+        const built = seriesFromDailyRows(ticker, remote.rows, range)
+        setSeries(built && { ...built, ticker: remote.ticker ?? ticker, fetchedAt: remote.fetchedAt })
         setIntradayLoading(false)
       })
       return () => {
@@ -212,7 +223,10 @@ export function QuoteTab({
     // key is '1m' | '6m' | 'ytd' | '1y': already-loaded daily series, no network.
     setIntradayLoading(localDailyStatus === 'loading')
     setIntradayError(localDailyStatus === 'error')
-    setSeries(seriesFromDailyRows(ticker, dailySeries?.rows ?? [], range))
+    const built = seriesFromDailyRows(ticker, dailySeries?.rows ?? [], range)
+    setSeries(
+      built && dailySeries ? { ...built, ticker: dailySeries.ticker, fetchedAt: dailySeries.asOf } : built,
+    )
   }, [ticker, range, rangeKey, dailySeries, localDailyStatus])
 
   if (!quote) {
@@ -270,6 +284,15 @@ export function QuoteTab({
 
   const category = getStockCategory(ticker, name, quote.industry)
 
+  // DT-02: TW-only 漲停/跌停 badge, from the same ±10% 昨收 band the chart's reference lines use.
+  const limits = market === 'TPE' ? priceLimits(quote.prevClose) : null
+  const limitState =
+    limits && roundPrice(quote.price) === limits.limitUp
+      ? 'up'
+      : limits && roundPrice(quote.price) === limits.limitDown
+        ? 'down'
+        : null
+
   return (
     <>
       <div className="quote-top-banner">
@@ -280,6 +303,11 @@ export function QuoteTab({
         </div>
         <div className="m-price">
           <span className={`big ${pnlClass(dayChange)}`}>{fmtPrice(quote.price, 'TWD')}</span>
+          {limitState && (
+            <span className={`quote-limit-badge ${limitState === 'up' ? 'pnl-up' : 'pnl-down'}`}>
+              {limitState === 'up' ? '漲停' : '跌停'}
+            </span>
+          )}
           {quote.trial && <span className="trial-marker">預估</span>}
           <span className={`delta ${pnlClass(dayChange)}`}>
             {dayChange === null
@@ -294,8 +322,17 @@ export function QuoteTab({
 
       <div className="quote-layout">
         <div className="quote-main">
-          <div className="m-stats">
-            <Cell label="成交量" value={quote.volume === null ? '—' : `${fmtInt(quote.volume)} 張`} />
+          <dl className="m-stats">
+            <Cell
+              label="成交量"
+              value={
+                quote.volume === null
+                  ? '—'
+                  : market === 'US'
+                    ? `${fmtInt(quote.volume * 1000)} 股`
+                    : `${fmtInt(quote.volume)} 張`
+              }
+            />
             <Cell label="開盤" value={fmtPrice(quote.open, 'TWD')} />
             <Cell label="最高" value={fmtPrice(quote.high, 'TWD')} />
             <Cell label="最低" value={fmtPrice(quote.low, 'TWD')} />
@@ -303,7 +340,7 @@ export function QuoteTab({
             <Cell label="均價" value={fmtPrice(vwap, 'TWD')} />
             <Cell label="漲跌幅" value={fmtSignedPercent(dayChangePct)} className={pnlClass(dayChange)} />
             <Cell label="振幅" value={fmtPercent(amplitude)} />
-          </div>
+          </dl>
           <p className="hint">
             {closed
               ? '今天已經收盤，這是收盤的價格，到明天開盤前都不會再變。'
@@ -318,6 +355,8 @@ export function QuoteTab({
             onRangeChange={setRange}
             ranges={TREND_RANGES}
             tradeDate={quote.tradeDate}
+            ticker={ticker}
+            market={market}
           />
 
           {recentDays.length > 0 && (

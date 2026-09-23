@@ -314,8 +314,18 @@ export function FundamentalTab({ fundamental, loading, error = false }: Fundamen
   const maxPretax = Math.max(0, ...pretaxSeries.map((v) => (v === null ? 0 : Math.abs(v))))
   const maxNet = Math.max(0, ...netSeries.map((v) => (v === null ? 0 : Math.abs(v))))
 
-  const displayedQuarters = quarters.filter((q) => q.yearQuarter >= '2024-Q1')
-  const renderQuarters = displayedQuarters.length > 0 ? displayedQuarters : quarters
+  /*
+    Rolling window instead of a hardcoded year cutoff (Task 166 FU-01): `quarters` is already
+    newest-first, so slicing off the front replaces the old `>= '2024-Q1'` filter — no more
+    silently losing everything once the calendar crosses past a hardcoded year.
+
+    Window size is 9, not the 12 profitQuarters itself retains upstream (PROFIT_TARGET): that is
+    what the old cutoff already produced (it only trimmed the few quarters older than 2024-Q1,
+    leaving 9 of a typical 12-quarter history on screen — see the FundamentalTab test fixture),
+    so 9 keeps the same amount of table on screen instead of suddenly widening it to 12.
+  */
+  const DISPLAYED_QUARTERS = 9
+  const renderQuarters = quarters.slice(0, DISPLAYED_QUARTERS)
 
   const recent4Quarters = profitQuarters.slice(-4)
   const recent4Eps = recent4Quarters.map((q) => q.epsTwd).filter((v): v is number => v !== null)
@@ -327,7 +337,18 @@ export function FundamentalTab({ fundamental, loading, error = false }: Fundamen
   const recent4Revenue = recent4Quarters
     .map((q) => q.revenueMillionTwd)
     .filter((v): v is number => v !== null)
-  const ttmRevenue = recent4Revenue.length > 0 ? recent4Revenue.reduce((a, b) => a + b, 0) : null
+  /*
+    TTM (trailing 4 quarters, Task 166 FU-02): a sum of fewer than 4 quarters is not a trailing-4
+    figure, so it must not be shown as if it were one (no partial sum, no bare dash) — say plainly
+    how many of the 4 quarters are actually in hand.
+  */
+  const ttmRevenue = recent4Revenue.length === 4 ? recent4Revenue.reduce((a, b) => a + b, 0) : null
+  const ttmRevenueLabel =
+    recent4Revenue.length === 4
+      ? `近4季 ${fmtInt(ttmRevenue)}`
+      : `資料不足 (${recent4Revenue.length}/4)`
+  const ttmEpsLabel =
+    recent4Eps.length === 4 ? `近4季 ${ttmEps!.toFixed(2)} 元` : `資料不足 (${recent4Eps.length}/4)`
 
   // Monthly Revenue Calculations
   const revenueSeries = revenueMonths.map((m) => m.revenueThousandTwd)
@@ -548,7 +569,7 @@ export function FundamentalTab({ fundamental, loading, error = false }: Fundamen
                     <tr className="tfoot-summary">
                       <td>{renderQuarters.length} 季統計</td>
                       <td className="num inst-matrix-cum">
-                        <div>{ttmRevenue !== null ? `近4季 ${fmtInt(ttmRevenue)}` : '—'}</div>
+                        <div>{ttmRevenueLabel}</div>
                         <div className="tfoot-cum-trend">
                           <span className="hint" style={{ fontSize: 12 }}>營收走勢</span>
                           <SparkCell
@@ -582,13 +603,7 @@ export function FundamentalTab({ fundamental, loading, error = false }: Fundamen
                         </div>
                       </td>
                       <td className={`num inst-matrix-cum ${ttmEps !== null ? chipClass(ttmEps) : ''}`}>
-                        <div>
-                          {ttmEps !== null
-                            ? `近4季 ${ttmEps.toFixed(2)} 元`
-                            : latestEps
-                              ? fmtEps(latestEps.epsTwd)
-                              : '—'}
-                        </div>
+                        <div>{ttmEpsLabel}</div>
                         <div className="tfoot-cum-trend">
                           <span className="hint" style={{ fontSize: 12 }}>EPS 走勢</span>
                           <SparkCell

@@ -42,7 +42,8 @@ afterEach(() => {
 })
 
 async function mount(payload: ForeignTopData | null) {
-  fetchForeignTop.mockResolvedValue(payload)
+  // Task 166 (MA-06): the proxy now reports empty and invalid separately instead of null.
+  fetchForeignTop.mockResolvedValue(payload === null ? { kind: 'empty' } : { kind: 'ok', data: payload })
   const user = userEvent.setup()
   render(<ForeignTopSection />)
   // wait for the effect's promise to settle
@@ -130,6 +131,13 @@ describe('ForeignTopSection', () => {
     await mount(data)
     const stamp = await screen.findByText(/^資料更新於 \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
     expect(stamp.className).toContain('section-stamp')
+  })
+
+  it('快照格式不符時說明是格式問題，不冒充成尚無資料（MA-06）', async () => {
+    fetchForeignTop.mockResolvedValue({ kind: 'invalid' })
+    render(<ForeignTopSection />)
+    expect(await screen.findByText(/資料格式不符/)).toBeTruthy()
+    expect(screen.queryByText('尚無外資買賣超資料')).toBeNull()
   })
 
   it('沒有快照時不顯示更新時間，不會出現「資料更新於 —」', async () => {

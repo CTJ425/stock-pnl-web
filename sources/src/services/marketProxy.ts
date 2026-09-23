@@ -57,6 +57,14 @@ export interface MarketData {
   days: MarketDay[]
 }
 
+/**
+ * Shared shape for the reports-bucket proxies (MA-06): `empty` is "no file yet" (the after-hours
+ * schedule has not produced one), `invalid` is "a file exists but does not parse" — the two used to
+ * collapse into the same `null`, so the UI could not tell "wait for the schedule" from "the file is
+ * broken, refreshing will not help".
+ */
+export type ProxyResult<T> = { kind: 'ok'; data: T } | { kind: 'empty' } | { kind: 'invalid' }
+
 interface StoredMarket {
   schema: number
   asOf: string
@@ -108,14 +116,15 @@ function normalizeDay(v: unknown): MarketDay | null {
   }
 }
 
-/** Read all market daily data; search none/return null if the format does not match*/
-export async function fetchMarketDaily(): Promise<MarketData | null> {
+/** Read all market daily data; `empty` = no file yet, `invalid` = a file exists but fails the checks below. */
+export async function fetchMarketDaily(): Promise<ProxyResult<MarketData>> {
   const stored = await downloadReportsJson<StoredMarket>('market/daily.json')
-  if (!stored || typeof stored !== 'object') return null
-  if (typeof stored.schema !== 'number' || stored.schema < MIN_MARKET_SCHEMA) return null
+  if (stored === null || stored === undefined) return { kind: 'empty' }
+  if (typeof stored !== 'object') return { kind: 'invalid' }
+  if (typeof stored.schema !== 'number' || stored.schema < MIN_MARKET_SCHEMA) return { kind: 'invalid' }
   const days = (Array.isArray(stored.days) ? stored.days : [])
     .map(normalizeDay)
     .filter((d): d is MarketDay => d !== null)
-  if (days.length === 0) return null
-  return { asOf: typeof stored.asOf === 'string' ? stored.asOf : '', days }
+  if (days.length === 0) return { kind: 'invalid' }
+  return { kind: 'ok', data: { asOf: typeof stored.asOf === 'string' ? stored.asOf : '', days } }
 }

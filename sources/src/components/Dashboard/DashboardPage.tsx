@@ -118,7 +118,11 @@ function HoldingsTable({
             >
               <td>{h.ticker}</td>
               <td>{stockName}</td>
-              <td className={`num ${pnlClass(dayChange)}`}>
+              {/*
+                DA-01: a cached quote's day-change must not read with the same red/green
+                emphasis as a live one — dim it (pnl-flat) while keeping the 「快取」 badge below.
+              */}
+              <td className={`num ${priceStale ? 'pnl-flat' : pnlClass(dayChange)}`}>
                 {price === null ? (
                   loading ? (
                     <span className="skeleton" aria-label="現價載入中" />
@@ -401,7 +405,7 @@ function MarketPanel({
             fmtMoney(0, currency)
           ) : netMkt === null ? (
             loading ? (
-              <span className="skeleton" style={{ width: '13ch', height: 22 }} />
+              <span className="skeleton" style={{ width: '13ch', height: 22 }} aria-label="市值載入中" />
             ) : (
               '—'
             )
@@ -459,7 +463,7 @@ function MarketPanel({
             {rows.length === 0 ? (
               fmtMoney(0, currency)
             ) : cost === null ? (
-              <span className="skeleton" style={{ width: '12ch', height: 22 }} />
+              <span className="skeleton" style={{ width: '12ch', height: 22 }} aria-label="成本載入中" />
             ) : (
               fmtMoney(cost, currency)
             )}
@@ -480,7 +484,7 @@ function MarketPanel({
               fmtMoney(0, currency)
             ) : unreal === null ? (
               loading ? (
-                <span className="skeleton" style={{ width: '13ch', height: 22 }} />
+                <span className="skeleton" style={{ width: '13ch', height: 22 }} aria-label="損益載入中" />
               ) : (
                 '—'
               )

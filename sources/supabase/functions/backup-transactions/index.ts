@@ -151,7 +151,7 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
         .from(BACKUPS_BUCKET)
         .list(userId, { limit: 1000 })
       if (listError) throw listError
-      const names = (listed ?? []).map((f) => f.name)
+      const names = (listed ?? []).map((f: { name: string }) => f.name)
       const toDelete = prunablePaths(names, KEEP_DAYS)
       if (toDelete.length > 0) {
         const { error: removeError } = await db.storage

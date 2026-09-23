@@ -12,13 +12,34 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronsDownUp, ChevronsUpDown, Globe, Minus, Plus, RefreshCw } from 'lucide-react'
 import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
+import { fetchMarketDaily, type MarketData } from '../../services/marketProxy'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 import { TwMarketSection } from './TwMarketSection'
 import { GlobalIndices, type IndexDef } from './GlobalIndices'
 import { IndexDetail } from './IndexDetail'
+import type { ClosedDates } from './sessionHours'
 import type { IndexQuote } from '../../services/indexQuotes'
+
+const TAIPEI_WEEKDAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
+
+/** 'YYYY-MM-DD' in Asia/Taipei for `now` ('en-CA' formats dates in that order). */
+function taipeiDateKey(now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(now)
+}
+
+/**
+ * MA-01: we hold no TW holiday calendar, only the after-hours schedule's own output. If today is
+ * a Taipei weekday but the newest day on file is still older than today, the schedule had nothing
+ * to write because the exchange never opened — i.e. today is 休市, not merely "not updated yet".
+ */
+function isTwClosedToday(market: MarketData | null, now: Date): boolean {
+  if (!market || market.days.length === 0) return false
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Taipei', weekday: 'short' }).format(now)
+  if (!TAIPEI_WEEKDAYS.has(weekday)) return false
+  return market.days[market.days.length - 1].date < taipeiDateKey(now)
+}
 
 type MacroSubTab = 'world' | 'us'
 
@@ -422,6 +443,29 @@ export function MacroPage() {
   const [tab, setTab] = useState<MacroSubTab>('world')
   const [selectedDef, setSelectedDef] = useState<IndexDef | null>(null)
   const [selectedQuote, setSelectedQuote] = useState<IndexQuote | null>(null)
+  /*
+    MA-01/MA-05: fetched once here (not inside GlobalIndices/TwMarketSection) so that
+    (a) GlobalIndices can know TW is 休市 today before the user ever drills into it, and
+    (b) re-entering TwMarketSection later in the same session reuses this instead of
+    re-fetching and flashing its loading state (see TwMarketSection's `initialMarket`).
+  */
+  const [twMarket, setTwMarket] = useState<MarketData | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchMarketDaily()
+      .then((result) => {
+        if (!cancelled) setTwMarket(result.kind === 'ok' ? result.data : null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const closedDates: ClosedDates | undefined = isTwClosedToday(twMarket, new Date())
+    ? { TW: new Set([taipeiDateKey(new Date())]) }
+    : undefined
 
   const handleTabChange = (nextTab: MacroSubTab) => {
     setTab(nextTab)
@@ -466,11 +510,11 @@ export function MacroPage() {
       {tab === 'us' ? (
         <UsMacroPanel />
       ) : selectedDef?.ticker === '^TWII' ? (
-        <TwMarketSection onBack={handleBack} quote={selectedQuote} />
+        <TwMarketSection onBack={handleBack} quote={selectedQuote} initialMarket={twMarket} />
       ) : selectedDef ? (
         <IndexDetail def={selectedDef} onBack={handleBack} quote={selectedQuote} />
       ) : (
-        <GlobalIndices onSelect={handleSelectIndex} />
+        <GlobalIndices onSelect={handleSelectIndex} closedDates={closedDates} />
       )}
     </>
   )

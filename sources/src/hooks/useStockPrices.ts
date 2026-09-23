@@ -61,9 +61,14 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
 
   // Background polling + re-capture when switching back to the foreground after paging (the background paging timer will be throttled by the browser and will be replenished when switching back)
   useEffect(() => {
-    const timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS)
+    let timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS)
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void load({ silent: true })
+      if (document.visibilityState !== 'visible') return
+      // A visibility change landing right on top of the interval would otherwise fire two
+      // loads back to back — restart the interval so the next tick is a full period away.
+      clearInterval(timer)
+      void load({ silent: true })
+      timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS)
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {

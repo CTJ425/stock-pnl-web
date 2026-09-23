@@ -200,6 +200,14 @@ describe('fetchAppLogs', () => {
     expect(body.source).toBe('edge')
   })
 
+  it('pages with an (at, id) cursor so rows sharing a timestamp are not skipped (AD-07)', async () => {
+    functionsInvoke.mockResolvedValue({ data: { ok: true, logs: [] }, error: null })
+    await fetchAppLogs({ limit: 50, before: { at: ROW.at, id: ROW.id } })
+    const body = functionsInvoke.mock.calls[0][1].body as Record<string, unknown>
+    expect(body.before).toBe(ROW.at)
+    expect(body.beforeId).toBe(7)
+  })
+
   it('maps a row into camelCase', async () => {
     functionsInvoke.mockResolvedValue({ data: { ok: true, logs: [ROW] }, error: null })
     const rows = await fetchAppLogs()

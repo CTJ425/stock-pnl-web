@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Modal } from '../Common/Modal'
 import { Spinner } from '../Common/Spinner'
@@ -45,21 +45,25 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
 
   const watchedSet = new Set(watched)
   const q = query.trim().toLowerCase()
-  const matches = q
-    ? [...list]
-        .filter(
-          (row) => row.symbol.toLowerCase().startsWith(q) || row.name.toLowerCase().includes(q),
-        )
-        .sort((a, b) => {
-          const watchedRank = Number(watchedSet.has(a.symbol)) - Number(watchedSet.has(b.symbol))
-          if (watchedRank !== 0) return watchedRank
-          const kind = kindRank(a.symbol) - kindRank(b.symbol)
-          if (kind !== 0) return kind
-          const match = matchRank(a, q) - matchRank(b, q)
-          if (match !== 0) return match
-          return a.symbol.localeCompare(b.symbol)
-        })
-    : []
+  // PR-07: filter+sort walks the whole TW stock list (thousands of rows) on every keystroke;
+  // memoise it so a re-render caused by something else (e.g. addError) does not redo the work.
+  const matches = useMemo(() => {
+    if (!q) return []
+    const ws = new Set(watched)
+    return [...list]
+      .filter(
+        (row) => row.symbol.toLowerCase().startsWith(q) || row.name.toLowerCase().includes(q),
+      )
+      .sort((a, b) => {
+        const watchedRank = Number(ws.has(a.symbol)) - Number(ws.has(b.symbol))
+        if (watchedRank !== 0) return watchedRank
+        const kind = kindRank(a.symbol) - kindRank(b.symbol)
+        if (kind !== 0) return kind
+        const match = matchRank(a, q) - matchRank(b, q)
+        if (match !== 0) return match
+        return a.symbol.localeCompare(b.symbol)
+      })
+  }, [list, q, watched])
   const results = matches.slice(0, RESULT_CAP)
 
   async function handleAdd(row: TwStockRow) {

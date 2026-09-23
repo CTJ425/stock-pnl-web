@@ -117,3 +117,31 @@ oversold legs; stop reading the legacy per-workspace min-fee localStorage keys a
 - DDL: `apply_transaction_updates(p_updates jsonb) RETURNS integer`, `SECURITY INVOKER` plpgsql, one UPDATE per element inside one statement/transaction, RLS still applies.
 - `DataProvider.updateTransactions(updates)` uses the RPC (Supabase) or an in-memory batch (Local).
 - `StockSplitModal` warns before applying a split whose (workspace, market, ticker, cutoff, ratio) already exists in `tx_split_log`, and writes the row after a successful apply. `RecalcFeesModal` uses the same batch path.
+
+## Batch 4 contract (0.9.66) — frontend sweep
+
+Grouped by area; every item is the audit finding of the same id. Shared rules:
+- No behaviour change beyond the finding; no redesign; keep existing copy tone (Traditional Chinese, user-facing).
+- Where a finding asks for a distinction the data cannot carry yet (stale vs missing), add the flag at the source that already knows it and render it, rather than guessing in the view.
+- a11y items follow the patterns already in the codebase (`Modal` focus trap, `rowActivateProps`, `HelpTh`).
+
+### Shell (SH-02..SH-05)
+`isAdmin()` re-runs on `onAuthStateChange` (TOKEN_REFRESHED / USER_UPDATED); `signOut` checks the returned error and falls back to a local sign-out with a visible message; the 「至少保留一個工作區」 invariant moves into `WorkspaceContext.deleteWorkspace`; `HeaderMenu` closes when focus leaves it.
+
+### Transactions and dashboard (TX-05, TX-07, DA-01..DA-06)
+Future-dated transactions ask for confirmation; a failed ticker lookup says whether it was 查無代號 or 查詢失敗; a stale quote is rendered with reduced emphasis (not the same red/green as a live one) everywhere `priceStale` is known; `MarketPanel` skeletons get `aria-label`; the price poller does not double-fetch when a visibility change coincides with the interval; watchlist removal disables only its own row and 復原 restores the original `sort_order`; `addWatch` gets its sort order from the database and translates a duplicate-key error into 「已在自選股中」.
+
+### Price pipeline (PR-01..PR-07)
+`asOf` missing from the Edge response renders 「時間未知」 instead of the client clock; the warm caches (`attempted*`, `last*`, `inflight*`) clear on `SIGNED_OUT`/user change and carry an LRU cap, as do `intradayProxy`/`dailyProxy`; swallowed failures in `prefetchStockData` and `stockSearch` call `logClient`; the two prefetch warms run concurrently; US Chinese-name search ranks like `twMatchScore`; `AddWatchModal` memoises its filter/sort.
+
+### Stock detail and charts (DT-01..DT-10, FU-01..FU-06)
+Intraday and daily series carry `fetchedAt` and the ticker they belong to, and the UI shows 「快取於 HH:MM」 and refuses to render a series whose ticker does not match; the quote card shows 漲停/跌停 state and the intraday chart draws the ±10% reference lines from 昨收; US volume is labelled 股 not 張; the stats grid uses `dl/dt/dd`; what-if validates per field; the price ladder says it is a convenience ladder, not the statutory limit; charts memoise their static layer and thin x-axis labels by available width; a single non-null point still renders a mark; the fundamental tab drops the hardcoded `2024-Q1` cutoff for a rolling window; chips empty states distinguish 尚未公布 / 抓取失敗 / 無資料; TTM says 資料不足 (n/4); the 三大法人 total is cross-checked against the four legs; 「資料更新於」 formats in Asia/Taipei explicitly.
+
+### Macro and FX (MA-01..MA-12)
+`sessionHours` accepts known closed dates and MacroPage supplies TW's from `market/daily.json` (a weekday whose latest market day is earlier than today is 休市, shown as such instead of 交易中); `GlobalIndices` gets a request-sequence guard and shows 已收盤 with the last update time; market data is cached across tab switches; `marketProxy`/`foreignTopProxy` return a discriminated empty-vs-invalid result and the UI says which; turnover units appear in the cells, not only the header; `IndexDetail` surfaces a failed 當日 fetch; FX staleness counts trading days; `FxPage` aborts on unmount and 重新整理 also refreshes history; tab ARIA is completed (`tablist`/`tabpanel`); `reportPdf.ts` is renamed `downloadBlob.ts`.
+
+### Admin and AI (AD-01, AD-03..AD-11, AI-02..AI-07)
+Role changes and 「全部執行」 ask for confirmation; the status page polls with a visible age and uses the server's `asOf` for 「N 分鐘前」; error states distinguish 權限不足 / 網路錯誤 / 尚未部署; the log cursor is `(at, id)`; `message` is length-capped and redacted like `detail`; MechanismGuide's 19:40 claim is corrected to the real window; probe cards say 未到時窗 / 尚未命中 / 今日未命中; `window.confirm` gives way to `useConfirm`; a failed AI question is preserved, in-flight AI requests abort on unmount, prompts have a length cap, and the AI model list is not hardcoded in two places.
+
+### Ops (OP-03..OP-07)
+A CSP is served with the app (Cloudflare Pages `_headers`), the manifest gains a maskable icon, `tsconfig.edge.json` drops `noImplicitAny: false`, the workflows pin actions to commit SHAs, and a scheduled workflow runs the e2e scripts against DEV when the required secrets exist (skipping cleanly when they do not).
