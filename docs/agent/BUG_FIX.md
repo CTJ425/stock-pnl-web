@@ -8,6 +8,14 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### RISK-021 — Daily and intraday series caches survive an account switch
+- **Where**: `sources/src/services/dailyProxy.ts`, `sources/src/services/intradayProxy.ts`
+- **Risk**: both in-memory caches carry an LRU cap (PR-03) but, unlike `warmStock.ts`, have no `onAuthStateChange` reset. After a sign-out and sign-in as another user on the same tab, cached series can be shown until their TTL expires (dailyProxy 300 s).
+- **Why accepted**: the cached data is public market data from the reports bucket and the stock-price Edge Function, not user-scoped rows, so nothing private leaks; the only effect is a few minutes of possibly stale display. Found by the Task 166 batch 4 review, 2026-09-23.
+- **Status**: ACCEPTED (Task 166 batch 4, 0.9.66)
+
+---
+
 ### RISK-020 — Nothing in the admin console reports a missing Discord cron schedule
 - **Where**: `sources/src/components/Admin/DiscordSection.tsx` (the deleted `ScheduleSection`), `sources/src/components/Settings/DiscordMySettings.tsx:69`
 - **Risk**: when `discord-summary-brief` / `discord-summary-full` are absent from `cron.job`, `scheduleFromJobs` yields `{brief: null, full: null}` and every inheriting account silently stops receiving (`dueAt` treats a null global time as not-due, by design). The deleted `ScheduleSection` was the only surface that said so, with 「找不到 Discord 排程工作，無法調整。」. What remains is `預設（尚未設定）` on each account's own drop-down — per-account, per-slot, and visible only to a signed-in user looking at their own settings. No admin-facing surface reports it.
