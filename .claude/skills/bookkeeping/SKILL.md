@@ -1,12 +1,12 @@
 ---
 name: bookkeeping
-description: Roll and record the docs/agent/ tracking files of stock-pnl-web — PROGRESS.md, TASK.md, BUG_FIX.md. Use at the end of every task, before dispatching scribe, to get the size caps, the archive destinations, the entry shapes, and the sub-item completion test.
+description: Roll and record the docs/agent/ tracking files of stock-pnl-web — PROGRESS.md, TASK.md, BUG_FIX.md. Use at the end of every task, before updating those files, to get the size caps, the archive destinations, the entry shapes, and the sub-item completion test.
 ---
 
 # docs/agent/ bookkeeping
 
-Load this skill before you compose a `scribe` brief. A subagent does not load this file —
-paste the rules it needs into the brief verbatim.
+Load this skill before you update `docs/agent/`. If you hand the update to a subagent, it does
+not load this file — paste the rules it needs into its brief verbatim.
 
 ## Where each record goes
 
@@ -22,7 +22,7 @@ paste the rules it needs into the brief verbatim.
 ### Size discipline — roll, don't hope
 
 The hot files are the ones read at session start, so they are the only ones with a size cost.
-There is **no automatic archiver**: rolling happens in the same `scribe` dispatch that records
+There is **no automatic archiver**: rolling happens in the same update that records
 the work, at the end of every task.
 
 | Hot file | Cap | Overflow goes to |

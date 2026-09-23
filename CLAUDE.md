@@ -25,7 +25,7 @@ Also: `docs/UnitTests/` (testing SoT), `docs/architecture/`.
 **Agent-written docs are English** (see global rule 1).
 
 Rolling rules (size caps, archive destinations), entry shapes, and the sub-item
-completion test: **`bookkeeping`** skill. Load it before you compose a `scribe` brief.
+completion test: **`bookkeeping`** skill. Load it before you update `docs/agent/`.
 
 ## Start of session
 
@@ -40,40 +40,12 @@ Then inspect code you will touch. Do not assume chat has full state.
 ## Work style
 
 - After work: update `TASK.md` / `PROGRESS.md` (and bugs if needed). Significant records: `YYYY-MM-DD HH:mm:ss Asia/Taipei`.
-- Skills (load when relevant): `route`, `testing`, `verify`, `versioning`, `supabase-ops`, `ship`.
+- Skills (load when relevant): `testing`, `verify`, `versioning`, `supabase-ops`, `ship`.
 
-## Task routing
-
-Beyond the planning, specs and adjudication named in the session-start routing note, the
-main session also owns **failing tests**. The four roles below are delegation targets.
-
-| Role | Owns | Do not do this in the main session |
-| ---- | ---- | ---- |
-| `scout` | Mapping files/callers/tests, compressing logs and stack traces, reading anything bulky | More than ~a dozen exploratory Read/Grep calls; an unbounded read of a file over 32KB; dispatching the built-in `Explore` / `general-purpose`, which inherit this session's model |
-| `builder` | Implementing an existing brief or spec | Editing `sources/` for anything bigger than a one-file mechanical change |
-| `reviewer` | Reviewing changed files against a spec | Self-reviewing your own implementation |
-| `scribe` | `docs/agent/` bookkeeping, commit messages | Hand-editing `TASK.md` / `PROGRESS.md` / bug files |
-
-- **The loop is the `route` skill.** Load it for any feature, bug, or `TASK.md` item; it
-  owns lane classification, dispatch order, handoff formats, and escalation.
-- **Route by context footprint, not by task size**: a surgical edit on content already in
-  context stays inline even when the task looks big. A large file read into the main
-  session is re-billed on every later turn, which is why the guard asks before unbounded
-  reads (`guard.readKB` in `.claude/route.config.json`). Measured economics: **`route`** skill.
-- Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
-- Whether routing actually happened is measurable, and the plan does not count as
-  evidence: the `/route:audit` skill.
-- This routes **delegation only**. The main session's model comes from `/model`, not from
-  this file.
-
-### Dispatch discipline
-
-Seven measured rules for writing a brief (reviewer tooling, scribe scope, spec proof,
-money-code review): the **`route`** skill. Two of them are not dispatch-specific and
-apply to any command you run here:
+## Command rules
 
 - **The Verify line is `npm run build`, never `npx tsc --noEmit`.** The latter does not
-  type-check test files here, so three builders reported exit 0 while the build was red.
+  type-check test files here, so a build once went red while the check reported exit 0.
 - **`cp` is aliased to `cp -i`.** Use `command cp -f`, and never background a command that
   can block on a prompt — one did, for 33 minutes.
 
