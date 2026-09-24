@@ -63,6 +63,12 @@ jobs:
         if: steps.gate.outputs.ready == 'true'
         run: npm ci
 
+      # npm ci installs the playwright package but not its browser; without this the suite fails
+      # at chromium.launch() the first time the DEV secrets are set.
+      - name: Install Playwright Chromium
+        if: steps.gate.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+
       - name: Build against DEV
         if: steps.gate.outputs.ready == 'true'
         env:
