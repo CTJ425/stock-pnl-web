@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Task 159 D12 (and the title half of D1), Task 158 #2 / Task 159 D9: every page names itself once
- * for screen readers and in the browser tab, and 「新增交易」 exists exactly once — in the header on
- * wide screens, as the floating button on narrow ones — never both.
+ * for screen readers and in the browser tab, and 「新增交易」 exists exactly once — in the header, on
+ * every width (0.9.68: the floating button covered the bottom-right corner).
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
@@ -29,14 +29,14 @@ describe('AppShell page identity', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
-  // 0.9.47: the user chose the floating button on desktop too (Task 159 D9 reverted); no header button.
-  it('offers exactly one add-transaction button, floating even on desktop', async () => {
+  // 0.9.68: the user moved it into the header bar (reverts 0.9.47); no floating button.
+  it('offers exactly one add-transaction button, in the header', async () => {
     const { container } = render(<App />)
     await screen.findByText('本機模式')
 
     const buttons = screen.getAllByRole('button', { name: '新增交易' })
     expect(buttons).toHaveLength(1)
-    expect(buttons[0].className).toContain('fab')
-    expect(container.querySelector('.header-add')).toBeNull()
+    expect(buttons[0].closest('.app-header')).toBeTruthy()
+    expect(container.querySelector('.fab')).toBeNull()
   })
 })

@@ -207,6 +207,27 @@ describe('aggregateHoldings', () => {
     expect(r.dayPct).toBeCloseTo((-1 / 96) * 100, 6)
   })
 
+  // 0.9.68: the 券商 figure mirrors 庫存總覽 (src/utils/holdingRows.ts) — the posted 0.1425%
+  // rate, undiscounted, TWD only.
+  it('adds the 券商 unrealized at the posted undiscounted rate, TWD only', () => {
+    const hA = holdingOf(la, 'TPE:2330')
+    const hB = holdingOf(lb, 'TPE:2330')
+    const long = find(summary.twd, 'TPE:2330', 'LONG')
+    const expectedLong = estimateUnrealized(hA, 1000, 0.001425, 1, true) + estimateUnrealized(hB, 1000, 0.001425, 1, true)
+    expect(long.brokerUnrealized).toBeCloseTo(expectedLong, 6)
+    // ws-a is discounted, so the merged 券商 figure is below the net one
+    expect(long.brokerUnrealized!).toBeLessThan(long.unrealized!)
+
+    const short = find(summary.twd, 'TPE:2603', 'SHORT')
+    const expectedShort = estimateUnrealizedShort(holdingOf(lb, 'TPE:2603'), 95, 0.001425, 20)
+    expect(short.brokerUnrealized).toBeCloseTo(expectedShort, 6)
+
+    expect(find(summary.twd, 'TPE:1101', 'LONG').brokerUnrealized).toBeNull()
+    expect(find(summary.usd, 'US:AAPL', 'LONG').brokerUnrealized).toBeNull()
+    expect(summary.twd.brokerUnrealized).toBeCloseTo(expectedLong + expectedShort, 6)
+    expect(summary.usd.brokerUnrealized).toBeNull()
+  })
+
   it('uses the USD holding with no minimum fee', () => {
     const r = find(summary.usd, 'US:AAPL', 'LONG')
     const h = holdingOf(la, 'US:AAPL')
@@ -334,6 +355,7 @@ function row(p: Partial<HoldingRowOut> & Pick<HoldingRowOut, 'ticker' | 'name'>)
     avgCost: 0,
     breakEven: null,
     realized: 0,
+    brokerUnrealized: null,
     ...p,
   }
 }
@@ -346,6 +368,7 @@ function cur(currency: 'TWD' | 'USD', p: Partial<CurrencySummary> = {}): Currenc
     cost: 0,
     unrealized: null,
     unrealizedPct: null,
+    brokerUnrealized: null,
     shortMarketValue: null,
     dayPnl: null,
     dayPct: null,
@@ -440,6 +463,29 @@ describe('buildHoldingsPayload', () => {
       expect(e.description).not.toContain('```')
       expect((e.description ?? '').length).toBeLessThanOrEqual(4096)
     }
+  })
+
+  it('shows 券商 on the total and on a row only when it differs from the net figure', () => {
+    const twd = cur('TWD', {
+      rows: [
+        row({ ticker: '2330', name: '台積電', shares: 1000, basis: 500_000, close: 600, quoteYmd: YMD, mktVal: 600_000, unrealized: 98_500.4, brokerUnrealized: 98_101.2, avgCost: 500 }),
+        row({ ticker: '0050', name: '元大台灣50', shares: 1000, basis: 150_000, close: 160, quoteYmd: YMD, mktVal: 160_000, unrealized: 9_300.2, brokerUnrealized: 9_299.8, avgCost: 150 }),
+      ],
+      unrealized: 107_800.6,
+      unrealizedPct: 16.58,
+      brokerUnrealized: 107_401,
+      dayPnl: 0,
+      newestQuoteYmd: YMD,
+    })
+    const p = buildHoldingsPayload({ ymd: YMD, twd, usd: cur('USD') }, { generatedAt: GEN, preview: false })!
+    expect(p.embeds[0].description).toBe([
+      '未實現合計 **+107,801**（+16.58%）｜券商 +107,401｜今日 0',
+      '',
+      '**2330 台積電**｜1 張｜均價 500｜未實現 **+98,500**（券商 +98,101）',
+      // 9,300.2 and 9,299.8 both print as +9,300, so the duplicate is left out
+      '**0050 元大台灣50**｜1 張｜均價 150｜未實現 **+9,300**',
+    ].join('\n'))
+    expect(p.embeds[0].footer?.text).toBe('資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本｜券商＝牌告 0.1425% 未折讓')
   })
 
   it('prefixes a preview', () => {

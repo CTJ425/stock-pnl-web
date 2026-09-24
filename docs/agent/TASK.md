@@ -21,6 +21,15 @@
 
 ## 📋 Active Tasks
 
+### Task 167: Remove AI UI, move 新增交易 to the header, Discord 券商 column (user, 2026-09-24)
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-24 01:55:00 Asia/Taipei
+1. ~~Remove every AI feature from the frontend (keep for a future redesign; recoverable from git)~~ ✅ working tree · retire `ai-proxy` Edge Function and AI tables? —— ⏳ user decision
+2. ~~Move 新增交易 from the bottom-right FAB into the header bar~~ ✅ working tree · browser check at 1440 / 375 px —— ⏳ (Playwright libs missing on host)
+3. Discord holdings card: add the 庫存總覽「券商」figure (undiscounted 0.1425 % unrealized / ROI) —— ⏳ proposal given, awaiting user choice
+4. Commit on `dev` + version bump (0.9.68-dev.1) —— ⏳
+
 ### Task 166: 全專案稽核修補（139 項發現，分 5 批）
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

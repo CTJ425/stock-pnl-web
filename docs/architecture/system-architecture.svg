@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 660" width="1160" height="660" role="img" aria-labelledby="svgTitle svgDesc">
   <title id="svgTitle">stock-pnl-web 系統架構圖</title>
-  <desc id="svgDesc">瀏覽器端 React SPA（UI、Context、DataProvider、localStorage）連向 Supabase（Auth、PostgreSQL、Edge Functions、Storage、pg_cron），由 Edge Functions 在伺服器端請求外部資料源；AI 端點由瀏覽器直連。</desc>
+  <desc id="svgDesc">瀏覽器端 React SPA（UI、Context、DataProvider、localStorage）連向 Supabase（Auth、PostgreSQL、Edge Functions、Storage、pg_cron），由 Edge Functions 在伺服器端請求外部資料源。</desc>
 
   <!--
     維護說明：本檔為手繪 SVG，無外部依賴，可直接在 README 以 <img> / Markdown 圖片語法引用。
@@ -22,7 +22,6 @@
       --sb-fill: #ecfdf5;  --sb-stroke: #10b981;  --sb-text: #064e3b;
       --in-fill: #ffffff;  --in-stroke: #6ee7b7;
       --ex-fill: #f1f5f9;  --ex-stroke: #94a3b8;  --ex-text: #334155;
-      --ai-fill: #f5f3ff;  --ai-stroke: #8b5cf6;  --ai-text: #4c1d95;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -38,7 +37,6 @@
         --sb-fill: #0f2b21;  --sb-stroke: #3fb950;  --sb-text: #b8f0cd;
         --in-fill: #0b1f18;  --in-stroke: #2e8b57;
         --ex-fill: #1c2128;  --ex-stroke: #6e7681;  --ex-text: #d0d7de;
-        --ai-fill: #241a3d;  --ai-stroke: #a371f7;  --ai-text: #e0d0ff;
       }
     }
     text {
@@ -54,7 +52,6 @@
     .node.sb { fill: var(--sb-fill); stroke: var(--sb-stroke); }
     .node.inner { fill: var(--in-fill); stroke: var(--in-stroke); stroke-dasharray: 3 2; }
     .node.ex { fill: var(--ex-fill); stroke: var(--ex-stroke); }
-    .node.ai { fill: var(--ai-fill); stroke: var(--ai-stroke); stroke-dasharray: 5 3; }
     .t { font-size: 12.5px; font-weight: 600; }
     .d { font-size: 10.5px; }
     .s { font-size: 9.5px; }
@@ -62,7 +59,6 @@
     .ls-t { fill: var(--ls-text); }
     .sb-t { fill: var(--sb-text); }
     .ex-t { fill: var(--ex-text); }
-    .ai-t { fill: var(--ai-text); }
     .edge { stroke: var(--edge); stroke-width: 1.6; fill: none; }
     .bus { stroke: var(--edge); stroke-width: 1.6; fill: none; }
     .dot { fill: var(--edge); }
@@ -199,15 +195,6 @@
   <line class="edge" x1="764" y1="350" x2="800" y2="350" marker-end="url(#arrow)"/>
   <line class="edge" x1="764" y1="418" x2="800" y2="418" marker-end="url(#arrow)"/>
   <circle class="dot" cx="764" cy="240" r="2.6"/>
-
-  <!--===== AI endpoint (direct browser connection) =====-->
-  <rect class="node ai" x="802" y="520" width="318" height="76" rx="7"/>
-  <text class="t ai-t" x="814" y="544">AI 端點（使用者自備）</text>
-  <text class="d ai-t" x="814" y="562">Google Gemini 或 OpenAI 相容端點</text>
-  <text class="d ai-t" x="814" y="578">（Ollama / vLLM 等自架服務）</text>
-
-  <polyline class="edge" points="165,470 165,558 800,558" marker-end="url(#arrow)"/>
-  <text class="el" x="180" y="548">AI 分析：瀏覽器直連，端點與金鑰由使用者自帶（專案不代付費用）</text>
 
   <text class="note" x="24" y="640">本機模式免登入、資料僅存於瀏覽器；個股分析 / 外幣匯率 / 總體經濟需 Supabase 模式。</text>
 </svg>

@@ -75,17 +75,6 @@
 
 ---
 
-### RISK-013 — `openai-compatible` 的金鑰仍會下發到每個登入者的瀏覽器
-- **Where**: `sources/supabase/schema.sql`（`get_ai_settings()`）、`sources/src/services/aiClient.ts`（`OpenAiCompatibleProviderImpl`）
-- **Failure scenario**: 0.9.51 把 `google` 的金鑰移到 `ai-proxy` 伺服器端，但 `openai-compatible` 維持瀏覽器直連，因此 `get_ai_settings()` 對該供應商照常回傳 `ai_api_key`。本機 Ollama 通常免金鑰，目前無實際影響；一旦管理員把 Base URL 改指向需要金鑰的雲端端點，該金鑰就會被每一個登入帳號讀到。
-- **Found**: 2026-09-14, Task 161 範圍決策。
-- **Decision**: 使用者 2026-09-14 決定只保護 google。Supabase Edge Function 連不到本機 localhost，全部代理化會讓本機 Ollama 無法使用。後台警語已改為依供應商如實顯示，不再一律寫「金鑰會下發」。
-- **Status**: OPEN（已接受；改用需要金鑰的雲端 openai-compatible 端點前必須重新評估）
-- **2026-09-22 (0.9.63)**: AI 分析改為只限管理員，`get_ai_settings()` 也只對管理員回傳金鑰，暴露面縮小到管理員瀏覽器；條目維持 open。
-
----
-
-
 ### RISK-012 — `scripts/backup-download.cjs` 的 `--dest` 不設路徑邊界
 - **Where**: `sources/scripts/backup-download.cjs`
 - **Failure scenario**: `--dest=../../..` 之類的值會把備份檔寫到預期以外的目錄。

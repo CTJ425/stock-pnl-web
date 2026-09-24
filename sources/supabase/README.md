@@ -9,8 +9,7 @@ supabase/
 └── functions/
     ├── stock-price/              # Edge Function：現價 / 搜尋 / 匯率報價代理（7 檔）
     ├── stock-report/             # Edge Function：盤後籌碼、技術面、基本面、匯率、總經（18 檔）
-    ├── backup-transactions/      # Edge Function：每日備份使用者資料至 backups bucket 與 R2（4 檔）
-    └── ai-proxy/                 # Edge Function：AI 助理代理（保護 Google API Key，2 檔）
+    └── backup-transactions/      # Edge Function：每日備份使用者資料至 backups bucket 與 R2（4 檔）
 ```
 
 前端以**函數名稱**呼叫（`supabase.functions.invoke('stock-price')`），所以函數名必須**完全等於**資料夾名稱，不可改名。
@@ -21,14 +20,13 @@ supabase/
 2. **已在 SQL Editor 執行 `schema.sql`**，建好 `price_cache`、`stock_names`、`chip_raw_cache` 等快取表。
    函數會寫入這些表，缺表會在執行時回 `relation does not exist`。
 
-## 四支函數
+## 三支函數
 
 | 函數 | 檔案 | 作用 |
 |---|---|---|
 | `stock-price` | 7 個 `.ts`（`index.ts`、`dailyRange.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`、`tpexFallback.ts`、`twList.ts`） | 伺服器端代抓現價（台股 MIS、美股 Yahoo）、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
 | `stock-report` | 18 個 `.ts`（`index.ts`、`report.ts`、`twChips.ts`、`twDaily.ts`、`twFundamental.ts`、`twProfitHistory.ts`、`twRevenueHistory.ts`、`twMarket.ts`、`twForeignTop.ts`、`usMacro.ts`、`macroCalendar.ts`、`fxRates.ts`、`pollPlan.ts`、`probeRound.ts`、`sourceProbePlan.ts`、`batchTickers.ts`、`backupAdmin.ts`、`cronSecret.ts`） | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history） |
 | `backup-transactions` | 4 個 `.ts`（`index.ts`、`backupPlan.ts`、`cronSecret.ts`、`r2.ts`） | 由 `backup-daily` 排程觸發，把每個帳號的 `workspaces` / `transactions` / `user_settings` 匯出成 JSON 存進私有的 `backups` bucket 與 Cloudflare R2（若有設定），每帳號保留最新 7 份 |
-| `ai-proxy` | 2 個 `.ts`（`index.ts`、`handler.ts`） | 轉發 Google Gemini AI 請求並於伺服器端注入 API 金鑰，強制驗證使用者 JWT，避免金鑰洩漏至瀏覽器 |
 
 > **環境變數**：即點即產只用到 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（Supabase 內建自動注入，不用設）。若要啟用「盤後自動產報」，需**額外**設一個 `CRON_SECRET`（見下方章節）。
 
@@ -65,13 +63,6 @@ supabase/
 2. 貼上 `functions/backup-transactions/` 下的 4 個檔案：`index.ts`、`backupPlan.ts`、`cronSecret.ts` 與 `r2.ts`（`*.test.ts` 不要上傳）。
 3. 這支**也要**關閉 **Enforce JWT Verification** → **Deploy** —— 它同樣由 pg_cron 帶 `CRON_SECRET` 呼叫。
 
-### 建立 `ai-proxy`
-
-1. Create a function，名稱 `ai-proxy`。
-2. 貼上 `functions/ai-proxy/` 下的 `index.ts` 與 `handler.ts`（`handler.test.ts` 不要上傳）。
-3. **JWT 驗證維持開啟**（預設值 `verify_jwt=true`）—— 前端以使用者 JWT 呼叫，由伺服器端驗證身分並安全注入 Google API Key。
-4. **Deploy**。
-
 ---
 
 ## 方式 B：Supabase CLI（推薦，多檔函數尤其省事）
@@ -90,10 +81,9 @@ cd sources
 supabase link --project-ref <你的-project-ref>
 
 # 4. 部署（--no-verify-jwt 等同 GUI 關閉 JWT 驗證）
-#    stock-price 與 ai-proxy 維持預設的 verify_jwt=true —— 前端是帶使用者 JWT 呼叫的，
-#    關掉只會讓它們變成誰都能打的公開端點（Edge Function 額度濫用風險）。
+#    stock-price 維持預設的 verify_jwt=true —— 前端是帶使用者 JWT 呼叫的，
+#    關掉只會讓它變成誰都能打的公開端點（Edge Function 額度濫用風險）。
 supabase functions deploy stock-price
-supabase functions deploy ai-proxy
 #    stock-report 一定要關 —— pg_cron 帶 CRON_SECRET 呼叫、不帶 JWT，
 #    被重設成 true 的話盤後批次會全數 401。
 supabase functions deploy stock-report --no-verify-jwt
@@ -153,41 +143,6 @@ supabase functions deploy backup-transactions --no-verify-jwt
 > `sources` 欄位會逐項標明各自的資料日與抓取時間。詳見 `schema.sql` §6c 的註解。
 
 > **空間**：每份報告是 ~5KB 純 JSON（v0.3.7-dev.3 起不再存 `html` 欄位，體積約砍半）；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。
-
-## AI 助理設定：`app_settings` 的 `ai_*` 欄位
-
-> ⚠️ 這一節在 0.6.5 更正過。原文寫的是「`user_settings` 的 `ai_*` 欄位」，
-> 那是 0.6.0-dev.1 的作法，後來改成**全站共用單列**（`app_settings`）並由
-> `schema.sql` 把 `user_settings.ai_*` 五欄 DROP 掉，但這份文件沒跟著改。
-
-`schema.sql` **§4.1** 的 `app_settings` 是單列表（`id SMALLINT PK CHECK (id = 1)`），
-供「AI 分析」分頁存放**全站共用**的 AI 供應商設定：
-
-| 欄位 | 內容 |
-| ---- | ---- |
-| `ai_provider` | `'google'` 或 `'openai-compatible'` |
-| `ai_base_url` | OpenAI 相容端點（Ollama / vLLM）；`google` 留空 |
-| `ai_model` | 模型名稱，例如 `gemini-2.5-flash` / `llama3` |
-| `ai_api_key` | 明文；**`authenticated` 已被 REVOKE SELECT**，見下方權限說明 |
-| `ai_updated_at` | 最後更新時間 |
-
-**權限（0.9.51 起）**：只有 `app_metadata.role = 'admin'` 可 INSERT / UPDATE。
-`ai_api_key` 這個**欄位**已對 `authenticated` 與 `anon` 撤銷 SELECT，任何帳號都讀不到，
-管理員也不例外（後台只顯示「已設定」，不回填原值）。
-
-前端改走 `get_ai_settings()` 這支 `SECURITY DEFINER` 函數讀設定，它對 `google` 一律回傳空字串，
-並附帶 `ai_has_key` 布林值。**`google` 的金鑰因此不再進入瀏覽器**，改由 `ai-proxy` Edge Function
-在伺服器端注入。
-
-⚠️ `openai-compatible` 不在此保護範圍內（使用者 2026-09-14 決定）：那條路徑仍由瀏覽器直連端點，
-所以 `get_ai_settings()` 會照常回傳它的金鑰。本機 Ollama 通常免金鑰；若改指向需要金鑰的雲端端點，
-該金鑰會回到每一個登入者的瀏覽器（見 `BUG_FIX.md` RISK-013）。
-
-**要在既有環境套用**：只執行 §4.1 那幾行 `ALTER TABLE` / `CREATE TABLE`。
-⚠️ **不要整份重跑 `schema.sql`**（見本檔開頭的警告）。
-
-沒套用的後果：AI 設定按下儲存會回 `column "ai_provider" does not exist`，
-其餘功能不受影響（報告、K 線都不讀這張表）。
 
 ### 報告 JSON 結構（目前 schema 3）
 

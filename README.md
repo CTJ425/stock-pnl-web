@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.67**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.68-dev.1**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -58,7 +58,6 @@
     - **月營收矩陣**：當月營收、MoM、YoY、累計 YoY，表尾 12 個月總額（自動換算 兆/億/千元）、年增連續月份動態徽章與 4 條 SVG 趨勢折線。
     - **季報獲利矩陣**：單季營收、YoY、EPS、四率（毛利率、營益率、稅前純益率、稅後純益率），表尾提供 TTM 近 4 季滾動 EPS、各項利潤率均值與 7 條對齊多線圖色彩之 SVG 走勢線。
   - **技術面**：日 K 線 + MA5 / MA20 / MA60、**每日成交量矩陣**（成交量、量比、收盤價、漲跌幅，表尾 N 日均量、連 N 日增量/縮量徽章與 4 條 SVG 走勢線）、KD(9,3,3)、RSI(14)、MACD 指標摘要。
-- **AI 分析**：需按下按鈕才會呼叫模型；資料為程式算好的指標與籌碼摘要（不含持股、成本與損益），產生後可繼續追問，對話嚴格框在該檔股票的數據內。
 
 ### 外幣匯率與總體經濟
 - **外幣匯率**：以台幣為本位的 8 種外幣即時中價（最多延遲 10 分鐘），走勢圖可切 3 個月 / 6 個月 / 1 年並同時顯示兩個方向。⚠️ 為市場中價，非銀行牌告匯率。
@@ -69,7 +68,7 @@
 ### 管理員後台與盤後戰情室 (Admin Status & Probe War Room)
 - **⚡ 盤後探針命中戰情室**：即時呈現 8 大資料源（BFI82U, T86, BWIBBU, TWT38U, MARGIN, BORROW, MOPS 營收/獲利）之幾點命中、命中次數與目標進度、是否退休收工以及歷次命中時間晶片。
 - **機制圖解與排程狀態**：視覺化呈現全市場量能、法人覆蓋天數、匯率與檔案涵蓋完整度。
-- **系統維運工具**：AI 端點連線檢測、全量手動重跑批次與 AI Prompt 提示詞線上編輯。
+- **系統維運工具**：全量手動重跑批次與執行記錄。
 
 ### 其他
 - **每工作區手續費率**：工作區列的 `%` 按鈕可直接設定（支援 `0.0004275` 等折扣費率位數），新增交易與損益估算自動帶入。
@@ -88,21 +87,19 @@
    - 計算引擎: `pnlEngine.ts`（移動平均成本法、精算同構對齊台股手續費/證交稅元以下無條件捨去、ETF 0.1% 優惠與 Dashboard 預扣賣出稅費、浮點誤差防護）。
 2. **後端與服務 (Back-end & BaaS)**:
    - `Supabase`:
-     - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings 與全站共用的 AI 設定 `app_settings`；共用快取 `price_cache`（現價）、`stock_names`（代號↔名稱）、`chip_raw_cache`（盤後原始檔）；批次可觀測性 `batch_run_log`、`source_probe_log`。
+     - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings；共用快取 `price_cache`（現價）、`stock_names`（代號↔名稱）、`chip_raw_cache`（盤後原始檔）；批次可觀測性 `batch_run_log`、`source_probe_log`。
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
-     - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫），`app_settings` 僅 `app_metadata.role = 'admin'` 的帳號可寫。
+     - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫）。
      - **Edge Functions (Deno)**：
        - `stock-price`：批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS。
        - `stock-report`：代抓 TWSE 盤後籌碼、日線、基本面、匯率與總經資料，產生結構化報告。
        - `backup-transactions`：由 `backup-daily` 排程觸發，每日備份使用者資料至 Storage 與 Cloudflare R2（若有設定）。
-       - `ai-proxy`：轉發 Google Gemini AI 請求並於伺服器端注入 API 金鑰，強制驗證使用者 JWT，避免金鑰洩漏至瀏覽器。
      - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
      - **精簡 7 大 pg_cron 排程與主動探針巡邏**：
        - `source-probe`：每 5 分鐘主動巡邏 8 大資料源，命中即抓，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
        - 精準時窗優化：`BWIBBU` 估值探針縮窄至 `17:00–18:30`；`BFI82U` 支援雙時窗（`15:00–16:30` 與 `19:30–20:15` 盤後鉅額與綜合帳戶結算）；`BORROW` 借券探針調至 `21:00–23:30`。
        - `macro-daily`、`fx-daily`、`market-data-daily`、`history-daily` 定時維護非日頻數據與歷程。
        - `backup-daily`：每日凌晨 02:00 (Asia/Taipei) 自動備份全站使用者交易紀錄至 Storage。
-     - **AI 端點（使用者自備）**：Google Gemini 走 `ai-proxy` Edge Function 代理並於伺服器端注入金鑰（強制驗證使用者 JWT），避免金鑰下發至瀏覽器；OpenAI 相容端點（Ollama / vLLM）維持瀏覽器直連。專案不內建金鑰、不代付費用。
 
 ### 系統架構圖 (System Architecture)
 
@@ -125,7 +122,7 @@ stock-pnl-web/
 ├── sources/              # 前端網頁應用程式原始碼 (Vite React TS)
 │   ├── src/
 │   │   ├── components/   # AppShell, Auth, Dashboard, YearlyReport, Transactions,
-│   │   │                 # StockDetail（個股分析／AI 分析）, Fx（匯率）, Macro（總經）,
+│   │   │                 # StockDetail（個股分析）, Fx（匯率）, Macro（總經）,
 │   │   │                 # Admin（後台狀態與戰情室）, Charts（自繪 SVG 圖表）, Common（共用 UI）
 │   │   ├── context/      # AuthContext, WorkspaceContext
 │   │   ├── hooks/        # useStockPrices
@@ -134,13 +131,12 @@ stock-pnl-web/
 │   │   │                 # usStockNames（美股 zh-TW 譯名對照）,
 │   │   │                 # reportProxy / reportsBucket / warmStock（盤後報告）,
 │   │   │                 # dailyProxy, fundamentalProxy, macroProxy,
-│   │   │                 # fxProxy / fxQuoteProxy（匯率）, adminStatus,
-│   │   │                 # aiClient / aiSettings / aiChatStore（AI 分析）
+│   │   │                 # fxProxy / fxQuoteProxy（匯率）, adminStatus
 │   │   ├── types/        # models.ts
 │   │   └── utils/        # pnlEngine.ts, holdingRows.ts, indicators.ts,
 │   │                     # csv.ts, fees.ts, formatters.ts, settings.ts
 │   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要、RLS、pg_cron 排程）
-│   │                     # + functions/（stock-price, stock-report, backup-transactions, ai-proxy）
+│   │                     # + functions/（stock-price, stock-report, backup-transactions）
 │   └── package.json      # 版本號來源
 └── README.md             # 本說明文件 (專案根目錄)
 ```
@@ -341,26 +337,17 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 
 ---
 
-### 步驟 5：部署四支 Edge Functions
+### 步驟 5：部署三支 Edge Functions
 
-⚠️ **四支的 JWT 設定各不相同，設錯會出事：**
+⚠️ **三支的 JWT 設定各不相同，設錯會出事：**
 
 | 函數 | JWT 驗證 | CLI 旗標 | 設錯的後果 |
 |---|---|---|---|
 | `stock-price` | **開啟**（預設） | 不加旗標 | 關掉 → 變成任何人都能呼叫的公開端點，Edge 額度遭濫用 |
-| `ai-proxy` | **開啟**（預設） | 不加旗標 | 關掉 → 未登入者也能用你的 Google AI 額度 |
 | `stock-report` | **關閉** | `--no-verify-jwt` | 沒關 → 盤後排程全數 401 |
 | `backup-transactions` | **關閉** | `--no-verify-jwt` | 沒關 → 每日備份全數 401 |
 
 `stock-report` 與 `backup-transactions` 不靠 JWT，它們驗的是 `x-cron-secret` 標頭。
-
-`ai-proxy` 是 0.9.51 新增的 AI 金鑰代理。前端不再持有 Google API Key，改由這支函數在伺服器端注入。
-**它沒部署，AI 分析就不能用**（後台的「AI 設定」仍可設定）。
-
-⚠️ **它有一組固定的上線順序**，寫在 `docs/agent/161-ai-key-proxy-migration.sql` 開頭：
-`PART A` → 部署 `ai-proxy` → 上傳新前端 → `PART B`。
-`PART B`（撤銷 `ai_api_key` 的讀取權）是唯一會弄壞「目前線上那份前端」的一步 ——
-0.9.51 以前的版本直接讀該欄位，先跑 PART B 會讓 AI 分析分頁在新前端上傳前一直顯示未設定。
 
 #### 做法 A：WebUI
 
@@ -374,7 +361,6 @@ Dashboard → Edge Functions → **Create a function**。名稱必須與資料�
 ```bash
 cd sources
 supabase functions deploy stock-price                          # 維持 verify_jwt=true
-supabase functions deploy ai-proxy                             # 維持 verify_jwt=true
 supabase functions deploy stock-report --no-verify-jwt
 supabase functions deploy backup-transactions --no-verify-jwt
 ```

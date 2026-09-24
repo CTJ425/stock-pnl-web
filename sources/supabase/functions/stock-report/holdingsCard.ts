@@ -73,6 +73,8 @@ export interface HoldingRowOut {
   avgCost: number
   breakEven: number | null
   realized: number
+  /** 庫存總覽「券商」: unrealized at the posted 0.1425% rate, undiscounted (TWD only; USD null). */
+  brokerUnrealized: number | null
 }
 
 export interface CurrencySummary {
@@ -82,6 +84,8 @@ export interface CurrencySummary {
   cost: number
   unrealized: number | null
   unrealizedPct: number | null
+  /** Σ quoted rows' `brokerUnrealized`; null for USD or when nothing is quoted. */
+  brokerUnrealized: number | null
   shortMarketValue: number | null
   dayPnl: number | null
   dayPct: number | null
@@ -121,6 +125,7 @@ interface RowAcc {
   quoteYmd: string | null
   mktVal: number | null
   unrealized: number | null
+  brokerUnrealized: number | null
   dayPnl: number | null
 }
 
@@ -135,6 +140,7 @@ function mergeRow(
   quoteYmd: string | null,
   mktVal: number | null,
   unrealized: number | null,
+  brokerUnrealized: number | null,
   dayPnl: number | null,
   legFeeRate: number,
 ): void {
@@ -156,6 +162,7 @@ function mergeRow(
       quoteYmd,
       mktVal,
       unrealized,
+      brokerUnrealized,
       dayPnl,
     })
     return
@@ -165,6 +172,8 @@ function mergeRow(
   existing.feeWeightSum += shares * legFeeRate
   existing.mktVal = existing.mktVal != null && mktVal != null ? existing.mktVal + mktVal : null
   existing.unrealized = existing.unrealized != null && unrealized != null ? existing.unrealized + unrealized : null
+  existing.brokerUnrealized =
+    existing.brokerUnrealized != null && brokerUnrealized != null ? existing.brokerUnrealized + brokerUnrealized : null
   existing.dayPnl = existing.dayPnl != null && dayPnl != null ? existing.dayPnl + dayPnl : null
 }
 
@@ -270,6 +279,7 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
       avgCost: a.shares !== 0 ? a.basis / a.shares : 0,
       breakEven: a.direction === 'LONG' && a.shares > 0 ? computeBreakEven(a.ticker, a.market, currency, a.shares, a.basis, a.feeWeightSum / a.shares) : null,
       realized: a.realized,
+      brokerUnrealized: a.brokerUnrealized,
     })),
   )
 
@@ -282,6 +292,8 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
   const cost = sum(quotedLong.map((r) => r.basis))
   const unrealized = quotedAll.length === 0 ? null : sum(quotedAll.map((r) => r.unrealized as number))
   const unrealizedPct = cost === 0 || unrealized == null ? null : (unrealized / cost) * 100
+  const brokerUnrealized =
+    currency !== 'TWD' || quotedAll.length === 0 ? null : sum(quotedAll.map((r) => r.brokerUnrealized as number))
   const shortMarketValue = quotedShort.length === 0 ? null : sum(quotedShort.map((r) => r.mktVal as number))
 
   const dayPnlRows = rows.filter((r) => r.dayPnl != null)
@@ -293,7 +305,7 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
   const quoteYmds = rows.filter((r): r is HoldingRowOut & { quoteYmd: string } => r.quoteYmd != null).map((r) => r.quoteYmd)
   const newestQuoteYmd = quoteYmds.length === 0 ? null : quoteYmds.reduce((a, b) => (a > b ? a : b))
 
-  return { currency, rows, marketValue, cost, unrealized, unrealizedPct, shortMarketValue, dayPnl, dayPct, realizedYtd, realizedToday, missingCount, newestQuoteYmd }
+  return { currency, rows, marketValue, cost, unrealized, unrealizedPct, brokerUnrealized, shortMarketValue, dayPnl, dayPct, realizedYtd, realizedToday, missingCount, newestQuoteYmd }
 }
 
 /**
@@ -321,15 +333,20 @@ export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string
         const minFee = minFeeFor(h.currency, h.qty)
         const mktVal = close != null ? close * h.qty : null
         const unrealized = close != null ? estimateUnrealized(h, close, l.feeRate, minFee) : null
+        // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden.
+        const brokerUnrealized =
+          close != null && h.currency === 'TWD' ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true) : null
         const dayPnl = close != null && prevClose != null ? h.qty * (close - prevClose) : null
-        mergeRow(map, h, 'LONG', h.qty, h.cost, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl, l.feeRate)
+        mergeRow(map, h, 'LONG', h.qty, h.cost, close, prevClose, quoteYmd, mktVal, unrealized, brokerUnrealized, dayPnl, l.feeRate)
       }
       if (h.shortQty > 0) {
         const minFee = minFeeFor(h.currency, h.shortQty)
         const mktVal = close != null ? close * h.shortQty : null
         const unrealized = close != null ? estimateUnrealizedShort(h, close, l.feeRate, minFee) : null
+        const brokerUnrealized =
+          close != null && h.currency === 'TWD' ? estimateUnrealizedShort(h, close, DEFAULT_FEE_RATE, minFee) : null
         const dayPnl = close != null && prevClose != null ? -h.shortQty * (close - prevClose) : null
-        mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl, l.feeRate)
+        mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, brokerUnrealized, dayPnl, l.feeRate)
       }
     }
   }
@@ -461,13 +478,20 @@ function usdTitle(cur: CurrencySummary): string {
   return `美股持股・美東 ${titleDate(cur.newestQuoteYmd)} 收盤`
 }
 
-/** `未實現合計 **<signed>**（<pct>）｜今日 <signed>` — spec Revision 8 §8.1. The percentage
- * parenthesis is omitted when unknown; an unknown amount prints `--` without bold. */
+/** The 券商 figure is printed only when known and different from the net one once rounded —
+ * the same rule 庫存總覽 uses, so a full-rate account never sees the same number twice. */
+function brokerShown(broker: number | null, net: number | null, decimals: number): broker is number {
+  return broker != null && (net == null || fmtSigned(broker, decimals) !== fmtSigned(net, decimals))
+}
+
+/** `未實現合計 **<signed>**（<pct>）｜券商 <signed>｜今日 <signed>` — spec Revision 8 §8.1. The
+ * percentage parenthesis is omitted when unknown; an unknown amount prints `--` without bold. */
 function totalLine(cur: CurrencySummary, decimals: number): string {
   const amt = cur.unrealized == null ? '--' : `**${fmtSigned(cur.unrealized, decimals)}**`
   const pct = cur.unrealizedPct == null ? '' : `（${pctSigned(cur.unrealizedPct)}）`
+  const broker = brokerShown(cur.brokerUnrealized, cur.unrealized, decimals) ? `｜券商 ${fmtSigned(cur.brokerUnrealized!, decimals)}` : ''
   const day = fmtSignedOrDash(cur.dayPnl, decimals)
-  return `未實現合計 ${amt}${pct}｜今日 ${day}`
+  return `未實現合計 ${amt}${pct}${broker}｜今日 ${day}`
 }
 
 /** TWD whole lots (`shares % 1000 === 0`) show as 張; everything else, and every USD row, as 股. */
@@ -483,7 +507,8 @@ function rowLine(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Curr
   const label = escapeMd(rawLabel)
   const priceFmt = currency === 'TWD' ? priceTwd : priceUsd
   const unrealizedText = r.unrealized == null ? '--' : `**${fmtSigned(r.unrealized, decimals)}**`
-  return `**${label}**｜${qtyText(currency, r.shares)}｜均價 ${priceFmt(r.avgCost)}｜未實現 ${unrealizedText}`
+  const broker = brokerShown(r.brokerUnrealized, r.unrealized, decimals) ? `（券商 ${fmtSigned(r.brokerUnrealized!, decimals)}）` : ''
+  return `**${label}**｜${qtyText(currency, r.shares)}｜均價 ${priceFmt(r.avgCost)}｜未實現 ${unrealizedText}${broker}`
 }
 
 /** Total line + blank line + one line per position, dropping whole positions from the end until
@@ -501,9 +526,11 @@ function buildDescription(total: string, rowText: string[]): string {
   return `${total}\n\n`
 }
 
-function footerText(missingCount: number): string {
-  const base = '資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本'
-  return missingCount > 0 ? `${base}｜${missingCount} 檔無報價，未計入合計` : base
+function footerText(missingCount: number, brokerLegend: boolean): string {
+  let text = '資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本'
+  if (missingCount > 0) text += `｜${missingCount} 檔無報價，未計入合計`
+  if (brokerLegend) text += '｜券商＝牌告 0.1425% 未折讓'
+  return text
 }
 
 function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, generatedAt: string): DiscordEmbed {
@@ -511,11 +538,14 @@ function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, gener
   const title = currency === 'TWD' ? twdTitle(cur, ymd) : usdTitle(cur)
   const total = totalLine(cur, decimals)
   const rows = cur.rows.map((r) => rowLine(r, cur.newestQuoteYmd, currency, decimals))
+  const brokerLegend =
+    brokerShown(cur.brokerUnrealized, cur.unrealized, decimals) ||
+    cur.rows.some((r) => brokerShown(r.brokerUnrealized, r.unrealized, decimals))
   return {
     title,
     description: buildDescription(total, rows),
     color: colorFor(cur.unrealized, decimals),
-    footer: { text: footerText(cur.missingCount) },
+    footer: { text: footerText(cur.missingCount, brokerLegend) },
     timestamp: generatedAt,
   }
 }

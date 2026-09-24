@@ -92,7 +92,7 @@ function readStore(): LocalStore {
  * Persist the local-mode store.
  *
  * **Deliberately the one localStorage write that is allowed to throw** —— the cache writers elsewhere
- * (`priceProxy`, `twMarketData`, `aiChatStore`) swallow failures because a lost cache costs one refetch, while a
+ * (`priceProxy`, `twMarketData`) swallow failures because a lost cache costs one refetch, while a
  * lost transaction is the user's own data and silence would be the worst outcome.
  *
  * What 0.6.43 adds (AUDIT-06) is a message. It used to throw the raw `QuotaExceededError`, which surfaces as an

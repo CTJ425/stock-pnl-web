@@ -858,6 +858,20 @@ export function AppShell() {
 
               <div className="header-spacer" />
 
+              {/* Global "add transaction", in the header on every width (0.9.68: the floating button
+                  covered the bottom-right corner). Hidden on admin, where it has no use. */}
+              {!loading && view !== 'admin' && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm header-add"
+                  aria-label="新增交易"
+                  onClick={() => setShowAddTx(true)}
+                >
+                  <ListPlus size={17} />
+                  <span className="header-add-label">新增交易</span>
+                </button>
+              )}
+
               <WorkspaceControls />
 
               <div className="header-meta">
@@ -924,18 +938,7 @@ export function AppShell() {
           {/* Mobile bottom navigation: must live outside .app-header —— see the comment on useNarrowScreen */}
           {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
 
-          {/*
-            Global "add transaction": available from any tab; the modal is mounted at the shell level so a
-            content reload cannot drop it. Floating on every width, desktop included (0.9.47 reverts the
-            header button — see AppShell.a11y.test.tsx). Hidden on admin: the button has no use there and
-            covers admin status text.
-          */}
-          {!loading && view !== 'admin' && (
-            <button className="btn btn-primary fab" aria-label="新增交易" onClick={() => setShowAddTx(true)}>
-              <ListPlus size={17} />
-              <span className="fab-label">新增交易</span>
-            </button>
-          )}
+          {/* The add-transaction modal is mounted at the shell level so a content reload cannot drop it. */}
           {showAddTx && (
             <Modal title="新增交易紀錄" onClose={() => setShowAddTx(false)} disableBackdropClose>
               <TransactionForm onSubmit={(tx) => addTransactions([tx])} />

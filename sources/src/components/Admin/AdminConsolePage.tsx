@@ -12,25 +12,22 @@
  * Anyone who changes a line of JS can call this page out, but calling it out will only get 403 and empty data.
  */
 import { useState } from 'react'
-import { Activity, Bot, ChevronLeft, Database, MessageSquare, Users } from 'lucide-react'
+import { Activity, ChevronLeft, Database, MessageSquare, Users } from 'lucide-react'
 import { AccountsSection } from './AccountsSection'
 import { AdminStatusPage } from './AdminStatusPage'
-import { AiConnectionSection } from './AiConnectionSection'
 import { BackupsSection } from './BackupsSection'
 import { DiscordAccountsSection } from './DiscordAccountsSection'
 import { DiscordHelpSection } from './DiscordHelpSection'
 import { DiscordSection } from './DiscordSection'
 import { LogsSection } from './LogsSection'
 import { ManualRunSection } from './ManualRunSection'
-import { PromptsSection } from './PromptsSection'
 
-type Panel = 'accounts' | 'data' | 'ai' | 'discord' | 'backups'
+type Panel = 'accounts' | 'data' | 'discord' | 'backups'
 type DataTab = 'status' | 'run' | 'logs'
 
 const PANELS: Array<{ id: Panel; label: string; icon: typeof Users }> = [
   { id: 'accounts', label: '帳號', icon: Users },
   { id: 'data', label: '資料更新', icon: Activity },
-  { id: 'ai', label: 'AI 設定', icon: Bot },
   { id: 'discord', label: 'Discord', icon: MessageSquare },
   { id: 'backups', label: '備份', icon: Database },
 ]
@@ -91,12 +88,6 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
             {dataTab === 'status' && <AdminStatusPage />}
             {dataTab === 'run' && <ManualRunSection />}
             {dataTab === 'logs' && <LogsSection />}
-          </>
-        )}
-        {panel === 'ai' && (
-          <>
-            <AiConnectionSection />
-            <PromptsSection />
           </>
         )}
         {panel === 'discord' && (

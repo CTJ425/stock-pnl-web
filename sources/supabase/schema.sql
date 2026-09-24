@@ -177,15 +177,16 @@ TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
--- 4.1 AI assistant global settings (0.6.0)
---     AI settings are shared by the entire site: regardless of account or workspace, and are stored in a single list of app_settings (the id is always 1).
---     In 0.6.0-dev.1, the user_settings.ai_* fields were used to save one copy for each account. From 0.6.0-dev.2 onwards, it was changed to the whole domain;
---     The following DROP allows the old version of the environment (test area only) to easily clear the dead slots when re-running this file.
+-- 4.1 AI assistant settings — removed in 0.9.68 (the AI feature was taken out; see git history
+--     before 0.9.68 for the old app_settings table, get_ai_settings() and the ai-proxy function).
+--     The DROPs let an older environment clear the dead objects when re-running this file.
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_provider;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_base_url;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_model;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_api_key;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_updated_at;
+DROP FUNCTION IF EXISTS public.get_ai_settings();
+DROP TABLE IF EXISTS app_settings;
 
 -- 4.0b Non-holding TW watchlist. Introduced 0.6.44, dormant 0.7.0–0.7.26 (search/TOP removed),
 -- back in use from 0.8.0 as the 觀察清單 page.
@@ -236,100 +237,6 @@ CREATE TRIGGER tw_watchlist_max30
   BEFORE INSERT ON tw_watchlist
   FOR EACH ROW
   EXECUTE FUNCTION tw_watchlist_enforce_max();
-
---     The key is stored in plain text: 0.6.0 is a front-end direct connection to the AI ​​provider. The key must eventually be returned to the browser to make a request.
---     Therefore, "all login accounts can be read" is a necessity of this architecture, not an oversight.
---     To prevent the key from entering the browser, you have to wait for the 0.6.1 Edge Function proxy.
-CREATE TABLE IF NOT EXISTS app_settings (
-    id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),  -- 恆為單列
-    ai_provider   TEXT,         -- 'google' | 'openai-compatible'
-    ai_base_url   TEXT,         -- openai-compatible 用（ollama / vLLM）；google 留空
-    ai_model      TEXT,
-    ai_api_key    TEXT,         -- ollama 本機通常不需要，允許空字串
-    ai_updated_at TIMESTAMPTZ
-);
-
--- 4.1a Online editing of prompt words (0.6.19)
---
---     Administrators can change the analysis and questioning criteria in the background without having to modify the code and redeploy it.
---
---     ⚠️ **NULL means "use the default value in the program code", not "no prompt word". **
---     The default value is deliberately not written into the database: after writing it in, the default value can be adjusted in aiPrompts.ts in the future.
---     The environment that has been applied will not be updated, and the two areas will run their own prompt words and cannot be seen.
---     When the front-end archives, if the content is the same as the default, NULL will be written back (see normalize in aiPrompts.ts).
---
---     ⚠️ **Only the "Style" section exists here. ** Safety rules (no buying or selling orders and target prices,
---     Ending disclaimers, leveled risk warnings, question limits and command override prevention) are fixed in the code.
---     `ANALYSIS_LOCKED` / `CHAT_LOCKED` followed by user input.
---     Opening the entire paragraph for editing is equivalent to leaving the guardrail to be deleted with one click, and there will be no sign after deletion.
---
---     Use the existing RLS of this table: readable by all login accounts (you need to use it to configure prompt on the front end), and writable only by admin.
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ai_prompt_analysis TEXT;
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ai_prompt_chat     TEXT;
-
-ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
-
--- Readable by all members (after logging in): Non-administrators must also obtain the endpoint and key before the browser can directly send AI requests.
-DROP POLICY IF EXISTS "Authenticated users can read app settings" ON app_settings;
-CREATE POLICY "Authenticated users can read app settings"
-ON app_settings FOR SELECT
-TO authenticated
-USING (true);
-
--- Only accounts with app_metadata.role = 'admin' can write.
--- app_metadata can only be set by Dashboard/SQL and cannot be changed by users (user_metadata is changeable by users and cannot be used as permissions).
--- Authorization method (executed by SQL Editor; after pasting the tag, the account must log in again to refresh the JWT to take effect):
---   UPDATE auth.users
---   SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
---   WHERE email = '<account email to be authorized>';
-DROP POLICY IF EXISTS "Admins can insert app settings" ON app_settings;
-CREATE POLICY "Admins can insert app settings"
-ON app_settings FOR INSERT
-TO authenticated
-WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-DROP POLICY IF EXISTS "Admins can update app settings" ON app_settings;
-CREATE POLICY "Admins can update app settings"
-ON app_settings FOR UPDATE
-TO authenticated
-USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
--- 4.1b Keep the google key out of the browser (Task 161)
---
---     The RLS policy above is still `USING (true)` — every authenticated account can SELECT
---     the row — so the column privileges below are the only thing stopping a direct
---     `select('*')` from returning `ai_api_key`.
---
---     ⚠️ A bare `REVOKE SELECT (ai_api_key) ... FROM authenticated` DOES NOT WORK here, and
---     fails silently. Supabase grants `authenticated` table-level SELECT on every table in
---     `public`, and Postgres checks the table-level privilege first: a column-level REVOKE
---     cannot subtract from it. Measured 2026-09-14 on supabase/postgres 17.6 — after that
---     REVOKE, `SET ROLE authenticated; SELECT secret FROM t;` still returned the value.
---     The table-level SELECT must be revoked first, then the safe columns granted back.
---     Keep this order if you ever add a column: a new column is NOT readable until it is
---     added to the GRANT below.
-REVOKE SELECT ON public.app_settings FROM authenticated, anon;
-GRANT SELECT (id, ai_provider, ai_base_url, ai_model, ai_updated_at, ai_prompt_analysis, ai_prompt_chat)
-  ON public.app_settings TO authenticated;
-
--- `SECURITY DEFINER` so it can still read the key server-side to decide `ai_has_key`,
--- but it never returns the key itself for the google provider (openai-compatible keeps
--- returning its key — that path stays browser-direct, see spec 161 §2).
--- Task 166 (AI-01): AI is admin-only, so the openai-compatible key is returned to admins only.
-CREATE OR REPLACE FUNCTION public.get_ai_settings()
-RETURNS TABLE (ai_provider TEXT, ai_base_url TEXT, ai_model TEXT, ai_api_key TEXT, ai_has_key BOOLEAN)
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT ai_provider, ai_base_url, ai_model,
-         CASE WHEN ai_provider = 'google'
-                OR COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin'
-              THEN '' ELSE COALESCE(ai_api_key, '') END,
-         (ai_api_key IS NOT NULL AND ai_api_key <> '')
-  FROM app_settings WHERE id = 1;
-$$;
-REVOKE ALL ON FUNCTION public.get_ai_settings() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_ai_settings() TO authenticated;
-
 
 -- 5. After-hours chip raw file cache data table (chip_raw_cache)
 --     Shared cache of Edge Function stock-report: cache TWSE files based on transaction date and data set,
@@ -1128,7 +1035,7 @@ CREATE TABLE IF NOT EXISTS backup_run_log (
 
 ALTER TABLE backup_run_log ENABLE ROW LEVEL SECURITY;
 
--- Admins only, same predicate as app_settings (see §4). No INSERT policy — only service role
+-- Admins only (`app_metadata.role = 'admin'`). No INSERT policy — only service role
 -- (Edge Function) writes rows.
 DROP POLICY IF EXISTS "Admins can read backup run log" ON backup_run_log;
 CREATE POLICY "Admins can read backup run log"

@@ -49,6 +49,20 @@ Then inspect code you will touch. Do not assume chat has full state.
 - **`cp` is aliased to `cp -i`.** Use `command cp -f`, and never background a command that
   can block on a prompt — one did, for 33 minutes.
 
+## Release workflow
+
+Run in this order; the steps live in the **`ship`** skill, the numbering in **`versioning`**.
+
+1. From `sources/`: `npm test`, `npm run build`, `npm run typecheck:edge` — all green, or stop.
+2. Bump to `x.x.x-dev.N` in every synced file; add a zh-TW `CHANGELOG.md` entry.
+3. Commit and push **`dev`**. If `sources/supabase/` changed, deploy / apply it on **DEV**
+   (`supabase-ops`) and verify there.
+4. **Stop and ask the user** before touching `main`.
+5. With the OK: finalize the CHANGELOG entry (no "pending" wording — it becomes the public
+   Release body), drop `-dev.N`, merge into `main`, push, then `git push origin main:dev`.
+6. A `main` push never deploys Edge or DDL: apply them to **PROD** separately, then verify.
+7. Update `docs/agent/` (`bookkeeping`).
+
 ## Versioning
 
 No `v` prefix. `main` = `x.x.x`; `dev` unfinished = `x.x.x-dev.N`.
