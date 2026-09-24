@@ -43,7 +43,7 @@ function isTwClosedToday(market: MarketData | null, now: Date): boolean {
 
 type MacroSubTab = 'world' | 'us'
 
-/** Whether the two ISO times fall on the same local calendar day. Bad values ​​are always considered to be on different days (prefer to display one more row)*/
+/** Whether the two ISO times fall on the same local calendar day. Bad values are always considered to be on different days (prefer to display one more row)*/
 function isSameDay(a: string, b: string): boolean {
   const da = new Date(a)
   const db = new Date(b)
@@ -198,7 +198,7 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
  * Indicator column: one indicator per column, with its own trend line and consecutive periods (0.6.35) hanging on the right.
  *
  * ⚠️ **The color rule is "red = higher than the previous issue, green = lower than the previous issue", red does not mean good. **
- * 0.6.34 Previously, non-agricultural employment was colored according to the positive and negative values ​​(increase in employment = red). After changing it to be consistent across the table
+ * 0.6.34 Previously, non-agricultural employment was colored according to the positive and negative values (increase in employment = red). After changing it to be consistent across the table
  * It follows the rise and fall - so "+57 thousand but 72 less than last period" is now green. There cannot be multiple grids in the same table
  * Red means "the value is positive", and some means "it is higher than the previous period". The coexistence of two sets of rules is more difficult to read than one set of rules.
  * The hint below the table is to explain this and cannot be deleted.

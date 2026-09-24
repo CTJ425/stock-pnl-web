@@ -80,7 +80,7 @@ export interface MarketFile {
 /** 2: Legal person amount plus buy/sell (0.6.32). Front-end `MIN_MARKET_SCHEMA` still receives 1 - adding fields is not harmful to old readers*/
 export const MARKET_SCHEMA = 2
 
-/** Daily volume values ​​for the entire month. `date` is only meaningful for the year and month, and the day is fixed to 01*/
+/** Daily volume values for the entire month. `date` is only meaningful for the year and month, and the day is fixed to 01*/
 export function fmtqikMonthUrl(yyyymm: string): string | null {
   if (!/^\d{6}$/.test(yyyymm)) return null
   return `https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=${yyyymm}01&response=json`
@@ -251,7 +251,7 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
 /**
  * Merge into a new date column: remove duplicates by date, from old to new, and cut to cap.
  *
- * **Existing values ​​will not be overwritten by a new copy without that item**: The coverage of the three sources is inherently out of sync——
+ * **Existing values will not be overwritten by a new copy without that item**: The coverage of the three sources is inherently out of sync——
  * The trading volume value will be re-captured throughout the month (without legal persons, without opening high and low), another branch will be opened for high and low, and one branch will be opened per day for legal persons.
  * If the entire transaction is overwritten, the completed legal person transaction will be washed out once every night——
  * It is the same problem and the same solution as EPS of mergeProfitQuarters.

@@ -44,7 +44,7 @@ export function normNum(v: unknown): number | null {
 export interface ChipLeg {
   buy: number | null
   sell: number | null
-  /** Oversold (buy − sell); official disclosed values ​​are preferred*/
+  /** Oversold (buy − sell); official disclosed values are preferred*/
   net: number | null
 }
 

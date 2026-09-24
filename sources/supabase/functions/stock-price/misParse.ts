@@ -10,9 +10,9 @@
  *   d: Trading day (YYYYMMDD); t: Last matching time (HH:mm:ss); ip: Trial matching is '1'.
  *   Yesterday's closing price is already in the same response, and it will be used as the benchmark for ups and downs coloring by hitting API (0.6.34) one more time.
  *   0.6.36 In the same way, get o/h/l/v/d/t/ip quotation card for individual stock analysis - same response, zero additional requests.
- *   After the market closes, these fields will still be the finalized values ​​for that day (actual measurement at 15:23 will still return d=that day, t=13:30:00),
+ *   After the market closes, these fields will still be the finalized values for that day (actual measurement at 15:23 will still return d=that day, t=13:30:00),
  *   The TWSE OpenAPI is still at the previous trading day at this time, so "today's close" will always be based on this endpoint.
- *   Invalid values ​​are represented by '-'.
+ *   Invalid values are represented by '-'.
  */
 
 export interface MisQuote {

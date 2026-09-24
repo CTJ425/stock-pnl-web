@@ -22,7 +22,7 @@ export const CHART_COLORS = {
  * Category color matching (when displaying multiple legal persons at the same time, use "identity" coloring instead of rising or falling).
  *
  * The up/down above is **polarity** encoding (red positive, green negative), which can only express the positive and negative of one sequence at a time;
- * When drawing four legal persons at the same time, the color must be changed to express "who is this", and the positive and negative values ​​​​are given to the direction of the long bar above and below the zero axis.
+ * When drawing four legal persons at the same time, the color must be changed to express "who is this", and the positive and negative values are given to the direction of the long bar above and below the zero axis.
  * Two codes cannot be overlapped on the same set of tags.
  *
  * Taken from the fixed order of dataviz reference color matching (dark steps of slots 1–4), **assigned in sequence, no loop**.

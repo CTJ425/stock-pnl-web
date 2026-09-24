@@ -314,7 +314,7 @@ export interface ScanDecision {
  * The order makes sense:
  * 1. **Maximum number of times** takes priority - unlimited scanning cannot be done when the source is really down (such as UMCSENT stopped updating).
  * 2. **Not scanned today → Scan**. Make sure you ask this question at least once a day.
- *    Because FRED will go back and correct the published historical values ​​(BUG-008 vintage changed two issues at the same time),
+ *    Because FRED will go back and correct the published historical values (BUG-008 vintage changed two issues at the same time),
  *    Relying solely on release day scans will miss corrections.
  * 3. **Within the release window and not yet received → Scan**, this is "stretched scan".
  * 4. Do not scan the rest - **"Once caught, don't catch" is exactly where it ends** (satisfied).

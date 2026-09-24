@@ -10,7 +10,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
@@ -59,9 +58,10 @@ const EMPTY_LEDGER = computeLedger([])
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const provider = useRef<DataProvider>(
+  // Lazy initialiser: `useRef(new …)` would construct (and discard) a provider on every render.
+  const [provider] = useState<DataProvider>(() =>
     isSupabaseConfigured ? new SupabaseProvider() : new LocalProvider(),
-  ).current
+  )
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)

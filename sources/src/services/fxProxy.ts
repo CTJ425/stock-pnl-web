@@ -6,7 +6,7 @@
  * This file is of type **Network Interface Contract** and must be used with
  * FxFile alignment for sources/supabase/functions/stock-report/fxRates.ts.
  *
- * Direction trap: `rate` is always "**How ​​many Taiwan dollars can be exchanged for 1 unit of foreign currency**" (1 USD = 32.387 TWD).
+ * Direction trap: `rate` is always "**How many Taiwan dollars can be exchanged for 1 unit of foreign currency**" (1 USD = 32.387 TWD).
  * In the reverse direction, the reciprocal value is taken from the front end, and the second copy is not stored in the data.
  */
 import { downloadReportsJson } from './reportsBucket'
