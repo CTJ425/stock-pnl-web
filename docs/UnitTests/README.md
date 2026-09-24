@@ -71,7 +71,7 @@ cd sources && npm test   # reports file + test counts
 | Bucket | Where |
 | ---- | ---- |
 | Unit frontend | `src/utils`, `src/services`, feature `*.test.ts` without `render` |
-| Unit Edge | `supabase/functions/*/*.test.ts` (`stock-report`, `backup-transactions`, `ai-proxy`, `stock-price`) |
+| Unit Edge | `supabase/functions/*/*.test.ts` (`stock-report`, `backup-transactions`, `stock-price`) |
 | Integration | `*.test.tsx` + jsdom pages under `src/components`, `App.smoke.test.tsx` |
 | E2E scripts | `scripts/run-all-e2e.cjs`, `scripts/verify-*.cjs`, Playwright verify skill |
 

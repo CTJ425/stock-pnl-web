@@ -1,6 +1,6 @@
 /**
  * Transaction record page: transaction list (date from new to old), deletion (single transaction/checked batch), CSV import/export.
- * New transactions are opened by the global floating button in the shell layer (available in any page).
+ * New transactions are opened by the global header button in the shell layer (available in any page).
  * The "Profit and Loss/Income and Expenses" column is the same as column H in the GAS version: buy = -(unit price × number of shares + expenses), sell = unit price × number of shares - expenses.
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -338,7 +338,7 @@ export function TransactionsPage() {
               <NotebookPen size={36} />
             </div>
             <div>
-              尚無交易紀錄。點右下角「新增交易」記下第一筆，或用「匯入 CSV」把舊試算表的資料搬過來。
+              尚無交易紀錄。點上方的「新增交易」記下第一筆，或用「匯入 CSV」把舊試算表的資料搬過來。
             </div>
           </div>
         ) : sorted.length === 0 ? (

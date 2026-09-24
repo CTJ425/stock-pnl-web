@@ -781,3 +781,20 @@ the "尚未公布" / "暫無資料" whole-card texts, footers and colours are un
 The ≤ 24-column tests are replaced by: no description contains ``` , and every description is at
 most 4,096 characters. The exact lines are fixed by the golden tests in `holdingsCard.test.ts`,
 `discordSummary.test.ts`, `discordRun.test.ts` and `holdingsRun.test.ts`.
+
+## Revision 9 — 券商 figure on the holdings card (user 2026-09-24, target 0.9.68-dev.1)
+
+The user wants the 庫存總覽「券商」figure on the card (option A: total line and every row).
+
+- Meaning: unrealized P&L at the posted TWD rate 0.1425 %, undiscounted, with per-lot inferred
+  rates overridden — the same engine call as `src/utils/holdingRows.ts`
+  (`estimateUnrealized(h, price, DEFAULT_FEE_RATE, minFee, true)`; SHORT uses
+  `estimateUnrealizedShort` at `DEFAULT_FEE_RATE`). TWD only; USD rows carry `null`.
+- Merged across workspaces like `unrealized` (null-propagating sum); the currency total is the sum
+  over quoted rows.
+- Layout: total line `未實現合計 **+X**（+p%）｜券商 +Y｜今日 +D`; row line
+  `…｜未實現 **+X**（券商 +Y）`. Shown only when it differs from the net figure after rounding
+  (same rule as 庫存總覽), so a full-rate account sees no change. When any 券商 figure is shown,
+  the footer adds `｜券商＝牌告 0.1425% 未折讓`.
+- Guards: golden test in `holdingsCard.test.ts` ('shows 券商 on the total and on a row only when it
+  differs from the net figure') and the engine-parity test ('adds the 券商 unrealized …').

@@ -283,7 +283,7 @@ describe('App（本機模式煙霧測試）', () => {
     render(<App />)
     await screen.findByText('本機模式')
 
-    // Add a new transaction using a global floating button
+    // Add a new transaction using the global header button
     await user.click(screen.getByRole('button', { name: /新增交易/ }))
     const addDialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
     const addForm = within(addDialog)

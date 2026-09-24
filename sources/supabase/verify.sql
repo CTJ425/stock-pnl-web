@@ -39,7 +39,7 @@ BEGIN
     VALUES ('workspaces'),('transactions'),('price_cache'),('stock_names'),
            ('user_settings'),('tw_watchlist'),('chip_raw_cache'),('warm_quota'),
            ('batch_run_log'),('backup_run_log'),('admin_run_log'),
-           ('source_probe_log'),('source_probe_tick'),('app_settings'),
+           ('source_probe_log'),('source_probe_tick'),
            ('app_log'),('app_secrets'),('discord_send_log'),
            ('user_discord_settings'),('user_discord_send_log')
   ), missing AS (

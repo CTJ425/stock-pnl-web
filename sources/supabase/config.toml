@@ -426,6 +426,3 @@ verify_jwt = false
 
 [functions.stock-price]
 verify_jwt = true
-
-[functions.ai-proxy]
-verify_jwt = true

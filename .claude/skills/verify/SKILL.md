@@ -38,7 +38,7 @@ Tx fields: `id, workspace_id, tx_date, market ('TPE'\|'US'), ticker, name, tx_ty
 
 - Workspace: `.ws-select select` or button `工作區：…`
 - Nav: `getByRole('button', { name: '…' })` (Chinese labels)
-- FAB `.fab` · notices `.notice-ok` / `.notice-warn` · tables `.data-table`
+- Add-transaction button `.header-add` · notices `.notice-ok` / `.notice-warn` · tables `.data-table`
 - Confirm: `page.on('dialog', d => d.accept())`
 - CSV: `page.waitForEvent('download')` then export
 

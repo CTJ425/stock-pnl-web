@@ -3,7 +3,7 @@
 ## Definition
 
 Pure (or nearly pure) modules: no real network, no Supabase/Storage/cron, no React `render`.  
-Edge pure files under `supabase/functions/` (`stock-report`, `backup-transactions`, `ai-proxy`, `stock-price`) are tested with **Vitest on Node** (not Deno).  
+Edge pure files under `supabase/functions/` (`stock-report`, `backup-transactions`, `stock-price`) are tested with **Vitest on Node** (not Deno).  
 `index.ts` calls `Deno.serve` at load — **never import it** in Vitest; logic lives in extractable modules (`pollPlan`, `twChips`, `r2`, `handler`, …).
 
 ## Run

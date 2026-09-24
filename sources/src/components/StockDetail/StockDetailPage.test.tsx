@@ -27,10 +27,6 @@ vi.mock('../../services/dailyProxy', () => ({
 }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
-// Task 166 (AI-01): the AI tab is admin-only. These tests exercise the tab layout, so they run
-// as an admin; the non-admin case has its own test at the end of this file.
-const isAdmin = vi.fn(async () => true)
-vi.mock('../../services/adminStatus', () => ({ isAdmin: () => isAdmin() }))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -312,13 +308,13 @@ describe('StockDetailPage', () => {
     expect(screen.queryByText('基本面資料尚未產生')).toBeNull()
   })
 
-  it('三個分頁籤：分析內容、損益試算、AI 分析', async () => {
+  it('兩個分頁籤：分析內容、損益試算', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
-    expect(tabs).toEqual(['分析內容', '損益試算', 'AI 分析'])
+    expect(tabs).toEqual(['分析內容', '損益試算'])
   })
 
   it('行情卡片中包含三大法人買賣超動向 2 日卡片', async () => {
@@ -506,17 +502,6 @@ describe('StockDetailPage', () => {
     expect(screen.queryByRole('button', { name: /下載 PDF/ })).toBeNull()
   })
 
-  it('AI 分析仍是獨立分頁，切過去後長頁四段都不在畫面上', async () => {
-    const user = userEvent.setup()
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-    await screen.findByText('三大法人買賣超')
-    await user.click(screen.getByRole('tab', { name: 'AI 分析' }))
-    expect(screen.queryByText('三大法人買賣超')).toBeNull()
-    expect(screen.queryByText('持股概況')).toBeNull()
-    // There is no report to retrieve for AI paging, and the PDF download does not appear.
-    expect(screen.queryByRole('button', { name: /下載 PDF/ })).toBeNull()
-  })
-
   it('Storage 未命中時走即點即產 fallback', async () => {
     fetchStoredReport.mockResolvedValue(null)
     generateReport.mockResolvedValue(report)
@@ -543,18 +528,6 @@ describe('StockDetailPage', () => {
     // The table footer counts the same days
     expect(screen.getByText('2 日累計')).toBeTruthy()
     expect(screen.getByText('近 2 日餘額走勢')).toBeTruthy()
-  })
-
-  it('應包含「AI 分析」分頁籤並可點擊切換', async () => {
-    const user = userEvent.setup()
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-    await screen.findByText('三大法人買賣超')
-
-    const aiTabButton = screen.getByRole('tab', { name: 'AI 分析' })
-    expect(aiTabButton).toBeTruthy()
-
-    await user.click(aiTabButton)
-    expect(screen.getByText('AI 個股綜合分析')).toBeTruthy()
   })
 
   it('應包含「基本面」分頁籤；有資料時顯示估值，無資料時顯示尚未產生', async () => {
@@ -898,21 +871,6 @@ describe('StockDetailPage', () => {
 
       expect(screen.getByText('三大法人買賣超')).toBeTruthy()
       expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
-    })
-  })
-})
-
-describe('AI 分頁的管理員限制（Task 166 AI-01）', () => {
-  beforeEach(() => {
-    cleanup()
-  })
-
-  it('非管理員看不到 AI 分析分頁', async () => {
-    isAdmin.mockResolvedValueOnce(false)
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-    await screen.findByRole('tab', { name: '損益試算' })
-    await waitFor(() => {
-      expect(screen.queryByRole('tab', { name: 'AI 分析' })).toBeNull()
     })
   })
 })

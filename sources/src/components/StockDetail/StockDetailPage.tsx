@@ -2,8 +2,7 @@
  * Content area for individual stock analysis.
  *
  * Starting from 0.6.8, the four sections of "My Holdings/Chips/Fundamentals/Technicals" are merged into a single long page** (Type D: card grouping),
- * Only two tabs are left: "Analysis Content/AI Analysis". AI does not work together and deliberately -
- * It has an API Key input box and dialog state, and the content is triggered by buttons and is not always there.
+ * Only two tabs are left: "Analysis Content/What-if". AI analysis was removed in 0.9.68.
  *
  * Each segment has a `.glass` card (`.detail-card`), and the borders are separated by the white space between cards.
  * I chose this version because it has zero interaction and no problem of "things being put away and cannot be found".
@@ -16,7 +15,7 @@
  * The selector on the left side of the page is also passed in from the caller (currently it is a drop-down menu for switching individual stocks).
  *
  * Data flow: Storage-first reads the shared report of scheduled pre-production, and then clicks and produces fallback if there is no problem.
- * Fundamentals are loaded once at this layer and distributed to three places (the industry badge of the title, the fundamentals section, and AI analysis).
+ * Fundamentals are loaded once at this layer and distributed to three places (the industry badge of the title and the fundamentals section).
  * Independent from chip reporting, failure of either does not affect the other.
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -29,10 +28,8 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
-import { isAdmin } from '../../services/adminStatus'
 import { needsCoreWarm, needsHistoryWarm } from '../../services/needsFundamentalBackfill'
 import { warmStockCore, warmStockHistory } from '../../services/warmStock'
-import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
 import { FundamentalTab } from './FundamentalTab'
 import { QuoteTab, quoteMeta } from './QuoteTab'
@@ -64,13 +61,12 @@ interface StockDetailPageProps extends StockDetailTarget {
   onWatchlistChanged?: () => void
 }
 
-type DetailTab = 'analysis' | 'whatif' | 'ai'
+type DetailTab = 'analysis' | 'whatif'
 type AnalysisSectionTab = 'chips' | 'fundamental' | 'technical'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'analysis', label: '分析內容' },
   { id: 'whatif', label: '損益試算' },
-  { id: 'ai', label: 'AI 分析' },
 ]
 
 const SECTION_TABS: Array<{ id: AnalysisSectionTab; label: string; meta: string }> = [
@@ -82,7 +78,7 @@ const SECTION_TABS: Array<{ id: AnalysisSectionTab; label: string; meta: string 
 const SECTION_IDS = SECTION_TABS.map((t) => t.id)
 
 function isDetailTab(v: string | null): v is DetailTab {
-  return v === 'analysis' || v === 'whatif' || v === 'ai'
+  return v === 'analysis' || v === 'whatif'
 }
 
 function isSectionTab(v: string | null): v is AnalysisSectionTab {
@@ -169,29 +165,6 @@ export function StockDetailPage({
   const [fundError, setFundError] = useState(false)
   // +1 when the user clicks "Refresh" to string in the dependencies of each loaded effect to force a refetch.
   const [reloadKey, setReloadKey] = useState(0)
-  // Task 166 AI-01: AI analysis is admin-only. `null` = not yet resolved; the AI tab stays
-  // hidden until it resolves `true`, same as a confirmed non-admin, so there is no flash of
-  // admin-only content while the check is in flight.
-  const [isAiAdmin, setIsAiAdmin] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    isAdmin().then((v) => {
-      if (alive) setIsAiAdmin(v)
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  // A `?tab=ai` URL for a non-admin falls back to 分析內容 once the check resolves.
-  useEffect(() => {
-    if (isAiAdmin === false && tab === 'ai') {
-      setTab('analysis')
-      setUrlParams({ tab: 'analysis' })
-    }
-  }, [isAiAdmin, tab])
-
   // `tab`/`sub` describe this page's own tabs; once this page is gone, leaving them in the
   // address bar is stale clutter for whatever renders next, so drop them (and only them) on unmount.
   useEffect(() => {
@@ -332,7 +305,7 @@ export function StockDetailPage({
     }
   }, [ticker, name, reloadKey])
 
-  const visibleTabs = isAiAdmin ? TABS : TABS.filter((t) => t.id !== 'ai')
+  const visibleTabs = TABS
   const visibleTabIds = visibleTabs.map((t) => t.id)
 
   return (
@@ -464,10 +437,6 @@ export function StockDetailPage({
             avgCost={avgCost}
             heldQty={holding?.qty ?? null}
           />
-        </div>
-      ) : tab === 'ai' && isAiAdmin ? (
-        <div className="glass detail-body">
-          <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
         </div>
       ) : null}
     </div>
