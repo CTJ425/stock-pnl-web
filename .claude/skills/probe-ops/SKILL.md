@@ -71,11 +71,12 @@ plus a reviewer are the only gates on that half. Do not read a green suite as en
 
 ## Timeouts: two different limits, and they disagree
 
-- **Edge worker wall clock: 150 s per request**, a fresh worker per request
-  (`workerTimeoutMs` in `volumes/functions/main/index.ts` on DEV).
+- **Edge request: 150 s.** Hosted Supabase answers 504 after a 150 s request idle timeout on every
+  plan (wall clock is 150 s on Free, 400 s on paid; CPU time 2 s, async I/O excluded) —
+  supabase.com/docs/guides/functions/limits, checked 2026-09-24.
 - **pg_net client gives up at 60 s.** So a round can still be running when cron already
-  recorded a timeout. `wall clock duration reached ... in_flight_req_exists = true` in the
-  functions container log is the worker being killed mid-request.
+  recorded a timeout. `wall clock duration reached` in the Edge Function logs is the worker being
+  killed mid-request.
 
 **Manual probe calls contend with the cron rounds.** Issuing `{"action":"probe"}` by hand while
 diagnosing produces exactly the 60 s timeouts that look like the regression you are hunting —
