@@ -1,17 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 167 — remove AI UI, move 新增交易 into the header (uncommitted)
-- Status: 🔄 working tree on `dev`; `main` and `dev` at 0.9.67
-- Timestamp: 2026-09-24 01:55:00 Asia/Taipei
+- Action: Task 167 — 0.9.68-dev.1 on `dev` (AI removed, header 新增交易, Discord 券商)
+- Status: 🔄 `dev` a3d1554 pushed; DEV Supabase not deployed (no CLI on host); `main` at 0.9.67
+- Timestamp: 2026-09-24 02:06:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-24 01:55:00 Asia/Taipei (Task 167, uncommitted on `dev`)
-- Task 167 items 1–2 done in the working tree on `dev`, **not committed, no version bump yet**.
-- AI removed from the frontend: StockDetail「AI 分析」tab, admin「AI 設定」panel, and `aiClient` / `aiSettings` / `aiPrompts` / `aiChatStore` / `aiChat` / `aiPayload` / `AiTab` / `AiConnectionSection` / `PromptsSection` with their tests. Unused `.ai-*` CSS dropped; `.ai-form` / `.ai-form-group` / `.ai-input` / `.ai-actions` kept (Discord settings use them). Backend untouched: `ai-proxy` Edge Function and the AI tables in `schema.sql` are still deployed.
-- 「新增交易」moved from the fixed `.fab` into `.app-header` (`.header-add`); icon-only at ≤ 720 px. Reverts 0.9.47. Mobile `.container` bottom padding no longer reserves the 56+24 px FAB space.
-- **Verify**: `npx vitest run` 2,473 passed / 7 skipped / 0 failed; `npm run build`, `npm run lint`, `npm run typecheck:edge` exit 0. **Layout not verified in a browser**: Playwright chromium on this host fails to start (`libatk-1.0.so.0` missing; needs `sudo npx playwright install-deps chromium`).
+## 📅 Log: 2026-09-24 02:06:00 Asia/Taipei (Task 167, 0.9.68-dev.1)
+- Committed and pushed `dev` a3d1554 (0.9.68-dev.1): AI removed end to end (frontend, `ai-proxy` source, `schema.sql` now DROPs `app_settings` + `get_ai_settings()`; RISK-013 closed); 新增交易 moved into the header; Discord holdings card shows the 券商 figure (spec discord-holdings.md Revision 9); CLAUDE.md gained § Release workflow.
+- **Verify**: `npm test` 2,459 passed / 7 skipped / 0 failed; `npm run build`, `npm run lint`, `npm run typecheck:edge` exit 0.
+- **Blocked — DEV not deployed**: the `supabase` CLI is not installed on this host (Node moved to v26 under nvm; no binary anywhere, no `~/.supabase`). Still to do on DEV: `supabase functions deploy stock-report --no-verify-jwt`, `supabase functions delete ai-proxy`, and `DROP FUNCTION IF EXISTS public.get_ai_settings(); DROP TABLE IF EXISTS app_settings;` with the DEV identity predicate in the same query. PROD after `main`.
+- Browser layout of the header button still unchecked (Playwright chromium needs `libatk-1.0.so.0`).
 
 ---
 
