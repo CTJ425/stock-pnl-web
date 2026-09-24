@@ -1,0 +1,231 @@
+/* ---------- KPI big character poster ----------*/
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.kpi {
+  padding: 16px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi .kpi-label {
+  color: var(--ink-secondary);
+  font-size: var(--type-label-01);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi .kpi-value {
+  margin-top: 8px;
+  font-family: var(--font-body);
+  font-size: var(--type-heading-04);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi .kpi-sub {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Market Panel (Inventory Overview: Taiwan Stocks/U.S. Stocks) ----------*/
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.market-panel {
+  padding: 16px 24px 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.market-panel .panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+/* The hero label sits at the right end of the head row, not above the number. */
+.market-panel .panel-head .kpi-label {
+  margin-left: auto;
+}
+
+.market-panel .panel-head h3,
+.market-panel .panel-head h2 {
+  font-size: var(--type-body-01);
+}
+
+.market-panel .panel-head .ccy {
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+}
+
+.market-panel .metric {
+  padding-top: 12px;
+}
+
+.market-panel .metric-hero {
+  padding-top: 2px;
+}
+
+.market-panel .kpi-label {
+  color: var(--ink-secondary);
+  font-size: var(--type-label-01);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.market-panel .kpi-value {
+  margin-top: 4px;
+  font-family: var(--font-body);
+  font-size: var(--type-body-02);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.market-panel .metric-hero .kpi-value {
+  font-size: var(--type-heading-03);
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+}
+
+.market-panel .metric-row {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.market-panel .metric-row .metric + .metric {
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+
+.market-panel .kpi-sub {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Exposure bar (Task 142): long vs. short market value within one market ----------*/
+.exposure-bar {
+  display: flex;
+  height: 8px;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.exposure-seg-long {
+  background: var(--ink);
+}
+
+.exposure-seg-short {
+  background: var(--steel);
+}
+
+.exposure-key {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: var(--type-label-01);
+}
+
+/* One legend entry: swatch, label and value read as a single group. */
+.exposure-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-secondary);
+}
+
+.exposure-sw {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+}
+
+.exposure-sw-long {
+  background: var(--ink);
+}
+
+.exposure-sw-short {
+  background: var(--steel);
+}
+
+.market-note {
+  margin-top: 12px;
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+.market-panel .market-foot {
+  margin: auto -24px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.market-panel .market-foot .metric {
+  padding: 0 24px 16px;
+}
+
+.market-panel .market-foot .metric + .metric {
+  border-left: 1px solid var(--border);
+}
+
+/* ---------- Profit and loss color (red rises, green falls; values are always signed, not just color) ----------*/
+.pnl-up {
+  color: var(--up);
+}
+
+.pnl-down {
+  color: var(--down);
+}
+
+.pnl-flat {
+  color: var(--ink-secondary);
+}
+
+/* Direction pill on the holdings table (Task 141): 台股慣例 red = up = long, green = down = short. */
+.dir-long,
+.dir-short {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+}
+
+.dir-long {
+  color: var(--up);
+  background: color-mix(in srgb, var(--up) 12%, transparent);
+}
+
+.dir-short {
+  color: var(--down);
+  background: color-mix(in srgb, var(--down) 12%, transparent);
+}

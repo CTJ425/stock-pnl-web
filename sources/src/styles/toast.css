@@ -1,0 +1,180 @@
+/* ---------- Toast ---------- */
+.toast-region {
+  position: fixed;
+  right: var(--sp-05);
+  bottom: var(--sp-05);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-03);
+  z-index: 110;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  min-width: 240px;
+  max-width: 360px;
+  padding: var(--sp-04);
+  background: var(--cds-layer-01);
+  color: var(--cds-text-primary);
+  border: 1px solid var(--cds-border-subtle);
+  border-left: 3px solid var(--cds-support-success);
+  font-size: var(--type-body-01);
+  box-shadow: var(--cds-shadow-menu);
+}
+
+.toast-error {
+  border-left-color: var(--cds-support-error);
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-01);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Discord settings blocks (Task 165 step 2e Revision 1) ──────────────────────────── */
+
+/* The read-only account table: without fixed widths the e-mail column eats the slack and the
+   three status columns bunch up against the right edge. */
+.dsc-account-table {
+  table-layout: fixed;
+}
+
+.dsc-account-table th,
+.dsc-account-table td {
+  padding-top: var(--sp-04);
+  padding-bottom: var(--sp-04);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dsc-account-table th:nth-child(1),
+.dsc-account-table td:nth-child(1) {
+  width: 34%;
+}
+
+.dsc-account-table th:nth-child(2),
+.dsc-account-table td:nth-child(2),
+.dsc-account-table th:nth-child(3),
+.dsc-account-table td:nth-child(3) {
+  width: 18%;
+}
+
+.dsc-account-table th:nth-child(4),
+.dsc-account-table td:nth-child(4) {
+  width: 30%;
+}
+
+.dsc-block {
+  display: flex;
+  flex-direction: column;
+  /* One rhythm for every child. The children carry no vertical margin of their own:
+     `.ai-form-group` and `.ai-actions` never had one (they rely on `.ai-form`'s gap, and
+     this panel is not an `.ai-form`), which is why the URL box and the button row touched. */
+  gap: var(--sp-04);
+  margin-top: var(--sp-06);
+  padding-top: var(--sp-06);
+  border-top: 1px solid var(--border);
+}
+
+.dsc-block:first-of-type {
+  margin-top: var(--sp-04);
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Scoped on purpose: `.hint` has no base rule in this file and is used app-wide, so it renders
+   as a default <p> with 14px collapsed margins. Only the margin is removed, only in here. */
+.dsc-block .hint {
+  margin: 0;
+}
+
+.dsc-block-title {
+  margin: 0;
+  font-size: var(--type-body-01);
+  font-weight: 600;
+}
+
+.dsc-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+}
+
+.dsc-schedule-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-04);
+  flex-wrap: wrap;
+}
+
+/* The three labels (快報發送時間 / 完整版發送時間 / 發送時間) have three widths, so without a
+   fixed column the selects start at three different x positions. */
+.dsc-schedule-row > span {
+  flex: 0 0 112px;
+}
+
+.dsc-schedule-field {
+  margin-bottom: 0;
+}
+
+.dsc-schedule-field select {
+  width: auto;
+  min-width: 120px;
+}
+
+.dsc-help-list {
+  margin: 0;
+  padding-left: var(--sp-05);
+}
+
+/* ── Revision 2 polish (§9.2 step 2d rev 2)──────────────────────────────────────────── */
+
+/* Pin the list column to ~240px so the detail card gets the rest of the width. */
+.dsc-account-nav {
+  flex: 0 0 240px;
+}
+
+/* Unselected rows had no border, so they read as plain text instead of clickable rows. */
+.dsc-account-nav .adm-side-item:not(.active) {
+  border-color: var(--border);
+}
+
+.dsc-account-nav .dsc-account-status {
+  color: var(--ink-muted);
+}
+
+/* Separates the test/preview/clear row from the toggle row above it. */
+@media (max-width: 720px) {
+  .dsc-master-detail {
+    flex-direction: column;
+  }
+
+  .dsc-account-nav {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

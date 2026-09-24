@@ -1,0 +1,229 @@
+/* ---------- Layout ----------*/
+.container {
+  width: 100%;
+  max-width: 1312px;
+  margin: 0 auto;
+  /* Use full height to allow the footer of the page to stick to the bottom*/
+  flex: 1;
+  padding: 0 24px 96px;
+}
+
+/* Carbon UI shell header: 48px tall, $background, one hairline rule below. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--cds-background);
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.app-header-inner {
+  max-width: 1312px;
+  margin: 0 auto;
+  padding: 0 var(--sp-05);
+  min-height: var(--cds-header-h);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-05);
+  flex-wrap: wrap;
+}
+
+/* Carbon header name: 14px, weight 600, the product name at the left edge. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  font-family: var(--font-display);
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+}
+
+.header-spacer {
+  flex: 1;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-secondary);
+  font-size: var(--type-label-01);
+}
+
+/* Global "新增交易" button in the header (0.9.68). */
+.header-add {
+  margin-left: var(--sp-03);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ----------Paging (Tabs) ----------*/
+/* Carbon tabs: no container, a 1px rule under the row, a 3px $border-interactive
+   bar under the selected tab. Each tab is 40px tall. */
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
+}
+
+.tab {
+  appearance: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--cds-text-secondary);
+  font: inherit;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
+  border-radius: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-03);
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.tab:hover {
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
+}
+
+.tab.active {
+  color: var(--cds-text-primary);
+  background: transparent;
+  font-weight: 600;
+  border-bottom: 3px solid var(--cds-border-interactive);
+}
+
+/*
+ * Separator lines for paging groups (0.6.19): four holdings / two market items.
+ *
+ * Only give one line 1px and no group title - the horizontal space at the top of the page is the scarcest resource.
+ * Grouping titles will make the entire navigation a bit taller, and the resulting signal is not worth the height.
+ */
+.tab-div {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: var(--border-strong);
+  flex: 0 0 auto;
+}
+
+/* The grid in the bottom column is a constant-width flex, and the dividing line cannot be stretched into one grid.*/
+.bottom-nav .tab-div {
+  align-self: center;
+  height: 26px;
+  margin: 0 2px;
+}
+
+/* ---------- Mobile phone bottom navigation (≤720px) ----------
+ * AppShell will render this copy when ≤720px (the same paging definition, not a copy of the DOM).
+ * It **must** hang outside .app-header: there is a backdrop-filter at the top of the page, which will become a descendant of fixed
+ * If the containing block is placed in the header of the page, it will only be posted at the bottom of the header instead of the bottom of the window.
+ *
+ * The height is based on --bottom-nav-h as the single source: the footer blank is calculated from it.
+ * If this number is changed, the three will follow together. The safe area (iPhone home indicator) is additionally added with padding below.
+ */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: flex;
+  gap: 2px;
+  height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: var(--header-bg);
+  border-top: 1px solid var(--border);
+}
+
+.bottom-nav .tab {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: auto;
+  margin-bottom: 0;
+  padding: var(--sp-02) var(--sp-01);
+  font-size: var(--type-label-01);
+  line-height: 1.25;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The label in the bottom column should always be visible: .tab-label is hidden at ≤1020px (only the icon is left at the top of the page)*/
+.bottom-nav .tab-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/*
+ * When selected, the gradient pill at the top of the page will not be used: the entire solid color block will be too heavy to occupy the entire grid.
+ * And the bottom column is always on the screen. Change to accent color + bold, which is a common writing method for mobile devices.
+ */
+.bottom-nav .tab.active {
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-01);
+  box-shadow: none;
+  font-weight: 600;
+  border-bottom-color: transparent;
+  box-shadow: inset 0 3px 0 0 var(--cds-border-interactive);
+}
+
+/* ---------- Glass Card ----------*/
+/* Carbon tile: a flat $layer surface with square corners and no shadow. */
+.glass {
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.section {
+  margin-top: var(--sp-06);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Carbon heading-compact-02. Carbon does not set uppercase on section headings. */
+.section-title h2 {
+  font-size: var(--type-body-02);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cds-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title .hint {
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+  font-family: var(--font-body);
+}

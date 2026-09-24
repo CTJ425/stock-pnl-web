@@ -1,0 +1,73 @@
+/* =========================================================
+ * Foreign Currency Exchange Rate Page (0.6.7)
+ *
+ * The mobile version is not within the scope of 0.6.7 (wait until the desktop function is verified), so only the desktop version will be written here.
+ * ========================================================= */
+.fx-panel {
+  padding: 16px 24px;
+}
+
+/*
+ * The currency card is <button>: the entire card can be clicked to have enough click area, and button will have
+ * All your fonts, centering and borders must be cleared to look the same as .kpi.
+ */
+.fx-card {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.fx-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* Selected state: Outline instead of color filling, so as not to cover up the original number layer in the card*/
+.fx-card.is-active {
+  border-color: var(--accent);
+  border-width: 2px;
+  /* .kpi is 16px 18px; thickening the border by 1px will make the cards grow taller and make the whole row jump, so each subtract 1px to make up for it.*/
+  padding: 16px 16px;
+}
+
+.fx-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Trend chart: Both directions side by side (0.6.7).
+ * Two columns for desktop; ≤900px stacked into one column - if two pictures are squeezed into half the width of a mobile phone, no trend can be seen at all.
+ */
+.fx-chart-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .fx-chart-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fx-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.fx-chart-head h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-body-01);
+  font-weight: 600;
+}

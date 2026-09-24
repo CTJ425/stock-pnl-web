@@ -1,0 +1,695 @@
+
+/* ──Management backend: full page + left vertical navigation (0.6.19)────────────────────*/
+
+.adm-console {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/*
+ * The sidebar sticks to the top when scrolling: the content area in the background (especially in the crawling state) is much longer than the sidebar.
+ * You need to be able to change pages directly after scrolling to the end without having to scroll back first.
+ */
+.adm-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: start;
+  position: sticky;
+  top: 14px;
+}
+
+.adm-side nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.adm-side-label {
+  font-size: var(--type-label-01);
+  letter-spacing: 1.4px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0 12px 8px;
+}
+
+.adm-side-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 0;
+  font: inherit;
+  font-size: var(--type-body-01);
+  color: var(--ink-secondary);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  text-align: left;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.adm-side-item:hover {
+  background: var(--btn-hover-bg);
+  color: var(--ink);
+}
+
+.adm-side-item.active {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.adm-side-item.active svg {
+  color: var(--accent);
+}
+
+/* Exit backstage. Deliberately made quieter than the guided tour, it is not the fifth project*/
+.adm-back {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.adm-back:hover {
+  color: var(--ink);
+}
+
+.adm-main {
+  min-width: 0;
+}
+
+/* The background panel itself is the first block and does not need to be pushed away from above.*/
+.adm-main > .section:first-child {
+  margin-top: 0;
+}
+
+.adm-panel {
+  padding: 16px 24px;
+}
+
+/*
+ * ≤900px The sidebar is converted into a horizontal scroll column. Keep it a "full row of clickable items" rather than a drop-down menu:
+ * The four items can still be arranged at 390px (scroll horizontally for a short distance), and it takes one more click to see which pages there are when scrolling down.
+ */
+@media (max-width: 900px) {
+  .adm-console {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .adm-side {
+    position: static;
+  }
+
+  .adm-side nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+
+  .adm-side-item {
+    white-space: nowrap;
+  }
+
+  .adm-side-label {
+    display: none;
+  }
+}
+
+/* ── Inventory Overview: Current Price Highlight (0.6.20)──────────────────────────────*/
+
+/* ──Management background: Administrator permission switch (0.6.19)──────────────────────*/
+
+/*
+ * Use switches instead of check boxes: this is an "immediate action", not a form field.
+ * The check box looks like you need to press a certain "Save" to take effect, but here it is sent.
+ */
+.adm-toggle {
+  appearance: none;
+  width: 38px;
+  height: 21px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-strong);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.adm-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--ink-secondary);
+  transition: left 0.18s ease, background 0.18s ease;
+}
+
+.adm-toggle.on {
+  background: var(--cds-support-success);
+  border-color: transparent;
+}
+
+.adm-toggle.on::after {
+  left: 19px;
+  background: var(--cds-text-on-color);
+}
+
+.adm-toggle:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* ──Management background: prompt word editing (0.6.19)────────────────────────────*/
+
+.adm-prompt {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.adm-prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-content: start;
+}
+
+.adm-prompt-item {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--cds-layer-02);
+  border-radius: 0;
+  padding: 12px 12px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--ink-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.adm-prompt-item:hover {
+  border-color: var(--btn-hover-border);
+}
+
+.adm-prompt-item.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--ink);
+}
+
+.adm-prompt-item b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--type-body-01);
+  font-family: var(--font-display);
+}
+
+.adm-prompt-item > span {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.adm-prompt-item .badge {
+  margin-top: 4px;
+}
+
+.adm-prompt-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  margin-bottom: 4px;
+}
+
+.adm-prompt-label span {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/*
+ * Prompt words are things that the model reads word by word. Line breaks and indentations are meaningful, so use constant-width words and keep blank spaces.
+ * The height is given larger than the normal textarea: these paragraphs originally have twenty or thirty lines.
+ */
+.adm-prompt-text {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  background: var(--input-bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  border-radius: 0;
+  padding: 12px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+  line-height: 1.75;
+}
+
+.adm-prompt-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Use a dotted frame to lock a paragraph: you can tell at a glance that "this is not an input box."*/
+.adm-prompt-locked {
+  margin-top: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0;
+  padding: 12px 12px;
+  background: var(--row-band);
+}
+
+.adm-prompt-locked b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+.adm-prompt-locked pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+  line-height: 1.75;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 900px) {
+  .adm-prompt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-prompt-list {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .adm-prompt-item {
+    flex: 1 0 auto;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   資料抓取狀況（管理員後台）。前綴一律 ast-，避免與既有 class 相撞。
+
+   狀態色沿用 --notice-*-ink，**刻意不用 --up / --down**：
+   台股的 --up 是紅色（漲），拿它當「異常」會與盤面語意打架。
+   ───────────────────────────────────────────────────────────── */
+.ast-ok    { --ast-c: var(--notice-ok-ink); }
+.ast-warn  { --ast-c: var(--notice-warn-ink); }
+.ast-late  { --ast-c: var(--notice-err-ink); }
+.ast-idle  { --ast-c: var(--ink-muted); }
+
+.ast-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.ast-verdict-icon { color: var(--accent); flex: none; }
+.ast-verdict .section-stamp { margin-left: auto; }
+
+.ast-note { margin: 6px 0 0; font-size: var(--type-label-01); color: var(--ink-muted); line-height: 1.6; }
+.ast-sub { display: block; font-size: var(--type-label-01); color: var(--ink-muted); }
+/* The fetch range of the schedule: connected below jobname, allowing line breaks (the remaining fields in the table are nowrap)*/
+.ast-scope {
+  display: block; margin-top: 3px; max-width: 34ch;
+  font-size: var(--type-label-01); line-height: 1.5; color: var(--ink-muted); white-space: normal;
+}
+.ast-mono { font-variant-numeric: tabular-nums; font-size: var(--type-label-01); white-space: nowrap; }
+.ast-unit { font-size: var(--type-body-01); font-weight: 400; color: var(--ink-secondary); }
+
+/* ─────────────────────────────────────────────────────────────
+   探針同步狀態的一源一列。前綴 apr-（admin probe row）。
+
+   進度條刻意用「一格＝一次探測」而不是百分比：這裡要看的是第幾輪翻綠，
+   百分比會把那個時刻壓成一個比例，正好丟掉唯一要量的東西。
+   ───────────────────────────────────────────────────────────── */
+.apr-days { display: flex; flex-direction: column; gap: 18px; }
+.apr-day {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 8px; font-size: var(--type-body-01); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.apr-day .ast-sub { display: inline; }
+
+/* The probe list is a table built from divs, so it carries the same four bands
+   as .data-table. `--hairline` was never defined, so every row was drawing the
+   legacy slate fallback instead of a Carbon border. */
+.apr-row { border-top: 1px solid var(--cds-border-subtle); }
+.apr-row:last-child { border-bottom: 1px solid var(--cds-border-subtle); }
+.apr-row:nth-child(even) { background: var(--table-zebra); }
+
+.apr-head {
+  display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr auto auto;
+  align-items: center; gap: 12px; width: 100%;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit;
+}
+.apr-head:hover { background: var(--table-row-hover); }
+.apr-head:disabled { cursor: default; opacity: .62; }
+.apr-head:disabled:hover { background: none; }
+
+.apr-name { font-size: var(--type-body-01); font-weight: 600; }
+
+/* 每格 flex:1，格數即窗內探測次數；不換行，窄螢幕自然壓縮格寬 */
+.apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
+.apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 0; }
+.apr-seg-hit { background: var(--notice-ok-ink); }
+.apr-seg-miss { background: var(--cds-border-strong); }
+.apr-seg-empty { background: var(--cds-border-subtle); }
+
+.apr-sum { text-align: right; font-size: var(--type-label-01); font-variant-numeric: tabular-nums; }
+.apr-sum b { font-weight: 600; }
+
+.apr-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
+.apr-open .apr-caret { transform: rotate(180deg); }
+
+.apr-log { margin: 0 0 12px; }
+.apr-log .data-table { font-size: var(--type-label-01); }
+.apr-hit-row td { color: var(--notice-ok-ink); }
+
+/* ─────────────────────────────────────────────────────────────
+   執行記錄（管理員後台 LogsSection，Spec 146）。前綴 adm-log-。
+   ───────────────────────────────────────────────────────────── */
+.adm-log-filters { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; }
+
+.adm-log-list { list-style: none; margin: 12px 0 0; padding: 0; }
+
+/* The execution log is the second div-built table in the console; it takes the
+   same bands, borders and row height as the probe list above. */
+.adm-log-row { border-top: 1px solid var(--cds-border-subtle); }
+.adm-log-row:last-child { border-bottom: 1px solid var(--cds-border-subtle); }
+.adm-log-row:nth-child(even) { background: var(--table-zebra); }
+
+.adm-log-head {
+  display: grid;
+  grid-template-columns: 9.5rem 3.5rem 5.5rem 11rem 1fr auto;
+  align-items: center; gap: 12px; width: 100%;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit; font-size: var(--type-label-01);
+}
+.adm-log-head:hover { background: var(--table-row-hover); }
+
+.adm-log-time { white-space: nowrap; }
+
+/* Carbon tag: a filled tint with no border, so the chip stays readable on the
+   base, zebra and hover bands alike — the same collision that hid .tx-chip-spot. */
+.adm-log-level {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 24px; font-size: var(--type-label-01); font-weight: 400; padding: 0 var(--sp-03);
+  border-radius: 12px; border: none; white-space: nowrap;
+  color: var(--cds-text-primary); background: var(--chip-neutral);
+}
+.adm-log-level-error { background: color-mix(in srgb, var(--danger) 28%, transparent); }
+.adm-log-level-warn  { background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent); }
+.adm-log-level-info  { background: var(--chip-neutral); }
+
+.adm-log-action {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.adm-log-message {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-secondary);
+}
+
+.adm-log-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
+.adm-log-open .adm-log-caret { transform: rotate(180deg); }
+
+.adm-log-detail { padding: var(--sp-02) var(--sp-02) var(--sp-04); border-top: 1px solid var(--cds-border-subtle); }
+.adm-log-detail pre {
+  margin: 8px 0; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01); line-height: 1.6; color: var(--ink-muted);
+  background: var(--row-band); border-radius: 0; padding: 10px 12px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   機制運作總覽對照（管理員後台 MechanismGuide）。前綴 adm-guide-。
+   ───────────────────────────────────────────────────────────── */
+.adm-guide-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 0; border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit;
+}
+.adm-guide-toggle-title {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.adm-guide-toggle-action {
+  display: flex; align-items: center; gap: 6px; font-size: var(--type-label-01);
+  color: var(--ink-muted); flex: none;
+}
+.adm-guide-toggle-action .apr-caret-open { transform: rotate(180deg); }
+.adm-guide-body { margin-top: 14px; }
+.adm-guide-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px; margin-bottom: 14px;
+}
+.adm-guide-card {
+  padding: 12px 16px; border-radius: 0;
+}
+.adm-guide-card-head {
+  display: flex; align-items: center; gap: 6px; font-size: var(--type-body-01); margin-bottom: 6px;
+}
+.adm-guide-subhead {
+  display: flex; align-items: center; gap: 6px; margin: 12px 0 8px;
+  font-size: var(--type-body-01); font-weight: 600; color: var(--ink-base, inherit);
+}
+.adm-guide-subhead h4 { margin: 0; font-size: var(--type-body-01); font-weight: 600; }
+.adm-guide-table { font-size: var(--type-label-01); }
+.ast-note-cell {
+  font-size: var(--type-label-01); color: var(--ink-secondary); line-height: 1.5;
+  max-width: 38ch; white-space: normal;
+}
+/* =========================================================
+   盤後探針命中戰情室 (ProbeWarRoom - Unified with .glass.kpi)
+   ========================================================= */
+.pwr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+/* ---------- Probe war room cards ----------
+ * The two gradient bars that used to live here were dead CSS: no base rule ever
+ * gave `.pwr-kpi-card::before` content or a box, so all three states drew the
+ * same card. State now uses the device Carbon already uses for a status block —
+ * a 3px rule on the leading edge in the $support colour — plus a Carbon tag.
+ * Two hues only: $support-success for retired, $support-info for probing.
+ */
+.pwr-kpi-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  border-left: 3px solid var(--cds-border-subtle);
+}
+
+.pwr-kpi-card.pwr-retired {
+  border-left-color: var(--cds-support-success);
+}
+
+.pwr-kpi-card.pwr-probing {
+  border-left-color: var(--cds-support-info);
+}
+.pwr-kpi-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.pwr-kpi-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}
+
+/* In a 250px grid cell the name and the source id compete for one line. The
+   human-readable name wins and stays whole; the id truncates. */
+.pwr-kpi-name b {
+  white-space: nowrap;
+}
+.pwr-kpi-name code {
+  /* The source id is a technical value, so it is mono text at $text-helper —
+     not a filled chip. As a chip it competed with the card name and forced the
+     name to wrap in a 250px grid cell. */
+  color: var(--cds-text-helper);
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Carbon tag: the tint carries the state, the label stays $text-primary. */
+.pwr-status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  padding: 0 var(--sp-03);
+  border: none;
+  border-radius: 12px;
+  white-space: nowrap;
+  color: var(--cds-text-primary);
+  background: var(--chip-neutral);
+}
+.pwr-status-tag.retired {
+  background: color-mix(in srgb, var(--cds-support-success) 28%, transparent);
+}
+.pwr-status-tag.probing {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.pwr-status-tag.waiting {
+  background: var(--chip-neutral);
+}
+.pwr-kpi-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+.pwr-probing-val {
+  color: var(--cds-support-info);
+}
+.pwr-retired-val {
+  color: var(--cds-support-success);
+}
+.pwr-hits-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.pwr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cds-border-subtle);
+}
+.pwr-dot.hit {
+  background: var(--cds-support-success);
+  box-shadow: none;
+}
+.pwr-kpi-sub {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--type-label-01);
+  line-height: 1.45;
+}
+.pwr-sub-window {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+}
+.pwr-sub-times {
+  display: flex;
+  align-items: center;
+}
+.pwr-times-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pwr-times-prefix {
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+}
+.pwr-times-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+/* A plain hit time is not a status, so it takes the neutral tag. Only the two
+   moments that matter — the latest probe and the retire — get a status tint. */
+.pwr-time-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  padding: 0 var(--sp-03);
+  border: none;
+  border-radius: 12px;
+  background: var(--chip-neutral);
+  color: var(--cds-text-primary);
+}
+.pwr-time-chip.is-retire {
+  background: color-mix(in srgb, var(--cds-support-success) 28%, transparent);
+}
+.pwr-time-chip.is-latest {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.pwr-times-empty {
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+}
+
+@media (max-width: 720px) {
+  .ast-next .sep { margin-left: 0; flex-basis: 100%; }
+  .ast-verdict .section-stamp { margin-left: 0; flex-basis: 100%; }
+  .pwr-grid { grid-template-columns: 1fr; }
+
+  /*
+    手機隱藏時間軸本體。它需要約 700px 才畫得完，塞進 390px 只能靠橫捲——
+    而預設停在左端，借券與新聞的「次日 09:10」落在右半，等於看不出誰延遲了。
+    改由標籤列直接列出狀態與時刻，資訊不減，只是換一種形式。
+  */
+  .ast-tl-scroll { overflow-x: visible; }
+  .ast-tl { min-width: 0; }
+  .ast-ruler { display: none; }
+  .ast-track { display: none; }
+  .ast-row { grid-template-columns: 1fr auto; min-height: 0; padding: 9px 0; }
+  .ast-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .ast-when { display: inline; font-size: var(--type-label-01); color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+  .ast-date { display: inline; margin-top: 0; }
+
+  /* 探針列：手機把「名稱／摘要」疊成兩行，進度條獨占一行才看得出翻綠的位置 */
+  .apr-head { grid-template-columns: 1fr auto; row-gap: 6px; }
+  .apr-bar { grid-column: 1 / -1; order: 3; }
+  .apr-sum { order: 2; }
+  .apr-caret { order: 2; }
+
+  /* The legend will squeeze the "judgment criterion is" into a straight row on a narrow screen, so the mobile phone changes it to a single column stack.*/
+  .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .ast-rule { line-height: 1.6; }
+
+  /* 472px of fixed columns plus five gaps cannot fit a 390px phone; collapse to
+     two tracks and let the remaining cells wrap. */
+  .adm-log-head { grid-template-columns: 1fr auto; }
+}

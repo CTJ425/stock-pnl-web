@@ -1,0 +1,1306 @@
+/* =========================================================
+ * Individual stock analysis page (drill-down view): page top, tabs, report layout and self-drawn SVG charts
+ * ========================================================= */
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/*
+ * AnalysisPage selector is a fragment: subtabs + primary menu (+ optional secondary search).
+ * Order keeps [menu | title | actions] on one stable row; search wraps under so switching
+ * 我的持股 / 其他台股 does not push the stock name down.
+ */
+.detail-head-analysis {
+  align-items: center;
+}
+
+.detail-head-analysis .subtabs {
+  flex: 1 0 100%;
+  order: 0;
+  margin-bottom: 0;
+}
+
+.detail-head-analysis .analysis-select-primary {
+  order: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.detail-head-analysis .detail-title {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.detail-head-analysis > .btn {
+  order: 3;
+  flex: none;
+}
+
+.detail-head-analysis .analysis-select-secondary {
+  order: 4;
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-head-analysis .analysis-watch-error {
+  order: 5;
+  flex: 1 0 100%;
+  color: var(--danger);
+}
+
+.detail-head-empty {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.detail-head-empty .analysis-select-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-head-empty .analysis-watch-error {
+  color: var(--danger);
+}
+
+.detail-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.detail-title h2 {
+  font-size: var(--type-body-02);
+  color: var(--ink);
+}
+
+.detail-title .badge {
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 2px 8px;
+  color: var(--ink);
+  border-color: var(--border-strong);
+  background: var(--surface-strong);
+  letter-spacing: 0.02em;
+}
+
+.detail-title .hint {
+  display: block;
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.detail-note {
+  font-size: var(--type-label-01);
+  color: var(--notice-warn-ink);
+  margin-bottom: 8px;
+}
+
+/* Second-level tabs: lighter than .tabs at the top of the page, marked with underlines instead of coloring*/
+.subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+/* Carbon tab, secondary level: same 3px selection bar as the primary tabs. */
+.subtab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--cds-text-secondary);
+  font: inherit;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
+  border-radius: 0;
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.subtab:hover {
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
+}
+
+.subtab.active {
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--cds-border-interactive);
+}
+
+.detail-body {
+  padding: 16px 24px;
+}
+
+/* ---------- Individual stock analysis single page (0.6.8, version D: card grouping) ----------
+ *
+ * After the four sections (my holdings/chips/fundamentals/technical aspects) were combined into one page, the original .rpt-section
+ * They are all of the same level, with the same spacing of 24px, so it’s hard to tell which paragraphs belong to whom. Give each segment its own card,
+ * The boundaries are defined by the blank space between cards - no interaction is required, and there will be no "things being put away that can't be found".
+ *
+ * In 0.6.23, each table title was made into a collapse switch. In 0.6.24, the entire table title was removed: the collapsed block is not in the DOM.
+ * The PDF export of that time had to expand every block and restore it: an invisible failure path in
+ * exchange for less scrolling. That export is gone since 0.9.52; this note stays as the record of why
+ * the switch went away.
+ */
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Nested .detail-stack does not overlap the margins again.*/
+.detail-stack .detail-stack {
+  gap: 24px;
+}
+
+.detail-card {
+  padding: 16px 24px;
+}
+
+/* Group title: deliberately one level higher than the .rpt-section h3 (14px + 1px bottom line) within the paragraph,
+   否則同一頁 14 個標題全部長一樣，層級等於沒有 */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-head h3 {
+  font-size: var(--type-body-02);
+  letter-spacing: 0.2px;
+}
+
+.card-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  flex: none;
+}
+
+.card-meta {
+  margin-left: auto;
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+/* Report header: shows the code number, data date and generation time */
+.rpt-head {
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+
+.rpt-head h2 {
+  font-size: var(--type-body-02);
+  color: var(--ink);
+}
+
+.rpt-meta {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+.rpt-meta-sep {
+  margin: 0 8px;
+  opacity: 0.6;
+}
+
+.rpt-section {
+  margin-bottom: 24px;
+}
+
+.rpt-section:last-child {
+  margin-bottom: 0;
+}
+
+.rpt-section h3 {
+  font-size: var(--type-body-01);
+  color: var(--ink);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.rpt-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rpt-section-head h3 {
+  flex: 1 1 auto;
+}
+
+/* When the title should be followed by a description (for example: "Data updated on..." for monthly revenue):
+   h3 預設 flex:1 會把後面的元素全推到最右邊，故改由 stamp 接手伸縮，
+   靠右的標籤（單位：千元）仍會被推到最右。窄螢幕由既有的 flex-wrap 換行。 */
+.rpt-section-head h3.head-tight {
+  flex: 0 0 auto;
+}
+
+.rpt-section-head .section-stamp {
+  flex: 1 1 auto;
+}
+
+.detail-body .hint {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.detail-body .data-table tbody tr.row-total td {
+  font-weight: 600;
+}
+
+/* Legal person switch button*/
+/* ---------- Carbon content switcher ----------
+ * The buttons join into one square bar. The selected item inverts to $layer-selected.
+ */
+.chip-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding-bottom: var(--sp-03);
+}
+
+.chip-btn {
+  appearance: none;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  color: var(--cds-text-secondary);
+  font: inherit;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-05);
+  border-radius: 0;
+  cursor: pointer;
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.chip-btn:last-child {
+  border-right-width: 1px;
+}
+
+.chip-btn:hover {
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
+}
+
+.chip-btn.active {
+  color: var(--cds-background);
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  font-weight: 400;
+}
+
+/* ---------- Self-drawn SVG chart ----------*/
+/* The chart is drawn with the measured container width 1:1 (see chartFrame.tsx); the upper limit avoids the bar being too fat on ultra-wide screens*/
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+}
+
+/*
+ * The .chart-pair of 0.6.33 (Taiwan stock index K-line and trend side by side) has been removed on 0.6.34:
+ * The three pictures are stacked top, middle and bottom and share the same hover. When placed side by side, each picture has only half the width.
+ * The same pixel position is on different days in the two pictures, crosshair, sorry.
+ * The .fx-chart-pair on the exchange rate page is not affected (the two charts hover independently).
+ */
+
+.chart-svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+
+/*
+ * 0.6.8 The focus falls on the entire picture (originally there is one tab stop for each data point, and there are 244 days K in one year.
+ * Maximum of 765 when four paragraphs are combined into one page). After focusing, use the direction keys to move point by point.
+ */
+.chart-svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.chart-tip {
+  position: absolute;
+  transform: translate(-50%, -115%);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+  font-size: var(--type-label-01);
+  white-space: nowrap;
+  padding: 4px 8px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+/* Chart + legend on the right: There is a blank space on the right after the upper limit of the chart is 760px, so the legend is placed here.*/
+.chart-with-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.chart-with-legend .chart-wrap {
+  flex: 1 1 340px;
+}
+
+.chart-legend-side {
+  flex: 0 1 210px;
+  min-width: 180px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--type-label-01);
+}
+
+.chart-legend-swatch {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 0;
+  transform: translateY(1px);
+}
+
+/*
+ * Switchable legend (0.6.26): The entire column is <button>, so there is a large enough click area.
+ * The button comes with its own font, border and centering by default. Clear them all to make it look exactly like the unclickable legend.
+ * ——When two legends coexist on the same picture, the clickable one should only have an extra cursor and hover, not an extra box.
+ */
+.chart-legend-toggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chart-legend-toggle:hover .chart-legend-label {
+  color: var(--ink);
+}
+
+/* Turned off sequence: the color block has been changed to hollow (see ChartLegend), and the text is dimmer again.*/
+.chart-legend-toggle[aria-pressed='false'] .chart-legend-label {
+  color: var(--ink-muted);
+}
+
+/* The last visible line will not be closed, the cursor must be made clear*/
+.chart-legend-toggle:disabled {
+  cursor: default;
+}
+
+.chart-legend-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Text should use normal text color and no sequence color: the color block is responsible for identity and the text is responsible for readability.*/
+.chart-legend-label {
+  color: var(--ink-secondary);
+}
+
+.chart-legend-note {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-legend-foot {
+  margin-top: 12px;
+  font-size: var(--type-label-01);
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.chart-title {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  margin-bottom: 2px;
+}
+
+/* ---------- Summary of technical indicators ----------*/
+/* Use grid instead of data-table: the minimum width of the table is 720px, and it is not cost-effective to force the phone to scroll horizontally for 7 values.*/
+.tech-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/*
+ * The dividing line is drawn on the grid without using the "container background color + 1px gap" method:
+ * The number of indicators (7) is not necessarily divisible by the number of cells in each column, and the last column will have empty cells.
+ * And that trick will paint the entire vacant area with a border color, making it look like a broken empty panel.
+ */
+.tech-cell {
+  padding: 12px 12px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.tech-cell dt {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  margin-bottom: 4px;
+}
+
+.tech-cell dd {
+  margin: 0;
+  font-size: var(--type-body-01);
+  font-variant-numeric: tabular-nums;
+}
+
+.tech-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* If the subscript has both rising and falling colors, the rising and falling colors must be better than muted (.tech-sub is defined later, and the order alone will cover .pnl-*)*/
+.tech-sub.pnl-up {
+  color: var(--up);
+}
+
+.tech-sub.pnl-down {
+  color: var(--down);
+}
+
+/* ---------- Shareholding Profile Card ----------*/
+.rpt-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.rpt-card {
+  flex: 1 1 140px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 12px;
+  background: var(--cds-layer-02);
+}
+
+.rpt-card .k {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.rpt-card .v {
+  font-size: var(--type-body-02);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ---------- Yahoo-style quote header + statistics grid (0.9.17, quote-yahoo-a T2) ----------
+ * Ported from docs/design/quote-redesign-mockups.html 方案 A, using only tokens already defined
+ * above (no new colour literals): --up/--down via .pnl-* on the value spans, --border/--row-alt
+ * for the grid lines, --ink* for text.
+ */
+.m-quote-head {
+  margin-bottom: 12px;
+}
+
+.m-sym {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.m-sym h2 {
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.m-sym .code {
+  font-size: var(--type-body-01);
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.m-sym .quote-badge,
+.quote-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  white-space: nowrap;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  align-self: center;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.quote-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-secondary);
+}
+
+.m-price {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.m-price .big {
+  font-size: var(--type-heading-05);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.m-price .delta {
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 4px;
+}
+
+/* DT-02: 漲停/跌停 badge beside the big price. Colour comes from .pnl-up/.pnl-down (already
+   applied alongside this class), this rule only draws the pill around it. */
+.quote-limit-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--type-label-01);
+  font-weight: 700;
+  padding: 1px 6px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+}
+
+/* 試撮 (08:30–09:00, 13:25–13:30): MIS's price is a simulated match, not a trade. */
+.trial-marker {
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--ink-muted);
+  padding-bottom: 8px;
+}
+
+.m-price .stamp {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  padding-bottom: 8px;
+}
+
+/* Bordered Yahoo-style stats grid: unlike .rpt-cards (gapped floating cards), the cells here
+   share one continuous border, so .rpt-card is overridden flat when nested here. */
+.m-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.m-stats .rpt-card {
+  flex: initial;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--row-alt);
+}
+
+.m-stats .rpt-card .k {
+  font-size: var(--type-label-01);
+}
+
+.m-stats .rpt-card .v {
+  font-size: var(--type-label-01);
+  margin-top: 0;
+}
+
+@media (max-width: 560px) {
+  .m-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 走勢圖 card header (range switch) — same visual language as .subtabs but pill-shaped like
+   .chip-btn, since these buttons switch a data range rather than a page tab. */
+.m-card-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.m-card-h h4 {
+  font-size: var(--type-body-01);
+  color: var(--ink);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.m-range {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Carbon content switcher: one joined square bar for the chart range. */
+.m-range button {
+  font: inherit;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  border-radius: 0;
+  cursor: pointer;
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  background: var(--cds-layer-01);
+  color: var(--cds-text-secondary);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.m-range button:last-child {
+  border-right-width: 1px;
+}
+
+.m-range button:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
+}
+
+.m-range button[aria-pressed='true'] {
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  color: var(--cds-background);
+  font-weight: 400;
+}
+
+@media (max-width: 560px) {
+  .m-range {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  .m-range button {
+    height: 40px;
+    padding: 0 4px;
+    border-right-width: 1px;
+  }
+}
+
+/* ---------- Card-level layout: quote header + chart left, sidebar right (revision 4) ----------
+ * `.chart-wrap`'s own 760px cap (above) is app-wide and stays; this only releases it inside the
+ * quote card so the chart can fill the wider left column instead of leaving dead space beside it.
+ * Revision 4 promotes what was a chart-only rail (revision 3's `.intraday-layout`/`.intraday-rail`)
+ * to a card-level sidebar carrying holdings + 指標摘要 + 成交金額/估值, matching 方案 A.
+ */
+.quote-top-banner {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.quote-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.quote-layout .chart-wrap {
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  .quote-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.quote-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quote-aside-private {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 12px;
+  background: var(--cds-layer-02);
+}
+
+.quote-aside-private h4 {
+  font-size: var(--type-body-01);
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.holding-pnl {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.holding-pnl-big {
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-roi {
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+}
+
+.holding-cell .k {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.holding-cell .v {
+  font-size: var(--type-label-01);
+  margin-top: 2px;
+}
+
+.m-chart-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.chart-time-badge {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ---------- Institutional Investors (三大法人買賣超) 2-day cards ---------- */
+.institutional-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.inst-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.inst-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inst-header-title {
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inst-header-badge {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 0;
+  font-weight: 500;
+}
+
+.inst-header-note {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.inst-days-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.inst-day-card {
+  background: var(--cds-layer-02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inst-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inst-day-title {
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inst-day-tag {
+  font-size: var(--type-label-01);
+  padding: 2px 8px;
+  border-radius: 0;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.inst-day-tag.is-latest {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.inst-day-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.inst-total-label {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.inst-total-val {
+  font-size: var(--type-body-01);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inst-legs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.inst-leg-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inst-leg-k {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.inst-leg-v {
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .inst-days-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.section-tabs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-tabs-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  background: var(--cds-layer-02);
+  border: 1px solid var(--border);
+  padding: 4px;
+  border-radius: var(--radius);
+  width: fit-content;
+}
+
+.sec-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--cds-text-secondary);
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  border-radius: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-03);
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.sec-tab-btn:hover {
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
+}
+
+.sec-tab-btn.active {
+  background: transparent;
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--cds-border-interactive);
+  box-shadow: none;
+}
+
+.intraday-block {
+  margin-bottom: 24px;
+}
+
+.intraday-empty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--type-body-01);
+}
+
+.intraday-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 當日大盤 panel (0.9.19; layout reworked 0.9.20) — 總體經濟 > 台股, above the daily charts.
+   Layout mirrors docs/design/taiex-intraday-panel-mockup.html, on existing tokens/classes only:
+   .section/.glass for the card shell, .m-card-h/.badge for the header, .m-price for the hero
+   value, .m-stats/.rpt-card for the six stat cells, IntradayChart's own range toggle for 一日/五日. */
+.tw-index-today {
+  padding: 16px 24px;
+}
+
+.tw-index-stats {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 560px) {
+  .tw-index-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Stats band (0.9.20): 當日 row above 收盤統計 row, each with its own caption on the left —
+   the two rows can legitimately describe different days (institutional money lands ~15:00). */
+.tw-index-band {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tw-index-band-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.tw-index-band-caption {
+  flex: 0 0 auto;
+  width: 56px;
+  padding-top: 8px;
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.tw-index-band-row .m-stats {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
+
+.tw-index-close-stats .kpi {
+  padding: 8px 12px;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--row-alt);
+}
+
+.tw-index-close-stats .kpi::before {
+  display: none;
+}
+
+.tw-index-close-stats .kpi-label {
+  font-size: var(--type-label-01);
+}
+
+.tw-index-close-stats .kpi-value {
+  font-size: var(--type-body-01);
+  margin-top: 0;
+}
+
+.tw-index-close-stats .kpi-sub {
+  font-size: var(--type-label-01);
+  margin-top: 2px;
+}
+
+/* Layout next to intraday chart in TwIndexToday */
+.tw-index-chart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.tw-index-chart-layout.has-aside {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.tw-index-chart-main {
+  min-width: 0;
+}
+
+.tw-index-chart-layout .chart-wrap {
+  max-width: none;
+}
+
+.tw-index-inst-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tw-index-inst-days {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+  .tw-index-chart-layout.has-aside {
+    grid-template-columns: 1fr;
+  }
+  .tw-index-inst-days {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .tw-index-inst-days {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rpt-notes {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  padding-left: 16px;
+  margin-bottom: 12px;
+}
+
+.rpt-notes li {
+  margin: 2px 0;
+}
+
+.rpt-disclaimer {
+  font-size: var(--type-label-01);
+  line-height: 1.6;
+  color: var(--ink-muted);
+  background: var(--row-alt);
+  border-radius: var(--radius-sm);
+  padding: 12px 12px;
+}
+
+@media (max-width: 720px) {
+  .detail-body {
+    padding: 16px;
+  }
+
+  .detail-card {
+    padding: 16px;
+  }
+
+  /* The spacing between cards on mobile phones should be smaller, otherwise the whole page will be longer.*/
+  .detail-stack {
+    gap: 16px;
+  }
+
+  .card-head h3 {
+    font-size: var(--type-body-01);
+  }
+
+  .subtab {
+    padding: 0 var(--sp-04);
+    font-size: var(--type-body-01);
+  }
+
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Data time stamp at the block level: Each data source publishes data at different times, so it is marked block by block rather than as a whole time.*/
+.source-tag {
+  margin-left: 12px;
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* Form primitives, first built for the AI tab (removed 0.9.68) and still used by the Discord settings.*/
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-form-group label {
+  font-size: var(--type-body-01);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.ai-input {
+  appearance: none;
+  font: inherit;
+  font-size: var(--type-body-01);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.ai-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
