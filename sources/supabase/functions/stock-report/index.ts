@@ -39,7 +39,6 @@
  * `warm` additionally charges `WARM_DAILY_LIMIT` via `take_warm_quota`. Deployed with
  * --no-verify-jwt; see 0.3.9 for what happens with no gate at all.
  */
-import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { logEvent } from '../_shared/log.ts'
 import { classifyFetchError, fetchWithRetry } from '../_shared/fetchRetry.ts'
 import {
@@ -63,8 +62,7 @@ import {
   type MarginDatedResponse,
   type T86ResponseShape,
 } from './twChips.ts'
-import { allowsTicker, mergeTwTickerLists, netOpenTickers } from './batchTickers.ts'
-import { secretsMatch } from './cronSecret.ts'
+import { allowsTicker, mergeTwTickerLists } from './batchTickers.ts'
 import {
   buildReport,
   dashDate,
@@ -173,8 +171,6 @@ import {
 } from './usMacro.ts'
 import {
   decideMacroScan,
-  MAX_SCANS_PER_DAY,
-  nextReleaseFor,
   RELEASE_CALENDAR,
   taipeiYmdOf,
   type ScanReason,
@@ -197,11 +193,9 @@ import {
   rowsFingerprint,
   runSignature,
   t86Fingerprint,
-  type T86State,
 } from './pollPlan.ts'
 import {
   PROBE_SOURCE_LABELS,
-  PROBE_SOURCE_ORDER,
   REQUIRED_LANDED_COUNTS,
   borrowCacheUsable,
   borrowHit,
@@ -219,72 +213,29 @@ import {
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
 import { runProbeRound, type ProbeTick } from './probeRound.ts'
+import { CORS_HEADERS, MAX_REQUEST_BODY_BYTES, db, json, safeStack } from './runtime.ts'
+import { assertAdmin, assertCronSecret, assertUser } from './gates.ts'
+import type { GenerateReportRequestBody } from './requestBody.ts'
+import { dispatchAction, type ActionRoute } from './actionRoutes.ts'
+import { REPORTS_BUCKET, downloadJson, heldTwTickers, pagedSelect, readLastRun } from './dataAccess.ts'
 import {
-  isValidBackupPath,
-  parseBackupDocument,
-  restoreFailureMessage,
-  rowsToInsert,
-  summarizeAccountBackups,
-} from './backupAdmin.ts'
-import { postDiscordWebhook } from './discordWebhook.ts'
-import { indexChartUrl, type IndexChartResponse } from './globalIndexClose.ts'
-import { marginSummaryUrl, type MarginSummaryResponse } from './marketMargin.ts'
-import type { FxLine, MacroLine, SummaryEdition } from './discordSummary.ts'
+  handleAdminBackupRestore,
+  handleAdminBackupUrl,
+  handleAdminBackups,
+  handleAdminSetRole,
+  handleAdminStatus,
+  handleAdminUsers,
+  handleAppLogs,
+  latestChipSources,
+} from './adminHandlers.ts'
 import {
-  runDiscordSummary,
-  runWebhookOp,
-  type RunOutcome,
-  type SendEdition,
-  type SendLogRow,
-  type SendLogStatus,
-  type SummaryDeps,
-  type WebhookAdminDeps,
-} from './discordRun.ts'
-import { runDiscordAccountsOp, type AccountSettingsRow, type DiscordAccountsDeps } from './discordAccounts.ts'
-import { runMySettingsOp, type MySettingsDeps } from './discordMySettings.ts'
-import { scheduleFromJobs } from './discordSchedule.ts'
-import {
-  runAccountTick,
-  type AccountRow,
-  type CopyOutcome,
-  type GlobalSchedule,
-  type MarketCopyKind,
-  type TickDeps,
-} from './accountTick.ts'
-import type { WorkspaceInput } from './holdingsCard.ts'
-import { makeChartFetch } from './holdingQuotes.ts'
-import type { Transaction } from '../_shared/engine/models.ts'
-import {
-  runHoldingsDaily,
-  type HoldingsDataDeps,
-  type HoldingsKind,
-  type HoldingsOutcome,
-  type HoldingsRunDeps,
-  type LastSend,
-} from './holdingsRun.ts'
-
-// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
-// The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
-const db = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-)
-
-const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-/** ER-14: documented request body cap, checked against `Content-Length` before `req.json()` runs. */
-const MAX_REQUEST_BODY_BYTES = 1_000_000
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json; charset=utf-8' },
-  })
-}
+  handleDiscordAccounts,
+  handleDiscordAccountTick,
+  handleDiscordHoldings,
+  handleDiscordMySettings,
+  handleDiscordSummary,
+  handleDiscordWebhook,
+} from './discordHandlers.ts'
 
 /**
  * Same contract as twChips.ts's `fetchJson` (throws on failure) but goes through the shared
@@ -300,20 +251,6 @@ async function fetchJsonRetry<T>(url: string, timeoutMs = 15_000): Promise<T> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/**
- * ER-15: `err.stack` is unbounded and can echo an upstream response verbatim — a stack that runs
- * through a URL carrying a signed query string would leak it straight into app_log. Keep only the
- * message line plus the first 3 call frames, and mask anything shaped like a long token (20+ chars
- * of base64/hex/JWT alphabet) before it ever reaches `logEvent`. This is a mask, not the allowlist
- * redaction _shared/log.ts already does on every field — see that file's header comment on why a
- * denylist is never enough on its own.
- */
-function safeStack(err: unknown): string | undefined {
-  if (!(err instanceof Error) || !err.stack) return undefined
-  const [head, ...frames] = err.stack.split('\n')
-  return [head, ...frames.slice(0, 3)].join('\n').replace(/[A-Za-z0-9+/_=-]{20,}/g, '[redacted]')
 }
 
 const TICKER_RE = /^[0-9A-Za-z]{2,8}$/
@@ -680,43 +617,6 @@ async function loadSeries(
   }
 }
 
-interface GenerateReportRequestBody {
-  action?: string
-  market?: string
-  ticker?: string
-  name?: string
-  /**
-   * warm only (0.6.46-dev.4). `core` | `history` | `full` (default).
-   * See handleWarm header comment.
-   */
-  phase?: string
-  holding?: HoldingContext | null
-  /** admin-set-role is used: the account to be changed and whether to give it to the administrator*/
-  userId?: string
-  admin?: boolean
-  /**
-   * admin-run: which batch job(s) to fire. Same handlers as pg_cron / x-cron-secret,
-   * but gated by assertAdmin so the console never needs CRON_SECRET in the browser.
-   * `'all'` or a list of: generate-all | sync-market | sync-macro | sync-fx | probe
-   */
-  jobs?: string[] | 'all'
-  /** Singular alias for a one-job admin-run */
-  job?: string
-  /** admin-backup-url / admin-backup-restore: the storage object path, `<uuid>/<YYYY-MM-DD>.json` */
-  path?: string
-  /** admin-backup-restore: false/omitted = preview only, true = actually write the missing rows */
-  apply?: boolean
-  /** app-logs: paging/filter passed through to admin_recent_app_logs() */
-  limit?: number
-  level?: string
-  source?: string
-  before?: string
-  /** app-logs (AD-07): paired with `before` to break ties when two rows share the same `at`. */
-  beforeId?: number
-  /** discord-summary (x-cron-secret): which edition to send, see schema.sql's two `discord-summary-*` cron jobs */
-  edition?: string
-}
-
 /**
  * warm phase: core = fast daily+latest; history = MOPS backfill; full = both (default);
  * chips = 三大法人/融資券/借券 backfill for a newly added symbol (Task 130).
@@ -979,8 +879,6 @@ async function handleGenerate(
 
 // ---- After-hours batch: Generate a common report for all Taiwan stocks held and store it in Storage (reports bucket), retaining the last 7 days ----
 
-const REPORTS_BUCKET = 'reports'
-
 /** Reports are retained in Storage for a number of **calendar days**. The front-end only reads the latest manifest pointed to, the old one is simply kept for reference.*/
 const REPORT_RETAIN_DAYS = 7
 /**
@@ -993,63 +891,6 @@ const REPORT_RETAIN_DAYS = 7
  * That's exactly the range that loadSeries will look back for, and older data will never be read in the first place.
  */
 const CACHE_RETAIN_DAYS = LOOKBACK_DAYS
-
-/** generate-all will write Storage, and the endpoint is public (--no-verify-jwt), so x-cron-secret is required to match the environment variable*/
-function assertCronSecret(req: Request): Response | null {
-  const expected = Deno.env.get('CRON_SECRET') ?? ''
-  const got = req.headers.get('x-cron-secret') ?? ''
-  if (!expected || !secretsMatch(got, expected)) return json({ error: 'Unauthorized' }, 401)
-  return null
-}
-
-/**
- * Gatekeeping for the admin-specific endpoint: Validate the caller's JWT and `app_metadata.role === 'admin'`.
- *
- * **Cannot use `assertCronSecret`** - that is the shared secret used by pg_cron,
- * The front end can't get it and shouldn't get it (once it's put in the front end, it's public, and anyone can trigger the entire batch of fetching).
- *
- * **Cannot use email to compare**. `app_metadata` can only be written by service role / Dashboard,
- * Users cannot change their own; email is a field that users can change by themselves. Using it as the basis for authorization means no authorization.
- * This is the same set of criteria as `isAdmin()` of `src/services/adminStatus.ts`, and both sides must be consistent.
- *
- * This function is deployed with `--no-verify-jwt`. The platform will not help verify JWT, so you can verify it yourself here.
- */
-async function assertAdmin(req: Request): Promise<Response | null> {
-  const auth = req.headers.get('Authorization') ?? ''
-  const token = auth.replace(/^Bearer\s+/i, '').trim()
-  if (!token) return json({ error: 'Unauthorized' }, 401)
-  try {
-    const { data, error } = await db.auth.getUser(token)
-    if (error || !data.user) return json({ error: 'Unauthorized' }, 401)
-    const meta = data.user.app_metadata as Record<string, unknown> | undefined
-    if (meta?.role !== 'admin') return json({ error: 'Forbidden' }, 403)
-    return null
-  } catch {
-    return json({ error: 'Unauthorized' }, 401)
-  }
-}
-
-/**
- * Login gate for browser-called endpoints (`generate` / `warm` / admin helpers).
- *
- * 0.7.0 pairs this with `heldTwTickers()` again (search/TOP removed). Keep both: account proof
- * via getUser (anon JWT has no sub) plus the holdings amplification ceiling.
- *
- * **Do not deploy this function with platform JWT verification on.** `generate-all` and cron
- * actions use `x-cron-secret` only; platform JWT would reject them before this file runs.
- */
-async function assertUser(req: Request): Promise<{ userId: string } | Response> {
-  const auth = req.headers.get('Authorization') ?? ''
-  const token = auth.replace(/^Bearer\s+/i, '').trim()
-  if (!token) return json({ error: 'Unauthorized' }, 401)
-  try {
-    const { data, error } = await db.auth.getUser(token)
-    if (error || !data.user) return json({ error: 'Unauthorized' }, 401)
-    return { userId: data.user.id }
-  } catch {
-    return json({ error: 'Unauthorized' }, 401)
-  }
-}
 
 /**
  * Count one `warm` against today's per-account allowance.
@@ -1087,27 +928,6 @@ function ymdMinusDays(ymd: string, days: number): string {
   dt.setUTCDate(dt.getUTCDate() - days)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${dt.getUTCFullYear()}${p(dt.getUTCMonth() + 1)}${p(dt.getUTCDate())}`
-}
-
-/**
- * The Taiwan stock code of every user's open position (service role scan transactions;
- * cross-user deduplication). The open/closed rule, and why it counts a 融券 short, live with
- * `netOpenTickers` in batchTickers.ts so they can be unit-tested.
- */
-async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  // BUG-066: this scans every user's transactions with no paging, so it silently truncated
-  // past PostgREST's max_rows (1000). `id` (UUID PRIMARY KEY) is a total order to page on.
-  const { data, error } = await pagedSelect<{ ticker: string; name: string; tx_type: string; qty: number }>(
-    (from, to) =>
-      db
-        .from('transactions')
-        .select('ticker, name, tx_type, qty')
-        .eq('market', 'TPE')
-        .order('id', { ascending: true })
-        .range(from, to),
-  )
-  if (error || !data) return []
-  return netOpenTickers(data)
 }
 
 /** All users' watchlist tickers (service role scan tw_watchlist; cross-user deduplication). */
@@ -1236,18 +1056,6 @@ async function uploadJson(path: string, payload: unknown): Promise<boolean> {
     return false
   }
 }
-
-async function downloadJson<T>(path: string): Promise<T | null> {
-  try {
-    const { data, error } = await db.storage.from(REPORTS_BUCKET).download(path)
-    if (error || !data) return null
-    return JSON.parse(await data.text()) as T
-  } catch {
-    return null
-  }
-}
-
-// ----Daily OHLCV (for technical purposes)----
 
 /**
  * For each Taiwanese stock, capture the one-year daily line and save it into daily/{ticker}.json (overwrite the entire copy).
@@ -3141,56 +2949,6 @@ async function handleProbe(): Promise<Response> {
   })
 }
 
-/** The status left by the last execution today; if found (the first run, or the table does not exist), null will be returned*/
-interface LastRun {
-  runsToday: number
-  t86: T86State | null
-  runSig: string | null
-  /** 今天最後一次記到的借券日期。`decideSkip` 用它判斷借券翻日了沒（BUG-026）。 */
-  borrowDataDate: string | null
-}
-
-/**
- * Retrieve the cross-run status from the last column of `batch_run_log` today.
- *
- * **Why put the status in the observation table**: These fields are what we want to observe (how many times will it be rewritten, when will it be finalized),
- * There is no need to create another table for the same data. The price is that it becomes half-loaded - when the write fails
- * (`logBatchRun` intentionally swallows exceptions) The next round will be regarded as the first run of the day, so T86 will be captured again and counted again.
- * That's **doing more** rather than doing wrong things, which is acceptable; but don't forget this characteristic.
- */
-async function readLastRun(todayYmd: string): Promise<LastRun | null> {
-  try {
-    const { data, error } = await db
-      .from('batch_run_log')
-      .select(
-        'runs_today, t86_fingerprint, t86_revisions, t86_unchanged, t86_frozen, run_sig, borrow_data_date',
-      )
-      .eq('taipei_ymd', todayYmd)
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (error || !data) return null
-    const fp = data.t86_fingerprint
-    return {
-      runsToday: Number(data.runs_today ?? 0),
-      t86:
-        typeof fp === 'string' && fp
-          ? {
-              fingerprint: fp,
-              revisions: Number(data.t86_revisions ?? 0),
-              unchanged: Number(data.t86_unchanged ?? 0),
-              frozen: Boolean(data.t86_frozen),
-            }
-          : null,
-      runSig: typeof data.run_sig === 'string' ? data.run_sig : null,
-      borrowDataDate:
-        typeof data.borrow_data_date === 'string' ? data.borrow_data_date : null,
-    }
-  } catch {
-    return null
-  }
-}
-
 /**
  * After-hours batch (changed to polling every 15 minutes from 16:00–23:45 starting from 0.6.1, replacing the original three shifts).
  *
@@ -3755,629 +3513,6 @@ async function handleSyncMarket(): Promise<Response> {
   })
 }
 
-/**
- * The data source of "Data Fetch Status" in the administrator's backend.
- *
- * Get everything you need from the entire page at once. The reason is that it will turn into more than a dozen round trips on the front end to type them one by one.
- * And some of them (cron schedule, observation table) the front end does not have permission to read at all——
- * `batch_run_log` / `source_probe_log` has RLS enabled but deliberately does not have any policy.
- * The `cron` schema is also not among PostgREST's exposed schemas.
- * Instead of loosening those defense lines for a read-only backend, it is better to let the service role be read here and then spit out.
- *
- * ⚠️ The returned content is selected, **does not contain any key**: the schedule only takes jobname/schedule/action/
- * Target ref (see `admin_schedule_status` in schema.sql §11 for a more complete description).
- */
-async function handleAdminStatus(): Promise<Response> {
-  const startedAt = Date.now()
-  const now = new Date()
-  const todayYmd = taipeiYmd(now)
-
-  // Each paragraph is independent of each other. If any paragraph fails, the entire page should not be blank. The missing paragraph is represented by null:
-  // The items that will be thrown (rpc / readLastRun / direct table lookup) are each linked to .catch(() => null),
-  // downloadJson and latestChipSources/storageCoverage themselves swallow exceptions and return null.
-  // Last ~2 Taipei calendar days for probe experiment (yyyyMMdd)
-  const ymdDash = dashDate(todayYmd)
-  const d0 = new Date(`${ymdDash}T12:00:00+08:00`)
-  d0.setDate(d0.getDate() - 1)
-  const yestYmd = taipeiYmd(d0)
-
-  const [schedules, manifest, macro, fx, lastRun, probe, probeTicks, chip, coverage, market] =
-    await Promise.all([
-      db
-        .rpc('admin_schedule_status')
-        .then((r: { data: unknown }) => r.data ?? null)
-        .catch(() => null),
-      downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
-      downloadJson<MacroFile>('macro/us.json'),
-      downloadJson<FxFile>('fx/twd.json'),
-      readLastRun(todayYmd).catch(() => null),
-      db
-        .from('source_probe_log')
-        .select(
-          'taipei_ymd, taipei_time, bwibbu_ok, bwibbu_date, bwibbu_rows, borrow_ok, borrow_date, borrow_rows, probed_at',
-        )
-        .order('id', { ascending: false })
-        .limit(1)
-        .then((r: { data: unknown[] | null }) => r.data?.[0] ?? null)
-        .catch(() => null),
-      // BUG-066: `.limit(2000)` here is dead — PostgREST's server-side max_rows (1000) caps the
-      // response before a client-side `.limit()` above it can have any effect, so this used to
-      // read as though the cap had been raised when it hadn't. Page through pagedSelect instead.
-      pagedSelect<Record<string, unknown>>((from, to) =>
-        db
-          .from('source_probe_tick')
-          .select(
-            'taipei_ymd, taipei_time, source, hit, ok, data_ymd, fingerprint, rows, note, duration_ms, probed_at',
-          )
-          .in('taipei_ymd', [todayYmd, yestYmd])
-          .order('id', { ascending: true })
-          .range(from, to),
-      )
-        .then((r) => (r.error ? [] : r.data))
-        .catch(() => [] as unknown[]),
-      latestChipSources(),
-      storageCoverage(),
-      downloadJson<MarketFile>('market/daily.json'),
-    ])
-
-  return json({
-    ok: true,
-    asOf: now.toISOString(),
-    todayYmd,
-    schedules,
-    manifest,
-    chip,
-    coverage,
-    macro: macro
-      ? {
-          asOf: macro.asOf,
-          checkedAt: macro.checkedAt ?? null,
-          indicators: (macro.indicators ?? []).map((i) => ({
-            id: i.id,
-            label: i.label,
-            unit: i.unit,
-            latest: i.latest,
-            previous: i.previous,
-            // Calculated by the backend, the frontend no longer prepares its own calendar (the two constants will drift sooner or later)
-            nextRelease: nextReleaseFor(i.id, i.latest?.period ?? null, now),
-          })),
-        }
-      : null,
-    fx: fx ? { asOf: fx.asOf, count: fx.currencies?.length ?? 0 } : null,
-    market: marketStatus(market),
-    batch: lastRun,
-    probe,
-    /** 0.7.3 multi-source probe experiment (hit/miss per 5-min slot) */
-    probeExperiment: {
-      mode: 'probe-only',
-      labels: PROBE_SOURCE_LABELS,
-      order: PROBE_SOURCE_ORDER,
-      ticks: Array.isArray(probeTicks) ? probeTicks : [],
-      /*
-        0.7.13 —— macro is **not** a `source_probe_tick` source, but it is a probe. Its hit rule lives
-        inside `sync-macro` as `decideMacroScan`: the official BLS/BEA release calendar decides
-        「這一輪到底該不該問 FRED」, 「once caught, don't catch」 retires it for the day, and a round that
-        decides not to ask makes zero external requests. That is the same shape as `pendingSources`,
-        just carried by `macro-daily`'s every-30-minute tick instead of `source-probe`'s 5-minute one.
-
-        The panel showed six sources and silently omitted this one, which made macro look
-        schedule-driven-and-blind next to sources that visibly wait for publication. Surfacing the
-        decision here costs nothing: `decideMacroScan` is pure, and `macro/us.json` is already
-        downloaded above for the `macro` block. Deliberately **read-only** —— this reports what the
-        next `sync-macro` round would decide; it does not move the trigger.
-      */
-      macroScan: macro
-        ? (() => {
-            const scansToday =
-              macro.scansToday?.ymd === todayYmd ? (macro.scansToday?.n ?? 0) : 0
-            const d = decideMacroScan({
-              now,
-              indicators: (macro.indicators ?? []).map((i) => ({
-                id: i.id,
-                latestPeriod: i.latest?.period ?? null,
-              })),
-              scansToday,
-              lastScanYmd: macro.scansToday?.ymd ?? null,
-            })
-            return {
-              scan: d.scan,
-              reason: d.reason,
-              dueIds: d.dueIds,
-              scansToday,
-              cap: MAX_SCANS_PER_DAY,
-              checkedAt: macro.checkedAt ?? null,
-            }
-          })()
-        : null,
-    },
-    durationMs: Date.now() - startedAt,
-  })
-}
-
-/**
- * The crawling status of all market data (0.6.32).
- *
- * The three gaps are numbered separately because they represent different problems:
- * - `missingInstitutional`: No legal entity amount throughout the day. The latest one or two days are normal (announced only at 15:00, supplemented daily),
- *   But if even the old days are missing, it means that the replenishment schedule is not running.
- * - `missingBuySell`: There is a difference and no buying/selling. This is the replenishment progress bar of 0.6.32,
- *   It will be reset to zero every 5 days in each round; once it reaches zero, it should not be increased.
- * - `missingCandle`: The days when the opening high and low are missing and the day K cannot be drawn.
- *
- * There is no determination of "delay or not" here - the determination rules are all left in the front-end timeline.ts (pure function, with tests).
- * The backend just spits out facts. Sooner or later, both sides will be inconsistent.
- */
-function marketStatus(m: MarketFile | null) {
-  if (!m) return null
-  const days = Array.isArray(m.days) ? m.days : []
-  const withInst = days.filter((d) => d?.institutional)
-  return {
-    schema: m.schema ?? null,
-    asOf: m.asOf ?? null,
-    days: days.length,
-    /** The latest trading day (regardless of whether there is a legal person amount)*/
-    latestDate: days[days.length - 1]?.date ?? null,
-    /** The latest trading day with legal person amount**. One or two days difference from the previous item is a normal compensation time difference.*/
-    latestInstitutionalDate: withInst[withInst.length - 1]?.date ?? null,
-    missingInstitutional: days.length - withInst.length,
-    missingBuySell: withInst.filter((d) => !d.institutional?.buy).length,
-    missingCandle: days.filter((d) => d?.taiexOpen == null).length,
-  }
-}
-
-/**
- * The data dates and capture times of the three chip sources in the latest report.
- *
- * Just point the manifest to **any file** of that day - `sources` is shared by the entire batch (written in the same round of batches),
- * Not per-ticker information. Picking the first file is much cheaper than downloading all 18 files back.
- */
-async function latestChipSources(): Promise<unknown> {
-  const manifest = await downloadJson<{ ymd?: string }>('manifest.json')
-  const ymd = manifest?.ymd
-  if (!ymd) return null
-  const { data } = await db.storage.from(REPORTS_BUCKET).list(ymd, { limit: 1 })
-  const first = data?.[0]?.name
-  if (!first) return null
-  const rep = await downloadJson<{ dataDate?: string; sources?: unknown; notes?: unknown }>(
-    `${ymd}/${first}`,
-  )
-  const inner = (rep as { data?: { dataDate?: string; sources?: unknown; notes?: unknown } })?.data ?? rep
-  return inner ? { ymd, dataDate: inner.dataDate ?? null, sources: inner.sources ?? null } : null
-}
-
-/**
- * The number of files in each Storage directory is used to calculate "how many files are there among the 18 files."
- *
- * Just count the quantity, do not download the content - download 18 JSONs file by file just to see the timestamp.
- * This will change the endpoint from 2 seconds to more than ten seconds, and the only thing on the screen is the numerator and denominator.
- */
-async function storageCoverage(): Promise<Record<string, number | null>> {
-  const dirs = ['daily', 'fundamental']
-  const out: Record<string, number | null> = {}
-  await Promise.all(
-    dirs.map(async (d) => {
-      // `list()` fails without throwing — { data: null, error }. Reading only `data` turned a failed
-      // lookup into "0 files", which an operator cannot tell apart from a genuinely empty directory
-      // (AUDIT-2026-09-04 #5). `null` here means "lookup failed", not "empty".
-      const { data, error } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000 })
-      out[d] = error
-        ? null
-        : (data ?? []).filter((f: { name: string }) => f.name.endsWith('.json')).length
-    }),
-  )
-  try {
-    out.held = (await heldTwTickers()).length
-  } catch {
-    out.held = null
-  }
-  return out
-}
-
-/**
- * Account list in the management background (0.6.19).
- *
- * **Why you must use Edge Function**: `auth.users` is not in the exposed schemas of PostgREST.
- * The front end cannot find the user's JWT no matter how you look it up; there is no profiles table for the project to map.
- * Only service role can be read, so read it here and then spit it out.
- *
- * ⚠️ The returned content is selected: only id/email/creation time/recent activities/whether you are an administrator.
- * **Do not return the full text of `app_metadata` or `user_metadata` - there may be other fields in there,
- * Always forwarding it means making future additions public.
- *
- * ⚠️ **`lastActiveAt` takes `updated_at`, not `last_sign_in_at`** (0.6.20 fix).
- * `last_sign_in_at` is only updated when "really logging in again", and accounts that rely on refresh tokens to survive
- * It will always stop at a very old time - actual test official area: a certain account `last_sign_in_at` stopped at 08-02 17:17,
- * But the `auth.sessions.refreshed_at` for the same account is 08-04 12:53, so the screen looks broken.
- * `updated_at` will be updated along with the session (the difference between actual measurement and `refreshed_at` is 0.02 seconds),
- * Moreover, `listUsers()` already returns it, so there is no need to check `auth.sessions`.
- */
-async function handleAdminUsers(): Promise<Response> {
-  const startedAt = Date.now()
-  // DB-03: `listUsers` pages independently of PostgREST's max_rows — hardcoding page: 1 silently
-  // drops every account past perPage once the project grows past one page, same bug
-  // handleAdminBackups already guards against (BUG-066). Loop upward until a page comes back short.
-  const perPage = 1000
-  const rawUsers: Array<{
-    id: string
-    email?: string | null
-    created_at?: string | null
-    updated_at?: string | null
-    app_metadata?: unknown
-  }> = []
-  for (let page = 1; ; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
-    if (error) return json({ error: error.message }, 500)
-    const batch = data?.users ?? []
-    rawUsers.push(...batch)
-    if (batch.length < perPage) break
-  }
-  const users = rawUsers.map((u) => ({
-    id: u.id,
-    email: u.email ?? '',
-    createdAt: u.created_at ?? null,
-    lastActiveAt: u.updated_at ?? null,
-    admin: (u.app_metadata as Record<string, unknown> | undefined)?.role === 'admin',
-  }))
-  // New accounts are listed first, and administrators usually look for "the one who just registered"
-  users.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
-  return json({ ok: true, users, durationMs: Date.now() - startedAt })
-}
-
-/**
- * Assign or revoke administrator privileges (0.6.19).
- *
- * What is written is `app_metadata.role`, which is the same field that `assertAdmin` and data table RLS interpret.
- * **Must write `app_metadata` instead of `user_metadata`** - the latter can be changed by the user.
- * Using it as a basis for permissions means that anyone can turn themselves into an administrator.
- *
- * ⚠️ **After the change is completed, the account will not take effect until you log in again**: The permissions are baked in the issued JWT.
- * The old token will still carry the old identity until it expires. The front end must write this thing on the screen,
- * Otherwise, it will be regarded as "no response after pressing".
- *
- * ⚠️ **You are not allowed to cancel your own administrator privileges**: This is the only operation that will lock people out——
- * You may be the only administrator left in the entire site. After the recovery, you will not even be able to enter the backend, so you can only go back to the SQL Editor and make manual changes.
- */
-/**
- * AD-02: how many of `listUsers`'s pages are administrators right now. `listUsers` pages
- * independently of PostgREST's max_rows, same as handleAdminBackups already guards for. Used both
- * to gate a revoke before it runs and, after it runs, to catch a lost-update race between two
- * concurrent revokes of two *different* admins that could each individually pass the pre-check.
- */
-async function countAdmins(): Promise<{ ok: true; count: number } | { ok: false; message: string }> {
-  const perPage = 1000
-  let adminCount = 0
-  for (let page = 1; ; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
-    if (error) return { ok: false, message: error.message }
-    const batch: Array<{ app_metadata?: unknown }> = data?.users ?? []
-    adminCount += batch.filter(
-      (u) => (u.app_metadata as Record<string, unknown> | undefined)?.role === 'admin',
-    ).length
-    if (batch.length < perPage) break
-  }
-  return { ok: true, count: adminCount }
-}
-
-async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody): Promise<Response> {
-  const userId = typeof body.userId === 'string' ? body.userId.trim() : ''
-  if (!userId) return json({ error: 'userId is required' }, 400)
-  const makeAdmin = body.admin === true
-
-  const auth = req.headers.get('Authorization') ?? ''
-  const token = auth.replace(/^Bearer\s+/i, '').trim()
-  const caller = await db.auth.getUser(token)
-  if (!makeAdmin && caller.data.user?.id === userId) {
-    return json({ error: '不能取消自己的管理員權限' }, 400)
-  }
-
-  const { data: target, error: readErr } = await db.auth.admin.getUserById(userId)
-  if (readErr || !target?.user) return json({ error: 'User not found' }, 404)
-
-  const targetIsAdmin =
-    (target.user.app_metadata as Record<string, unknown> | undefined)?.role === 'admin'
-
-  // AD-02: never let the admin count fall to zero — that locks everyone out of the console with
-  // no way back short of a manual SQL Editor edit (see the header comment above). This is a
-  // best-effort guard, not a lock: two concurrent revokes of two *different* admins can each pass
-  // it before either write lands. The re-count after the write below catches that race.
-  if (!makeAdmin && targetIsAdmin) {
-    const count = await countAdmins()
-    if (!count.ok) return json({ error: count.message }, 500)
-    if (count.count <= 1) {
-      return json({ error: '無法取消最後一位管理員的權限（目前僅剩一位管理員）' }, 409)
-    }
-  }
-
-  // Integrate the existing app_metadata, do not overwrite the entire package - there are also Supabase's own fields such as provider.
-  const meta = { ...(target.user.app_metadata as Record<string, unknown>) }
-  if (makeAdmin) meta.role = 'admin'
-  else delete meta.role
-
-  const { error } = await db.auth.admin.updateUserById(userId, { app_metadata: meta })
-  if (error) return json({ error: error.message }, 500)
-
-  // AD-02: the pre-revoke count above already passed by the time this write landed — re-count now
-  // to catch the race it cannot: a second concurrent revoke of a different admin that also passed
-  // its own pre-check. If this revoke is what tipped the count to zero, undo it and fail instead
-  // of leaving the site with no administrator.
-  if (!makeAdmin && targetIsAdmin) {
-    const recount = await countAdmins()
-    if (recount.ok && recount.count === 0) {
-      await db.auth.admin.updateUserById(userId, { app_metadata: { ...meta, role: 'admin' } })
-      await logEvent(db, {
-        level: 'warn',
-        action: 'admin-set-role',
-        message: '偵測到管理員人數歸零，已還原此帳號的管理員權限',
-        userId: caller.data.user?.id ?? null,
-        detail: {
-          code: caller.data.user?.id ?? 'unknown',
-          hint: userId,
-          name: 'restore',
-        },
-      })
-      return json({ error: '無法取消最後一位管理員的權限（目前僅剩一位管理員）' }, 409)
-    }
-  }
-
-  // AD-02: every role change is security-relevant — log actor/target/new-role using only
-  // _shared/log.ts's allowlisted keys (it has no dedicated "actor"/"target" key, so this reuses
-  // `code` / `hint` / `name` the same way discordRun.ts already reuses them for other labels).
-  await logEvent(db, {
-    level: 'info',
-    action: 'admin-set-role',
-    message: makeAdmin ? '授予管理員權限' : '取消管理員權限',
-    userId: caller.data.user?.id ?? null,
-    detail: {
-      code: caller.data.user?.id ?? 'unknown',
-      hint: userId,
-      name: makeAdmin ? 'admin' : 'user',
-    },
-  })
-
-  return json({ ok: true, userId, admin: makeAdmin })
-}
-
-/**
- * PostgREST caps a single response at `max_rows` (1000, see `supabase/config.toml`). A select that
- * can plausibly return more rows than that needs explicit paging, or rows past the cap are silently
- * dropped (AUDIT-2026-09-04 #3: this under-counted `existingKeys` for accounts past 1000
- * `transactions`, so the backup-restore preview reported existing rows as missing).
- *
- * `build` must return a fresh, fully-specified query (including any `.order()`) for the given
- * `[from, to]` range — a supabase-js query builder cannot be re-awaited after use, so each page
- * needs its own builder call.
- */
-async function pagedSelect<T>(
-  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000,
-): Promise<{ data: T[]; error: { message: string } | null }> {
-  const rows: T[] = []
-  let from = 0
-  for (;;) {
-    const { data, error } = await build(from, from + pageSize - 1)
-    if (error) return { data: rows, error }
-    const page = data ?? []
-    rows.push(...page)
-    if (page.length < pageSize) break
-    from += pageSize
-  }
-  return { data: rows, error: null }
-}
-
-const BACKUPS_BUCKET = 'backups'
-
-/**
- * Admin backup console (task 130, phase 2): per-account summary of `backups` storage objects
- * plus the newest `backup_run_log` row, so an admin can see who is/isn't getting backed up
- * without opening the Supabase dashboard.
- *
- * Same service-role client as everywhere else in this file — the `backups` bucket is private,
- * only service_role can list it, and there is no self-service download path for ordinary users.
- */
-async function handleAdminBackups(): Promise<Response> {
-  // `listUsers` is a GoTrue Admin API with its own page/perPage, independent of PostgREST's
-  // max_rows — hardcoding page: 1 silently dropped every account past perPage (BUG-066). Loop
-  // upward until a page comes back short.
-  const perPage = 1000
-  const users: { id: string; email?: string | null }[] = []
-  for (let page = 1; ; page++) {
-    const { data: usersData, error: usersError } = await db.auth.admin.listUsers({ page, perPage })
-    if (usersError) return json({ error: usersError.message }, 500)
-    const batch = usersData?.users ?? []
-    users.push(...batch)
-    if (batch.length < perPage) break
-  }
-
-  const { data: runRows, error: runError } = await pagedSelect<Record<string, unknown>>((from, to) =>
-    db
-      .from('backup_run_log')
-      .select('user_id, run_date, status, error, transaction_count')
-      .order('run_date', { ascending: false })
-      .order('id', { ascending: false })
-      .range(from, to),
-  )
-  if (runError) return json({ error: runError.message }, 500)
-
-  // Rows are newest-first: `run_date` is a DATE with no (user_id, run_date) unique key, so a
-  // failed scheduled run plus a successful manual re-run can land two rows on the same date —
-  // `id` (BIGSERIAL PRIMARY KEY) is the tiebreak that makes the ordering a total order, so the
-  // first row seen per user_id is unambiguously that account's newest run.
-  const lastRunByUser = new Map<
-    string,
-    {
-      runDate: string
-      status: string
-      error: string | null
-      transactionCount: number
-    }
-  >()
-  for (const r of runRows ?? []) {
-    const uid = r.user_id as string
-    if (lastRunByUser.has(uid)) continue
-    lastRunByUser.set(uid, {
-      runDate: r.run_date as string,
-      status: r.status as string,
-      error: (r.error as string | null) ?? null,
-      transactionCount: (r.transaction_count as number | null) ?? 0,
-    })
-  }
-
-  const accounts = await Promise.all(
-    users.map(async (u) => {
-      const { data: objects } = await db.storage.from(BACKUPS_BUCKET).list(u.id, { limit: 1000 })
-      const summary = summarizeAccountBackups(
-        u.id,
-        u.email ?? '',
-        (objects ?? []).map((o: { name: string; metadata: unknown; created_at: string | null }) => ({
-          name: o.name,
-          size: (o.metadata as { size?: number } | null)?.size ?? 0,
-          createdAt: o.created_at ?? null,
-        })),
-      )
-      return { ...summary, lastRun: lastRunByUser.get(u.id) ?? null }
-    }),
-  )
-
-  return json({ ok: true, accounts })
-}
-
-/**
- * Mint a short-lived signed URL for one backup object (task 130, phase 2).
- *
- * `isValidBackupPath` must pass before the path reaches Storage: `createSignedUrl` will happily
- * sign whatever path it is given, so an unvalidated path here is an arbitrary-object read for
- * anyone who can reach this action (i.e. any admin — still narrower than "anyone").
- */
-async function handleAdminBackupUrl(body: GenerateReportRequestBody): Promise<Response> {
-  const path = typeof body.path === 'string' ? body.path : ''
-  if (!isValidBackupPath(path)) return json({ error: '備份路徑格式不正確' }, 400)
-
-  const { data, error } = await db.storage.from(BACKUPS_BUCKET).createSignedUrl(path, 60)
-  if (error || !data) return json({ error: '找不到備份檔' }, 404)
-  // This client is built from the container-internal SUPABASE_URL, so `signedUrl` may be an
-  // absolute URL on an internal hostname (e.g. `http://kong:8000`) that no browser can resolve.
-  // Strip it down to path + query; the browser knows the public origin and re-attaches it.
-  const relativeUrl = data.signedUrl.startsWith('http')
-    ? data.signedUrl.slice(new URL(data.signedUrl).origin.length)
-    : data.signedUrl
-  return json({ ok: true, url: relativeUrl, expiresIn: 60 })
-}
-
-/** Key field per table for the additive restore below — matches the primary/unique key each table's schema actually uses. */
-const BACKUP_TABLE_KEYS: Record<'workspaces' | 'transactions' | 'user_settings', string> = {
-  workspaces: 'id',
-  transactions: 'id',
-  user_settings: 'user_id',
-}
-
-/**
- * Restore the missing rows of one backup file back into the account it belongs to
- * (task: backup-restore).
- *
- * Additive only: a row whose key already exists is left untouched, and `apply !== true` never
- * writes anything — it only reports what an apply would do. `parseBackupDocument` is the safety
- * gate: it aborts before any read of "what's missing" if the file's account does not match the
- * path, or if a single row inside it belongs to someone else.
- */
-async function handleAdminBackupRestore(body: GenerateReportRequestBody): Promise<Response> {
-  const path = typeof body.path === 'string' ? body.path : ''
-  if (!isValidBackupPath(path)) return json({ error: '備份路徑格式不正確' }, 400)
-  const apply = body.apply === true
-
-  const expectedUserId = path.split('/')[0]
-  const { data: fileData, error: downloadError } = await db.storage.from(BACKUPS_BUCKET).download(path)
-  if (downloadError || !fileData) return json({ error: '找不到備份檔' }, 404)
-
-  let raw: unknown
-  try {
-    raw = JSON.parse(await fileData.text())
-  } catch {
-    return json({ error: '備份檔格式無法辨識' }, 400)
-  }
-
-  const parsed = parseBackupDocument(raw, expectedUserId)
-  if (!parsed.ok) return json({ error: parsed.error }, 400)
-  const { doc } = parsed
-
-  // Parents before children: transactions has a composite FK (workspace_id, user_id) onto
-  // workspaces, so inserting in any other order fails.
-  const tableOrder: (keyof typeof BACKUP_TABLE_KEYS)[] = ['workspaces', 'transactions', 'user_settings']
-  const tables: Record<string, { inFile: number; present: number; missing: number }> = {}
-  // No transaction spans the three writes below, so a later failure can leave earlier
-  // tables already committed. Track what actually landed so the error message is honest.
-  const writtenSoFar: Array<{ table: string; count: number }> = []
-
-  for (const name of tableOrder) {
-    const keyField = BACKUP_TABLE_KEYS[name]
-    const fileRows = doc.tables[name]
-    // `.range()` is OFFSET/LIMIT, and Postgres guarantees no row order across separate queries
-    // without an ORDER BY —— so an unordered paged read can repeat or skip a row between pages,
-    // which is exactly the >1000-row case this paging exists to get right. Order by the key.
-    const { data: existingRows, error: existingError } = await pagedSelect((from, to) =>
-      db
-        .from(name)
-        .select(keyField)
-        .eq('user_id', expectedUserId)
-        .order(keyField, { ascending: true })
-        .range(from, to),
-    )
-    if (existingError) return json({ error: existingError.message }, 500)
-    const existingKeys = (existingRows ?? []).map((r) => String((r as Record<string, unknown>)[keyField]))
-    const toInsert = rowsToInsert(fileRows, existingKeys, keyField)
-
-    let missing = toInsert.length
-    if (apply && toInsert.length > 0) {
-      // BUG-066: `.upsert(...).select()` writes every row, but its RETURNING payload is capped
-      // at max_rows (1000) same as any select — a restore past that many rows under-reported
-      // `missing` even though every row landed. Chunk the write so each batch's RETURNING stays
-      // under the cap, and sum the batches.
-      const UPSERT_BATCH = 1000
-      let written = 0
-      for (let i = 0; i < toInsert.length; i += UPSERT_BATCH) {
-        const batch = toInsert.slice(i, i + UPSERT_BATCH)
-        const { data: inserted, error: insertError } = await db
-          .from(name)
-          .upsert(batch, { onConflict: keyField, ignoreDuplicates: true })
-          .select(keyField)
-        if (insertError) {
-          // A failure on a later batch must still report what the earlier batches committed.
-          if (written > 0) writtenSoFar.push({ table: name, count: written })
-          return json({ error: restoreFailureMessage(writtenSoFar, insertError.message) }, 500)
-        }
-        written += inserted?.length ?? 0
-      }
-      missing = written
-      writtenSoFar.push({ table: name, count: missing })
-    }
-
-    tables[name] = { inFile: fileRows.length, present: existingKeys.length, missing }
-  }
-
-  return json({ ok: true, applied: apply, backupDate: doc.backup_date, tables })
-}
-
-/**
- * Admin console reader over `public.app_log` (Spec 146). The table has no SELECT policy —
- * only `admin_recent_app_logs()` (SECURITY DEFINER, service_role only) can read it, so this
- * goes through the same `db` service-role client every other admin action already uses.
- */
-/** DB-04: `admin_recent_app_logs` defaults to 100 rows but takes whatever `p_limit` the caller sends. */
-const APP_LOGS_MAX_LIMIT = 200
-
-async function handleAppLogs(body: GenerateReportRequestBody): Promise<Response> {
-  const p_limit = typeof body.limit === 'number' ? Math.min(body.limit, APP_LOGS_MAX_LIMIT) : undefined
-  const p_before_id = typeof body.beforeId === 'number' && Number.isFinite(body.beforeId) ? body.beforeId : null
-  const { data, error } = await db.rpc('admin_recent_app_logs', {
-    p_limit,
-    p_level: body.level ?? undefined,
-    p_source: body.source ?? undefined,
-    p_before: body.before ?? undefined,
-    p_before_id,
-  })
-  if (error) return json({ error: error.message }, 500)
-  return json({ ok: true, logs: data ?? [] })
-}
-
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -4390,681 +3525,6 @@ async function handleSyncFx(): Promise<Response> {
     skippedForBudget: fx.skippedForBudget ?? 0,
     durationMs: Date.now() - startedAt,
   })
-}
-
-/**
- * Real dependencies for the Discord daily summary (Task 165). Shared by `discord-summary` (cron,
- * `x-cron-secret`) and `discord-webhook` (admin console): both read/write `app_secrets` and
- * `discord_send_log`. The webhook URL itself never leaves this module as a return value — see
- * spec §2.2/§2.3.
- */
-async function readDiscordWebhookRow(): Promise<{ url: string; updatedAt: string } | null> {
-  const { data, error } = await db
-    .from('app_secrets')
-    .select('value, updated_at')
-    .eq('name', 'discord_webhook_url')
-    .maybeSingle()
-  // A read failure must not look like "not configured": the admin console would show 尚未設定 and
-  // the cron run would record a misleading `no-webhook` skip. Throw so the caller answers 500.
-  if (error) throw new Error(error.message)
-  if (!data) return null
-  return { url: data.value, updatedAt: data.updated_at }
-}
-
-async function loadDiscordWebhookUrl(): Promise<string | null> {
-  const row = await readDiscordWebhookRow()
-  return row?.url ?? null
-}
-
-async function writeDiscordWebhookUrl(url: string): Promise<void> {
-  const { error } = await db
-    .from('app_secrets')
-    .upsert({ name: 'discord_webhook_url', value: url, updated_at: new Date().toISOString() }, { onConflict: 'name' })
-  if (error) throw new Error(error.message)
-}
-
-async function deleteDiscordWebhookUrl(): Promise<void> {
-  const { error } = await db.from('app_secrets').delete().eq('name', 'discord_webhook_url')
-  if (error) throw new Error(error.message)
-}
-
-async function recentDiscordSends(limit: number): Promise<SendLogRow[]> {
-  const { data, error } = await db
-    .from('discord_send_log')
-    .select('taipei_ymd, edition, status, http_status, reason, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error || !data) return []
-  return data.map(
-    (row: {
-      taipei_ymd: string
-      edition: SendEdition
-      status: SendLogStatus
-      http_status: number | null
-      reason: string | null
-      created_at: string
-    }) => ({
-      taipeiYmd: row.taipei_ymd,
-      edition: row.edition,
-      status: row.status,
-      httpStatus: row.http_status,
-      reason: row.reason,
-      at: row.created_at,
-    }),
-  )
-}
-
-/**
- * The unique index `discord_send_log_once` (schema.sql) is the actual guard against a double
- * post; `23505` means another call already claimed this day+edition first.
- */
-async function claimDiscordSend(ymd: string, edition: SummaryEdition): Promise<boolean> {
-  const { error } = await db.from('discord_send_log').insert({ taipei_ymd: ymd, edition, status: 'claimed' })
-  if (!error) return true
-  if (error.code === '23505') return false
-  throw new Error(error.message)
-}
-
-/**
- * `brief`/`full` terminal outcomes (`sent`/`failed`) update the row `claimSend` inserted earlier;
- * everything else — the two pre-claim skip reasons, and every `test` send — has no claimed row to
- * update, so it inserts its own.
- */
-async function finishDiscordSend(ymd: string, edition: SendEdition, outcome: RunOutcome): Promise<void> {
-  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
-  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
-  if ((edition === 'brief' || edition === 'full') && (outcome.kind === 'sent' || outcome.kind === 'failed')) {
-    const { error } = await db
-      .from('discord_send_log')
-      .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
-      .eq('taipei_ymd', ymd)
-      .eq('edition', edition)
-      .eq('status', 'claimed')
-    if (error) throw new Error(error.message)
-    return
-  }
-  const { error } = await db
-    .from('discord_send_log')
-    .insert({ taipei_ymd: ymd, edition, status: outcome.kind, http_status: httpStatus, reason })
-  if (error) throw new Error(error.message)
-}
-
-async function loadDiscordUsdTwd(): Promise<FxLine | null> {
-  const file = await downloadJson<FxFile>('fx/twd.json')
-  const usd = file?.currencies.find((c) => c.code === 'USD')
-  if (!usd) return null
-  const lastPoint = usd.points[usd.points.length - 1]
-  return {
-    code: usd.code,
-    latest: usd.latest,
-    prevClose: usd.prevClose,
-    decimals: usd.decimals,
-    date: lastPoint ? lastPoint[0] : null,
-    asOf: file?.asOf ?? null,
-  }
-}
-
-async function loadDiscordMacro(): Promise<MacroLine[] | null> {
-  const file = await downloadJson<MacroFile>('macro/us.json')
-  return file?.indicators ?? null
-}
-
-/** Task 165 step 2f: every account's row, exactly as `accountTick.ts`'s `dueAt` needs it. Unlike
- * the retired `loadDiscordMarketOverrides`, this is not filtered to accounts with a 經濟快報 URL —
- * an account with only a 個人持股 webhook (or neither) still needs its row for `dueAt` to say no. */
-async function listDiscordTickAccounts(): Promise<AccountRow[]> {
-  const out: AccountRow[] = []
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await db
-      .from('user_discord_settings')
-      .select('user_id, market_webhook_url, market_enabled, market_brief_time, market_full_time, webhook_url, enabled, holdings_time')
-      .order('user_id', { ascending: true })
-      .range(from, from + 999)
-    if (error) throw new Error(error.message)
-    const page = data ?? []
-    out.push(
-      ...page.map(
-        (row: {
-          user_id: string
-          market_webhook_url: string | null
-          market_enabled: boolean
-          market_brief_time: string | null
-          market_full_time: string | null
-          webhook_url: string | null
-          enabled: boolean
-          holdings_time: string | null
-        }) => ({
-          userId: row.user_id,
-          marketWebhookUrl: row.market_webhook_url,
-          marketEnabled: row.market_enabled,
-          marketBriefTime: row.market_brief_time,
-          marketFullTime: row.market_full_time,
-          holdingsWebhookUrl: row.webhook_url,
-          holdingsEnabled: row.enabled,
-          holdingsTime: row.holdings_time,
-        }),
-      ),
-    )
-    if (page.length < 1000) break
-  }
-  return out
-}
-
-/** schema.sql §15's two-job schedule, in the shape `accountTick.ts`'s `dueAt` inherits from. */
-async function loadDiscordGlobalSchedule(): Promise<GlobalSchedule> {
-  return scheduleFromJobs(await readDiscordScheduleJobs())
-}
-
-/** `23505` means another tick already claimed this user+day+kind first — same shape as
- * `claimHoldingsDaily`. Task 165 step 2f (spec §4): this is new; the retired
- * `finishDiscordMarketOverride` inserted a finished row with no prior claim, safe only because
- * the job ran once a day. */
-async function claimMarketCopy(userId: string, ymd: string, kind: MarketCopyKind): Promise<boolean> {
-  const { error } = await db.from('user_discord_send_log').insert({ user_id: userId, taipei_ymd: ymd, kind, status: 'claimed' })
-  if (!error) return true
-  if (error.code === '23505') return false
-  throw new Error(error.message)
-}
-
-/** Updates the row `claimMarketCopy` inserted — never a second insert. */
-async function finishMarketCopy(userId: string, ymd: string, kind: MarketCopyKind, outcome: CopyOutcome): Promise<void> {
-  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
-  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
-  const { error } = await db
-    .from('user_discord_send_log')
-    .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('taipei_ymd', ymd)
-    .eq('kind', kind)
-    .eq('status', 'claimed')
-  if (error) throw new Error(error.message)
-}
-
-/** Cron entry point: every half hour, Taipei 17:00–23:30 weekdays (`discord-account-tick` in
- * schema.sql). Reuses the same data loaders / holdings step as the retired `discord-holdings`. */
-async function handleDiscordAccountTick(): Promise<Response> {
-  const startedAt = Date.now()
-  const deps: TickDeps = {
-    now: () => new Date(),
-    elapsedMs: () => Date.now() - startedAt,
-    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
-    loadGlobalSchedule: loadDiscordGlobalSchedule,
-    loadGlobalWebhookUrl: loadDiscordWebhookUrl,
-    listAccounts: listDiscordTickAccounts,
-    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
-    loadUsdTwd: loadDiscordUsdTwd,
-    loadMacro: loadDiscordMacro,
-    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
-    post: postDiscordWebhook,
-    claimMarketCopy,
-    finishMarketCopy,
-    loadWorkspaces: loadHoldingsWorkspaces,
-    fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
-    claimHoldings: claimHoldingsDaily,
-    finish: finishHoldingsSend,
-    log: (e) => logEvent(db, { level: e.level, action: 'discord-account-tick', message: e.message, detail: e.detail }),
-  }
-  const result = await runAccountTick(deps)
-  return json(result)
-}
-
-/**
- * The five real data loaders behind both the scheduled summary and the admin preview
- * (`op: 'preview'`, spec §2.7) — one factory so the two entry points cannot drift.
- */
-function discordSummaryLoaders(): Pick<
-  SummaryDeps,
-  'loadMarketFile' | 'loadIndex' | 'loadUsdTwd' | 'loadMacro' | 'loadMargin'
-> {
-  return {
-    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
-    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
-    loadUsdTwd: loadDiscordUsdTwd,
-    loadMacro: loadDiscordMacro,
-    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
-  }
-}
-
-/** Cron entry point: weekday 17:30 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs
- * in schema.sql. Posts to the global webhook only (Task 165 step 2f, spec D4) — the per-account
- * copies of either edition are `discord-account-tick`'s job now. */
-async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Response> {
-  if (body.edition !== 'brief' && body.edition !== 'full') {
-    return json({ error: 'edition 必須是 brief 或 full' }, 400)
-  }
-  const edition = body.edition
-  const deps: SummaryDeps = {
-    now: () => new Date(),
-    ...discordSummaryLoaders(),
-    loadWebhookUrl: loadDiscordWebhookUrl,
-    claimSend: claimDiscordSend,
-    finishSend: finishDiscordSend,
-    post: postDiscordWebhook,
-    log: (e) => logEvent(db, { level: e.level, action: 'discord-summary', message: e.message, detail: e.detail }),
-  }
-  const outcome = await runDiscordSummary(deps, edition)
-  return json(outcome)
-}
-
-/** Admin console entry point (Discord settings panel): get / set / clear / test / preview. Never returns the URL — see `runWebhookOp`. */
-async function handleDiscordWebhook(body: GenerateReportRequestBody): Promise<Response> {
-  const { action: _action, ...input } = body
-  const deps: WebhookAdminDeps = {
-    now: () => new Date(),
-    readWebhook: readDiscordWebhookRow,
-    writeWebhook: writeDiscordWebhookUrl,
-    deleteWebhook: deleteDiscordWebhookUrl,
-    recentSends: recentDiscordSends,
-    finishSend: finishDiscordSend,
-    post: postDiscordWebhook,
-    ...discordSummaryLoaders(),
-  }
-  const result = await runWebhookOp(deps, input)
-  if (!result.ok) {
-    return json(result, result.error === 'not-configured' || result.error === 'no-market-data' ? 409 : 400)
-  }
-  return json(result)
-}
-
-/**
- * Real dependencies for the per-user Discord holdings card (Task 165 Phase 2). Shared by
- * `discord-holdings` (cron, `x-cron-secret`) and `discord-accounts` (admin console, Task 165
- * Phase 2 step 2d, replacing the retired per-user `discord-holdings-settings`): both read/write
- * `user_discord_settings` and `user_discord_send_log`. The webhook URL itself never leaves this
- * module as a return value — see spec §2.6.
- */
-const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
-
-/** Every workspace of the user, each with all of its transactions. BUG-066: page transactions
- * 1,000 rows at a time until a short page — PostgREST caps a single response at `max_rows`. */
-async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceInput[]> {
-  const { data: workspaces, error } = await db
-    .from('workspaces')
-    .select('id, fee_rate')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-  if (error) throw new Error(error.message)
-
-  const out: WorkspaceInput[] = []
-  for (const ws of workspaces ?? []) {
-    const transactions: Transaction[] = []
-    for (let from = 0; ; from += 1000) {
-      const { data, error: txError } = await db
-        .from('transactions')
-        .select(HOLDINGS_TX_COLUMNS)
-        .eq('workspace_id', ws.id)
-        .order('tx_date', { ascending: true })
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-        .range(from, from + 999)
-      if (txError) throw new Error(txError.message)
-      const page = (data ?? []) as unknown as Transaction[]
-      transactions.push(...page)
-      if (page.length < 1000) break
-    }
-    out.push({ id: ws.id, fee_rate: ws.fee_rate, transactions })
-  }
-  return out
-}
-
-async function listEnabledHoldingsUsers(): Promise<Array<{ userId: string; webhookUrl: string }>> {
-  const { data, error } = await db
-    .from('user_discord_settings')
-    .select('user_id, webhook_url')
-    .eq('enabled', true)
-    .not('webhook_url', 'is', null)
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((row: { user_id: string; webhook_url: string | null }) => ({
-    userId: row.user_id,
-    webhookUrl: row.webhook_url as string,
-  }))
-}
-
-/** `23505` means another call already claimed this user+day first — the unique index is the actual guard. */
-async function claimHoldingsDaily(userId: string, ymd: string): Promise<boolean> {
-  const { error } = await db.from('user_discord_send_log').insert({ user_id: userId, taipei_ymd: ymd, kind: 'daily', status: 'claimed' })
-  if (!error) return true
-  if (error.code === '23505') return false
-  throw new Error(error.message)
-}
-
-/** `daily` terminal outcomes (`sent`/`failed`/`skipped`) update the row `claimDaily` inserted
- * earlier; `preview`/`test` have no claimed row, so they insert their own. */
-async function finishHoldingsSend(userId: string, ymd: string, kind: HoldingsKind, outcome: HoldingsOutcome): Promise<void> {
-  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
-  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
-  if (kind === 'daily') {
-    const { error } = await db
-      .from('user_discord_send_log')
-      .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
-      .eq('user_id', userId)
-      .eq('taipei_ymd', ymd)
-      .eq('status', 'claimed')
-    if (error) throw new Error(error.message)
-    return
-  }
-  const { error } = await db
-    .from('user_discord_send_log')
-    .insert({ user_id: userId, taipei_ymd: ymd, kind, status: outcome.kind, http_status: httpStatus, reason })
-  if (error) throw new Error(error.message)
-}
-
-async function readHoldingsSettings(
-  userId: string,
-): Promise<{ enabled: boolean; webhookUrl: string | null; holdingsTime: string | null } | null> {
-  const { data, error } = await db
-    .from('user_discord_settings')
-    .select('enabled, webhook_url, holdings_time')
-    .eq('user_id', userId)
-    .maybeSingle()
-  // A read failure must not look like "not configured" — throw so the caller answers 500.
-  if (error) throw new Error(error.message)
-  if (!data) return null
-  return { enabled: data.enabled, webhookUrl: data.webhook_url, holdingsTime: data.holdings_time }
-}
-
-async function saveHoldingsWebhookUrl(userId: string, url: string): Promise<void> {
-  const { error } = await db
-    .from('user_discord_settings')
-    .upsert({ user_id: userId, webhook_url: url, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-  if (error) throw new Error(error.message)
-}
-
-async function clearHoldingsWebhookUrl(userId: string): Promise<void> {
-  const { error } = await db
-    .from('user_discord_settings')
-    .update({ webhook_url: null, enabled: false, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-  if (error) throw new Error(error.message)
-}
-
-async function setHoldingsEnabled(userId: string, enabled: boolean): Promise<void> {
-  const { error } = await db
-    .from('user_discord_settings')
-    .upsert({ user_id: userId, enabled, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-  if (error) throw new Error(error.message)
-}
-
-async function readHoldingsLastSend(userId: string): Promise<LastSend | null> {
-  const { data, error } = await db
-    .from('user_discord_send_log')
-    .select('kind, taipei_ymd, status, reason, updated_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (error || !data) return null
-  return { kind: data.kind, ymd: data.taipei_ymd, status: data.status, reason: data.reason, at: data.updated_at }
-}
-
-async function countHoldingsManualToday(userId: string, ymd: string): Promise<number> {
-  const { count, error } = await db
-    .from('user_discord_send_log')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('taipei_ymd', ymd)
-    .in('kind', ['test', 'preview'])
-  if (error) throw new Error(error.message)
-  return count ?? 0
-}
-
-/** The data loaders shared by the scheduled run and the per-user settings ops (get/set/.../preview). */
-function holdingsDataDeps(): HoldingsDataDeps {
-  return {
-    now: () => new Date(),
-    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
-    loadWorkspaces: loadHoldingsWorkspaces,
-    fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
-    post: postDiscordWebhook,
-    finish: finishHoldingsSend,
-  }
-}
-
-/** Cron entry point: weekday, together with the brief (17:30 default; admin-adjustable, see
- * schema.sql §15) — `discord-holdings-daily` in schema.sql. */
-async function handleDiscordHoldings(): Promise<Response> {
-  const startedAt = Date.now()
-  const deps: HoldingsRunDeps = {
-    ...holdingsDataDeps(),
-    elapsedMs: () => Date.now() - startedAt,
-    listEnabledUsers: listEnabledHoldingsUsers,
-    claimDaily: claimHoldingsDaily,
-    log: (e) => logEvent(db, { level: e.level, action: 'discord-holdings', message: e.message, detail: e.detail }),
-  }
-  const result = await runHoldingsDaily(deps)
-  return json(result)
-}
-
-/**
- * Real dependencies for the admin console's per-account Discord ops (Task 165 Phase 2 step 2d,
- * spec discord-admin-accounts.md §3.5). Every account, every webhook — global (§13, unchanged),
- * per-account 經濟快報 override, per-account 個人持股報告 — plus the send schedule, all gated by
- * `assertAdmin`; the per-user `discord-holdings-settings` action is retired with it (U1).
- */
-async function listDiscordAccounts(): Promise<Array<{ userId: string; email: string | null }>> {
-  // Same BUG-066 paging shape as `handleAdminBackups` / `handleAdminUsers`: `listUsers` has its
-  // own page/perPage, independent of PostgREST's max_rows.
-  const perPage = 1000
-  const users: Array<{ userId: string; email: string | null }> = []
-  for (let page = 1; ; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
-    if (error) throw new Error(error.message)
-    const batch = data?.users ?? []
-    users.push(
-      ...batch.map((u: { id: string; email: string | null | undefined }) => ({
-        userId: u.id,
-        email: u.email ?? null,
-      })),
-    )
-    if (batch.length < perPage) break
-  }
-  return users
-}
-
-async function listDiscordAccountSettings(): Promise<AccountSettingsRow[]> {
-  const out: AccountSettingsRow[] = []
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await db
-      .from('user_discord_settings')
-      .select('user_id, enabled, webhook_url, market_webhook_url, market_enabled')
-      .order('user_id', { ascending: true })
-      .range(from, from + 999)
-    if (error) throw new Error(error.message)
-    const page = data ?? []
-    out.push(
-      ...page.map(
-        (row: {
-          user_id: string
-          enabled: boolean
-          webhook_url: string | null
-          market_webhook_url: string | null
-          market_enabled: boolean
-        }) => ({
-          userId: row.user_id,
-          enabled: row.enabled,
-          webhookUrl: row.webhook_url,
-          marketWebhookUrl: row.market_webhook_url,
-          marketEnabled: row.market_enabled,
-        }),
-      ),
-    )
-    if (page.length < 1000) break
-  }
-  return out
-}
-
-async function saveDiscordMarketWebhook(userId: string, url: string | null): Promise<void> {
-  const { error } = await db
-    .from('user_discord_settings')
-    .upsert({ user_id: userId, market_webhook_url: url, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-  if (error) throw new Error(error.message)
-}
-
-/** Task 165 step 2e: the per-account 經濟快報 switch, shared by the admin console and the
- * self-service `discord-my-settings` action. */
-async function setDiscordMarketEnabled(userId: string, enabled: boolean): Promise<void> {
-  const { error } = await db
-    .from('user_discord_settings')
-    .upsert({ user_id: userId, market_enabled: enabled, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-  if (error) throw new Error(error.message)
-}
-
-/** Self-service read of the caller's own 經濟快報 override, plus (Task 165 step 2f) its two send
- * times — `discord-my-settings` only. */
-async function readDiscordMarketSettings(
-  userId: string,
-): Promise<{ enabled: boolean; webhookUrl: string | null; marketBriefTime: string | null; marketFullTime: string | null }> {
-  const { data, error } = await db
-    .from('user_discord_settings')
-    .select('market_enabled, market_webhook_url, market_brief_time, market_full_time')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!data) return { enabled: false, webhookUrl: null, marketBriefTime: null, marketFullTime: null }
-  return {
-    enabled: data.market_enabled,
-    webhookUrl: data.market_webhook_url,
-    marketBriefTime: data.market_brief_time,
-    marketFullTime: data.market_full_time,
-  }
-}
-
-/** Typed for `discordMySettings.ts`'s `HoldingsOutcome` (the self-service market sends never
- * produce `no-holdings`, but the shared `MySettingsDeps.finishMarket` signature carries the full
- * type). `kind` distinguishes 「測試經濟快報連線」 (`'test'`) from the real-edition preview
- * (`'preview'`, Task 165 step 2h) — both are manual sends; the tick's own sends go through
- * `finishMarketCopy`. Nothing writes `kind: 'market'` any more (spec discord-market-preview.md §2). */
-async function finishDiscordMyMarket(userId: string, ymd: string, kind: 'test' | 'preview', outcome: HoldingsOutcome): Promise<void> {
-  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
-  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
-  const { error } = await db
-    .from('user_discord_send_log')
-    .insert({ user_id: userId, taipei_ymd: ymd, kind, status: outcome.kind, http_status: httpStatus, reason })
-  if (error) throw new Error(error.message)
-}
-
-/** Task 165 step 2f: writes all three per-account send times at once; `null` = inherit. */
-async function saveDiscordTimes(
-  userId: string,
-  times: { marketBriefTime: string | null; marketFullTime: string | null; holdingsTime: string | null },
-): Promise<void> {
-  const { error } = await db
-    .from('user_discord_settings')
-    .upsert(
-      {
-        user_id: userId,
-        market_brief_time: times.marketBriefTime,
-        market_full_time: times.marketFullTime,
-        holdings_time: times.holdingsTime,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    )
-  if (error) throw new Error(error.message)
-}
-
-/** schema.sql §15's `discord_schedule_get()` — jobname/schedule only, never `command`. */
-async function readDiscordScheduleJobs(): Promise<Array<{ jobname: string; schedule: string }>> {
-  const { data, error } = await db.rpc('discord_schedule_get')
-  if (error) throw new Error(error.message)
-  return (data ?? []) as Array<{ jobname: string; schedule: string }>
-}
-
-async function writeDiscordSchedule(s: {
-  briefHour: number
-  briefMinute: number
-  fullHour: number
-  fullMinute: number
-}): Promise<void> {
-  const { error } = await db.rpc('discord_schedule_set', {
-    brief_hour: s.briefHour,
-    brief_minute: s.briefMinute,
-    full_hour: s.fullHour,
-    full_minute: s.fullMinute,
-  })
-  if (error) throw new Error(error.message)
-}
-
-/** Admin console entry point: list / set-schedule / set-market / clear-market / test-market /
- * holdings-set / holdings-clear / holdings-enable / holdings-test. Never returns a webhook URL —
- * see `runDiscordAccountsOp`. */
-async function handleDiscordAccounts(body: GenerateReportRequestBody): Promise<Response> {
-  const { action: _action, ...input } = body
-  const deps: DiscordAccountsDeps = {
-    ...holdingsDataDeps(),
-    readSettings: readHoldingsSettings,
-    saveWebhook: saveHoldingsWebhookUrl,
-    clearWebhook: clearHoldingsWebhookUrl,
-    setEnabled: setHoldingsEnabled,
-    lastSend: readHoldingsLastSend,
-    countManualToday: countHoldingsManualToday,
-    listAccounts: listDiscordAccounts,
-    listSettings: listDiscordAccountSettings,
-    saveMarketWebhook: saveDiscordMarketWebhook,
-    setMarketEnabled: setDiscordMarketEnabled,
-    readScheduleJobs: readDiscordScheduleJobs,
-    writeSchedule: writeDiscordSchedule,
-  }
-  const result = await runDiscordAccountsOp(deps, input)
-  if (!result.ok) {
-    const status =
-      result.error === 'bad-request' ||
-      result.error === 'invalid-url' ||
-      result.error === 'invalid-time' ||
-      result.error === 'not-configured' ||
-      result.error === 'unknown-user'
-        ? 400
-        : result.error === 'quota'
-          ? 429
-          : 409
-    return json(result, status)
-  }
-  return json(result)
-}
-
-/** Self-service entry point (Task 165 step 2e, spec discord-user-self-service.md §5.3/§7): the
- * signed-in account managing its own 經濟快報 and 個人持股 webhooks. `assertUser` must run first —
- * `userId` never comes from the request body (§7). Never returns a webhook URL — see `runMySettingsOp`. */
-async function handleDiscordMySettings(req: Request, body: GenerateReportRequestBody): Promise<Response> {
-  const auth = await assertUser(req)
-  if (auth instanceof Response) return auth
-
-  const { action: _action, ...input } = body
-  const deps: MySettingsDeps = {
-    ...holdingsDataDeps(),
-    readSettings: readHoldingsSettings,
-    saveWebhook: saveHoldingsWebhookUrl,
-    clearWebhook: clearHoldingsWebhookUrl,
-    setEnabled: setHoldingsEnabled,
-    lastSend: readHoldingsLastSend,
-    countManualToday: countHoldingsManualToday,
-    readMarket: readDiscordMarketSettings,
-    saveMarketWebhook: saveDiscordMarketWebhook,
-    setMarketEnabled: setDiscordMarketEnabled,
-    finishMarket: finishDiscordMyMarket,
-    readWebhook: readDiscordWebhookRow,
-    saveTimes: saveDiscordTimes,
-    readScheduleJobs: readDiscordScheduleJobs,
-    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
-    loadUsdTwd: loadDiscordUsdTwd,
-    loadMacro: loadDiscordMacro,
-    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
-  }
-  const result = await runMySettingsOp(deps, auth.userId, input)
-  if (!result.ok) {
-    const status =
-      result.error === 'bad-request' ||
-      result.error === 'invalid-url' ||
-      result.error === 'invalid-time' ||
-      result.error === 'not-configured'
-        ? 400
-        : result.error === 'quota'
-          ? 429
-          : 409
-    return json(result, status)
-  }
-  return json(result)
 }
 
 /**
@@ -5252,6 +3712,60 @@ async function handleAdminRun(
   })
 }
 
+const PHASE_OF: Record<'generate-chips' | 'generate-market-data' | 'generate-history', GeneratePhaseId> = {
+  'generate-chips': 'chips',
+  'generate-market-data': 'market-data',
+  'generate-history': 'history',
+}
+
+/**
+ * Every action, its gate and its handler (see actionRoutes.ts for what each gate checks).
+ * `cron` actions all write Storage or call upstream sources, so an open endpoint would hand out a
+ * free proxy; `admin` actions use the caller's JWT because CRON_SECRET must never reach a browser.
+ */
+const ACTION_ROUTES = new Map<string, ActionRoute<GenerateReportRequestBody>>([
+  // Browser callers: assertUser + per-account quota inside the handlers.
+  ['generate', { gate: 'self', run: (req, body) => handleGenerate(req, body) }],
+  ['warm', { gate: 'self', run: (req, body) => handleWarm(req, body) }],
+
+  // pg_cron batch. Single phases exist for manual runs; prefer admin-run from the console.
+  ['generate-all', { gate: 'cron', run: () => handleGenerateAll() }],
+  ['generate-chips', { gate: 'cron', run: () => handleGeneratePhase(PHASE_OF['generate-chips']) }],
+  ['generate-market-data', { gate: 'cron', run: () => handleGeneratePhase(PHASE_OF['generate-market-data']) }],
+  ['generate-history', { gate: 'cron', run: () => handleGeneratePhase(PHASE_OF['generate-history']) }],
+  // History backfills: for "fill it now" instead of waiting for the nightly batch.
+  ['backfill-revenue', { gate: 'cron', run: () => handleBackfillRevenue() }],
+  ['backfill-profit', { gate: 'cron', run: () => handleBackfillProfit() }],
+  // Independent cron jobs: macro-daily (FRED), market-daily (TWSE, schema.sql §11), fx-daily (§10).
+  ['sync-macro', { gate: 'cron', run: () => handleSyncMacro() }],
+  ['sync-market', { gate: 'cron', run: () => handleSyncMarket() }],
+  ['sync-fx', { gate: 'cron', run: () => handleSyncFx() }],
+  // Source probe only reads (plus its own observation table) but still calls TWSE.
+  ['probe', { gate: 'cron', run: () => handleProbe() }],
+
+  // Admin console.
+  ['admin-status', { gate: 'admin', run: () => handleAdminStatus() }],
+  ['admin-users', { gate: 'admin', run: () => handleAdminUsers() }],
+  ['admin-set-role', { gate: 'admin', run: (req, body) => handleAdminSetRole(req, body) }],
+  ['admin-backups', { gate: 'admin', run: () => handleAdminBackups() }],
+  ['admin-backup-url', { gate: 'admin', run: (_req, body) => handleAdminBackupUrl(body) }],
+  ['admin-backup-restore', { gate: 'admin', run: (_req, body) => handleAdminBackupRestore(body) }],
+  // Log viewer (Spec 146): public.app_log through the RPC.
+  ['app-logs', { gate: 'admin', run: (_req, body) => handleAppLogs(body) }],
+  // Manual batch trigger (0.6.44-dev.2): same work as the cron jobs; assertAdmin runs inside.
+  ['admin-run', { gate: 'self', run: (req, body) => handleAdminRun(req, body) }],
+
+  // Discord (Task 165). discord-summary is deliberately not in ADMIN_RUN_JOBS: a "run all" must
+  // never post to Discord. discord-holdings' cron job is retired (step 2f, D5); the action stays.
+  ['discord-summary', { gate: 'cron', run: (_req, body) => handleDiscordSummary(body) }],
+  ['discord-holdings', { gate: 'cron', run: () => handleDiscordHoldings() }],
+  ['discord-account-tick', { gate: 'cron', run: () => handleDiscordAccountTick() }],
+  ['discord-webhook', { gate: 'admin', run: (_req, body) => handleDiscordWebhook(body) }],
+  ['discord-accounts', { gate: 'admin', run: (_req, body) => handleDiscordAccounts(body) }],
+  // Self-service settings (step 2e): assertUser inside the handler (spec §7.4).
+  ['discord-my-settings', { gate: 'self', run: (req, body) => handleDiscordMySettings(req, body) }],
+])
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -5295,186 +3809,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (body.action === 'generate') {
-      return await handleGenerate(req, body)
-    }
-
-    if (body.action === 'warm') {
-      return await handleWarm(req, body)
-    }
-
-    if (body.action === 'generate-all') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleGenerateAll()
-    }
-
-    // Single nightly phase (cron secret). Prefer admin-run from the console.
-    if (
-      body.action === 'generate-chips' ||
-      body.action === 'generate-market-data' ||
-      body.action === 'generate-history'
-    ) {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      const phase: GeneratePhaseId =
-        body.action === 'generate-chips'
-          ? 'chips'
-          : body.action === 'generate-market-data'
-            ? 'market-data'
-            : 'history'
-      return await handleGeneratePhase(phase)
-    }
-
-    // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.
-    // The night batch will run smoothly. This entrance is for those who "don't want to wait for the schedule and need to fill it up now."
-    if (body.action === 'backfill-revenue') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleBackfillRevenue()
-    }
-
-    if (body.action === 'backfill-profit') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleBackfillProfit()
-    }
-
-    // General synchronization: it can write Storage and send requests to FRED, and the control is the same as generate-all.
-    // Triggered by independent cron job `macro-daily` (two shifts per day, see schema.sql)
-    if (body.action === 'sync-macro') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleSyncMacro()
-    }
-
-    // Total market volume and legal person transaction amount (0.6.28): Can write Storage and make requests to TWSE, and check the same as generate-all.
-    // Triggered by standalone cron job `market-daily` (see schema.sql §11)
-    if (body.action === 'sync-market') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleSyncMarket()
-    }
-
-    // Exchange rate synchronization: can write Storage and make requests to Yahoo, and the control is the same as generate-all.
-    // Triggered by independent cron job `fx-daily` (two shifts per day, see schema.sql §10)
-    if (body.action === 'sync-fx') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleSyncFx()
-    }
-
-    // Data source probe: only read and not write (except for its own observation table), but still go CRON_SECRET ——
-    // It will send a request to TWSE. Exposing the endpoint undefended is equivalent to giving away a proxy tool.
-    if (body.action === 'probe') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleProbe()
-    }
-
-    // Administrator backend: read-only summary. Gatekeeping uses user JWT + app_metadata.role, not CRON_SECRET
-    // (That key cannot enter the front end, see the description of assertAdmin)
-    if (body.action === 'admin-status') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAdminStatus()
-    }
-
-    if (body.action === 'admin-users') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAdminUsers()
-    }
-
-    if (body.action === 'admin-set-role') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAdminSetRole(req, body)
-    }
-
-    if (body.action === 'admin-backups') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAdminBackups()
-    }
-
-    if (body.action === 'admin-backup-url') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAdminBackupUrl(body)
-    }
-
-    if (body.action === 'admin-backup-restore') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAdminBackupRestore(body)
-    }
-
-    // Admin console log viewer (Spec 146): reads public.app_log through the RPC, same gate as
-    // every other admin-* action.
-    if (body.action === 'app-logs') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleAppLogs(body)
-    }
-
-    // Manual batch trigger from the admin console (0.6.44-dev.2).
-    // Same work as the cron jobs, but auth is assertAdmin — never expose CRON_SECRET to the browser.
-    if (body.action === 'admin-run') {
-      return await handleAdminRun(req, body)
-    }
-
-    // Discord daily market summary (Task 165): triggered by the `discord-summary-brief` /
-    // `discord-summary-full` cron jobs (schema.sql), same x-cron-secret gate as the other
-    // pg_cron actions. Deliberately not in ADMIN_RUN_JOBS — a "run all" must never post to Discord.
-    if (body.action === 'discord-summary') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleDiscordSummary(body)
-    }
-
-    // Discord webhook admin settings (Task 165): get / set / clear / test, from the admin console.
-    if (body.action === 'discord-webhook') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleDiscordWebhook(body)
-    }
-
-    // Per-user Discord holdings card (Task 165 Phase 2). The `discord-holdings-daily` cron job
-    // that used to trigger this is retired (Task 165 step 2f, D5) — `discord-account-tick` below
-    // does its work now — but the action itself stays, same x-cron-secret gate, in case it is
-    // ever needed again.
-    if (body.action === 'discord-holdings') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleDiscordHoldings()
-    }
-
-    // Task 165 step 2f: the per-account send tick (schema.sql's `discord-account-tick`), every
-    // 30 minutes, Taipei 17:00–23:30 weekdays. Same x-cron-secret gate as the other pg_cron
-    // actions.
-    if (body.action === 'discord-account-tick') {
-      const denied = assertCronSecret(req)
-      if (denied) return denied
-      return await handleDiscordAccountTick()
-    }
-
-    // Admin console: every account's Discord settings and the send schedule (Task 165 Phase 2
-    // step 2d). Replaces the retired per-user `discord-holdings-settings` action (U1) — every
-    // webhook is now managed here, gated by assertAdmin like `discord-webhook`.
-    if (body.action === 'discord-accounts') {
-      const denied = await assertAdmin(req)
-      if (denied) return denied
-      return await handleDiscordAccounts(body)
-    }
-
-    // Self-service Discord settings (Task 165 step 2e): every signed-in account managing its own
-    // 經濟快報 and 個人持股 webhooks. Gated by assertUser inside the handler itself (spec §7.4).
-    if (body.action === 'discord-my-settings') {
-      return await handleDiscordMySettings(req, body)
-    }
-
-    return json({ error: 'Unknown action' }, 400)
+    return await dispatchAction(
+      ACTION_ROUTES,
+      body.action,
+      req,
+      body,
+      { cron: assertCronSecret, admin: assertAdmin },
+      () => json({ error: 'Unknown action' }, 400),
+    )
   } catch (err) {
     await logEvent(db, {
       level: 'error',
