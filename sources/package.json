@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "typecheck:edge": "tsc -p tsconfig.edge.json",
     "sync:edge-engine": "node scripts/sync-edge-engine.cjs",
+    "refresh:tpex-fallback": "node scripts/refresh-tpex-fallback.cjs",
     "release:sync": "node scripts/sync-github-releases.cjs",
     "release:sync:all": "node scripts/sync-github-releases.cjs --all",
     "backup:download": "node scripts/backup-download.cjs",
