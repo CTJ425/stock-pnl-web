@@ -43,10 +43,9 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
 
   // Effective fee rate and min fee for the workspace
   const workspaceFeeRate = current?.fee_rate ?? getFeeRate(current?.id)
-  const minFees = {
-    whole: getMinFee('whole', current?.id),
-    odd: getMinFee('odd', current?.id),
-  }
+  const minFeeWhole = getMinFee('whole', current?.id)
+  const minFeeOdd = getMinFee('odd', current?.id)
+  const minFees = useMemo(() => ({ whole: minFeeWhole, odd: minFeeOdd }), [minFeeWhole, minFeeOdd])
 
   // Extract all distinct tickers with BUY transactions
   const buyTickers = useMemo(() => {
@@ -198,7 +197,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
         feeAutoFilled,
       }
     })
-  }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, workspaceFeeRate, minFees.whole, minFees.odd])
+  }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, workspaceFeeRate, minFees])
 
   // Count preview items whose converted quantity rounds down to 0 shares (AUDIT-09)
   const zeroQtyCount = useMemo(() => previewItems.filter((item) => item.newQty === 0).length, [previewItems])

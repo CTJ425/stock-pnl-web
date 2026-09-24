@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { IntradayChart, changeLabel, finalVwap } from './IntradayChart'
+import { IntradayChart } from './IntradayChart'
+import { changeLabel, finalVwap } from './intradayStats'
 import type {
   IntradayPoint,
   IntradaySeries,

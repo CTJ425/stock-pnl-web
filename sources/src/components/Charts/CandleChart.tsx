@@ -66,26 +66,27 @@ interface CandleBody {
  * would do exactly that).
  */
 function CandleBodies({ candles, geo }: { candles: Candle[]; geo: PlotGeometry }) {
+  const { bandCenter, y, bandWidth } = geo
   const { bodyW, bars } = useMemo(() => {
     // The candle body occupies 60% of the width of the column, leaving a gap; no matter how narrow it is, the minimum is 1px
-    const bodyW = Math.max(geo.bandWidth * 0.6, 1)
+    const bodyW = Math.max(bandWidth * 0.6, 1)
     const out: CandleBody[] = []
     candles.forEach((raw, i) => {
       const c = full(raw)
       if (!c) return
       const color = c.close >= c.open ? CHART_COLORS.up : CHART_COLORS.down
-      const center = geo.bandCenter(i)
-      const yHigh = geo.y(c.high)
-      const yLow = geo.y(c.low)
-      const yOpen = geo.y(c.open)
-      const yClose = geo.y(c.close)
+      const center = bandCenter(i)
+      const yHigh = y(c.high)
+      const yLow = y(c.low)
+      const yOpen = y(c.open)
+      const yClose = y(c.close)
       const top = Math.min(yOpen, yClose)
       // When the opening is equal to the closing (crosshair), still draw 1px, otherwise the whole bar will disappear that day
       const bodyH = Math.max(Math.abs(yClose - yOpen), 1)
       out.push({ key: `${c.label}-${i}`, center, yHigh, yLow, top, bodyH, color, index: i })
     })
     return { bodyW, bars: out }
-  }, [candles, geo.bandCenter, geo.y, geo.bandWidth])
+  }, [candles, bandCenter, y, bandWidth])
 
   return (
     <>
@@ -104,9 +105,10 @@ function CandleBodies({ candles, geo }: { candles: Candle[]; geo: PlotGeometry }
  * `hover` — same reasoning and same memoisation split as `CandleBodies` above.
  */
 function CandleOverlays({ overlays, geo }: { overlays: OverlayLine[]; geo: PlotGeometry }) {
+  const { bandCenter, y } = geo
   const paths = useMemo(
-    () => overlays.map((o) => ({ name: o.name, color: o.color, segs: lineSegments(o.values, geo) })),
-    [overlays, geo.bandCenter, geo.y],
+    () => overlays.map((o) => ({ name: o.name, color: o.color, segs: lineSegments(o.values, { bandCenter, y }) })),
+    [overlays, bandCenter, y],
   )
   return (
     <>

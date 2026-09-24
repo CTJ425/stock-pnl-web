@@ -234,7 +234,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       })
       setFee(String(calculated))
     }
-  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, getActualShares])
+  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, getActualShares, isCashDividend, isStockDividend])
 
   // Market Switch: U.S. Stocks Mandate “Odd Lot” Units
   const handleMarketChange = (next: Market) => {

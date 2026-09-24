@@ -19,6 +19,7 @@ const ToastContext = createContext<ToastContextValue | null>(null)
 // Called outside the provider (e.g. in isolated tests) must not throw.
 const noopToast: ToastContextValue = { show: () => {} }
 
+// eslint-disable-next-line react/only-export-components -- provider + hook share one private context by design
 export function useToast(): ToastContextValue {
   return useContext(ToastContext) ?? noopToast
 }

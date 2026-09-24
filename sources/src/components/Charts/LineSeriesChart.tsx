@@ -43,11 +43,12 @@ function LineSeriesPaths({
   color: string
   gradId: string
 }) {
+  const { bandCenter, y, innerH } = geo
   const areaPaths = useMemo(
-    () => areaSegments(values, geo),
-    [values, geo.bandCenter, geo.y, geo.innerH],
+    () => areaSegments(values, { bandCenter, y, innerH }),
+    [values, bandCenter, y, innerH],
   )
-  const linePaths = useMemo(() => lineSegments(values, geo), [values, geo.bandCenter, geo.y])
+  const linePaths = useMemo(() => lineSegments(values, { bandCenter, y }), [values, bandCenter, y])
   return (
     <>
       {/* Area below the line: drawn first so it cannot cover the line and its dots */}

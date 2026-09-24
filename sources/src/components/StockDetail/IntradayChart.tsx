@@ -16,6 +16,7 @@ import type { Market } from '../../types/models'
 import { pickLabelIndices } from './technicalView'
 import { isIntradayRange, TREND_LABELS, type TrendRange } from './trendRange'
 import { priceLimits } from './whatIf'
+import { changeLabel, fmt2, vwapSeries } from './intradayStats'
 
 /**
  * 均價 line colour: mirrors --accent-2 (index.css). It stays a literal (CHART_COLORS.vwap) instead
@@ -56,52 +57,12 @@ function utcParts(epochSeconds: number): { y: string; m: string; d: string } {
   }
 }
 
-function fmt2(v: number): string {
-  return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function pct(change: number, base: number): string {
-  const p = (change / base) * 100
-  return `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`
-}
-
-/**
- * AUDIT-14: `prevClose` can arrive as 0 from a MIS response, and dividing by it prints
- * 「漲跌 +123.00 (Infinity%)」in the tooltip. Null and 0 both mean "no usable baseline".
- */
-export function changeLabel(close: number, prevClose: number | null): string | null {
-  if (prevClose === null || prevClose === 0) return null
-  const change = close - prevClose
-  return `漲跌 ${change >= 0 ? '+' : ''}${fmt2(change)} (${pct(change, prevClose)})`
-}
-
-/** Cumulative VWAP (均價): running sum(c·v) / running sum(v); null until the first traded bar. */
 /**
  * OPT-2 (Task 145): a fresh `[]` on every render made `points` a new reference whenever
  * `series` was absent, which invalidated every `useMemo` below it and cascaded re-renders.
  * One module-level constant keeps the identity stable.
  */
 const EMPTY_POINTS: IntradayPoint[] = []
-
-function vwapSeries(points: IntradayPoint[]): Array<number | null> {
-  let pv = 0
-  let vol = 0
-  return points.map((p) => {
-    pv += p.c * p.v
-    vol += p.v
-    return vol > 0 ? pv / vol : null
-  })
-}
-
-/**
- * The 均價 the session ends at — the same number the chart's 均價 line terminates on. Shared with
- * `QuoteTab`'s statistics grid and 成交金額 cell so the VWAP is computed once, not twice.
- */
-export function finalVwap(points: IntradayPoint[]): number | null {
-  if (points.length === 0) return null
-  const series = vwapSeries(points)
-  return series[series.length - 1]
-}
 
 /**
  * Symmetric around prevClose so the dashed 昨收 line sits mid-chart (as the mockup shows).

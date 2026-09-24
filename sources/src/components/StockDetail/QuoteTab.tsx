@@ -37,7 +37,8 @@ import {
   roundPrice,
 } from '../../utils/formatters'
 import { fmtInt, fmtLotsFromShares, shortDate } from './chipFormat'
-import { IntradayChart, finalVwap, type TrendSeries } from './IntradayChart'
+import { IntradayChart, type TrendSeries } from './IntradayChart'
+import { finalVwap } from './intradayStats'
 import { getStockCategory } from '../../utils/stockCategory'
 import type { TechnicalView } from './technicalView'
 import { remoteRangeOf } from './technicalView'
@@ -57,15 +58,6 @@ type TechnicalLatest = TechnicalView['latest']
 function fmtNum(v: number | null | undefined, digits = 2): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—'
   return v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
-}
-
-/** The status on the right side of the card title: when was the quotation and whether it was cached*/
-export function quoteMeta(quote: PriceQuote | null, market?: Market): string {
-  if (!quote) return '尚未取得'
-  const day = tradeDateLabel(quote.tradeDate)
-  const state = quote.trial ? '試撮中' : isClosed(quote, market) ? '已收盤' : '盤中'
-  const parts = [day, state, quote.tradeTime].filter((s): s is string => !!s)
-  return quote.stale ? `${parts.join(' · ')} · 快取` : parts.join(' · ')
 }
 
 function Cell({ label, value, className }: { label: string; value: string; className?: string }) {

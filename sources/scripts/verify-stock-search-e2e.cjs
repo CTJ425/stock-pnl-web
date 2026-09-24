@@ -10,7 +10,6 @@
  */
 const { chromium } = require('playwright')
 const path = require('path')
-const fs = require('fs')
 
 const TARGET_URL = process.env.TEST_URL || 'http://localhost:5174/'
 const SCREENSHOT_PATH = path.join(__dirname, '..', 'stock-search-e2e.png')
