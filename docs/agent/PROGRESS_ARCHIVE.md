@@ -5,6 +5,14 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-23 10:40:00 Asia/Taipei (BUG-085, 0.9.67)
+- Fixed BUG-085: watchlist industry group flipped between 半導體業 and 其他 for 8150 (南茂), because `price_cache` did not store `industry`. See `FIXED_BUG.md` BUG-085 and `docs/agent/specs/BUG-085.md`.
+- Released 0.9.67: `main` and `dev` both at 8ee2065. DEV and PROD: DDL applied, `stock-price` redeployed and verified.
+
+---
+
+---
+
 ## 📅 Log: 2026-09-23 09:49:00 Asia/Taipei (Task 166 batch 4, 0.9.66)
 
 **稽核修補第 4 批：前端體驗與無障礙。** 前一段工作已完成殼層、交易、報價管線、管理後台、維運等項目但未提交；本輪以兩個 scout 逐條比對規格，補完剩餘項目後一次提交。
