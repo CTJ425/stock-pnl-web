@@ -20,7 +20,6 @@ const path = require('path')
 
 const TARGET_URL = process.env.TEST_URL || 'http://10.8.22.99:5317/'
 const REPORT_FILE = process.env.REPORT_FILE || path.join(__dirname, '..', 'e2e-report.html')
-const ARTIFACT_REPORT = '/root/.gemini/antigravity-cli/brain/909d481e-55c5-469b-aa76-6293ebd52785/e2e-report.html'
 
 // Test Results Storage
 const results = {
@@ -1448,13 +1447,6 @@ async function captureCaseScreenshot(page, testCase) {
   const html = generateHtmlReport(results)
   fs.writeFileSync(REPORT_FILE, html, 'utf8')
   console.log(`📄 Generated HTML Report: ${REPORT_FILE}`)
-
-  try {
-    fs.writeFileSync(ARTIFACT_REPORT, html, 'utf8')
-    console.log(`📄 Copied HTML Report to Artifact: ${ARTIFACT_REPORT}`)
-  } catch (err) {
-    // Artifact dir fallback
-  }
 
   if (results.summary.failed > 0) {
     process.exit(1)
