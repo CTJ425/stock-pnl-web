@@ -1,9 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 167 — 0.9.68-dev.1 on `dev` (AI removed, header 新增交易, Discord 券商)
-- Status: 🔄 `dev` at 0.9.68-dev.3, deployed to DEV; `main` / PROD at 0.9.67
-- Timestamp: 2026-09-24 05:40:00 Asia/Taipei
+- Action: Task 167 — 0.9.68 released to `main`; PROD Supabase pending
+- Status: ✅ `main` = `dev` = 0.9.68 (a029192); DEV Supabase deployed; ⏳ PROD Supabase blocked on permission
+- Timestamp: 2026-09-24 14:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-24 14:40:00 Asia/Taipei (Task 167, 0.9.68 released)
+- Pre-merge review of `main..dev` found and fixed 3 leftovers: stale `isAiAdmin()` comment in `stock-report/index.ts` (now points to `adminStatus.isAdmin()`), `public.app_settings` in `snapshotPlan.test.mjs`, and **`run-all-e2e.cjs` still clicking `button.fab`** (now `button.header-add`; selector verified at 1440 / 375 px in local mode — the script itself needs Supabase mode + credentials, not run).
+- 0.9.68 finalized (a029192): CHANGELOG's three dev entries merged into one; `main` fast-forwarded and pushed, `main:dev` synced. Release 0.9.68 created by the sync workflow; CI success. Cloudflare Pages live: the PROD login page no longer renders `.version-badge` (0.9.67 did).
+- DEV `stock-report` redeployed from a029192 → v29 `f0ecd8ed9cbc`.
+- **PROD not touched**: `supabase functions deploy … --project-ref hrilemueiqyaoiwnkeuu` was denied by the auto-mode classifier ("Production Deploy"). Still owed on PROD: deploy `stock-report --no-verify-jwt` (券商 figure), delete `ai-proxy`, guarded DROP of `get_ai_settings()` + `app_settings` (needs `supabase link` to PROD, then back to DEV), `verify.sql` + `verify_setup()`. Until then PROD cards have no 券商 figure and the unused AI objects remain; nothing breaks.
 
 ---
 
@@ -13,14 +21,4 @@
 - Host note: the CLI is `/home/linuxbrew/.linuxbrew/bin/supabase`, not on the agent's non-interactive PATH; run it as `bash -ic 'sbuse stock >/dev/null; cd ~/stock-pnl-web/sources; supabase …'`. This host had lost its link; re-linked to DEV.
 - Not verified: a real holdings card with the 券商 figure (needs a user session — 預覽 in Discord settings on DEV). PROD untouched.
 
----
-
-## 📅 Log: 2026-09-24 02:06:00 Asia/Taipei (Task 167, 0.9.68-dev.1)
-- Committed and pushed `dev` a3d1554 (0.9.68-dev.1): AI removed end to end (frontend, `ai-proxy` source, `schema.sql` now DROPs `app_settings` + `get_ai_settings()`; RISK-013 closed); 新增交易 moved into the header; Discord holdings card shows the 券商 figure (spec discord-holdings.md Revision 9); CLAUDE.md gained § Release workflow.
-- **Verify**: `npm test` 2,459 passed / 7 skipped / 0 failed; `npm run build`, `npm run lint`, `npm run typecheck:edge` exit 0.
-- **Blocked — DEV not deployed**: the `supabase` CLI is not installed on this host (Node moved to v26 under nvm; no binary anywhere, no `~/.supabase`). Still to do on DEV: `supabase functions deploy stock-report --no-verify-jwt`, `supabase functions delete ai-proxy`, and `DROP FUNCTION IF EXISTS public.get_ai_settings(); DROP TABLE IF EXISTS app_settings;` with the DEV identity predicate in the same query. PROD after `main`.
-- Browser layout: Playwright system deps installed by the user 2026-09-24 (`sudo env "PATH=$PATH" npx playwright install-deps chromium`; plain `sudo npx` fails, nvm is not on root's PATH). Dev server must run in local mode for screenshots: `VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev`.
-- 05:05 — 0.9.68-dev.2: version moved from `.version-badge` (fixed bottom-left, removed from `App.tsx`) to `.footer-version` at the end of the footer disclaimer in `AppShell.tsx`; on ≤ 720 px the footer now carries the bottom-nav clearance and `main.container` bottom padding drops to 24 px. Not shown on the login page any more. Tests 2,459 passed; build, lint, typecheck:edge exit 0.
-
-- 0.9.68-dev.3: on ≤ 720 px `.header-add` gets `order: 1` (after the workspace menu, before `.header-meta`); verified at 1440 / 1024 / 375 / 320 px — no header overflow, no horizontal scroll, version 31 px above the bottom nav, modal opens.
 ---
