@@ -14,6 +14,10 @@ export default defineConfig({
     // When running on a clean main, all 7 of them timed out.
     // Once the gate turns red for no reason, no one will believe it, so it is raised to 20 seconds.
     testTimeout: 20_000,
+    // threads spawns workers faster than the default forks: 142 s vs 154–161 s on the 2-core
+    // dev host (2026-09-24). `isolate: false` was tried and rejected — 252 tests failed from
+    // module state leaking between files, and the run was no faster.
+    pool: 'threads',
     // The smoke test is based on "local mode"; clear the Supabase environment variables.
     // Avoid developers' .env.local and let tests run in Supabase mode
     env: {
