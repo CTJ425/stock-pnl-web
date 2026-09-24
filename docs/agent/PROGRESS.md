@@ -10,6 +10,7 @@
 ## 📅 Log: 2026-09-24 15:00:00 Asia/Taipei (Task 167, PROD Supabase for 0.9.68)
 - User authorized the PROD deploy. From clean tree c689ed2: PROD `stock-report` → v17, `ezbr_sha256` `f0ecd8ed9cbc` (same as DEV v29); `ai-proxy` deleted (404); linked to PROD, read-only check `is_prod=true` / `is_dev=false` (`app_settings` had 0 rows), guarded DO block dropped `get_ai_settings()` + `app_settings`; `verify.sql` installed, `verify_setup()` 10/10 PASS; re-linked to DEV (`project-ref` = `zyebvayngwrqzoaicbwd`).
 - Smoke: `discord-account-tick` without secret → 401. Remaining in Task 167: user check of a real 券商 card.
+- 15:20 — prompt audit of CLAUDE.md + 8 skills: 7 stale facts fixed (d33cedc); follow-ups: `functions download` works with `sbuse stock` and DEV `stock-report` matches the repo file for file (6008187), stale `.gemini` report path dropped from `run-all-e2e.cjs`, `probe-ops` Edge limits now cite the hosted docs (74b9ab9). Global `~/.claude/CLAUDE.md` gained § This machine (not in git).
 
 ---
 
