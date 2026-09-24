@@ -24,12 +24,12 @@
 ### Task 167: Remove AI, move 新增交易 to the header, Discord 券商 figure (user, 2026-09-24)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
-- **Timestamp**: 2026-09-24 05:05:00 Asia/Taipei
+- **Timestamp**: 2026-09-24 05:40:00 Asia/Taipei
 - **Spec**: docs/agent/specs/discord-holdings.md (Revision 9)
 - **Decisions (user, 2026-09-24)**: remove AI completely (frontend, `ai-proxy`, DB objects); 券商 option A (total line + every row).
-1. ~~Remove AI from frontend and repo (`ai-proxy`, `app_settings`, `get_ai_settings()`)~~ ✅ a3d1554 · DEV: delete `ai-proxy`, DROP the two objects —— ⏳ (no supabase CLI on host) · PROD same after `main` —— ⏳
+1. ~~Remove AI from frontend and repo (`ai-proxy`, `app_settings`, `get_ai_settings()`)~~ ✅ a3d1554 · ~~DEV: delete `ai-proxy`, DROP the two objects~~ ✅ 2026-09-24 · PROD same after `main` —— ⏳
 2. ~~Move 新增交易 into the header~~ ✅ a3d1554 · ~~browser check 1440 / 1024 / 375 / 320 px~~ ✅ 0.9.68-dev.3 (mobile order fixed)
-3. ~~Discord holdings card 券商 figure, option A~~ ✅ a3d1554 · deploy `stock-report` DEV then PROD —— ⏳
+3. ~~Discord holdings card 券商 figure, option A~~ ✅ a3d1554 · ~~deploy `stock-report` DEV~~ ✅ v28 `02841a5f6b0e` · PROD after `main` —— ⏳ · real card check via 預覽 on DEV —— ⏳ user
 4. ~~Commit + push `dev` as 0.9.68-dev.1~~ ✅ a3d1554 · release 0.9.68 to `main` —— ⏳ user OK after DEV verify
 5. ~~Move the version from the fixed bottom-left badge to the end of the footer disclaimer (user 2026-09-24)~~ ✅ 0.9.68-dev.2 · ~~browser check desktop / phone~~ ✅ 0.9.68-dev.3
 
