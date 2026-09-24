@@ -3,55 +3,44 @@
  *
  * The right side of the top page is reduced from 8 control items to 2 menus in 0.6.5-dev.3. For the reason, see docs/agent/PLAN.md §R.
  */
-import { Fragment, Suspense, lazy, useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import { Fragment, Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import {
   ArrowRightLeft,
   CalendarRange,
-  Check,
-  ChevronDown,
-  ExternalLink,
   Globe,
-  HardDrive,
-  KeyRound,
-  Layers,
   LayoutDashboard,
   LineChart,
   ListPlus,
-  LogOut,
-  MessageCircle,
-  Monitor,
-  Moon,
   NotebookPen,
-  Pencil,
-  Percent,
-  Plus,
-  ShieldCheck,
-  Sun,
-  Trash2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { MIN_PASSWORD_LENGTH } from './Auth/AuthPage'
-import type { ThemePref } from '../utils/settings'
-import { applyTheme, getFeeRate, getThemePref, setThemePref } from '../utils/settings'
-import { describeTwFeeRate } from '../utils/feeRateHint'
-import { DashboardPage } from './Dashboard/DashboardPage'
-import { YearlyPage } from './YearlyReport/YearlyPage'
-import { TransactionsPage } from './Transactions/TransactionsPage'
-import { TransactionForm } from './Transactions/TransactionForm'
-import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
+import { isReportConfigured } from '../services/reportProxy'
+import { isAdmin } from '../services/adminStatus'
+import { APP_VERSION } from '../version'
+import { RecoveryPasswordModal } from './Auth/PasswordModals'
+import { BrandMark } from './BrandMark'
 import { Modal } from './Common/Modal'
-import { HeaderMenu } from './Common/HeaderMenu'
-import { ToastProvider, useToast } from './Common/Toast'
-import { ConfirmProvider, useConfirm } from './Common/useConfirm'
-import { AnalysisPage } from './StockDetail/AnalysisPage'
+import { ToastProvider } from './Common/Toast'
+import { ConfirmProvider } from './Common/useConfirm'
+import { DashboardPage } from './Dashboard/DashboardPage'
+import { TransactionForm } from './Transactions/TransactionForm'
+import { UserMenu } from './UserMenu'
+import { formatViewHash, parseViewHash, type ViewRoute } from './viewRoute'
+import { WorkspaceControls } from './WorkspaceControls'
+
 /**
- * OPT-1 (Task 145): these three pages are route-level split points. None of them is on the
- * first paint path — 總體經濟, 外幣匯率 and the admin console are all reached by a tab click —
- * so keeping them in the entry chunk only grew the bundle every user downloads.
+ * Route-level split points. Only the dashboard (the first paint) and the shell ship in the entry
+ * chunk; every other page is reached by a tab or menu click (OPT-1, Task 145; the rest 2026-09-24).
+ * TransactionForm stays eager: 新增交易 is on every page and a first click should open the form,
+ * not a loading placeholder (~6 KB gzip).
  * `.then` maps the named export onto `default`, which is what `lazy` expects.
  */
+const AnalysisPage = lazy(() => import('./StockDetail/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
+const YearlyPage = lazy(() => import('./YearlyReport/YearlyPage').then((m) => ({ default: m.YearlyPage })))
+const TransactionsPage = lazy(() =>
+  import('./Transactions/TransactionsPage').then((m) => ({ default: m.TransactionsPage })),
+)
 const MacroPage = lazy(() => import('./Macro/MacroPage').then((m) => ({ default: m.MacroPage })))
 const FxPage = lazy(() => import('./Fx/FxPage').then((m) => ({ default: m.FxPage })))
 const AdminConsolePage = lazy(() =>
@@ -61,12 +50,8 @@ const DiscordMySettings = lazy(() =>
   import('./Settings/DiscordMySettings').then((m) => ({ default: m.DiscordMySettings })),
 )
 
-/** Same markup as the workspace-loading placeholder above, so a split page does not flash a different shape. */
+/** Same markup as the workspace-loading placeholder, so a split page does not flash a different shape. */
 const PAGE_FALLBACK = <div className="glass empty-state section">載入中…</div>
-import { isReportConfigured } from '../services/reportProxy'
-import { isAdmin } from '../services/adminStatus'
-import { BrandMark } from './BrandMark'
-import { APP_VERSION } from '../version'
 
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
 
@@ -123,6 +108,13 @@ const TABS = isReportConfigured
   ? ALL_TABS
   : ALL_TABS.filter((t) => !SUPABASE_ONLY_TABS.includes(t.id))
 
+/** Pages a URL may open directly. Hidden tabs are left out, so a local-mode `#/macro` lands on the dashboard. */
+const ROUTABLE_VIEWS: View[] = [...TABS.map((t) => t.id), 'admin', ...(isReportConfigured ? (['discord'] as const) : [])]
+
+function readRoute(): ViewRoute<View> {
+  return parseViewHash(window.location.hash, ROUTABLE_VIEWS) ?? { view: 'dashboard' }
+}
+
 /** Label for the page identity heading (h1) and the browser tab title. `admin` is not on any tab, so it needs its own entry. */
 const ALL_TAB_LABELS: Record<Tab, string> = Object.fromEntries(
   ALL_TABS.map((t) => [t.id, t.label]),
@@ -133,8 +125,6 @@ function viewLabel(view: View): string {
   if (view === 'discord') return 'Discord 通知設定'
   return ALL_TAB_LABELS[view]
 }
-
-const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
 /** Need to be consistent with `@media (max-width: 720px)` in index.css*/
 const NARROW_QUERY = '(max-width: 720px)'
@@ -208,616 +198,30 @@ function TabNav({
   )
 }
 
-/**
- * GitHub official mark.
- *
- * Embed a path yourself instead of using an icon library: **lucide 1.x has removed all brand icons**
- * (`lucide-react@1.24.0` does not have `Github`), it is not cost-effective to install one more package for one icon.
- * Size and stroke alignment lucide: 24×24 viewBox, `currentColor` coloring (this is solid not line art).
- */
-function GithubMark({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      focusable="false"
-      style={{ flex: '0 0 auto' }}
-    >
-      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-    </svg>
-  )
-}
-
-/**
- * Modern flat user avatar icon (Contemporary Architect Arc).
- * Solid circular head + elegant dual-arc minimalist shoulder contours.
- * Replaces the old account number / email initials with a clean modern flat persona.
- */
-function AvatarIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      aria-hidden="true"
-      focusable="false"
-      style={{ flex: '0 0 auto' }}
-    >
-      <circle cx="12" cy="7" r="4.2" fill="currentColor" stroke="none" />
-      <path d="M4 21c.6-4.5 4-7.8 8-7.8s7.4 3.3 8 7.8" strokeWidth="2.2" />
-      <path d="M7 21c.5-2.8 2.5-4.8 5-4.8s4.5 2 5 4.8" strokeWidth="1.8" />
-    </svg>
-  )
-}
-
-const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
-const THEME_LABEL: Record<ThemePref, string> = {
-  system: '跟隨系統',
-  dark: '深色',
-  light: '淺色',
-}
-
-/** After the user clicks the "Reset Password" email link to enter the site, he or she is prompted to set a new password.*/
-function RecoveryPasswordModal() {
-  const { updatePassword, dismissRecovery } = useAuth()
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (busy) return
-    setError(null)
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`新密碼至少需要 ${MIN_PASSWORD_LENGTH} 個字元`)
-      return
-    }
-    if (password !== confirm) {
-      setError('兩次輸入的密碼不一致')
-      return
-    }
-    setBusy(true)
-    try {
-      const err = await updatePassword(password)
-      if (err) setError(`設定失敗：${err}`)
-      // updatePassword will automatically close this window when successful (recovery = false)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Modal title="設定新密碼" onClose={dismissRecovery} disableBackdropClose>
-      <div className="notice notice-warn">
-        你剛透過「重設密碼」信件連結登入，請立即設定新密碼。
-        （關閉此視窗則維持原密碼不變）
-      </div>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="notice notice-error">{error}</div>}
-        <div className="field">
-          <label htmlFor="new-password">新密碼</label>
-          <input
-            id="new-password"
-            type="password"
-            autoComplete="new-password"
-            autoFocus
-            value={password}
-            placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="confirm-password">確認新密碼</label>
-          <input
-            id="confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            placeholder="再輸入一次新密碼"
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
-          {busy ? '儲存中…' : '儲存新密碼'}
-        </button>
-      </form>
-    </Modal>
-  )
-}
-
-/** Change password from inside the account: re-authenticates with the current password first (see AuthContext.changePassword). */
-function ChangePasswordModal({ onClose }: { onClose: () => void }) {
-  const { changePassword } = useAuth()
-  const [current, setCurrent] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (busy) return
-    setError(null)
-    if (!current) {
-      setError('請輸入目前密碼')
-      return
-    }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`新密碼至少需要 ${MIN_PASSWORD_LENGTH} 個字元`)
-      return
-    }
-    if (password !== confirm) {
-      setError('兩次輸入的密碼不一致')
-      return
-    }
-    setBusy(true)
-    try {
-      const err = await changePassword(current, password)
-      if (err) setError(err)
-      else {
-        // Keep the modal open so the confirmation is actually seen; clear the fields and lock
-        // the button so a second submit cannot fail against the password that just changed.
-        setDone(true)
-        setCurrent('')
-        setPassword('')
-        setConfirm('')
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Modal title="變更密碼" onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="notice notice-error">{error}</div>}
-        {done && <div className="notice notice-ok">密碼已變更</div>}
-        <div className="field">
-          <label htmlFor="current-password">目前密碼</label>
-          <input
-            id="current-password"
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="change-new-password">新密碼</label>
-          <input
-            id="change-new-password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="change-confirm-password">確認新密碼</label>
-          <input
-            id="change-confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            placeholder="再輸入一次新密碼"
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy || done}>
-          {busy ? '儲存中…' : '變更密碼'}
-        </button>
-      </form>
-    </Modal>
-  )
-}
-
-/**
- * User menu: appearance switching, management background, source code, identity, logout.
- *
- * Local mode** deliberately retains the "local mode" badge as a trigger button** instead of replacing it with an avatar——
- * "Data only exists in this browser" is a fact that users need to see at all times. Hiding it in the menu is equivalent to downgrading it.
- *
- * 0.6.19 Collect two things:
- * - **Admin Backstage** (Administrator only). Originally it was "crawl status" on the paginated column, but the management function is the same as
- *   The paginations for daily viewing are mixed into the same navigation, which means that every user sees a location that they cannot click on.
- * - **Source Code** (for everyone). Originally a line of text link at the end of the page; a disclaimer at the end of the page,
- *   The link is included here, and there is no need to make room for it at the top or bottom of the page.
- */
-function UserMenu({
-  admin,
-  onOpenAdmin,
-  onOpenDiscord,
-}: {
-  admin: boolean
-  onOpenAdmin: () => void
-  onOpenDiscord: () => void
-}) {
-  const { mode, user, signOut } = useAuth()
-  const { show } = useToast()
-  const [pref, setPref] = useState<ThemePref>(() => getThemePref())
-  const [showChangePassword, setShowChangePassword] = useState(false)
-
-  useEffect(() => {
-    applyTheme(pref)
-  }, [pref])
-
-  useEffect(() => {
-    // The existence check of matchMedia cannot be omitted: jsdom has not implemented it. Without this test, the whole batch will explode.
-    if (pref !== 'system' || typeof window.matchMedia !== 'function') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => applyTheme('system')
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [pref])
-
-  const cycleTheme = () => {
-    const next = THEME_ORDER[(THEME_ORDER.indexOf(pref) + 1) % THEME_ORDER.length]
-    setPref(next)
-    setThemePref(next)
-  }
-
-  const ThemeIcon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun
-  const email = user?.email ?? ''
-  const isLocal = mode === 'local'
-
-  return (
-    <>
-      <HeaderMenu
-        triggerLabel={isLocal ? '本機模式選單' : `帳號選單（${email}）`}
-        triggerClass={isLocal ? 'badge hmenu-badge' : 'hmenu-avatar'}
-        triggerContent={
-          isLocal ? (
-            <>
-              <HardDrive size={12} />
-              本機模式
-            </>
-          ) : (
-            <AvatarIcon size={16} />
-          )
-        }
-        menuLabel="帳號與外觀"
-      >
-        {(close) => (
-          <>
-            <div className="hmenu-head">
-              {isLocal ? '資料儲存於此瀏覽器，未連線 Supabase' : email}
-            </div>
-            <div className="hmenu-sep" />
-            <button type="button" role="menuitem" className="hmenu-item" onClick={cycleTheme}>
-              <ThemeIcon size={14} />
-              <span>外觀：{THEME_LABEL[pref]}</span>
-            </button>
-            <div className="hmenu-sep" />
-            {/*
-              Hiding the admin console is **housekeeping in the interface, not a security boundary** —— the real
-              gate is `assertAdmin` in the Edge Function plus RLS on the tables (anything the frontend hides can
-              be summoned by editing one line of JS). Bypassing this check to open the console only earns a 403
-              and a page with no data in it.
-            */}
-            {admin && (
-              <button
-                type="button"
-                role="menuitem"
-                className="hmenu-item hmenu-item-admin"
-                onClick={() => {
-                  close()
-                  onOpenAdmin()
-                }}
-              >
-                <ShieldCheck size={14} />
-                <span>管理後台</span>
-              </button>
-            )}
-            <a
-              role="menuitem"
-              className="hmenu-item"
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noreferrer"
-              onClick={close}
-            >
-              <GithubMark />
-              <span>原始碼</span>
-              <ExternalLink size={12} className="hmenu-item-ext" />
-            </a>
-            {!isLocal && (
-              <>
-                <div className="hmenu-sep" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="hmenu-item"
-                  onClick={() => {
-                    close()
-                    onOpenDiscord()
-                  }}
-                >
-                  <MessageCircle size={14} />
-                  <span>Discord 通知設定</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="hmenu-item"
-                  onClick={() => {
-                    close()
-                    setShowChangePassword(true)
-                  }}
-                >
-                  <KeyRound size={14} />
-                  <span>變更密碼</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="hmenu-item"
-                  onClick={() => {
-                    close()
-                    void signOut().then((err) => {
-                      if (err) show(err, 'error')
-                    })
-                  }}
-                >
-                  <LogOut size={14} />
-                  <span>登出</span>
-                </button>
-              </>
-            )}
-          </>
-        )}
-      </HeaderMenu>
-      {showChangePassword && (
-        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
-      )}
-    </>
-  )
-}
-
-function WorkspaceControls() {
-  const {
-    workspaces,
-    current,
-    selectWorkspace,
-    createWorkspace,
-    renameWorkspace,
-    deleteWorkspace,
-    setWorkspaceFeeRate,
-  } = useWorkspace()
-  const { show } = useToast()
-  const confirm = useConfirm()
-  const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
-  const [nameInput, setNameInput] = useState('')
-  const [feeInput, setFeeInput] = useState('')
-  // After the rate changes, batch recalculation preview is enabled so that historical records can be adjusted according to the new rate.
-  const [showRecalc, setShowRecalc] = useState(false)
-
-  const openCreate = () => {
-    setNameInput('')
-    setModal('create')
-  }
-  const openRename = () => {
-    if (!current) return
-    setNameInput(current.name)
-    setModal('rename')
-  }
-  const openFee = () => {
-    if (!current) return
-    setFeeInput(String(getFeeRate(current.id)))
-    setModal('fee')
-  }
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (modal === 'fee') {
-      const rate = parseFloat(feeInput)
-      if (!Number.isFinite(rate) || rate < 0 || rate >= 1) return
-      if (current) {
-        const changed = rate !== getFeeRate(current.id)
-        await setWorkspaceFeeRate(current.id, rate)
-        // When the rates change, batch recalculation will be carried out for simultaneous adjustment of historical records (can be checked or cancelled)
-        if (changed) setShowRecalc(true)
-      }
-      setModal(null)
-      return
-    }
-    const name = nameInput.trim()
-    if (!name) return
-    if (modal === 'create') await createWorkspace(name)
-    else if (modal === 'rename' && current) await renameWorkspace(current.id, name)
-    setModal(null)
-  }
-
-  const handleDelete = async () => {
-    if (!current) return
-    if (workspaces.length <= 1) {
-      show('至少需保留一個工作區。', 'error')
-      return
-    }
-    const ok = await confirm({
-      title: '刪除工作區',
-      message: `確定刪除工作區「${current.name}」嗎？\n\n其中所有交易紀錄將一併刪除，此動作無法復原。`,
-      confirmLabel: '刪除',
-      danger: true,
-    })
-    if (ok) {
-      await deleteWorkspace(current.id)
-      show('工作區已刪除')
-    }
-  }
-
-  return (
-    <div className="ws-select">
-      {/*
-        Switching and managing share one menu: the management actions only ever act on "the workspace you are
-        in", so putting them next to the workspace list means the target never has to be guessed.
-        Delete is set off by a divider and coloured red —— it used to sit beside 重新命名, both 14px unlabelled icons.
-      */}
-      <HeaderMenu
-        triggerLabel={`工作區：${current?.name ?? '未選擇'}`}
-        triggerClass="hmenu-ws"
-        triggerContent={
-          <>
-            <Layers size={14} />
-            <span className="hmenu-ws-name">{current?.name ?? '未選擇'}</span>
-            <ChevronDown size={12} className="hmenu-caret" />
-          </>
-        }
-        menuLabel="工作區選單"
-      >
-        {(close) => (
-          <>
-            {workspaces.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={w.id === current?.id}
-                className={w.id === current?.id ? 'hmenu-item is-current' : 'hmenu-item'}
-                onClick={() => {
-                  selectWorkspace(w.id)
-                  close()
-                }}
-              >
-                <Check size={14} className="hmenu-check" aria-hidden="true" />
-                <span>{w.name}</span>
-              </button>
-            ))}
-            <div className="hmenu-sep" />
-            <button
-              type="button"
-              role="menuitem"
-              className="hmenu-item"
-              onClick={() => {
-                close()
-                openCreate()
-              }}
-            >
-              <Plus size={14} />
-              <span>新增工作區</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="hmenu-item"
-              onClick={() => {
-                close()
-                openRename()
-              }}
-            >
-              <Pencil size={14} />
-              <span>重新命名</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="hmenu-item"
-              onClick={() => {
-                close()
-                openFee()
-              }}
-            >
-              <Percent size={14} />
-              <span>預設手續費率</span>
-            </button>
-            <div className="hmenu-sep" />
-            <button
-              type="button"
-              role="menuitem"
-              className="hmenu-item is-danger"
-              onClick={() => {
-                close()
-                void handleDelete()
-              }}
-            >
-              <Trash2 size={14} />
-              <span>刪除工作區</span>
-            </button>
-          </>
-        )}
-      </HeaderMenu>
-
-      {modal && (
-        <Modal
-          title={
-            modal === 'create'
-              ? '新增工作區'
-              : modal === 'rename'
-                ? '重新命名工作區'
-                : `工作區設定 — ${current?.name ?? ''}`
-          }
-          onClose={() => setModal(null)}
-        >
-          <form onSubmit={(e) => void submit(e)}>
-            {modal === 'fee' ? (
-              <div className="field">
-                <label htmlFor="ws-fee-rate">預設手續費率</label>
-                <input
-                  id="ws-fee-rate"
-                  type="number"
-                  step="any"
-                  min="0"
-                  max="0.99"
-                  value={feeInput}
-                  autoFocus
-                  placeholder="例如 0.001425"
-                  onChange={(e) => setFeeInput(e.target.value)}
-                />
-                {(() => {
-                  const hint = describeTwFeeRate(parseFloat(feeInput))
-                  return (
-                    <>
-                      {hint.discount && <span className="fee-rate-hint">{hint.discount}</span>}
-                      {hint.warning && <span className="fee-rate-warning">{hint.warning}</span>}
-                    </>
-                  )
-                })()}
-                <div className="field-hint">
-                  台股標準是 0.001425。券商有折扣就填折扣後的數字（例如 0.0004275）。
-                  只套用在「{current?.name ?? '目前'}」工作區，新增交易時會自動帶入；
-                  改了費率會問你要不要把舊紀錄一起重算。
-                </div>
-              </div>
-            ) : (
-              <div className="field">
-                <label htmlFor="ws-name">工作區名稱</label>
-                <input
-                  id="ws-name"
-                  value={nameInput}
-                  autoFocus
-                  placeholder="例如：長期投資、退休帳戶"
-                  onChange={(e) => setNameInput(e.target.value)}
-                />
-              </div>
-            )}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-              {modal === 'create' ? '建立' : '儲存'}
-            </button>
-          </form>
-        </Modal>
-      )}
-
-      {showRecalc && <RecalcFeesModal onClose={() => setShowRecalc(false)} />}
-    </div>
-  )
-}
-
 export function AppShell() {
   const { recovery, user, authVersion } = useAuth()
   const { loading, error, addTransactions } = useWorkspace()
-  const [view, setView] = useState<View>('dashboard')
-  const [analysisTicker, setAnalysisTicker] = useState<string | undefined>(undefined)
+  // The page lives in the URL hash, so a reload, the back button and a shared link all keep it.
+  const [route, setRoute] = useState<ViewRoute<View>>(readRoute)
+  const view = route.view
+  const analysisTicker = view === 'analysis' ? route.ticker : undefined
   const [showAddTx, setShowAddTx] = useState(false)
-  const [admin, setAdmin] = useState(false)
+  // null until the first check answers: a reload on #/admin must wait for it, not bounce.
+  const [admin, setAdmin] = useState<boolean | null>(null)
+
+  const navigate = useCallback((next: View, ticker?: string) => {
+    const nextRoute: ViewRoute<View> = ticker ? { view: next, ticker } : { view: next }
+    const hash = formatViewHash(nextRoute)
+    // Assigning the hash pushes a history entry, which is what makes the back button work.
+    if (window.location.hash !== hash) window.location.hash = hash
+    setRoute(nextRoute)
+  }, [])
+
+  useEffect(() => {
+    const onHashChange = () => setRoute(readRoute())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
   const narrow = useNarrowScreen()
 
   // Administrator entrance: It is determined that auth needs to be made once, so it is added asynchronously. If you make a mistake, there will only be one less menu item.
@@ -836,7 +240,10 @@ export function AppShell() {
 
   // When permissions are revoked (such as logging out to change accounts), do not leave the user in the background
   useEffect(() => {
-    if (view === 'admin' && !admin) setView('dashboard')
+    if (view !== 'admin' || admin !== false) return
+    // Replace, not push: the back button should not return to a page this user cannot open.
+    window.history.replaceState(null, '', formatViewHash({ view: 'dashboard' }))
+    setRoute({ view: 'dashboard' })
   }, [admin, view])
 
   // Each page names itself in the browser tab, matching the single h1 rendered in <main>.
@@ -855,7 +262,7 @@ export function AppShell() {
                 <span className="brand-text">股票小幫手</span>
               </div>
 
-              {!narrow && <TabNav variant="header" current={view} onSelect={setView} tabs={TABS} />}
+              {!narrow && <TabNav variant="header" current={view} onSelect={navigate} tabs={TABS} />}
 
               <div className="header-spacer" />
 
@@ -877,9 +284,9 @@ export function AppShell() {
 
               <div className="header-meta">
                 <UserMenu
-                  admin={admin}
-                  onOpenAdmin={() => setView('admin')}
-                  onOpenDiscord={() => setView('discord')}
+                  admin={admin === true}
+                  onOpenAdmin={() => navigate('admin')}
+                  onOpenDiscord={() => navigate('discord')}
                 />
               </div>
             </div>
@@ -900,31 +307,23 @@ export function AppShell() {
                   <DashboardPage
                     onSelectTicker={
                       isReportConfigured
-                        ? (ticker) => {
-                            setAnalysisTicker(ticker)
-                            setView('analysis')
-                          }
+                        ? (ticker) => navigate('analysis', ticker)
                         : undefined
                     }
                     onAddTransaction={() => setShowAddTx(true)}
-                    onGoToTransactions={() => setView('transactions')}
+                    onGoToTransactions={() => navigate('transactions')}
                   />
                 )}
-                {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
-                {view === 'macro' && <Suspense fallback={PAGE_FALLBACK}><MacroPage /></Suspense>}
-                {view === 'fx' && <Suspense fallback={PAGE_FALLBACK}><FxPage /></Suspense>}
-                {view === 'yearly' && <YearlyPage />}
-                {view === 'transactions' && <TransactionsPage />}
-                {view === 'admin' && (
-                  <Suspense fallback={PAGE_FALLBACK}>
-                    <AdminConsolePage onExit={() => setView('dashboard')} />
-                  </Suspense>
-                )}
-                {view === 'discord' && (
-                  <Suspense fallback={PAGE_FALLBACK}>
-                    <DiscordMySettings />
-                  </Suspense>
-                )}
+                <Suspense fallback={PAGE_FALLBACK}>
+                  {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
+                  {view === 'macro' && <MacroPage />}
+                  {view === 'fx' && <FxPage />}
+                  {view === 'yearly' && <YearlyPage />}
+                  {view === 'transactions' && <TransactionsPage />}
+                  {view === 'admin' && admin === true && <AdminConsolePage onExit={() => navigate('dashboard')} />}
+                  {view === 'admin' && admin === null && PAGE_FALLBACK}
+                  {view === 'discord' && <DiscordMySettings />}
+                </Suspense>
               </>
             )}
           </main>
@@ -941,7 +340,7 @@ export function AppShell() {
           </footer>
 
           {/* Mobile bottom navigation: must live outside .app-header —— see the comment on useNarrowScreen */}
-          {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
+          {narrow && <TabNav variant="bottom" current={view} onSelect={navigate} tabs={TABS} />}
 
           {/* The add-transaction modal is mounted at the shell level so a content reload cannot drop it. */}
           {showAddTx && (

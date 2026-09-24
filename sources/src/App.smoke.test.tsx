@@ -123,6 +123,36 @@ describe('App（本機模式煙霧測試）', () => {
     expect(screen.queryByRole('button', { name: /抓取狀況/ })).toBeNull()
   })
 
+  it('分頁寫進網址 hash：重新整理停在原頁，返回鍵回上一頁', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: '交易紀錄' }))
+    expect(window.location.hash).toBe('#/transactions')
+
+    // Reload: a fresh mount reads the page back from the hash.
+    cleanup()
+    render(<App />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '交易紀錄' }).getAttribute('aria-current')).toBe('page'),
+    )
+
+    // Back button: the browser changes the hash and fires hashchange.
+    window.history.replaceState(null, '', '#/yearly')
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '年度收益' }).getAttribute('aria-current')).toBe('page'),
+    )
+  })
+
+  it('網址指向本機模式沒有的分頁時回到庫存總覽，且不改寫網址', async () => {
+    window.history.replaceState(null, '', '#/macro')
+    render(<App />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '庫存總覽' }).getAttribute('aria-current')).toBe('page'),
+    )
+    expect(window.location.hash).toBe('#/macro')
+  })
+
   it('手機（≤720px）主導覽改成固定底部列，頁首不再有分頁', async () => {
     const user = userEvent.setup()
     // jsdom does not have matchMedia, so AppShell defaults to the desktop version; here is a copy only for
