@@ -11,7 +11,7 @@
 
 ## 📍 Where the project stands (2026-09-17 16:33:21)
 
-- **Version 0.9.57 on `main`（2026-09-17 合併）；`dev` 為 0.9.58-dev.3（Task 165 第二階段 2a–2c，未推送；DEV Supabase 尚未部署）。前端由 Cloudflare Pages 從 `main` 自動部署。Task 165（Discord 每日總結）的 schema §13 與新版 `stock-report` 目前只在 DEV；PROD 尚未套用 §13、也未重新部署 `stock-report`，所以 PROD 主控台的 Discord 頁在部署前會回錯誤。** 驗收看畫面左下角的版本徽章。
+- **Version 0.9.57 on `main`（2026-09-17 合併）；`dev` 為 0.9.58-dev.3（Task 165 第二階段 2a–2c，未推送；DEV Supabase 尚未部署）。前端由 Cloudflare Pages 從 `main` 自動部署。Task 165（Discord 每日總結）的 schema §13 與新版 `stock-report` 目前只在 DEV；PROD 尚未套用 §13、也未重新部署 `stock-report`，所以 PROD 主控台的 Discord 頁在部署前會回錯誤。** 驗收看頁尾免責聲明後方的版本號（0.9.68 起；之前是左下角徽章）。
   - Shipped 0.9.45 ~ 0.9.56 的逐版記述已移入 `TASK_ARCHIVE.md`（見該檔 `Shipped history` 區塊）與 `docs/agent/CHANGELOG.md`。
   - Verification (2026-09-17): 137 test files / **2,201** vitest tests passed, 7 skipped, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0。
   - Edge Functions（2026-09-17）: DEV `stock-report` **v12**（Task 165）；PROD `stock-report` 未變動（2026-09-15 記錄為 v8）。其餘三支同 2026-09-15 紀錄：`stock-price` DEV v18 / PROD v9、`backup-transactions` v4、`ai-proxy` v1。`verify_jwt`：`stock-price` 與 `ai-proxy` 為 true，`stock-report` 與 `backup-transactions` 為 false。
