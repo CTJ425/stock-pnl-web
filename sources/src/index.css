@@ -112,8 +112,8 @@
   /* Carbon has no rounded corners on productive components. */
   --radius: 0px;
   --radius-sm: 0px;
-  /* The height of the mobile bottom navigation (safe area excluded). Floating buttons,
-     version badges and the page footer all derive their space from this value. */
+  /* The height of the mobile bottom navigation (safe area excluded). The page footer derives
+     its clearance from this value. */
   --bottom-nav-h: 48px;
   --font-display: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   --font-body: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
@@ -437,7 +437,7 @@ h3.market-table-title {
  * It **must** hang outside .app-header: there is a backdrop-filter at the top of the page, which will become a descendant of fixed
  * If the containing block is placed in the header of the page, it will only be posted at the bottom of the header instead of the bottom of the window.
  *
- * The height is based on --bottom-nav-h as the single source: version badges and footer blanks are all calculated from it.
+ * The height is based on --bottom-nav-h as the single source: the footer blank is calculated from it.
  * If this number is changed, the three will follow together. The safe area (iPhone home indicator) is additionally added with padding below.
  */
 .bottom-nav {
@@ -1512,21 +1512,6 @@ table.data-table {
   padding: 0;
 }
 
-/* Fixed version mark in lower left corner*/
-.version-badge {
-  position: fixed;
-  left: 14px;
-  bottom: 12px;
-  z-index: 90;
-  font-size: var(--type-label-01);
-  color: var(--cds-text-helper);
-  padding: var(--sp-01) var(--sp-03);
-  border-radius: 0;
-  background: var(--cds-layer-01);
-  border: 1px solid var(--cds-border-subtle);
-  pointer-events: none;
-  user-select: none;
-}
 
 /* ---------- Form ----------*/
 /* ---------- Carbon text input ----------
@@ -2487,6 +2472,18 @@ a.hmenu-item {
   line-height: 1.7;
 }
 
+/* Version number at the end of the disclaimer (0.9.68): one step quieter than the text, never split
+   across lines, so on a phone it wraps to the next line whole instead of breaking at "-dev". */
+.footer-version-sep,
+.footer-version {
+  color: var(--cds-text-helper);
+  white-space: nowrap;
+}
+
+.footer-version {
+  font-variant-numeric: tabular-nums;
+}
+
 /* GitHub link: Place it below the disclaimer, one level below the main text, and do not compete with the content for attention.*/
 .footer-link {
   display: inline-flex;
@@ -2665,8 +2662,8 @@ a.hmenu-item {
   /* Pagination is changed to a fixed bottom column (see .bottom-nav), and the top of the page is therefore condensed into a single column:
      品牌 ＋ 工作區 ＋ 帳號。頁首高度由 106px 降到約 54px。 */
   .container {
-    /* Bottom padding reserves room for the fixed bottom nav so scrolled content clears it. */
-    padding: 0 16px calc(var(--bottom-nav-h) + 24px + env(safe-area-inset-bottom, 0px));
+    /* The footer below carries the bottom-nav clearance, so main only needs ordinary spacing. */
+    padding: 0 16px 24px;
   }
 
   .app-header-inner {
@@ -2678,8 +2675,10 @@ a.hmenu-item {
     display: none;
   }
 
+  /* The footer is the last thing above the fixed bottom nav, so it carries the clearance itself
+     (the static version badge used to). */
   .app-footer {
-    padding-bottom: 12px;
+    padding-bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom, 0px));
   }
 
   /*
@@ -2881,17 +2880,6 @@ a.hmenu-item {
 
   .header-add-label {
     display: none;
-  }
-
-  /*
-   * The version badge changes back to the file stream, following the footer (#root is the flex column, which is the last child element).
-   * There is no "lower left corner" available on mobile phones: it is either covered by the navigation bar or floating on the card text.
-   * The bottom margin is also responsible for its margin, so the .app-footer above is no longer left alone.
-   */
-  .version-badge {
-    position: static;
-    align-self: center;
-    margin-bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Touch target: 32px is below the 44px guideline, raise small buttons on touch-sized screens. */

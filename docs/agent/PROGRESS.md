@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: Task 167 — 0.9.68-dev.1 on `dev` (AI removed, header 新增交易, Discord 券商)
-- Status: 🔄 `dev` a3d1554 pushed; DEV Supabase not deployed (no CLI on host); `main` at 0.9.67
+- Status: 🔄 `dev` at 0.9.68-dev.2; DEV Supabase not deployed (no CLI on host); `main` at 0.9.67
 - Timestamp: 2026-09-24 02:06:00 Asia/Taipei
 
 ---
@@ -12,6 +12,7 @@
 - **Verify**: `npm test` 2,459 passed / 7 skipped / 0 failed; `npm run build`, `npm run lint`, `npm run typecheck:edge` exit 0.
 - **Blocked — DEV not deployed**: the `supabase` CLI is not installed on this host (Node moved to v26 under nvm; no binary anywhere, no `~/.supabase`). Still to do on DEV: `supabase functions deploy stock-report --no-verify-jwt`, `supabase functions delete ai-proxy`, and `DROP FUNCTION IF EXISTS public.get_ai_settings(); DROP TABLE IF EXISTS app_settings;` with the DEV identity predicate in the same query. PROD after `main`.
 - Browser layout of the header button still unchecked (Playwright chromium needs `libatk-1.0.so.0`).
+- 05:05 — 0.9.68-dev.2: version moved from `.version-badge` (fixed bottom-left, removed from `App.tsx`) to `.footer-version` at the end of the footer disclaimer in `AppShell.tsx`; on ≤ 720 px the footer now carries the bottom-nav clearance and `main.container` bottom padding drops to 24 px. Not shown on the login page any more. Tests 2,459 passed; build, lint, typecheck:edge exit 0.
 
 ---
 
