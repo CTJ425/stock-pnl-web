@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthPage } from './components/Auth/AuthPage'
 import { AppShell } from './components/AppShell'
-import { APP_VERSION } from './version'
 import { initialAuthNotice } from './services/supabase'
 
 /**
@@ -64,7 +63,6 @@ export default function App() {
   return (
     <AuthProvider>
       <AppInner />
-      <div className="version-badge">{APP_VERSION}</div>
     </AuthProvider>
   )
 }

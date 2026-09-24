@@ -54,16 +54,19 @@ describe('App（本機模式煙霧測試）', () => {
     expect(wsTrigger.textContent).toContain('我的投資組合')
   })
 
-  it('版本標記固定於左下角徽章，只顯示版號本身', async () => {
+  // 0.9.68: the version moved from the fixed bottom-left badge to the end of the footer disclaimer.
+  it('版本號接在頁尾免責聲明後面，只顯示版號本身', async () => {
     const { container } = render(<App />)
     await screen.findByText('本機模式')
 
-    const badge = container.querySelector('.version-badge')
-    expect(badge).toBeTruthy()
-    // The badge only displays the version number itself: no v prefix, no author
-    expect(badge!.textContent).toBe(APP_VERSION)
-    expect(badge!.textContent).not.toMatch(/^v/)
-    expect(badge!.textContent).not.toContain('Ivan')
+    expect(container.querySelector('.version-badge')).toBeNull()
+    const version = container.querySelector('.app-footer .footer-version')
+    expect(version).toBeTruthy()
+    // Only the version number itself: no v prefix, no author
+    expect(version!.textContent).toBe(APP_VERSION)
+    expect(version!.textContent).not.toMatch(/^v/)
+    expect(version!.textContent).not.toContain('Ivan')
+    expect(container.querySelector('.app-footer')!.textContent).toMatch(/諮詢之用\s*·\s*\S+$/)
   })
 
   it('服務狀態功能已移除；頁尾只剩免責聲明（GitHub 連結 0.6.19 移入帳號選單）', async () => {

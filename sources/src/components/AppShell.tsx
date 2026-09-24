@@ -66,6 +66,7 @@ const PAGE_FALLBACK = <div className="glass empty-state section">載入中…</d
 import { isReportConfigured } from '../services/reportProxy'
 import { isAdmin } from '../services/adminStatus'
 import { BrandMark } from './BrandMark'
+import { APP_VERSION } from '../version'
 
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
 
@@ -931,6 +932,10 @@ export function AppShell() {
           <footer className="app-footer">
             <p>
               提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
+              {/* 0.9.68: the version sits at the end of the disclaimer instead of a fixed bottom-left badge,
+                  which covered page content on desktop and needed its own row on phones. */}
+              <span className="footer-version-sep" aria-hidden="true"> · </span>
+              <span className="footer-version">{APP_VERSION}</span>
             </p>
             {/* The GitHub link moved into the user menu (0.6.19): the footer is left to the disclaimer */}
           </footer>
