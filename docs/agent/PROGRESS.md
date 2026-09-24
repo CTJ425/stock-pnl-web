@@ -1,9 +1,16 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 168 — health-check follow-ups A–H on `dev` as 0.9.69-dev.1; DEV Edge deployed
-- Status: 🔄 `dev` = 0.9.69-dev.1 (1b35efc), `main` = 0.9.68; DEV `stock-report` v30 / `stock-price` v22; PROD untouched
-- Timestamp: 2026-09-24 17:45:00 Asia/Taipei
+- Action: Task 168 — 0.9.69 released to `main`
+- Status: ✅ `main` = `dev` = 0.9.69 (87050f7); Pages live; DEV Edge = repo; PROD Edge still pre-0.9.69 (awaiting user OK)
+- Timestamp: 2026-09-24 23:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-24 23:55:00 Asia/Taipei (Task 168, 0.9.69 released)
+- User asked to merge to `main`. Release gates at 23:42 found `ProbeWarRoom.test` failing: it read the wall clock and failed every night after 22:30 Taipei (融資融券 window closed → label changes). Pinned the clock with fake Date, added a test for all three empty-card labels. Gates: 2,470 passed / 7 skipped, exit 0; build, typecheck:edge, lint exit 0.
+- 87050f7: 0.9.69 finalized, `main` fast-forwarded, `main:dev` synced. CI + Sync GitHub Releases success; Release 0.9.69 published. Pages serves `0.9.69` (in the `appLog-*.js` chunk); browser load of `#/transactions` on PROD keeps the hash, shows login, 0 console errors.
+- PROD Edge not deployed (`stock-report` v17, `stock-price` unchanged): user only asked for the merge. Both refactors are behaviour-identical, so PROD keeps working; deploy when the user OKs it.
 
 ---
 
@@ -13,12 +20,5 @@
 - Findings on the way: oxlint 1.85 added 95 warnings (62 zero-width spaces in comments → removed; 4 React-Compiler rules → off in `.oxlintrc.json`, app does not use the compiler); `WorkspaceProvider` built a new provider per render (`useRef(new …)`) → `useState` initialiser; the health report's "89 hard-coded hex colours" was wrong (85 are token definitions); its "15 lint warnings" was truncated output (45).
 - Browser (Playwright, local-mode build, 1280 px): TransactionsPage chunk not fetched on first paint, fetched on tab click; reload on `#/yearly` stays; back → `#/transactions` → dashboard; 新增交易 form opens; 0 console errors. Playwright 1.63 needed `npx playwright install chromium`; `e2e-dev.yml` never installed a browser (latent — the job has only ever skipped for missing secrets) → step added.
 - Not verified: generate-all / Discord tick paths on v30 (tonight's DEV batch); Supabase-mode pages (analysis, macro, fx, admin) in a browser.
-
----
-
-## 📅 Log: 2026-09-24 15:00:00 Asia/Taipei (Task 167, PROD Supabase for 0.9.68)
-- User authorized the PROD deploy. From clean tree c689ed2: PROD `stock-report` → v17, `ezbr_sha256` `f0ecd8ed9cbc` (same as DEV v29); `ai-proxy` deleted (404); linked to PROD, read-only check `is_prod=true` / `is_dev=false` (`app_settings` had 0 rows), guarded DO block dropped `get_ai_settings()` + `app_settings`; `verify.sql` installed, `verify_setup()` 10/10 PASS; re-linked to DEV (`project-ref` = `zyebvayngwrqzoaicbwd`).
-- Smoke: `discord-account-tick` without secret → 401. Remaining in Task 167: user check of a real 券商 card.
-- 15:20 — prompt audit of CLAUDE.md + 8 skills: 7 stale facts fixed (d33cedc); follow-ups: `functions download` works with `sbuse stock` and DEV `stock-report` matches the repo file for file (6008187), stale `.gemini` report path dropped from `run-all-e2e.cjs`, `probe-ops` Edge limits now cite the hosted docs (74b9ab9). Global `~/.claude/CLAUDE.md` gained § This machine (not in git).
 
 ---
