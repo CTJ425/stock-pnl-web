@@ -264,7 +264,6 @@ describe('CACHE_TABLES (S17–S18)', () => {
       'public.workspaces',
       'public.transactions',
       'public.user_settings',
-      'public.app_settings',
       'public.tw_watchlist',
       'public.stock_names',
       'public.warm_quota',

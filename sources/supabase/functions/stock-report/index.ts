@@ -1010,7 +1010,7 @@ function assertCronSecret(req: Request): Response | null {
  *
  * **Cannot use email to compare**. `app_metadata` can only be written by service role / Dashboard,
  * Users cannot change their own; email is a field that users can change by themselves. Using it as the basis for authorization means no authorization.
- * This is the same set of criteria as `isAiAdmin()` of `aiSettings.ts`, and both sides must be consistent.
+ * This is the same set of criteria as `isAdmin()` of `src/services/adminStatus.ts`, and both sides must be consistent.
  *
  * This function is deployed with `--no-verify-jwt`. The platform will not help verify JWT, so you can verify it yourself here.
  */
