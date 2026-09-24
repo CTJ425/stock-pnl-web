@@ -1,0 +1,654 @@
+/* ---------- Button ----------*/
+/* ---------- Carbon button ----------
+ * Carbon buttons are square, 40px tall (md), and use asymmetric padding:
+ * the label sits at the left edge, and the right side keeps room for an icon.
+ * The default .btn is the Carbon tertiary/secondary style; .btn-primary is $button-primary.
+ */
+.btn {
+  appearance: none;
+  border: 1px solid var(--cds-border-strong);
+  background: transparent;
+  color: var(--cds-text-primary);
+  font: inherit;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  min-height: var(--cds-size-md);
+  padding: 0 var(--sp-06) 0 var(--sp-04);
+  border-radius: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--sp-03);
+  text-align: left;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.btn:hover {
+  border-color: var(--cds-border-strong);
+  background: var(--cds-background-hover);
+}
+
+.btn:active {
+  background: var(--cds-background-active);
+}
+
+.btn:disabled {
+  border-color: transparent;
+  background: var(--cds-background-selected);
+  color: var(--cds-text-disabled);
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border: 1px solid transparent;
+  background: var(--cds-button-primary);
+  color: var(--cds-text-on-color);
+  box-shadow: none;
+}
+
+.btn-primary:hover {
+  background: var(--cds-button-primary-hover);
+  box-shadow: none;
+}
+
+.btn-primary:active {
+  background: var(--cds-button-primary-active);
+}
+
+/* Carbon danger--tertiary: a red outline that fills on hover. */
+.btn-danger {
+  border-color: var(--cds-button-danger);
+  color: var(--cds-support-error);
+  background: transparent;
+}
+
+.btn-danger:hover {
+  border-color: var(--cds-button-danger-hover);
+  background: var(--cds-button-danger);
+  color: var(--cds-text-on-color);
+}
+
+.btn-danger:active {
+  background: var(--cds-button-danger-hover);
+  color: var(--cds-text-on-color);
+}
+
+/* Carbon icon-only button: square, and the label padding goes away. */
+.btn-icon {
+  padding: 0;
+  width: var(--cds-size-md);
+  min-height: var(--cds-size-md);
+  justify-content: center;
+  gap: 0;
+}
+
+/* Carbon small button: 32px tall. */
+.btn-sm {
+  min-height: var(--cds-size-sm);
+  padding: 0 var(--sp-05) 0 var(--sp-04);
+  font-size: var(--type-body-01);
+  border-radius: 0;
+}
+
+.btn-sm.btn-icon {
+  width: var(--cds-size-sm);
+  padding: 0;
+}
+
+
+/* ---------- Form ----------*/
+/* ---------- Carbon text input ----------
+ * Carbon fields carry one $border-strong rule on the bottom edge only, sit on
+ * $field-01, and are 40px tall. Focus draws a 2px $focus outline inside the box.
+ */
+.field {
+  margin-bottom: var(--sp-05);
+  position: relative;
+}
+
+/* Carbon label-01: 12px / 16px, $text-secondary. */
+.field label {
+  display: block;
+  margin-bottom: var(--sp-03);
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  font-weight: 400;
+  color: var(--cds-text-secondary);
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  font: inherit;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  outline: none;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    outline var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.field textarea {
+  height: auto;
+  min-height: 80px;
+  padding: var(--sp-04) var(--sp-05);
+  line-height: 1.42857;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--cds-text-placeholder);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+/* ---------- Carbon layer contexts ----------
+ * Carbon builds depth by stepping the surface token one level per nesting, not by
+ * adding borders. A control that sits directly on the page uses $field-01; the same
+ * control inside a card or a modal — both of which are themselves $layer-01 — must
+ * step up to $field-02, or the control and its container read as one flat plane.
+ */
+.modal .field input,
+.modal .field select,
+.modal .field textarea,
+.glass .field input,
+.glass .field select,
+.glass .field textarea,
+.detail-card .field input,
+.detail-card .field select,
+.detail-card .field textarea {
+  background: var(--cds-field-02);
+}
+
+.glass .search-box .search-input,
+.modal .search-box .search-input,
+.modal .stock-search input,
+.glass .stock-search input {
+  background: var(--cds-field-02);
+}
+
+/* A menu opened from inside a card or a modal floats above both. */
+.modal .suggestions,
+.glass .suggestions {
+  background: var(--cds-layer-03);
+}
+
+/* Carbon checkbox and radio: a 16px box that must not stretch to the field width. */
+.field input[type='checkbox'],
+.field input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cds-interactive);
+  cursor: pointer;
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled {
+  background: var(--cds-field-01);
+  border-bottom-color: transparent;
+  color: var(--cds-text-disabled);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.field select option {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* Carbon helper-text-01: 12px, $text-helper, 4px under the control. */
+.field .field-hint {
+  margin-top: var(--sp-02);
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  color: var(--cds-text-helper);
+}
+
+/* Field-level validation message, under the control. */
+.field-error {
+  margin-top: var(--sp-02);
+  font-size: var(--type-label-01);
+  color: var(--cds-support-error);
+}
+
+/* Fee-rate hint/warning shown next to the transaction form's fee-rate field. */
+.fee-rate-hint {
+  font-size: var(--type-label-01);
+  color: var(--cds-text-secondary);
+}
+
+.fee-rate-warning {
+  font-size: var(--type-label-01);
+  color: var(--cds-support-warning);
+  font-weight: 500;
+}
+
+/* Linked buttons within the tooltip (e.g. "Restore original record")*/
+/* Carbon link: $link-primary with a permanent underline. */
+.link-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--cds-link-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-btn:hover {
+  color: var(--cds-link-hover);
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.field-row > * {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+/* The nested columns (number of shares + unit, tax rate + quick selection) remain in the same row and can be scaled by the input box.*/
+.field .field-row {
+  flex-wrap: nowrap;
+}
+
+.field .field-row > * {
+  flex: 1 1 auto;
+}
+
+.field-row > .narrow {
+  flex: 0 0 92px;
+}
+
+.field-row > .narrow-lg {
+  flex: 0 0 122px;
+}
+
+/* Transaction form's quantity field: full row so the input isn't squeezed by the
+ * 張/股 unit select nested inside it. NOTE: the parent `.field-row` is a flex
+ * container (display: flex), not a CSS grid, so this uses a flex-basis override
+ * instead of `grid-column: 1 / -1`. */
+@media (max-width: 560px) {
+  /* `.field-row > .tx-qty-field`, not `.tx-qty-field`: the later ≤720 px `.field-row > *` rule has equal specificity and would win. */
+  .field-row > .tx-qty-field {
+    flex: 1 1 100%;
+  }
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(var(--date-invert));
+  cursor: pointer;
+}
+
+/* ---------- Fuzzy search drop-down ----------*/
+/* ---------- Carbon dropdown list ----------
+ * A square $layer-02 sheet directly under the field, with 40px list items.
+ */
+.suggestions {
+  position: absolute;
+  z-index: 60;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: var(--cds-shadow-menu);
+}
+
+.suggestion-item {
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-05);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-03);
+  font-size: var(--type-body-01);
+  color: var(--cds-text-secondary);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
+}
+
+.suggestion-item .market-tag {
+  flex-shrink: 0;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 12px;
+  padding: 0 var(--sp-03);
+  line-height: 20px;
+}
+
+.suggestion-empty {
+  padding: 12px 12px;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+}
+
+.modal-body .search-box {
+  display: flex;
+  width: 100%;
+}
+
+.modal-body .search-box .search-input {
+  width: 100%;
+}
+
+.modal-body .search-box .search-input:focus {
+  width: 100%;
+  border-color: var(--accent-strong);
+  box-shadow: 0 2px 0 0 var(--accent-strong);
+}
+
+/* ---------- Watch search results (same visual family as .suggestion-item) ---------- */
+.watch-results {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.watch-results li + li {
+  border-top: 1px solid var(--border);
+}
+
+.watch-result-item {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--type-body-01);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.watch-result-item:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.watch-result-item:active {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.watch-result-item:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.watch-result-symbol {
+  font-weight: 600;
+}
+
+.watch-result-name {
+  color: var(--ink-secondary);
+}
+
+.watch-result-item:disabled {
+  cursor: not-allowed;
+  color: var(--ink-muted);
+}
+
+.watch-result-item:disabled:hover {
+  background: transparent;
+}
+
+.watch-result-added {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.watch-results-more {
+  margin: 8px 0 0;
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+/* ---------- Modal ---------- */
+/* ---------- Carbon modal ----------
+ * A square $layer-01 panel over a $overlay scrim. The close control is a 48px
+ * square ghost button pinned to the top right corner.
+ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--cds-overlay);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh var(--sp-05) var(--sp-05);
+  overflow-y: auto;
+  animation: fade-in var(--cds-dur-slow) var(--cds-ease-entrance);
+}
+
+.modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--cds-layer-01);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--cds-shadow-modal);
+  animation: pop-in var(--cds-dur-slow) var(--cds-ease-entrance);
+}
+
+.modal.wide {
+  max-width: 768px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-05);
+  padding: var(--sp-05) var(--sp-05) 0;
+}
+
+/* Carbon heading-03: 20px / 28px. */
+.modal-head h3 {
+  font-size: var(--type-heading-03);
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--cds-text-primary);
+}
+
+.modal-body {
+  padding: var(--sp-05) var(--sp-05) var(--sp-09);
+  color: var(--cds-text-secondary);
+}
+
+.modal-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--cds-text-primary);
+  cursor: pointer;
+  width: var(--cds-size-lg);
+  height: var(--cds-size-lg);
+  flex: 0 0 auto;
+  margin: calc(var(--sp-05) * -1) calc(var(--sp-05) * -1) 0 0;
+  padding: 0;
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.modal-close:hover {
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
+}
+
+/* ---------- Skeleton screen ----------*/
+/* Carbon skeleton: a square $skeleton-background block with a slow pulse. */
+.skeleton {
+  display: inline-block;
+  width: 72px;
+  height: 14px;
+  border-radius: 0;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-a) 25%,
+    var(--skeleton-b) 50%,
+    var(--skeleton-a) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+/* ---------- Tips and Badges ----------*/
+/* ---------- Carbon tag ----------
+ * Carbon tags stay pill-shaped: 24px tall, 12px label, a filled tint, no border.
+ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-02);
+  height: 24px;
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  padding: 0 var(--sp-03);
+  border-radius: 12px;
+  border: none;
+  background: var(--cds-layer-02);
+  color: var(--cds-text-primary);
+  white-space: nowrap;
+}
+
+.badge.badge-warn {
+  color: var(--cds-text-primary);
+  border: none;
+  background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent);
+}
+
+/* ---------- Carbon inline notification ----------
+ * A $layer-01 bar with a 3px status rule on the left edge. The text stays
+ * $text-primary; the status color carries the meaning, not the type color.
+ */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-05);
+  min-height: var(--cds-size-lg);
+  padding: var(--sp-04) var(--sp-05);
+  border-radius: 0;
+  font-size: var(--type-body-01);
+  line-height: 1.42857;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-01);
+  border: none;
+  border-left: 3px solid var(--cds-border-subtle);
+  margin-bottom: var(--sp-04);
+}
+
+.notice-error {
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-error);
+  background: var(--cds-layer-01);
+}
+
+.notice-ok {
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-success);
+  background: var(--cds-layer-01);
+}
+
+.notice-warn {
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-warning);
+  background: var(--cds-layer-01);
+}
+
+/* The dismiss control inside a notification is a Carbon ghost button. */
+.notice > button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--cds-text-primary);
+  font: inherit;
+  min-height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.notice > button:hover {
+  background: var(--cds-layer-hover-01);
+}
+
+.empty-state {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.empty-state .empty-icon {
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
 
-describe('index.css .data-table PnL color rules (Task 150 regression test)', () => {
+describe('styles/tables.css .data-table PnL color rules (Task 150 regression test)', () => {
   async function loadCss(): Promise<string> {
     // Dynamic import to avoid static Node type dependencies in browser tsconfig (tsc -b)
     // @ts-ignore
@@ -10,7 +10,7 @@ describe('index.css .data-table PnL color rules (Task 150 regression test)', () 
     const path = await import('node:path'.slice(0))
     // @ts-ignore
     const cwd = typeof process !== 'undefined' ? process.cwd() : '.'
-    const cssPath = path.resolve(cwd, 'src/index.css')
+    const cssPath = path.resolve(cwd, 'src/styles/tables.css')
     return fs.readFileSync(cssPath, 'utf-8')
   }
 

@@ -1,0 +1,647 @@
+/* ---------- sheet ----------*/
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0;
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: var(--type-body-01);
+  min-width: 0;
+  background: var(--cds-layer-01);
+}
+
+/* ---------- Carbon data table (compact) ----------
+ * The header row sits on $layer-accent-01 and uses sentence case, weight 600.
+ * Carbon does not set uppercase on column headers.
+ */
+.data-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  text-transform: none;
+  color: var(--cds-text-primary);
+  padding: var(--sp-03);
+  border-bottom: none;
+  white-space: nowrap;
+  background: var(--cds-layer-accent-01);
+}
+
+/* Carbon data table, md size: every row is 40px. A stacked cell grows past it. */
+.data-table td {
+  font-size: var(--type-body-01);
+  height: var(--cds-size-md);
+  padding: var(--sp-03);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  border-top: none;
+  white-space: nowrap;
+  color: var(--cds-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Carbon row header: the first column anchors the row, so it keeps $text-primary
+   while the data cells stay one step back at $text-secondary. */
+.data-table td:first-child {
+  color: var(--cds-text-primary);
+}
+
+/* When the first cell is a selection checkbox it carries no text, so the anchor
+   moves to the next cell. */
+.data-table td:first-child:has(input[type='checkbox']) + td {
+  color: var(--cds-text-primary);
+}
+
+/* The headline number in a cell is the reading target; the lines under it are notes. */
+.data-table td.num > div:first-child {
+  color: var(--cds-text-primary);
+}
+
+.data-table .num {
+  font-family: var(--font-body);
+  font-size: var(--type-body-01);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table .num > div:first-child {
+  font-size: var(--type-body-01);
+}
+
+/*
+ * The secondary lines inside a numeric cell (未含費 …, 淨收 …) are prose, not a column that
+ * has to align. Monospace at 11px made them wide enough to push the 10-column holdings
+ * table past its frame, so they stay in the proportional face.
+ */
+.data-table .num > div:not(:first-child):not(.row-actions),
+.data-table .cell-sub {
+  font-family: var(--font-body);
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  padding-left: 12px;
+}
+
+.data-table th:last-child,
+.data-table td:last-child {
+  padding-right: 12px;
+}
+
+/* Text that is too long (such as stock names) is truncated. See the title prompt for the complete content.*/
+.cell-ellipsis {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Breakpoint convention: this file has five sanctioned breakpoints — 560px,
+   720px, 900px, 1020px and 1120px — and every media block below is
+   `max-width`. New layouts are written narrow-first (base styles target the
+   smallest screen; these blocks layer on wider-screen overrides), so do not
+   introduce a `min-width` block or a sixth breakpoint value. */
+
+/* When the window is narrow, further compress it to prevent horizontal scrolling in the same-width table of transaction records.*/
+@media (max-width: 1120px) {
+  table.data-table {
+    font-size: var(--type-label-01);
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 4px;
+    font-size: var(--type-label-01);
+  }
+
+  .data-table .num,
+  .data-table .num > div:first-child {
+    font-size: var(--type-label-01);
+  }
+
+  .data-table .num > div:not(:first-child):not(.row-actions),
+  .data-table .cell-sub {
+    font-size: var(--type-label-01);
+  }
+
+  .th-head .th-plain {
+    padding: 8px 0 8px 4px;
+  }
+
+  .th-head {
+    padding-right: 4px;
+  }
+
+  .cell-ellipsis {
+    max-width: 84px;
+  }
+}
+
+.data-table tbody tr {
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+/* Carbon zebra striping. The band sits on the row, not the cell, so a grouping,
+   total or detail row that paints its own cells still overrides it. */
+.data-table tbody tr:nth-child(even) {
+  background: var(--table-zebra);
+}
+
+/* The sticky first column of the institutional matrix paints its own background,
+   so it needs the band explicitly or the stripe stops at the frozen column. */
+.inst-matrix tbody tr:nth-child(even) td:first-child {
+  background: var(--table-zebra);
+}
+
+.data-table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.data-table tbody tr:hover td {
+  color: var(--cds-text-primary);
+}
+
+/* ---------- Data table PnL colors (Task 150) ----------
+ * .data-table td, td.num > div:first-child and tr:hover td set Carbon text hierarchy
+ * ($text-secondary, $text-primary). PnL cells carry semantic colors (red up / green down / secondary flat)
+ * and must override both cell text-primary/secondary and row hover states.
+ */
+.data-table .pnl-up,
+.data-table td.pnl-up,
+.data-table td.num.pnl-up,
+.data-table td.num > .pnl-up,
+.data-table td.pnl-up > div:first-child,
+.data-table td.num.pnl-up > div:first-child,
+.data-table td.num > div.pnl-up:first-child,
+.data-table tbody tr:hover .pnl-up,
+.data-table tbody tr:hover td.pnl-up,
+.data-table tbody tr:hover td.num.pnl-up,
+.data-table tbody tr:hover td.num > .pnl-up,
+.data-table tbody tr:hover td.pnl-up > div:first-child,
+.data-table tbody tr:hover td.num.pnl-up > div:first-child,
+.data-table tbody tr:hover td.num > div.pnl-up:first-child {
+  color: var(--up);
+}
+
+.data-table .pnl-down,
+.data-table td.pnl-down,
+.data-table td.num.pnl-down,
+.data-table td.num > .pnl-down,
+.data-table td.pnl-down > div:first-child,
+.data-table td.num.pnl-down > div:first-child,
+.data-table td.num > div.pnl-down:first-child,
+.data-table tbody tr:hover .pnl-down,
+.data-table tbody tr:hover td.pnl-down,
+.data-table tbody tr:hover td.num.pnl-down,
+.data-table tbody tr:hover td.num > .pnl-down,
+.data-table tbody tr:hover td.pnl-down > div:first-child,
+.data-table tbody tr:hover td.num.pnl-down > div:first-child,
+.data-table tbody tr:hover td.num > div.pnl-down:first-child {
+  color: var(--down);
+}
+
+.data-table .pnl-flat,
+.data-table td.pnl-flat,
+.data-table td.num.pnl-flat,
+.data-table td.num > .pnl-flat,
+.data-table td.pnl-flat > div:first-child,
+.data-table td.num.pnl-flat > div:first-child,
+.data-table td.num > div.pnl-flat:first-child,
+.data-table tbody tr:hover .pnl-flat,
+.data-table tbody tr:hover td.pnl-flat,
+.data-table tbody tr:hover td.num.pnl-flat,
+.data-table tbody tr:hover td.num > .pnl-flat,
+.data-table tbody tr:hover td.pnl-flat > div:first-child,
+.data-table tbody tr:hover td.num.pnl-flat > div:first-child,
+.data-table tbody tr:hover td.num > div.pnl-flat:first-child {
+  color: var(--cds-text-secondary);
+}
+
+.data-table input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--cds-interactive);
+  vertical-align: middle;
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table th.num,
+.data-table td.num {
+  text-align: right;
+}
+
+/* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
+.holding-group td {
+  background: var(--row-band);
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 8px 12px;
+}
+
+.holding-group-short .holding-group-label {
+  color: var(--steel);
+}
+
+.row-short td {
+  background: var(--steel-tint);
+}
+
+.row-short td:first-child {
+  box-shadow: inset 3px 0 0 var(--steel);
+}
+
+.tx-chip {
+  display: inline-block;
+  font-size: var(--type-label-01);
+  padding: 2px 8px;
+  border: none;
+}
+
+.tx-chip-spot {
+  color: var(--cds-text-primary);
+  background: var(--chip-neutral);
+}
+
+.tx-chip-day {
+  color: var(--ochre);
+  background: var(--ochre-tint);
+}
+
+.tx-chip-margin {
+  color: var(--steel);
+  background: var(--steel-tint);
+}
+
+.tx-chip-short {
+  color: var(--steel-on);
+  background: var(--steel);
+}
+
+/* ---------- 損益試算: sell ladder + ledger (Task 117) ----------*/
+.whatif-ladder-row {
+  cursor: pointer;
+}
+
+.whatif-ladder-row:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+
+.whatif-ladder-row--current td {
+  background: var(--row-hover);
+  font-weight: 600;
+}
+
+.whatif-ladder-row--breakEven td {
+  background: color-mix(in srgb, var(--accent-strong) 12%, transparent);
+}
+
+.whatif-ladder-row--avgCost td {
+  background: var(--row-hover);
+  font-weight: 600;
+}
+
+.whatif-ladder-gap td {
+  padding: 4px 8px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+  background: var(--row-hover);
+}
+
+.whatif-ladder-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--accent-strong);
+  border: 1px solid var(--accent-strong);
+}
+
+/* Summary strip (Task 121): 現價 / 持有均價 / 回本 as clickable cards above the ladder. */
+.whatif-marks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.whatif-mark {
+  flex: 1 1 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--cds-layer-02);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.whatif-mark:focus-visible,
+.whatif-mark:hover {
+  border-color: var(--accent-strong);
+  background: var(--row-hover);
+}
+
+.whatif-mark-label {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+}
+
+.whatif-mark-price {
+  font-size: var(--type-body-02);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.whatif-mark-relative,
+.whatif-mark-pnl {
+  font-size: var(--type-label-01);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 560px) {
+  .whatif-mark {
+    flex-basis: 100%;
+    padding: 8px 12px;
+  }
+}
+
+/* Shared-row grid: a row is three sibling cells (key / buy / sell) in DOM order, so the
+   grid auto-placement lines up every row without either side laying itself out. */
+.whatif-ledger {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) 1fr 1fr;
+  margin-top: 4px;
+}
+
+.whatif-ledger-cell {
+  padding: 12px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Key column (1st of every 3 cells) */
+.whatif-ledger-cell:nth-child(3n + 1) {
+  text-align: left;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+/* Sell column (3rd of every 3 cells): divider against the buy column */
+.whatif-ledger-cell:nth-child(3n) {
+  border-left: 1px solid var(--border);
+}
+
+/* Last row: no bottom rule, the 結算 strip closes it off instead */
+.whatif-ledger-cell:nth-last-child(-n + 3) {
+  border-bottom: none;
+}
+
+.whatif-ledger-cell .field {
+  margin-bottom: 0;
+}
+
+/* Sub-label naming the number below it (成交均價（未含費）／實付手續費／現價 …) */
+.whatif-ledger-sublabel {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+
+.whatif-ledger-cell input[type='number'] {
+  text-align: right;
+}
+
+.whatif-ledger-heading {
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  text-align: right;
+}
+
+.whatif-ledger-settle {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.whatif-headline-label {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+
+.whatif-headline-value {
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  /* Stay three columns — collapsing to one would destroy the row alignment
+     this grid exists to create. Shrink padding/font/key-width instead. */
+  .whatif-ledger {
+    grid-template-columns: minmax(60px, auto) 1fr 1fr;
+  }
+
+  .whatif-ledger-cell {
+    padding: 8px 8px;
+    min-height: 36px;
+    font-size: var(--type-body-01);
+  }
+}
+
+/* Sortable header*/
+.th-sort {
+  padding: 0;
+}
+
+.th-sort-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  padding: 12px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.th-sort.num .th-sort-btn {
+  justify-content: flex-end;
+}
+
+/* When the header contains an explanation icon, the sort button is placed side by side with "?" (the padding is moved to the outer layer so that there will be no gaps)*/
+.th-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.th-head .th-sort-btn {
+  width: auto;
+  padding-right: 0;
+}
+
+/* Unsortable header text (aligned with the padding of the sort button)*/
+.th-head .th-plain {
+  padding: 8px 0 8px 8px;
+  white-space: nowrap;
+}
+
+.th-sort.num .th-head {
+  justify-content: flex-end;
+}
+
+/* Field description "?" icon and bubble*/
+.help-tip {
+  appearance: none;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cds-text-secondary);
+  font-size: var(--type-label-01);
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.help-tip:hover,
+.help-tip:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.help-bubble {
+  position: fixed;
+  z-index: 120;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-card);
+  color: var(--ink-secondary);
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.help-bubble-title {
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.th-sort-btn:hover {
+  color: var(--ink);
+}
+
+.th-sort .sort-ind {
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.th-sort .sort-ind.active {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.data-table .cell-muted {
+  color: var(--ink-muted);
+}
+
+/* Annual income: individual stock details column (the columns will be aligned only if they belong to the same table as the annual column)*/
+.detail-row td {
+  background: var(--row-alt);
+  color: var(--ink-secondary);
+  font-size: var(--type-label-01);
+  font-weight: 400;
+}
+
+.detail-row.sell-row td {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/* Annual income three-layer indentation: the icon column is fixed at 22px + 10px spacing (a total of 32px per layer),
+   無展開鈕的列以 .toggle-slot 空槽補位，各層文字才會垂直對齊 */
+.cell-tree {
+  display: flex;
+  align-items: center;
+}
+
+.cell-tree .year-toggle {
+  flex: none;
+}
+
+.toggle-slot {
+  flex: none;
+  width: 22px;
+  margin-right: 12px;
+}
+
+.year-toggle {
+  appearance: none;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-strong);
+  color: var(--ink-secondary);
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  margin-right: 12px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  vertical-align: middle;
+}
+
+.year-toggle:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}

@@ -1,0 +1,832 @@
+/* ---------- Login page ----------*/
+.auth-wrap {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px 32px 32px;
+}
+
+.auth-card .brand {
+  justify-content: center;
+  font-size: var(--type-heading-03);
+  margin-bottom: 4px;
+}
+
+.auth-card .auth-sub {
+  text-align: center;
+  color: var(--ink-secondary);
+  font-size: var(--type-body-01);
+  margin: 4px 0 24px;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  text-align: center;
+  color: var(--ink-secondary);
+  font-size: var(--type-body-01);
+}
+
+.auth-switch button {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.auth-switch button:hover {
+  text-decoration: underline;
+}
+
+.error-fallback {
+  text-align: center;
+}
+
+.error-fallback-btn {
+  margin: 4px auto 0;
+}
+
+/* ---------- Menu frame (common to the top work area and individual stock switching for individual stock analysis) ----------*/
+.ws-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* As of 0.6.5-dev.3, there is only one menu trigger button left, and min-width 0 allows it to shrink without collapsing on narrow screens.*/
+  min-width: 0;
+}
+
+/*
+ * Full-market search box on the individual stock analysis page (0.6.44).
+ *
+ * `position: relative` is load-bearing: `.suggestions` is absolutely positioned and would otherwise
+ * anchor to whatever ancestor happens to be positioned. The dropdown itself reuses the transaction
+ * form's `.suggestions` / `.suggestion-item` rules —— same control, so the same look.
+ */
+.stock-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  /* Narrow enough not to crowd the holdings switcher, wide enough for 「代號 + 四字名稱」 */
+  flex: 0 1 190px;
+}
+
+.stock-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.stock-search input {
+  width: 100%;
+  min-width: 0;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-05) 0 var(--sp-07);
+  font: inherit;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  outline: none;
+}
+
+.stock-search input:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+}
+
+.stock-search input::placeholder {
+  color: var(--cds-text-placeholder);
+}
+
+.stock-search-clear {
+  flex: none;
+}
+
+/* ---------- Drop-down menu (shared by workspace/account/stock switching, see Common/HeaderMenu.tsx) ----------*/
+.hmenu {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.hmenu-ws {
+  appearance: none;
+  font: inherit;
+  font-size: var(--type-body-01);
+  color: var(--cds-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  height: var(--cds-header-h);
+  padding: 0 var(--sp-04);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 200px;
+}
+
+/* The name can be truncated, but the icon on the left and the arrow on the right will always remain -
+   0.6.5-dev.2 的 bug 就是整顆被擠到只剩箭頭，看不出目前在哪個工作區 */
+.hmenu-ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 2.5em;
+}
+
+.hmenu-ws svg,
+.hmenu-caret {
+  flex: 0 0 auto;
+  color: var(--ink-secondary);
+}
+
+/* Carbon header action: no border at rest, $background-hover on hover. */
+.hmenu-ws:hover {
+  background: var(--cds-background-hover);
+}
+
+.hmenu-avatar {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: none;
+  background: var(--cds-button-primary);
+  color: var(--cds-text-on-color);
+  font: inherit;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  letter-spacing: 0.32px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The native mode follows the existing badge appearance, but becomes a clickable trigger button——
+   「資料只存在這個瀏覽器」要隨時看得到，不該藏進選單 */
+.hmenu-badge {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Carbon overflow menu: a square $layer-02 sheet flush under the trigger. */
+.hmenu-pop {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 60;
+  min-width: 200px;
+  max-width: min(288px, calc(100vw - 28px));
+  padding: 0;
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--cds-shadow-menu);
+}
+
+/*
+ * Expand to the left. The default .hmenu-pop is `right: 0` (menu on the right side of the page),
+ * When called from the left side of the screen, it will go to the left and run out of the screen - the stock switching is on the left.
+ */
+.hmenu-pop-left {
+  right: auto;
+  left: 0;
+}
+
+/* The list may be very long (dozens of holdings) and the time limit is high and can be rolled up to prevent the pop-up layer from growing beyond the window.*/
+.hmenu-pop-scroll {
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hmenu-head {
+  padding: 8px 12px 8px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.hmenu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 4px;
+}
+
+/* Carbon menu item: 40px tall, 16px side padding, square. */
+.hmenu-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--cds-text-primary);
+  font: inherit;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  width: 100%;
+  min-height: var(--cds-size-md);
+  text-align: left;
+  padding: 0 var(--sp-05);
+  border-radius: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.hmenu-item:hover {
+  background: var(--row-hover);
+  color: var(--ink);
+}
+
+.hmenu-item svg {
+  flex: 0 0 auto;
+}
+
+.hmenu-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unselected workspaces must also have check marks, otherwise the list will jump left and right.*/
+.hmenu-check {
+  visibility: hidden;
+  color: var(--accent);
+}
+
+.hmenu-item.is-current {
+  color: var(--ink);
+}
+
+.hmenu-item.is-current .hmenu-check {
+  visibility: visible;
+}
+
+.hmenu-item.is-danger {
+  color: var(--danger);
+}
+
+.hmenu-item.is-danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+/* Admin backend entrance (0.6.19): use accent color to separate it from other projects, it will leave the current page*/
+.hmenu-item-admin {
+  color: var(--accent);
+}
+
+.hmenu-item-admin:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* The outward-facing icon of "Source Code" is pushed to the far right, away from the text of the menu item.*/
+.hmenu-item-ext {
+  margin-left: auto;
+  color: var(--ink-muted);
+}
+
+a.hmenu-item {
+  text-decoration: none;
+}
+
+/* ---------- Toolbar ----------*/
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-box .search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+/* Carbon search: 40px tall, $field-01, one bottom rule, icon at the left edge. */
+.search-box .search-input {
+  appearance: none;
+  font: inherit;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-08) 0 var(--sp-08);
+  outline: none;
+  width: 200px;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    width var(--cds-dur-moderate) var(--cds-ease-productive);
+}
+
+.search-box .search-input:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+  width: 240px;
+}
+
+.search-box .search-clear-btn {
+  position: absolute;
+  right: 6px;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-box .search-clear-btn:hover {
+  color: var(--ink);
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+/* Task 158 #12: the 「工具」 trigger only exists for the ≤720px collapsed toolbar. */
+.tx-tools-trigger {
+  display: none;
+}
+
+/* ---------- footer ----------*/
+.app-footer {
+  margin-top: auto;
+  max-width: 1312px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 16px 24px 24px;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* Version number at the end of the disclaimer (0.9.68): one step quieter than the text, never split
+   across lines, so on a phone it wraps to the next line whole instead of breaking at "-dev". */
+.footer-version-sep,
+.footer-version {
+  color: var(--cds-text-helper);
+  white-space: nowrap;
+}
+
+.footer-version {
+  font-variant-numeric: tabular-nums;
+}
+
+/* GitHub link: Place it below the disclaimer, one level below the main text, and do not compete with the content for attention.*/
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.footer-link:hover {
+  color: var(--ink-secondary);
+  text-decoration: underline;
+}
+
+/* ---------- Animation ----------*/
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.detail-row {
+  animation: row-in 0.18s ease;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cds-spinner {
+  flex: none;
+  animation: cds-spin 690ms linear infinite;
+}
+
+.cds-spinner circle {
+  fill: none;
+  stroke-width: 10;
+}
+
+.cds-spinner__track {
+  stroke: var(--cds-layer-accent-01);
+}
+
+.cds-spinner__stroke {
+  stroke: var(--cds-interactive);
+  stroke-linecap: butt;
+  stroke-dasharray: 264;
+  stroke-dashoffset: 66;
+}
+
+@keyframes cds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cds-spinner {
+    animation: none;
+  }
+}
+
+.suggestion-loading,
+.watch-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+}
+
+/* ---------- Scroll ----------*/
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 0;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- Top of page single line protection ----------
+ * After the number of paginations is increased to four, the workspace and account status on the right side will be squeezed to the second row.
+ *
+ * Key: container max-width 1180px makes the available width of the top of the page always 1140px, regardless of the window width.
+ * Therefore, spacing and letterbox truncation must be applied unconditionally - if only media query is tied, 1180px or more
+ * On the contrary, it has no effect at all (1920px and 1220px face the same 1140px).
+ *
+ * Gradual concessions: unconditionally close the spacing and mailbox width → 1220px close the mailbox (the full value is still in the logout button title)
+ * → 1120px Collapse brand text → 1020px Leave only icon in paging (name moved to title / aria-label)
+ * → 720px paging completely leaves the top of the page and changes to a fixed bottom column (see .bottom-nav).
+ *
+ * There is no need to compress pagination below 720px: only the brand + workspace + account remain at the top of the page, and the horizontal pressure is reset to zero.
+ * This is also the reason why the calculation in 0.6.5 that "the five page breaks will be wrapped if there is a difference of 1px from 375px" disappeared——
+ * Each column at the bottom is vertical, 375px, each of the five columns is 73px, and the sixth column is still 61px.
+ *
+ * Note: The email + logout button in Supabase mode is about 140px wider than the "local mode" label in local mode.
+ * Always verify in Supabase mode when adjusting breakpoints.
+ */
+.app-header-inner {
+  gap: 12px 12px;
+}
+
+.tab {
+  padding: 8px 12px;
+}
+
+@media (max-width: 1120px) {
+  .brand-text {
+    display: none;
+  }
+}
+
+@media (max-width: 1020px) {
+  .tab-label {
+    display: none;
+  }
+
+  .tab {
+    padding: 0 var(--sp-04);
+  }
+}
+
+/* ---------- Mobile Device (RWD) ----------*/
+@media (max-width: 720px) {
+  /* Pagination is changed to a fixed bottom column (see .bottom-nav), and the top of the page is therefore condensed into a single column:
+     品牌 ＋ 工作區 ＋ 帳號。頁首高度由 106px 降到約 54px。 */
+  .container {
+    /* The footer below carries the bottom-nav clearance, so main only needs ordinary spacing. */
+    padding: 0 16px 24px;
+  }
+
+  .app-header-inner {
+    padding: 0 var(--sp-04);
+    gap: var(--sp-03) var(--sp-04);
+  }
+
+  .header-spacer {
+    display: none;
+  }
+
+  /* The footer is the last thing above the fixed bottom nav, so it carries the clearance itself
+     (the static version badge used to). */
+  .app-footer {
+    padding-bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /*
+   * The workspace menu eats up the remaining horizontal space at the top of the page (names that are too long are truncated by .hmenu-ws-name).
+   *
+   * ⚠️ **Limited to .app-header**. `.ws-select` is also used for switching individual stocks in individual stock analysis starting from 0.6.7.
+   * And there are titles and two buttons competing for space in the same column - the flex-basis of `flex: 1` is 0,
+   * There is almost no width when competing with `flex: 1 1 auto`'s .detail-title:
+   * The measured 390px is only 48px, the 360px is only 33px, and the code name is cut to "18...".
+   * The mobile version of the stock selection list is handled separately (see .detail-head .ws-select below).
+   */
+  .app-header .ws-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /*
+   * Stock switching has its own column on mobile phones: it is the main control on this page.
+   * After being squeezed out by the title and buttons, only "18..." is left, which means it is impossible to tell which gear is currently selected.
+   */
+  .detail-head .ws-select {
+    flex: 1 0 100%;
+    /* Two controls now share this row (0.6.44). At 375px they do not both fit, and shrinking
+       either one reproduces exactly the 「18…」 truncation this rule was written to stop. */
+    flex-wrap: wrap;
+  }
+
+  .detail-head .stock-search {
+    flex: 1 0 100%;
+  }
+
+  /*
+   * The title also occupies its own column, so the two buttons will be in the same column.
+   * If you don't do this, the title will eat up the width in the middle and only squeeze in a button.
+   * Another one was pushed to the fourth column - three columns became four columns, and two buttons of the same nature were disassembled.
+   */
+  .detail-head .detail-title {
+    flex: 1 0 100%;
+  }
+
+  /* Don’t shrink the buttons: it’s more difficult to shrink them down to just the icons, I’d rather have them occupy a column by themselves*/
+  .detail-head .btn {
+    flex: none;
+  }
+
+  /*
+   * Analysis header: keep menu + title on one visual block; search already full-width (order 4).
+   * Primary menu may take the full first content row on narrow screens; title follows — still
+   * stable when switching 我的持股 / 其他台股 (search never sits above the title).
+   */
+  .detail-head-analysis .analysis-select-primary {
+    flex: 1 1 auto;
+    min-width: min(100%, 12rem);
+  }
+
+  .detail-head-analysis .detail-title {
+    flex: 1 0 100%;
+  }
+
+  .detail-head-analysis .analysis-select-secondary .stock-search {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  /* Enter the font size ≥16px to prevent iOS Safari from automatically enlarging the page when focusing*/
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: var(--type-body-02);
+  }
+
+  /* iOS clips the 16px text at height:40px + 12px vertical padding (16px left for the glyph);
+     44px with horizontal-only padding gives the text room without vertically centring it via padding. */
+  .field input:not([type='checkbox']):not([type='radio']),
+  .field select {
+    height: 44px;
+    padding: 0 12px;
+    line-height: normal;
+  }
+
+  .field textarea {
+    padding: 12px;
+  }
+
+  /* iOS gives date inputs an intrinsic min-width, extra height, and centres the value;
+     without this the date input overflows into the next .field-row column. */
+  .field input[type='date'] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  .field input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+  }
+
+  .stock-search input,
+  .search-box .search-input {
+    font-size: var(--type-body-02);
+  }
+
+  /* Task 158 #12: collapse the four low-use tools into the 「工具」 trigger so
+     search + 工具 share one row instead of wrapping into a second/third line. */
+  .toolbar .tx-tool {
+    display: none;
+  }
+
+  .tx-tools-trigger {
+    display: inline-flex;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  .toolbar .search-box {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .toolbar .search-input {
+    width: 100%;
+    height: 44px;
+  }
+
+  .toolbar .search-input:focus {
+    width: 100%;
+  }
+
+  /* 交易工具 sheet: bottom sheet instead of a centred dialog. Modal has no
+     className prop, so the sheet is picked out via the .tx-tools-sheet body. */
+  .modal-overlay:has(.tx-tools-sheet) {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal:has(.tx-tools-sheet) {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .tx-tools-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .tx-tools-item {
+    width: 100%;
+    height: 48px;
+    justify-content: flex-start;
+  }
+
+  .field-row > * {
+    flex: 1 1 45%;
+  }
+
+  .field-row > .narrow {
+    flex: 0 0 92px;
+  }
+
+  .field-row > .narrow-lg {
+    flex: 0 0 122px;
+  }
+
+  .modal-overlay {
+    padding: 3vh 12px 12px;
+  }
+
+  .modal-body {
+    padding: 16px 16px 16px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .kpi .kpi-value {
+    font-size: var(--type-heading-03);
+  }
+
+  .market-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .market-panel .metric-hero .kpi-value {
+    font-size: var(--type-heading-03);
+  }
+
+  /* The header row is tight on narrow screens: 新增交易 collapses to an icon-only square, and
+     moves after the workspace menu (order) so it does not read as part of the brand mark. */
+  .header-add {
+    order: 1;
+    margin-left: 0;
+    width: var(--cds-size-sm);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .header-add-label {
+    display: none;
+  }
+
+  .app-header-inner > .header-meta {
+    order: 2;
+  }
+
+  /* Touch target: 32px is below the 44px guideline, raise small buttons on touch-sized screens. */
+  .btn-sm {
+    min-height: var(--cds-size-md);
+  }
+
+  .btn-sm.btn-icon {
+    min-height: var(--cds-size-md);
+    min-width: var(--cds-size-md);
+  }
+}

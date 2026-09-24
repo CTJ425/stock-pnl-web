@@ -1,0 +1,140 @@
+
+/* ── Mini trend line (0.6.19)────────────────────────────────────*/
+
+/*
+ * The height is hardcoded to 30px: the viewBox is 100×28, `preserveAspectRatio="none"`,
+ * So it will be stretched to fill, and the line width is maintained unchanged by SVG's vector-effect.
+ * Starting from 0.6.34, the total economic index card will no longer use it (changed to "Continuous N Periods" chip).
+ * The current user is the trend column of the Taiwan stock legal person table - where the fixed width and height are specified in inline style.
+ */
+.mac-spark {
+  display: block;
+  width: 100%;
+  height: 30px;
+  margin-top: 12px;
+}
+
+/* ── General economic indicators: chips slimmed down into a row and small characters in the table column (0.6.35)────────*/
+
+/*
+ * 0.6.35 Press five KPI cards into a row. Use flex-wrap instead of grid:
+ * The five chips have different widths ("Consumer Confidence 49.5" is longer than "Core CPI +2.57%"),
+ * An equal-width grid will leave large gaps to the right of the shorter ones.
+ */
+.mac-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.mac-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-strong);
+  white-space: nowrap;
+}
+
+.mac-chip-label {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+/* Use equal-width numbers for values: When five chips are placed side by side, the proportional numbers will cause the decimal points to be misaligned.*/
+.mac-chip-value {
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The indicator name is on the same line as the "N periods behind" badge*/
+.mac-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Indicator description (originally at the bottom of the card). After the word cards were slimmed down, they were hung in columns and can still be seen.*/
+.mac-row-note {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+/* Period and "as of this period": they are notes and do not conflict with the main figures.*/
+.mac-row-period {
+  font-size: var(--type-label-01);
+  color: var(--ink-muted);
+  font-weight: 400;
+  margin-top: 2px;
+}
+/* ---------- 國際指數 (task 162) ---------- */
+.gix-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.gix-group-head {
+  margin-top: 0;
+}
+
+/* `.rpt-card` is `flex: 1 1 140px`, so a group holding one index (日本) stretched the card
+ * across the whole row while the 5-card US group sat at ~270px. Cap the basis here only —
+ * changing `.rpt-card` itself would move every other report card on the site. */
+.gix-groups .rpt-card {
+  flex: 1 1 160px;
+  max-width: 320px;
+}
+
+/* No color here (unlike .mac-row-note/.mac-row-period): pnlClass supplies it. */
+.gix-change {
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+button.rpt-card {
+  text-align: left;
+  background: var(--cds-layer-02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+              border-color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+button.rpt-card:hover {
+  background: var(--cds-layer-hover-01);
+  border-color: var(--border-strong);
+}
+
+.gix-hours {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+.gix-stamp {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+.index-session-hours {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  margin: 8px 0 12px;
+}
+
+.index-detail {
+  padding: 18px 20px;
+}

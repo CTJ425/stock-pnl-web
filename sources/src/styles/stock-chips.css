@@ -1,0 +1,124 @@
+
+/* ── Institutional matrix: 單位 × 日期 (0.7.6) ──────────────────────
+ *
+ * Shared by 總體經濟 → 台股市場 (whole market, 億元) and 個股 → 籌碼 (one stock, 張).
+ * Same layout answering the same question at two scopes, so it must not be styled twice.
+ */
+
+/*
+ * The metric switch (買賣超／買進／賣出). Reuses .btn.btn-sm and only adds the pressed state ——
+ * the card already has .btn buttons and a second button shape here would read as a second kind of control.
+ */
+.inst-metric-seg {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.inst-metric-seg .btn[aria-pressed='true'] {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+/*
+ * Seven day columns plus 單位／累計／走勢 overflow a phone, so the unit name is frozen: scrolled sideways,
+ * a row of numbers with no name attached is unreadable. .data-table already scrolls inside .table-scroll.
+ * The background must be opaque — the card behind is glass, and a translucent cell would let the scrolled
+ * numbers show through the frozen column.
+ */
+.inst-matrix th:first-child,
+.inst-matrix td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  /* sticky 欄底下會有內容捲過，必須不透明。分別對齊表頭與資料列：
+     資料列走 --surface（Carbon $layer-01），表頭走 --thead-solid（Carbon $layer-accent-01）。 */
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+/* 同特異度，必須排在合併規則之後才生效：首欄的表頭格跟表頭走，不跟資料列走。 */
+.inst-matrix th:first-child {
+  background: var(--thead-solid);
+}
+
+.inst-matrix thead th:first-child {
+  z-index: 2;
+}
+
+/* The 7-day sum is a different question from the seven days it sums; a rule separates it from them. */
+.inst-matrix .inst-matrix-cum {
+  border-left: 1px solid var(--border-strong);
+  font-weight: 600;
+}
+
+.inst-matrix tfoot td {
+  border-top: 1px solid var(--border-strong);
+  font-weight: 650;
+  background: color-mix(in srgb, var(--cds-text-on-color) 3.5%, transparent);
+  vertical-align: top;
+}
+
+.inst-matrix .tfoot-cum-trend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.inst-matrix .col-total {
+  border-left: 1px solid var(--border-strong);
+  font-weight: 650;
+}
+
+/* 三大法人合計 cross-check marker (Task 166 FU-04): only ever rendered when the total actually
+   disagrees with the sum of its four legs, so it stays invisible on the common, consistent case. */
+.chip-total-mismatch {
+  color: var(--cds-support-warning);
+  vertical-align: -1px;
+  margin-left: 3px;
+}
+
+.inst-matrix .row-total td {
+  border-top: 1px solid var(--border-strong);
+  font-weight: 650;
+}
+
+/* The row spark sits in a cell, not a card: kill the standalone margin/width of .mac-spark. */
+.inst-matrix .mac-spark {
+  margin-top: 0;
+}
+
+.inst-matrix .trend-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inst-matrix .trend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.inst-matrix .trend-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.inst-matrix .trend-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inst-matrix .trend-label {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
