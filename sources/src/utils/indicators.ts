@@ -1,7 +1,7 @@
 /**
  * Technical indicators: pure function, no DOM dependencies, easy for unit testing.
  *
- * Why do the math yourself instead of throwing it to something else: The AI ​​assistant in 0.6.0 will eat the output here.
+ * Why do the math yourself instead of throwing it to something else: The AI assistant in 0.6.0 will eat the output here.
  * The language model's mental calculation of MA60 or KD from the 244 original closing prices must be wrong, and the wrong number package is the hardest to detect in fluent Chinese.
  * The indicators are all calculated by the program, and the model is only responsible for interpretation - so the accuracy of this file is the foundation of the entire function.
  *
@@ -107,7 +107,7 @@ export interface KdResult {
  * KD stochastic indicator (usually 9,3,3 for Taiwan stocks).
  *
  * RSV = (Close − n-day low) / (n-day high − n-day low) × 100
- * K = K × 2/3 + RSV × 1/3 of the previous day; D = D × 2/3 + K × 1/3 of the previous day, and the initial values ​​of K/D are both 50.
+ * K = K × 2/3 + RSV × 1/3 of the previous day; D = D × 2/3 + K × 1/3 of the previous day, and the initial values of K/D are both 50.
  *
  * n When the highest value in a day is equal to the lowest value (there is no fluctuation in the entire period, such as continuous lower limit lock-up), RSV takes 50 -
  * A denominator of zero cannot be treated as 0 or 100, which will create an oversold/overbought signal out of thin air.

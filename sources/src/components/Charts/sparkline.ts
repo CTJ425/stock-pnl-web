@@ -22,9 +22,9 @@ export interface SparklineGeometry {
 }
 
 /**
- * Convert a set of values ​​into the coordinates of a mini trend line.
+ * Convert a set of values into the coordinates of a mini trend line.
  *
- * `null` (the issue has not yet been released) **skip without drawing**, but still occupies an x ​​position ——
+ * `null` (the issue has not yet been released) **skip without drawing**, but still occupies an x position ——
  * Compressing it will distort the timeline, and drawing it as 0 is just making up a number out of thin air.
  *
  * If there are less than two valid values, null is returned (one point cannot be connected), and the caller does not render accordingly.

@@ -35,7 +35,7 @@
  *     → { rows: [{ symbol, name, close }], tpexFallbackAgeDays?: number } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
  *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup.
  *       tpexFallbackAgeDays (EP-05) is present only when the TPEx leg used the static
- *       tpexFallback.ts snapshot instead of the live endpoint; it is that snapshot's age in
+ *       tpexFallback.json snapshot instead of the live endpoint; it is that snapshot's age in
  *       days as of this response, and gets one extra `logEvent` warning when it exceeds 90.)
  *   POST { action: 'intraday', symbol: { market: 'TPE'|'US'|'IDX', ticker: string }, range?: '1d'|'5d' }
  *     → { series: IntradaySeries | null } (Yahoo chart v8 intraday bars; range defaults to '1d'.
@@ -264,7 +264,7 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
   return resolved
 }
 
-/** The DB cache field returns the value of Quote; NULL / bad values ​​​​are returned to null */
+/** The DB cache field returns the value of Quote; NULL / bad values are returned to null */
 function cachedNum(value: unknown, allowZero = false): number | null {
   if (value === null || value === undefined) return null
   const n = Number(value)

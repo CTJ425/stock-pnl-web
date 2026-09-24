@@ -94,7 +94,7 @@ function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
       d = cashFlow(a) - cashFlow(b)
       break
   }
-  // If the values ​​are the same, fall back to the engine order, descending.
+  // If the values are the same, fall back to the engine order, descending.
   return d || -compareTxOrder(a, b)
 }
 

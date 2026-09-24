@@ -727,7 +727,7 @@ h3.market-table-title {
   border-left: 1px solid var(--border);
 }
 
-/* ---------- Profit and loss color (red rises, green falls; values ​​are always signed, not just color) ----------*/
+/* ---------- Profit and loss color (red rises, green falls; values are always signed, not just color) ----------*/
 .pnl-up {
   color: var(--up);
 }

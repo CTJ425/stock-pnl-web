@@ -29,7 +29,7 @@ export const FX_SCHEMA = 1
  * exchange rate for one day. Tuple is to reduce Storage volume (the reason for using twDaily.DailyRow:
  * The object array is approximately 3 times the size of the tuple). 8 currencies × 260 days, the object writing method will approach 150KB.
  *
- * `rate` is always "**How ​​many Taiwan dollars can be exchanged for 1 unit of foreign currency**". Reverse (how much foreign currency is exchanged for 1 Taiwan dollar) is the reciprocal from the front end,
+ * `rate` is always "**How many Taiwan dollars can be exchanged for 1 unit of foreign currency**". Reverse (how much foreign currency is exchanged for 1 Taiwan dollar) is the reciprocal from the front end,
  * Don’t save another copy – two copies will keep the clock running.
  */
 export type FxPoint = [date: string, rate: number]

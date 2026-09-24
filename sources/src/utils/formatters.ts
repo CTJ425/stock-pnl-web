@@ -14,7 +14,7 @@ function withThousands(value: number, decimals: number): string {
   })
 }
 
-/** Amount (TWD defaults to an integer, USD defaults to two decimal places), negative values ​​are displayed as -NT$1,234*/
+/** Amount (TWD defaults to an integer, USD defaults to two decimal places), negative values are displayed as -NT$1,234*/
 export function fmtMoney(
   value: number | null | undefined,
   currency: Currency,
@@ -51,7 +51,7 @@ export function fmtPercent(value: number | null | undefined): string {
   return `${pct.toFixed(2)}%`
 }
 
-/** Profit and loss amount: Positive values ​​are marked with a + sign (increases and decreases are not identified solely by color)*/
+/** Profit and loss amount: Positive values are marked with a + sign (increases and decreases are not identified solely by color)*/
 export function fmtSignedMoney(
   value: number | null | undefined,
   currency: Currency,

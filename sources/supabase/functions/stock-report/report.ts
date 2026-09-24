@@ -12,7 +12,7 @@ import type { ChipLeg, InstitutionalChip, MarginChip, BorrowChip } from './twChi
 /** Report structure version*/
 export const REPORT_SCHEMA = 3
 
-/** The shareholding context brought in by the front-end (all values ​​have been calculated by the front-end, Worker does not recalculate)*/
+/** The shareholding context brought in by the front-end (all values have been calculated by the front-end, Worker does not recalculate)*/
 export interface HoldingContext {
   qty: number
   avgCost: number

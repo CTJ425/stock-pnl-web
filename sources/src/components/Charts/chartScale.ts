@@ -82,7 +82,7 @@ export function tickStep(domain: Domain, count = 4): number {
   return span > 0 ? niceStep(span / count) : 0
 }
 
-/** Scale values ​​within the range (from small to large, including endpoints)*/
+/** Scale values within the range (from small to large, including endpoints)*/
 export function domainTicks(domain: Domain, count = 4): number[] {
   const step = tickStep(domain, count)
   if (step === 0) return [domain.min]
@@ -107,7 +107,7 @@ export function scaleY(value: number, domain: Domain, height: number): number {
  * When the step (scale interval) is passed in, the decimal places will be determined according to the step interval - otherwise, it will be like financing balance 31,100~31,928
  * For a sequence whose level interval is much smaller than the unit, the adjacent scales will all be marked as "31,000" and it will be impossible to distinguish between high and low.
  *
- * **Values ​​less than 1 also rely on step to determine the decimal place** (0.6.7 revision): Originally, it was always `Math.round`,
+ * **Values less than 1 also rely on step to determine the decimal place** (0.6.7 revision): Originally, it was always `Math.round`,
  * There is no problem with the balance, stock price, and trading volume (all ≥ 1), but the exchange rate of yen is 0.1957~0.2015,
  * The Korean won is 0.022 - the entire Y-axis will be marked with a row of "0", as is the case on the actual measurement screen.
  */

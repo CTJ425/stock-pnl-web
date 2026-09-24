@@ -384,7 +384,7 @@ export function meetingRatePoints(
  * - `momThousands`: The difference from the previous issue (FRED’s PAYEMS was originally thousands).
  * - `index` / `rate`: The original value is copied (`rate` points should already be collapsed steps).
  *
- * Missing values ​​are always represented by null, and are not pretended to be 0 - "This month is 0" and "There is no data for this month"
+ * Missing values are always represented by null, and are not pretended to be 0 - "This month is 0" and "There is no data for this month"
  * Inflation and employment data are two very different things.
  */
 export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): MacroIndicator {

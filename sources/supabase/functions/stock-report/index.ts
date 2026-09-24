@@ -1381,7 +1381,7 @@ async function syncFundamental(
   const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
   const company = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP03_L', T187AP03_URL)
   // Profitability (0.6.5). The same is the whole-market large stall, go for chip_raw_cache,
-  // So out of 32 rounds a day, only the first round is really going to be caught. The data is updated quarterly, and the values ​​extracted in most rounds are the same as yesterday.
+  // So out of 32 rounds a day, only the first round is really going to be caught. The data is updated quarterly, and the values extracted in most rounds are the same as yesterday.
   const profit = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP17_L', T187AP17_URL)
   // The valuation file comes with the date of the Republic of China (for example: '1150724'). Enter batch_run_log to answer the question
   // "When will the fundamentals be updated?" - Originally, only the synced count was recorded, and that number would be interfered with by "new stocks".
@@ -1545,7 +1545,7 @@ async function backfillRevenue(
       if (row) incoming.push(row)
     }
 
-    // fillGapsOnly: Existing values ​​are retained. t187ap05_L caught the corrected number,
+    // fillGapsOnly: Existing values are retained. t187ap05_L caught the corrected number,
     // Cannot be overwritten by an older MOPS crawl (see description of mergeRevenueMonths).
     const merged = mergeRevenueMonths(file.revenueMonths, incoming, { fillGapsOnly: true })
     // ⚠️ Compare the monthly list instead of the length: when adding a new month to a file that already has 12 transactions, cap will cut off the oldest one.
@@ -1675,7 +1675,7 @@ async function backfillProfit(
       if (row) incoming.push(row)
     }
 
-    // fillGapsOnly: Existing values ​​are retained. t187ap17_L is the officially calculated ratio.
+    // fillGapsOnly: Existing values are retained. t187ap17_L is the officially calculated ratio.
     // It cannot be overwritten by our own calculated version (the two have the same answer, but the official one is accurate)
     const merged = mergeProfitQuarters(file.profitQuarters, incoming, { fillGapsOnly: true })
     /*
@@ -1920,7 +1920,7 @@ async function syncForeignTop(
 // ----U.S. General Economic Indicator (0.6.5)----
 
 /**
- * Output `macro/us.json`: the latest values ​​of the five FRED series and the trends in the past 12 periods.
+ * Output `macro/us.json`: the latest values of the five FRED series and the trends in the past 12 periods.
  *
  * **This is the first non-individual stock data of this project**, several deliberate decisions:
  *
@@ -2287,7 +2287,7 @@ async function warmDataYmd(): Promise<string> {
  * Instant production of a single symbol: supplement the daily line and fundamentals (0.6.0-dev.7).
  *
  * Why it is needed: Newly added stocks have to wait for the next night batch to have daily lines and fundamentals.
- * Before that, the technical and fundamental pages are empty, and the AI ​​analysis will even fail because it cannot get the daily line.
+ * Before that, the technical and fundamental pages are empty, and the AI analysis will even fail because it cannot get the daily line.
  *
  * Why it’s safe (lessons from burning credits in 0.3.9):
  * 1. `assertUser` + `heldTwTickers()` whitelist (0.7.0) + `WARM_DAILY_LIMIT`. This is the only

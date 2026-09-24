@@ -137,7 +137,7 @@ export function labelIndicesFor(n: number, want = 6): number[] {
 /**
  * Whether the data has expired.
  *
- * Why is this judgment necessary: ​​the old files on Storage look exactly the same as the new files on the screen?
+ * Why is this judgment necessary: the old files on Storage look exactly the same as the new files on the screen?
  * The numbers on this page will be used to make money decisions. The lesson learned in 0.6.4-dev.5 is exactly this
  * "The data displayed is wrong and cannot be seen by the user" (see description of services/reportsBucket.ts).
  *
