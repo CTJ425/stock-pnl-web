@@ -2870,8 +2870,10 @@ a.hmenu-item {
     font-size: var(--type-heading-03);
   }
 
-  /* The header row is tight on narrow screens: 新增交易 collapses to an icon-only square. */
+  /* The header row is tight on narrow screens: 新增交易 collapses to an icon-only square, and
+     moves after the workspace menu (order) so it does not read as part of the brand mark. */
   .header-add {
+    order: 1;
     margin-left: 0;
     width: var(--cds-size-sm);
     padding: 0;
@@ -2880,6 +2882,10 @@ a.hmenu-item {
 
   .header-add-label {
     display: none;
+  }
+
+  .app-header-inner > .header-meta {
+    order: 2;
   }
 
   /* Touch target: 32px is below the 44px guideline, raise small buttons on touch-sized screens. */
