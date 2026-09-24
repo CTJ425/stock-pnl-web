@@ -21,21 +21,6 @@
 
 ## 📋 Active Tasks
 
-### Task 168: Codebase health-check follow-ups A–H (user, 2026-09-24)
-- **Status**: 🔄 IN PROGRESS
-- **Agent**: Claude
-- **Timestamp**: 2026-09-24 23:55:00 Asia/Taipei
-- **Decisions (user, 2026-09-24)**: do all of A–H from the health-check report, fix anything else found on the way, all operations authorized.
-1. ~~A hash routing (`components/viewRoute.ts`; admin state `boolean | null`)~~ ✅ a28e3f0
-2. ~~B lazy pages (analysis, yearly, transactions, recalc modal); TransactionForm kept eager~~ ✅ a28e3f0 — entry chunk 156 → 112 KB gzip (the a28e3f0 message says 107: measured while TransactionForm was still lazy)
-3. ~~C split AppShell (PasswordModals, UserMenu, WorkspaceControls)~~ ✅ a28e3f0 · ~~split `stock-report/index.ts` + `ACTION_ROUTES` table~~ ✅ e522876 · ~~DEV deploy v30 `08606770fa09`, gate smoke tests, `source-probe` 200 after deploy~~ ✅
-4. ~~D split `index.css` into `src/styles/` (13 files)~~ ✅ 6eb4f0b
-5. ~~E TPEx fallback → JSON + `refresh:tpex-fallback`~~ ✅ 031b6fe · ~~DEV `stock-price` v22 `9677c6a337ee`, twlist 200~~ ✅
-6. ~~F vitest `pool: 'threads'`~~ ✅ fa5f4ad (`isolate: false` rejected: 252 failures)
-7. ~~G deps: TS 7, vitest 5, jsdom 30, minor/patch; e2e Node 22 → 24~~ ✅ 9caa2f1
-8. ~~H lint to 0~~ ✅ 11b9662, fe5eb5c
-9. ~~0.9.69-dev.1 on `dev`~~ ✅ 1b35efc · ~~browser check (local mode) + e2e workflow browser install~~ ✅ · ~~release 0.9.69 to `main`~~ ✅ 87050f7 (user OK 2026-09-24; CI + Release 0.9.69 success, Pages live, `main:dev` synced) · PROD deploy of `stock-report` and `stock-price` —— ⏳ needs user OK (not deploying leaves PROD on the pre-refactor bundles, which behave the same)
-
 ### Task 167: Remove AI, move 新增交易 to the header, Discord 券商 figure (user, 2026-09-24)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
