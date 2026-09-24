@@ -626,8 +626,8 @@ async function captureCaseScreenshot(page, testCase) {
       if (await closeBtn.isVisible().catch(() => false)) await closeBtn.click()
       await existingOverlay.waitFor({ state: 'detached', timeout: 2000 }).catch(() => {})
     }
-    const fab = page.locator('button.fab')
-    await fab.click()
+    // 0.9.68: 新增交易 lives in the header (.header-add), not a floating button.
+    await page.locator('button.header-add').click()
     await page.waitForSelector('.modal-head, .modal', { state: 'visible', timeout: 5000 })
   }
 
