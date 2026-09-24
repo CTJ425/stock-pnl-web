@@ -8,9 +8,9 @@ description: The version number determination rule of stock-pnl-web. Use it when
 Prerequisite (stated in `CLAUDE.md` § Versioning): the version number does not have the `v` prefix.
 Keep these synchronized:
 
-- `sources/src/version.ts` → `APP_VERSION` (UI badge)
+- `sources/src/version.ts` → `APP_VERSION` (shown after the footer disclaimer)
 - `sources/package.json` → `version` (with `package-lock.json`)
-- `README.md` → version badge line only
+- `README.md` → the `目前版本` line only
 - `docs/agent/CHANGELOG.md` → version history
 
 **`dev` and `main` must never disagree on the version string after a sync.** After every release merge, fast-forward so both tips carry the **same** finalized `x.x.x`.
@@ -57,8 +57,8 @@ Examples: target `0.6.48` → first change `0.6.48-dev.1`, second `0.6.48-dev.2`
 3. Finalize `docs/agent/CHANGELOG.md` under that official heading.
 4. Merge to `main`, push.
 5. **Sync branches**: `git push origin main:dev` (or merge main→dev) so **dev and main show the same `0.6.48`**.
-6. **Publish a GitHub Release** for the tag, using that version's `CHANGELOG.md` section as the body
-   (see § GitHub Releases below).
+6. The `main` push runs `release.yml`, which creates the Release from that version's `CHANGELOG.md`
+   section (see § GitHub Releases below). Confirm with `gh release view <x.y.z>`.
 7. Next feature on `dev`: first versioned change → **`0.6.49-dev.1`**.
 
 ---

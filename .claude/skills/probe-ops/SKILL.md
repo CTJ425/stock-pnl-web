@@ -45,16 +45,12 @@ ORDER BY taipei_time DESC, source;
 SELECT count(*) FROM source_probe_tick WHERE source = '<id>';
 ```
 
-Run them against DEV with `supabase db query --linked`, from `sources/`.
-
-**Corrected 2026-09-01.** This section used to say `docker exec stock-pnl-web-dev-db-1 psql …`
-and to avoid `db query --linked`. That is wrong now: DEV is the cloud project
-`zyebvayngwrqzoaicbwd` (`sources/.env`'s `VITE_SUPABASE_URL`), and the docker container is an
-unrelated local stack that answers every probe query plausibly while telling you nothing about
-DEV. The `--linked` cwd trap is real — it resolves against the current working directory and has
-silently written to PROD before (see `supabase-ops`) — so defend against it the way `supabase-ops`
-prescribes: `cd sources/` first, and put an identity value in the same query, e.g.
-`SELECT (SELECT count(*) FROM cron.job) AS identity_6, …` (6 on DEV).
+Run them against DEV with `supabase db query --linked`, from `sources/`. DEV is the cloud project
+`zyebvayngwrqzoaicbwd`; the local docker container `stock-pnl-web-dev-db-1` is an unrelated stack
+that answers every probe query plausibly while telling you nothing about DEV. `--linked` resolves
+against the current working directory and has silently written to PROD before, so `cd sources/`
+first and put the identity predicate from `supabase-ops` in the same query:
+`SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%') AS is_dev, …`.
 
 ## A source that never fires: check both halves of the dispatch path
 

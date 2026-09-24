@@ -56,7 +56,7 @@ CAUTION: Do not read a whole hot file yet. A full read costs context on every la
 the session. Read headings first, then read only the entries you plan to move.
 
 ```bash
-cd /root/dev/stock-pnl-web
+cd "$(git rev-parse --show-toplevel)"
 grep -n '^## 📅 Log:' docs/agent/PROGRESS.md
 grep -n '^### Task\|^- \*\*Status\*\*:' docs/agent/TASK.md
 grep -n '^### ' docs/agent/BUG_FIX.md
@@ -106,7 +106,7 @@ Move every block. Delete nothing.
 Run the lossless test. Do not assume the result.
 
 ```bash
-cd /root/dev/stock-pnl-web
+cd "$(git rev-parse --show-toplevel)"
 wc -c docs/agent/PROGRESS.md docs/agent/TASK.md docs/agent/BUG_FIX.md
 wc -c docs/agent/PROGRESS_ARCHIVE.md docs/agent/TASK_ARCHIVE.md docs/agent/FIXED_BUG.md
 ```

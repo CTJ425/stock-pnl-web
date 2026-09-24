@@ -22,7 +22,7 @@ Persist important state here so the next agent does not need chat history.
 
 Also: `docs/UnitTests/` (testing SoT), `docs/architecture/`.
 
-**Agent-written docs are English** (see global rule 1).
+**Agent-written docs are English** (the global Language rule).
 
 Rolling rules (size caps, archive destinations), entry shapes, and the sub-item
 completion test: **`bookkeeping`** skill. Load it before you update `docs/agent/`.
@@ -40,7 +40,6 @@ Then inspect code you will touch. Do not assume chat has full state.
 ## Work style
 
 - After work: update `TASK.md` / `PROGRESS.md` (and bugs if needed). Significant records: `YYYY-MM-DD HH:mm:ss Asia/Taipei`.
-- Skills (load when relevant): `testing`, `verify`, `versioning`, `supabase-ops`, `ship`.
 
 ## Command rules
 
