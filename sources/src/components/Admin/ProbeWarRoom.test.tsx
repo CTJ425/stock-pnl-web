@@ -72,7 +72,18 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     expect(screen.getByText(/收工 1 源・探測中 2 源・待機中 5 源/)).toBeTruthy()
   })
 
+  // The empty-card label reads the wall clock (AD-10), so pin it: this used to fail every night
+  // after 22:30 Taipei, when the 融資融券 window had closed and the label changed.
+  function atTaipei(hhmm: string) {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(`2026-08-14T${hhmm}:00+08:00`))
+  }
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('正確計算已退休、探測中與待機狀態', () => {
+    atTaipei('17:30')
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
 
     // BFI82U reaches 3 hits -> 已退休
@@ -94,6 +105,19 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     expect(marginCard.textContent).toContain('⏳ 待機中')
     expect(marginCard.textContent).toContain('0/ 3 次命中')
     expect(marginCard.textContent).toContain('尚未進入時窗 (今日未命中)')
+  })
+
+  it('空卡片依融資融券時窗（20:30–22:30）區分三種狀態', () => {
+    for (const [hhmm, label] of [
+      ['17:30', '尚未進入時窗 (今日未命中)'],
+      ['21:00', '時窗內尚未命中'],
+      ['23:45', '今日已結束，未命中'],
+    ] as const) {
+      atTaipei(hhmm)
+      render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
+      expect(screen.getByTestId('pwr-card-margin').textContent).toContain(label)
+      cleanup()
+    }
   })
 
   /*
