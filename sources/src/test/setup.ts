@@ -4,6 +4,7 @@
  * (requires --localstorage-file to be available); in order for the test not to rely on the Node flag,
  * Change to a memory implementation when localStorage is missing.
  */
+import { beforeEach } from 'vitest'
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>()
@@ -37,4 +38,12 @@ if (typeof window !== 'undefined' && !window.localStorage) {
   const storage = new MemoryStorage()
   Object.defineProperty(window, 'localStorage', { value: storage, configurable: true })
   Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true })
+}
+
+// The shell keeps its page in the URL hash (components/viewRoute.ts), and jsdom keeps one URL per
+// test file — without this, a test that navigated would start the next test on that page.
+if (typeof window !== 'undefined') {
+  beforeEach(() => {
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  })
 }
