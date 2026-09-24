@@ -28,7 +28,7 @@ Never run npm from repo root. Never import `supabase/functions/*/index.ts` in Vi
 
 ## E2E / verify
 
-- Native mode: `npm run dev`, no Supabase env → 「本機模式」.
+- Native mode: `VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev` → 「本機模式」 (`.env` sets both, see **`verify`**).
 - Admin layout script: `sources/scripts/verify-admin-status.cjs` (pass `REF` + `SESSION`).
 - No secrets in git. No PROD write from automation.
 

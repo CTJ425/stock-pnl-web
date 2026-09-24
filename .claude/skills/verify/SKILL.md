@@ -10,8 +10,11 @@ Strategy SoT: `docs/UnitTests/E2E.md`. Layer choice: **`testing`** skill.
 ## Start
 
 ```bash
-cd sources && npm run dev   # http://localhost:5173 — local mode if Supabase env unset
+cd sources && VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev   # http://localhost:5173
 ```
+
+`sources/.env` sets both variables, so a plain `npm run dev` opens the login page, not 「本機模式」.
+Blanking them on the command line gives local mode without touching `.env`.
 
 ## Playwright
 
@@ -19,6 +22,7 @@ cd sources && npm run dev   # http://localhost:5173 — local mode if Supabase e
 
 ```bash
 cd sources && npx playwright install chromium
+sudo env "PATH=$PATH" npx playwright install-deps chromium   # system libs (e.g. libatk); nvm is not on root's PATH
 ```
 
 Prefer **`src/App.smoke.test.tsx`** (jsdom) for copy/DOM structure — more durable than one-off browser scripts. Use Playwright for layout, overflow, downloads, multi-viewport.

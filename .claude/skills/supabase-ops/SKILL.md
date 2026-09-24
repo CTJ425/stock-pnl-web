@@ -64,7 +64,7 @@ The subsequent validation query is also in the same (wrong) database, so it chec
 Pick a value that must be different between the two areas, for example:
 
 ```sql
-SELECT (SELECT count(*) FROM batch_run_log) AS identity check, -- official area 2 / test area 0
+SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%') AS is_dev, -- see § DEV and PROD identity
        jobid, schedule, (regexp_match(command, 'url\s*:=\s*''([^'']*)'''))[1] AS url
 FROM cron.job;
 ```
