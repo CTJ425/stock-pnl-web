@@ -26,10 +26,11 @@ diff <downloaded file> sources/supabase/functions/<slug>/<file>
 I have encountered that the one with a newer version number is the old code (the test area `stock-price` v2 is 137 lines behind,
 `misParse.ts` is not deployed at all).
 
-**But `functions download` cannot authenticate in this environment** —— it returns
-`Access token not provided. Supply an access token by running supabase login or setting SUPABASE_ACCESS_TOKEN`,
-while `projects list` / `functions list` / `functions deploy` all work fine: they take a different auth path.
-Observed 2026-08-05 on both `--project-ref` values. Do not read this as "the audit was done".
+**`functions download` needs `SUPABASE_ACCESS_TOKEN` in the environment** (load it with `sbuse stock`,
+see the global CLAUDE.md § This machine). Without it the command answers
+`Access token not provided …` while `functions list` / `deploy` still work, because they take a
+different auth path — an audit that stopped there was not done. Run it from a scratch directory: it
+writes `supabase/functions/<slug>/` under the cwd and warns that Docker is not running, which is harmless.
 
 **Fallback audit: compare `ezbr_sha256` from `functions list`.** It is the hash of the deployed bundle, so:
 
