@@ -77,7 +77,7 @@ async function captureCaseScreenshot(page, testCase) {
   try {
     const buf = await page.screenshot({ fullPage: false })
     testCase.screenshot = `data:image/png;base64,${buf.toString('base64')}`
-  } catch (e) {
+  } catch {
     // Ignore screenshot errors
   }
 }
@@ -737,7 +737,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -781,7 +781,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -822,7 +822,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -866,7 +866,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -906,7 +906,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -942,7 +942,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1003,7 +1003,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1039,7 +1039,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1104,7 +1104,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1158,7 +1158,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1210,7 +1210,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1292,7 +1292,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1343,7 +1343,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1377,7 +1377,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1400,7 +1400,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++
@@ -1423,7 +1423,7 @@ async function captureCaseScreenshot(page, testCase) {
       await captureCaseScreenshot(page, tc)
       tc.status = 'PASS'
       results.summary.passed++
-    } catch (e) {
+    } catch {
       await captureCaseScreenshot(page, tc)
       tc.status = 'FAIL'
       results.summary.failed++

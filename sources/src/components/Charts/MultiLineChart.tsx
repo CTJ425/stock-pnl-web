@@ -26,9 +26,10 @@ export interface LineSeries {
  * called inside the render-prop callback below would do exactly that).
  */
 function MultiLinePaths({ series, geo }: { series: LineSeries[]; geo: PlotGeometry }) {
+  const { bandCenter, y } = geo
   const paths = useMemo(
-    () => series.map((s) => ({ name: s.name, color: s.color, segs: lineSegments(s.values, geo) })),
-    [series, geo.bandCenter, geo.y],
+    () => series.map((s) => ({ name: s.name, color: s.color, segs: lineSegments(s.values, { bandCenter, y }) })),
+    [series, bandCenter, y],
   )
   return (
     <>

@@ -6,6 +6,9 @@
  */
 import type { PlotGeometry } from './chartFrame'
 
+/** The only geometry the path builders read — lets memoised callers depend on these two stable closures instead of the per-render `geo`. */
+export type PathGeometry = Pick<PlotGeometry, 'bandCenter' | 'y'>
+
 /**
  * Cut the value sequence into continuous value segments, each segment is a `[x, y]` coordinate array.
  *
@@ -14,7 +17,7 @@ import type { PlotGeometry } from './chartFrame'
  * In particular, area filling cannot be divided into segments by itself: as long as the breakpoint of the filling and the line is different by one grid,
  * A color block without lines will appear on the screen, and it will be difficult to see which side is wrong.
  */
-function segments(values: Array<number | null>, geo: PlotGeometry): Array<Array<[number, number]>> {
+function segments(values: Array<number | null>, geo: PathGeometry): Array<Array<[number, number]>> {
   const out: Array<Array<[number, number]>> = []
   let current: Array<[number, number]> = []
   values.forEach((v, i) => {
@@ -40,7 +43,7 @@ const pt = ([x, y]: [number, number]) => `${x.toFixed(2)},${y.toFixed(2)}`
  * can draw these as a small dot so a lone data point (e.g. the first minute of a session)
  * still shows up as a visible mark.
  */
-export function soloPoints(values: Array<number | null>, geo: PlotGeometry): Array<[number, number]> {
+export function soloPoints(values: Array<number | null>, geo: PathGeometry): Array<[number, number]> {
   const out: Array<[number, number]> = []
   values.forEach((v, i) => {
     if (v === null || v === undefined) return
@@ -57,7 +60,7 @@ export function soloPoints(values: Array<number | null>, geo: PlotGeometry): Arr
  * A string of points that cuts a continuous value segment into multiple polylines (breaks when null is encountered and does not interpolate).
  * The line chart, the moving average overlay chart, and the KD chart are shared in three places - writing one for each will inevitably lead to a delay in "should the missing information be connected?"
  */
-export function lineSegments(values: Array<number | null>, geo: PlotGeometry): string[] {
+export function lineSegments(values: Array<number | null>, geo: PathGeometry): string[] {
   return segments(values, geo).map((seg) => seg.map(pt).join(' '))
 }
 
@@ -68,7 +71,7 @@ export function lineSegments(values: Array<number | null>, geo: PlotGeometry): s
  * (The exchange rate is 0.195~0.202, and the financing balance is often tens of thousands. Starting from 0 will suppress the changes into a straight line),
  * `geo.y(0)` will fall far outside the plot area.
  */
-export function areaSegments(values: Array<number | null>, geo: PlotGeometry): string[] {
+export function areaSegments(values: Array<number | null>, geo: PathGeometry & Pick<PlotGeometry, 'innerH'>): string[] {
   return segments(values, geo).map((seg) => {
     const first = seg[0]
     const last = seg[seg.length - 1]

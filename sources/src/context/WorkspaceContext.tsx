@@ -297,6 +297,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
 
+// eslint-disable-next-line react/only-export-components -- provider + hook share one private context by design
 export function useWorkspace(): WorkspaceState {
   const ctx = useContext(WorkspaceContext)
   if (!ctx) throw new Error('useWorkspace 必須在 WorkspaceProvider 內使用')

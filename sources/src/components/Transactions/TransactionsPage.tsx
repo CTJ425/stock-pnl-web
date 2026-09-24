@@ -6,14 +6,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Calculator, Download, MoreHorizontal, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
-import type { NewTransaction, Transaction, TxNature } from '../../types/models'
-import { MARKET_LABEL, TX_NATURE_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
+import type { NewTransaction, Transaction } from '../../types/models'
+import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
 import { displayStockName } from '../../services/usStockNames'
 import { transactionsToCsv } from '../../utils/csv'
 import { compareTxOrder } from '../../utils/pnlEngine'
 import { fmtPrice, fmtQty, fmtSignedMoney } from '../../utils/formatters'
-import type { SortState } from '../Common/SortableTh'
-import { SortableTh, nextSort } from '../Common/SortableTh'
+import { SortableTh } from '../Common/SortableTh'
+import { nextSort, type SortState } from '../Common/sortState'
 import { Modal } from '../Common/Modal'
 import { useToast } from '../Common/Toast'
 import { useConfirm } from '../Common/useConfirm'
@@ -22,6 +22,7 @@ import { RecalcFeesModal } from './RecalcFeesModal'
 import { StockSplitModal } from './StockSplitModal'
 import { TransactionForm } from './TransactionForm'
 import { filterTransactions } from './txSearch'
+import { txChipClass, txChipLabel } from './txChip'
 
 /**
  * STOCK_DIVIDEND is a zero-price BUY (engine: `pnlEngine.ts`), so it shares the BUY outflow
@@ -33,32 +34,6 @@ function cashFlow(tx: Transaction): number {
   return tx.tx_type === 'BUY' || tx.tx_type === 'STOCK_DIVIDEND'
     ? -(gross + tx.fee_tax)
     : gross - tx.fee_tax
-}
-
-/** Chip colour for the 類型 cell (Task 142 C4): direction/nature hues only, never the price up/down ones. */
-export function txChipClass(nature?: TxNature | null): string {
-  switch (nature) {
-    case 'DAY_TRADE':
-      return 'tx-chip-day'
-    case 'MARGIN':
-      return 'tx-chip-margin'
-    case 'SHORT':
-      return 'tx-chip-short'
-    default:
-      return 'tx-chip-spot'
-  }
-}
-
-/**
- * `tx_nature` is optional and nullable; absent means *unknown*, not 現股 (models.ts). When it is
- * null the chip falls back to the plain BUY/SELL label instead of claiming a nature it does not know.
- * DIVIDEND/STOCK_DIVIDEND rows always write a null nature (TransactionForm), but a `${nature}買/賣`
- * label only makes sense for an actual buy or sell — a dividend row falls back to its own
- * TX_TYPE_LABEL even if a nature value somehow made it through CSV import.
- */
-export function txChipLabel(tx: Transaction): string {
-  if (!tx.tx_nature || (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL')) return TX_TYPE_LABEL[tx.tx_type]
-  return `${TX_NATURE_LABEL[tx.tx_nature]}${tx.tx_type === 'BUY' ? '買' : '賣'}`
 }
 
 type TxSortKey =

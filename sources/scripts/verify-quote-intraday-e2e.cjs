@@ -108,7 +108,7 @@ const mockIntraday5d = {
   try {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 8000 })
     console.log(` Connected to ${BASE_URL}`)
-  } catch (e) {
+  } catch {
     console.log(`ℹ️ Preview server not running at ${BASE_URL}.`)
   }
 

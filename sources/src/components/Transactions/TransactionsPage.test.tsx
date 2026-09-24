@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import App from '../../App'
 import type { Transaction } from '../../types/models'
-import { txChipClass, txChipLabel } from './TransactionsPage'
+import { txChipClass, txChipLabel } from './txChip'
 
 // Task 142: the 類型 cell became one colour-coded chip, and the cash-flow column lost its colour.
 describe('TransactionsPage 類型色塊 (Task 142)', () => {

@@ -16,6 +16,7 @@ const ConfirmContext = createContext<ConfirmFn | null>(null)
 // Called outside the provider must not throw; resolve false as if the user cancelled.
 const noopConfirm: ConfirmFn = () => Promise.resolve(false)
 
+// eslint-disable-next-line react/only-export-components -- provider + hook share one private context by design
 export function useConfirm(): ConfirmFn {
   return useContext(ConfirmContext) ?? noopConfirm
 }

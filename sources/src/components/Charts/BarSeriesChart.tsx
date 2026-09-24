@@ -49,21 +49,22 @@ function BarSeriesBars({
   geo: PlotGeometry
   multi: boolean
 }) {
+  const { bandCenter, y, bandWidth } = geo
   const bars = useMemo(() => {
-    const zeroY = geo.y(0)
+    const zeroY = y(0)
     // A single sequence occupies half of the column width; multiple sequences occupy 80% of the column width, leaving a 2px gap for each.
-    const groupW = multi ? geo.bandWidth * 0.8 : geo.bandWidth * 0.52
+    const groupW = multi ? bandWidth * 0.8 : bandWidth * 0.52
     const slotW = groupW / series.length
     const barW = Math.max(multi ? slotW - BAR_GAP : slotW, 2)
     const out: BarRect[] = []
     series.forEach((s, si) => {
       s.values.forEach((value, i) => {
         if (value === null || value === undefined) return
-        const valueY = geo.y(value)
+        const valueY = y(value)
         const top = Math.min(valueY, zeroY)
         // When the value is 0, still draw 1px, so that the difference between "there is data but 0" and "no data" can be seen
         const h = Math.max(Math.abs(valueY - zeroY), 1)
-        const center = geo.bandCenter(i)
+        const center = bandCenter(i)
         const x = multi
           ? center - groupW / 2 + slotW * si + (slotW - barW) / 2
           : center - barW / 2
@@ -72,7 +73,7 @@ function BarSeriesBars({
       })
     })
     return out
-  }, [series, geo.bandCenter, geo.y, geo.bandWidth, multi])
+  }, [series, bandCenter, y, bandWidth, multi])
 
   return (
     <>

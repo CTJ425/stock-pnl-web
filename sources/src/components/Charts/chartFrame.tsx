@@ -140,6 +140,8 @@ export function ChartFrame({
    * keeps the same `bandCenter`/`y` closures and grid/label arrays. Series-path computation
    * in the chart components keys its own `useMemo` off these, so it skips work too.
    */
+  // Keyed on the bounds, not the object, so an equal domain in a new object keeps the closures.
+  const { min: domainMin, max: domainMax } = domain
   const staticGeo = useMemo(
     () => ({
       innerW,
@@ -147,14 +149,14 @@ export function ChartFrame({
       count,
       bandWidth,
       bandCenter: (i: number) => bandWidth * (i + 0.5),
-      y: (v: number) => scaleY(v, domain, innerH),
+      y: (v: number) => scaleY(v, { min: domainMin, max: domainMax }, innerH),
     }),
-    [innerW, innerH, count, bandWidth, domain.min, domain.max],
+    [innerW, innerH, count, bandWidth, domainMin, domainMax],
   )
   const geo: PlotGeometry = { ...staticGeo, hover }
 
-  const ticks = useMemo(() => domainTicks(domain), [domain.min, domain.max])
-  const step = useMemo(() => tickStep(domain), [domain.min, domain.max])
+  const ticks = useMemo(() => domainTicks({ min: domainMin, max: domainMax }), [domainMin, domainMax])
+  const step = useMemo(() => tickStep({ min: domainMin, max: domainMax }), [domainMin, domainMax])
   // Fixed-count / fixed-Nth-index thinning overlaps on narrow charts; derive the step from
   // the measured plot width instead (DT-*) when the caller does not pin labelIndices itself.
   const labelStep = useMemo(() => thinLabelStep(labels.length, innerW), [labels.length, innerW])

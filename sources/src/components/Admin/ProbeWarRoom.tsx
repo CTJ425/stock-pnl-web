@@ -18,7 +18,7 @@ export interface WarRoomSourceConfig {
   neverRetires?: boolean
 }
 
-export const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
+const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
   { id: 'bfi82u', name: '全市場三大法人', code: 'BFI82U', window: '15:00–16:30 / 19:30–20:15', target: 3 },
   { id: 't86', name: '個股三大法人', code: 'T86', window: '16:00–17:00', target: 3 },
   { id: 'bwibbu', name: '個股估值 (PE/PB/DY)', code: 'BWIBBU', window: '17:00–18:30', target: 3 },
