@@ -21,14 +21,16 @@
 
 ## 📋 Active Tasks
 
-### Task 167: Remove AI UI, move 新增交易 to the header, Discord 券商 column (user, 2026-09-24)
+### Task 167: Remove AI, move 新增交易 to the header, Discord 券商 figure (user, 2026-09-24)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
-- **Timestamp**: 2026-09-24 01:55:00 Asia/Taipei
-1. ~~Remove every AI feature from the frontend (keep for a future redesign; recoverable from git)~~ ✅ working tree · retire `ai-proxy` Edge Function and AI tables? —— ⏳ user decision
-2. ~~Move 新增交易 from the bottom-right FAB into the header bar~~ ✅ working tree · browser check at 1440 / 375 px —— ⏳ (Playwright libs missing on host)
-3. Discord holdings card: add the 庫存總覽「券商」figure (undiscounted 0.1425 % unrealized / ROI) —— ⏳ proposal given, awaiting user choice
-4. Commit on `dev` + version bump (0.9.68-dev.1) —— ⏳
+- **Timestamp**: 2026-09-24 02:06:00 Asia/Taipei
+- **Spec**: docs/agent/specs/discord-holdings.md (Revision 9)
+- **Decisions (user, 2026-09-24)**: remove AI completely (frontend, `ai-proxy`, DB objects); 券商 option A (total line + every row).
+1. ~~Remove AI from frontend and repo (`ai-proxy`, `app_settings`, `get_ai_settings()`)~~ ✅ a3d1554 · DEV: delete `ai-proxy`, DROP the two objects —— ⏳ (no supabase CLI on host) · PROD same after `main` —— ⏳
+2. ~~Move 新增交易 into the header~~ ✅ a3d1554 · browser check at 1440 / 375 px —— ⏳ (Playwright libs missing)
+3. ~~Discord holdings card 券商 figure, option A~~ ✅ a3d1554 · deploy `stock-report` DEV then PROD —— ⏳
+4. ~~Commit + push `dev` as 0.9.68-dev.1~~ ✅ a3d1554 · release 0.9.68 to `main` —— ⏳ user OK after DEV verify
 
 ### Task 166: 全專案稽核修補（139 項發現，分 5 批）
 - **Status**: 🔄 IN PROGRESS
