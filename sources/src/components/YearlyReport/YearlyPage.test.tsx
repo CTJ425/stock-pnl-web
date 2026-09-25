@@ -4,7 +4,7 @@
  * legs (DA-07). Both are money figures the page had no test for at all.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { computeLedger } from '../../utils/pnlEngine'
 import type { Transaction, TxType } from '../../types/models'
 import { YearlyPage } from './YearlyPage'
@@ -71,5 +71,25 @@ describe('YearlyPage 股利與 ROI', () => {
     const row = (await screen.findByText('2024')).closest('tr')!
     // 全部賣出腿都是超賣 → 報酬率顯示 —
     expect(within(row).getAllByText('—').length).toBeGreaterThan(0)
+  })
+})
+
+describe('YearlyPage 搜尋', () => {
+  it('輸入搜尋後自動展開年度與逐筆賣出，清除後收回', async () => {
+    renderWith([
+      tx('2026-01-10', 'BUY', 500, 1000, 712),
+      tx('2026-06-01', 'SELL', 600, 1000, 2655),
+    ])
+    // 預設收合：看不到個股列與賣出腿
+    expect(screen.queryByText(/2330（/)).toBeNull()
+    expect(screen.queryByText(/賣出 1,000 股/)).toBeNull()
+
+    const input = screen.getByLabelText('搜尋年度收益的股票')
+    fireEvent.change(input, { target: { value: '2330' } })
+    expect(screen.getByText(/2330（/)).toBeTruthy()
+    expect(screen.getByText(/賣出 1,000 股/)).toBeTruthy()
+
+    fireEvent.change(input, { target: { value: '' } })
+    expect(screen.queryByText(/2330（/)).toBeNull()
   })
 })
