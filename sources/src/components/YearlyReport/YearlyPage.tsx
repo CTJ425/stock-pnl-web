@@ -254,6 +254,17 @@ function YearlySection({ title, currency, query }: { title: string; currency: Cu
     rows.every((r) => expanded.has(r.year)) &&
     allTickerKeys.every((k) => expandedTickers.has(k))
 
+  // A search asks for one stock's sells, and those only live inside the collapsed year and ticker
+  // rows — so open everything the search matched, and fold back to the default when it is cleared.
+  // Adjusted during render (not in an effect) so the first frame of a new query is already open.
+  const q = query.trim()
+  const [openedFor, setOpenedFor] = useState('')
+  if (q !== openedFor) {
+    setOpenedFor(q)
+    setExpanded(new Set(q ? rows.map((r) => r.year) : []))
+    setExpandedTickers(new Set(q ? allTickerKeys : []))
+  }
+
   const toggleAll = () => {
     if (allOpen) {
       setExpanded(new Set())

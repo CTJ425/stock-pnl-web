@@ -21,6 +21,13 @@
 
 ## 📋 Active Tasks
 
+### Task 169: 年度收益 search auto-expands matched years and sells (user, 2026-09-25)
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-25 15:20:00 Asia/Taipei
+1. ~~Auto-expand years + tickers with sells on a non-empty query, collapse on clear (`YearlyPage.tsx`) + test~~ ✅ working tree
+2. Browser check · commit + push `dev` as next `-dev.N` —— ⏳ awaiting user
+
 ### Task 167: Remove AI, move 新增交易 to the header, Discord 券商 figure (user, 2026-09-24)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
