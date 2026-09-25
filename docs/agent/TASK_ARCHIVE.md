@@ -1,5 +1,12 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 169: 年度收益 search auto-expands matched years and sells (user, 2026-09-25)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-25 23:30:00 Asia/Taipei
+1. ~~Auto-expand years + tickers with sells on a non-empty query, collapse on clear (`YearlyPage.tsx`) + test~~ ✅ 8b0e663 (0.9.70-dev.1)
+2. ~~Release 0.9.70 to `main` (user asked to merge directly)~~ ✅ 13ed768 — CI + Release sync success; Pages serves 0.9.70. No browser check was run.
+
 ### Task 168: Codebase health-check follow-ups A–H (user, 2026-09-24)
 - **Status**: ✅ DONE
 - **Agent**: Claude
