@@ -4,7 +4,7 @@
  * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
-import type { Market, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRebate, Market, NewTransaction, Transaction, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 import { logClient } from './appLog'
@@ -53,6 +53,8 @@ export interface DataProvider {
   deleteTransactions(ids: string[]): Promise<void>
   /** Persist the workspace's fee rate (source of truth; localStorage is the cache)*/
   setWorkspaceFeeRate(id: string, rate: number): Promise<void>
+  /** Persist how the workspace's broker refunds the fee discount (現折 / 月退). */
+  setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void>
 }
 
 /* =========================================================
@@ -224,6 +226,15 @@ export class LocalProvider implements DataProvider {
       writeStore(store)
     }
   }
+
+  async setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void> {
+    const store = readStore()
+    const ws = store.workspaces.find((w) => w.id === id)
+    if (ws) {
+      ws.fee_rebate = rebate
+      writeStore(store)
+    }
+  }
 }
 
 /* =========================================================
@@ -235,8 +246,10 @@ function client() {
   return supabase
 }
 
-const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate'
-/** Without fee_rate, for a database that has not run that part of schema.sql. */
+const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate, fee_rebate'
+/** Without fee_rebate, for a database that has not run that part of schema.sql. */
+const WORKSPACE_COLUMNS_WITHOUT_REBATE = 'id, name, created_at, fee_rate'
+/** Without fee_rate either, for a database that has not run that part of schema.sql. */
 const WORKSPACE_COLUMNS_LEGACY = 'id, name, created_at'
 
 const TX_COLUMNS =
@@ -338,20 +351,20 @@ async function currentUserId(): Promise<string> {
 
 export class SupabaseProvider implements DataProvider {
   async listWorkspaces(): Promise<Workspace[]> {
-    const { data, error } = await client()
-      .from('workspaces')
-      .select(WORKSPACE_COLUMNS)
-      .order('created_at', { ascending: true })
-    if (!error) return (data ?? []) as Workspace[]
-
-    // The database may not have run the fee_rate part of schema.sql yet. PostgREST rejects
-    // the whole query for an unknown column, so retry once without it rather than break login.
-    const retry = await client()
-      .from('workspaces')
-      .select(WORKSPACE_COLUMNS_LEGACY)
-      .order('created_at', { ascending: true })
-    if (retry.error) throw new Error(`載入工作區失敗：${retry.error.message}`)
-    return (retry.data ?? []) as Workspace[]
+    // The database may not have run the fee_rebate or fee_rate part of schema.sql yet. PostgREST
+    // rejects the whole query for an unknown column, so step down one column set at a time rather
+    // than break login (a frontend deploy can land before the migration).
+    const columnSets = [WORKSPACE_COLUMNS, WORKSPACE_COLUMNS_WITHOUT_REBATE, WORKSPACE_COLUMNS_LEGACY]
+    let lastError = ''
+    for (const columns of columnSets) {
+      const { data, error } = await client()
+        .from('workspaces')
+        .select(columns)
+        .order('created_at', { ascending: true })
+      if (!error) return (data ?? []) as unknown as Workspace[]
+      lastError = error.message
+    }
+    throw new Error(`載入工作區失敗：${lastError}`)
   }
 
   async createWorkspace(name: string): Promise<Workspace> {
@@ -500,5 +513,10 @@ export class SupabaseProvider implements DataProvider {
   async setWorkspaceFeeRate(id: string, rate: number): Promise<void> {
     const { error } = await client().from('workspaces').update({ fee_rate: rate }).eq('id', id)
     if (error) throw new Error(`儲存手續費率失敗：${error.message}`)
+  }
+
+  async setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void> {
+    const { error } = await client().from('workspaces').update({ fee_rebate: rebate }).eq('id', id)
+    if (error) throw new Error(`儲存折扣退還方式失敗：${error.message}`)
   }
 }

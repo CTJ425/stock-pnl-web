@@ -13,6 +13,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { buildHoldingRows } from '../../utils/holdingRows'
 import { getFeeRate } from '../../utils/settings'
+import { pnlBasis, rowRoi, rowUnrealized } from '../../utils/pnlBasis'
 import { displayStockName } from '../../services/usStockNames'
 import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
 import { positionKey } from '../../types/models'
@@ -31,6 +32,8 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const holdings = ledger.holdings
   const { prices } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
+  // Same basis as 庫存總覽: derived from the workspace's fee settings (utils/pnlBasis).
+  const basis = pnlBasis(feeRate, current?.fee_rebate)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   // Remembers what WatchSection handed over (ticker + name) so a stock added to the watchlist after
   // mount still resolves — the loaded `watchlist` copy below is not refreshed on every click.
@@ -271,10 +274,11 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
                       : 0
                     : selected.row.holding.avgCost,
                 price: selected.row.price,
-                unrealized: selected.row.unrealized,
-                brokerUnrealized: selected.row.brokerUnrealized,
-                roi: selected.row.roi,
-                brokerRoi: selected.row.brokerRoi,
+                unrealized: rowUnrealized(selected.row, basis),
+                // The 券商 note only adds information when the headline is the discounted figure.
+                brokerUnrealized: basis === 'net' ? selected.row.brokerUnrealized : null,
+                roi: rowRoi(selected.row, basis),
+                brokerRoi: basis === 'net' ? selected.row.brokerRoi : null,
               }
             : null
         }

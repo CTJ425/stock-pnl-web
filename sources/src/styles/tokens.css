@@ -1,52 +1,54 @@
 /* =========================================================
- * Design system: IBM Carbon Design System
- * Default theme is Carbon Gray 100 (dark). Carbon White applies when <html data-theme="light">.
- * Carbon tokens use the --cds-* prefix. The historic token names stay as aliases,
- * so every downstream rule in this file keeps its meaning.
- * The profit and loss color follows the Taiwan market habit: red up / green down.
+ * Design system: the broker statement (券商對帳單), 2026-09-26 redesign.
+ * White statement paper, near-black ink, blue-gray printed ruling and one ruling-blue accent;
+ * the dark theme is the same statement at night (blue-black paper, pale ink).
+ * The --cds-* names are kept from the Carbon era so every downstream rule keeps its meaning;
+ * only their values changed. The historic token names below stay as aliases.
+ * The profit and loss color follows the Taiwan market habit: red up / green down, and is
+ * never reused for error or warning state.
  * ========================================================= */
 :root {
-  /* ---------- Carbon Gray 100 (dark) ---------- */
-  --cds-background: #161616;
-  --cds-background-hover: #353535;
-  --cds-background-active: #525252;
-  --cds-background-selected: #393939;
-  --cds-layer-01: #262626;
-  --cds-layer-02: #393939;
-  --cds-layer-03: #525252;
-  --cds-layer-hover-01: #333333;
-  --cds-layer-accent-01: #393939;
-  --cds-layer-accent-02: #525252;
-  --cds-field-01: #262626;
-  --cds-field-02: #393939;
-  --cds-field-hover-01: #333333;
-  --cds-border-subtle: #393939;
-  --cds-border-strong: #6f6f6f;
-  --cds-border-inverse: #f4f4f4;
-  --cds-border-interactive: #4589ff;
-  --cds-text-primary: #f4f4f4;
-  --cds-text-secondary: #c6c6c6;
-  --cds-text-helper: #a8a8a8;
-  --cds-text-placeholder: #6f6f6f;
+  /* ---------- Statement at night (dark) ---------- */
+  --cds-background: #11151a;
+  --cds-background-hover: #1a2129;
+  --cds-background-active: #232c36;
+  --cds-background-selected: #1f2833;
+  --cds-layer-01: #151b21;
+  --cds-layer-02: #1a2129;
+  --cds-layer-03: #222b35;
+  --cds-layer-hover-01: #1a2129;
+  --cds-layer-accent-01: #1f2833;
+  --cds-layer-accent-02: #28323e;
+  --cds-field-01: #151b21;
+  --cds-field-02: #1a2129;
+  --cds-field-hover-01: #1f2833;
+  --cds-border-subtle: #29323d;
+  --cds-border-strong: #5b6674;
+  --cds-border-inverse: #e7ebf0;
+  --cds-border-interactive: #8db3e2;
+  --cds-text-primary: #e7ebf0;
+  --cds-text-secondary: #b3bdc9;
+  --cds-text-helper: #8f9aa8;
+  --cds-text-placeholder: #6b7684;
   --cds-text-on-color: #ffffff;
-  --cds-text-disabled: rgba(244, 244, 244, 0.25);
-  --cds-link-primary: #78a9ff;
-  --cds-link-hover: #a6c8ff;
-  --cds-focus: #ffffff;
-  --cds-interactive: #4589ff;
-  --cds-button-primary: #0f62fe;
-  --cds-button-primary-hover: #0353e9;
-  --cds-button-primary-active: #002d9c;
-  --cds-button-danger: #da1e28;
-  --cds-button-danger-hover: #ba1b23;
-  --cds-support-error: #fa4d56;
-  --cds-support-success: #42be65;
-  --cds-support-warning: #f1c21b;
-  --cds-support-info: #4589ff;
-  --cds-support-error-inverse: #da1e28;
-  --cds-overlay: rgba(22, 22, 22, 0.7);
-  --cds-highlight: #002d9c;
-  --cds-toggle-off: #6f6f6f;
+  --cds-text-disabled: rgba(231, 235, 240, 0.3);
+  --cds-link-primary: #8db3e2;
+  --cds-link-hover: #a9c6ea;
+  --cds-focus: #8db3e2;
+  --cds-interactive: #8db3e2;
+  --cds-button-primary: #8db3e2;
+  --cds-button-primary-hover: #a9c6ea;
+  --cds-button-primary-active: #6f9ad0;
+  --cds-button-danger: #c9423c;
+  --cds-button-danger-hover: #a83630;
+  --cds-support-error: #f28b82;
+  --cds-support-success: #52c98c;
+  --cds-support-warning: #e8b949;
+  --cds-support-info: #8db3e2;
+  --cds-support-error-inverse: #c9423c;
+  --cds-overlay: rgba(8, 11, 14, 0.72);
+  --cds-highlight: #1f3550;
+  --cds-toggle-off: #5b6674;
 
   /* ---------- Carbon spacing scale ---------- */
   --sp-01: 2px;
@@ -77,14 +79,14 @@
   --cds-dur-slow: 240ms;
 
   /* ---------- Carbon elevation ---------- */
-  --cds-shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.3);
-  --cds-shadow-modal: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --cds-shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --cds-shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.5);
 
   /* ---------- Carbon control sizes ---------- */
   --cds-size-sm: 32px;
   --cds-size-md: 40px;
   --cds-size-lg: 48px;
-  --cds-header-h: 48px;
+  --cds-header-h: 56px;
 
   /* ---------- Legacy aliases ---------- */
   --bg: var(--cds-background);
@@ -102,36 +104,37 @@
   --accent: var(--cds-link-primary);
   --accent-strong: var(--cds-button-primary);
   --accent-2: var(--cds-interactive);
-  --up: #ff8389; /* up (red) */
-  --down: #42be65; /* down (green) */
+  --up: #ff7d74; /* up (red) */
+  --down: #52c98c; /* down (green) */
   --danger: var(--cds-support-error);
   --svg-main-1: var(--cds-interactive);
   --svg-accent: var(--cds-link-primary);
   --stock-up-bright: var(--up);
   --svg-bg-glow: transparent;
-  /* Carbon has no rounded corners on productive components. */
-  --radius: 0px;
-  --radius-sm: 0px;
+  /* Statement forms: square corners, softened by 2px on controls only. */
+  --radius: 2px;
+  --radius-sm: 2px;
+  /* Text on the accent fill (primary buttons, selected chips). Pale accent in dark → dark ink. */
+  --accent-ink: #0c1016;
   /* The height of the mobile bottom navigation (safe area excluded). The page footer derives
      its clearance from this value. */
   --bottom-nav-h: 48px;
-  --font-display: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-  --font-body: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Noto Sans TC', monospace;
+  --font-display: 'Public Sans', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-body: 'Public Sans', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Noto Sans TC', monospace;
   --shadow-card: none;
   --panel: var(--cds-layer-01);
   --modal-bg: var(--cds-layer-01);
   --header-bg: var(--cds-background);
   --overlay: var(--cds-overlay);
   --input-bg: var(--cds-field-01);
-  /* ---------- Carbon data table surfaces ----------
-   * A long table needs four separable tones, or every row reads the same.
-   * Dark: base #262626 < zebra #333333 < hover #393939 < header #525252.
-   * The light theme reaches the same four steps in the other direction; only the
-   * three roles below are re-pointed there, never the rules that consume them. */
-  --table-head: var(--cds-layer-accent-02);
-  --table-zebra: var(--cds-layer-hover-01);
-  --table-row-hover: var(--cds-layer-accent-01);
+  /* ---------- Statement table surfaces ----------
+   * A statement separates rows with printed rules, not tinted bands: the header sits on
+   * the paper itself (opaque, for sticky headers) above an ink rule, there is no zebra,
+   * and hover is the one tinted state. Both themes point the roles at their own paper. */
+  --table-head: var(--cds-layer-01);
+  --table-zebra: var(--cds-layer-01);
+  --table-row-hover: var(--cds-background-hover);
   /* A neutral chip sits inside a row, so it has to clear the hover band too. */
   --chip-neutral: var(--cds-layer-accent-02);
   --thead-bg: var(--table-head);
@@ -143,76 +146,74 @@
   --btn-hover-bg: var(--cds-background-hover);
   --btn-hover-border: var(--cds-border-strong);
   --scroll-thumb: var(--cds-border-strong);
-  --skeleton-a: #333333;
-  --skeleton-b: #525252;
+  --skeleton-a: #1a2129;
+  --skeleton-b: #28323e;
   --notice-ok-ink: var(--cds-support-success);
   --notice-err-ink: var(--cds-support-error);
   --notice-warn-ink: var(--cds-support-warning);
   --badge-warn-ink: var(--cds-support-warning);
   --date-invert: 1;
   --steel: var(--cds-link-primary);
-  --steel-tint: rgba(69, 137, 255, 0.2);
-  --steel-on: var(--cds-text-on-color);
+  --steel-tint: rgba(141, 179, 226, 0.16);
+  --steel-on: var(--accent-ink);
   --ochre: var(--cds-support-warning);
-  --ochre-tint: rgba(241, 194, 27, 0.2);
+  --ochre-tint: rgba(232, 185, 73, 0.18);
 }
 
 :root[data-theme='light'] {
-  /* ---------- Carbon White (light) ---------- */
+  /* ---------- Statement paper (light) ---------- */
   --cds-background: #ffffff;
-  --cds-background-hover: #e8e8e8;
-  --cds-background-active: #c6c6c6;
-  --cds-background-selected: #e0e0e0;
-  --cds-layer-01: #f4f4f4;
-  --cds-layer-02: #ffffff;
-  --cds-layer-03: #f4f4f4;
-  --cds-layer-hover-01: #e8e8e8;
-  --cds-layer-accent-01: #e0e0e0;
-  --cds-layer-accent-02: #e0e0e0;
-  --cds-field-01: #f4f4f4;
+  --cds-background-hover: #eff3f7;
+  --cds-background-active: #e3e9f0;
+  --cds-background-selected: #e3e9f0;
+  --cds-layer-01: #ffffff;
+  --cds-layer-02: #f6f8fa;
+  --cds-layer-03: #eff3f7;
+  --cds-layer-hover-01: #eff3f7;
+  --cds-layer-accent-01: #e3e9f0;
+  --cds-layer-accent-02: #d3dae3;
+  --cds-field-01: #ffffff;
   --cds-field-02: #ffffff;
-  --cds-field-hover-01: #e8e8e8;
-  --cds-border-subtle: #e0e0e0;
-  --cds-border-strong: #8d8d8d;
-  --cds-border-inverse: #161616;
-  --cds-border-interactive: #0f62fe;
-  --cds-text-primary: #161616;
-  --cds-text-secondary: #525252;
-  --cds-text-helper: #6f6f6f;
-  --cds-text-placeholder: #a8a8a8;
+  --cds-field-hover-01: #f6f8fa;
+  --cds-border-subtle: #d3dae3;
+  --cds-border-strong: #8a94a1;
+  --cds-border-inverse: #16191d;
+  --cds-border-interactive: #2c5785;
+  --cds-text-primary: #16191d;
+  --cds-text-secondary: #444d58;
+  --cds-text-helper: #636c78;
+  --cds-text-placeholder: #8a94a1;
   --cds-text-on-color: #ffffff;
-  --cds-text-disabled: rgba(22, 22, 22, 0.25);
-  --cds-link-primary: #0f62fe;
-  --cds-link-hover: #0043ce;
-  --cds-focus: #0f62fe;
-  --cds-interactive: #0f62fe;
-  --cds-button-primary: #0f62fe;
-  --cds-button-primary-hover: #0353e9;
-  --cds-button-primary-active: #002d9c;
-  --cds-button-danger: #da1e28;
-  --cds-button-danger-hover: #ba1b23;
-  --cds-support-error: #da1e28;
-  --cds-support-success: #24a148;
-  --cds-support-warning: #f1c21b;
-  --cds-support-info: #0043ce;
-  --cds-support-error-inverse: #fa4d56;
-  --cds-overlay: rgba(22, 22, 22, 0.5);
-  --cds-highlight: #d0e2ff;
-  --cds-toggle-off: #8d8d8d;
+  --cds-text-disabled: rgba(22, 25, 29, 0.3);
+  --cds-link-primary: #2c5785;
+  --cds-link-hover: #234769;
+  --cds-focus: #2c5785;
+  --cds-interactive: #2c5785;
+  --cds-button-primary: #2c5785;
+  --cds-button-primary-hover: #234769;
+  --cds-button-primary-active: #1b3854;
+  --cds-button-danger: #b3261e;
+  --cds-button-danger-hover: #8f1f18;
+  --cds-support-error: #b3261e;
+  --cds-support-success: #17784a;
+  --cds-support-warning: #8a6100;
+  --cds-support-info: #2c5785;
+  --cds-support-error-inverse: #f28b82;
+  --cds-overlay: rgba(22, 25, 29, 0.45);
+  --cds-highlight: #dbe6f3;
+  --cds-toggle-off: #8a94a1;
 
-  --cds-shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.2);
-  --cds-shadow-modal: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --cds-shadow-menu: 0 4px 12px rgba(22, 25, 29, 0.12);
+  --cds-shadow-modal: 0 12px 32px rgba(22, 25, 29, 0.18);
 
-  --up: #da1e28;
-  --down: #198038;
-  --skeleton-a: #e8e8e8;
-  --skeleton-b: #c6c6c6;
-  --table-head: var(--cds-layer-accent-01);
-  --table-zebra: var(--cds-layer-02);
-  --table-row-hover: var(--cds-layer-hover-01);
+  --up: #c42f2b;
+  --down: #17784a;
+  --skeleton-a: #eff3f7;
+  --skeleton-b: #d3dae3;
   --chip-neutral: var(--cds-layer-accent-01);
-  --steel-tint: rgba(15, 98, 254, 0.12);
-  --ochre: #8e6a00; /* Carbon yellow 60 */
+  --accent-ink: #ffffff;
+  --steel-tint: rgba(44, 87, 133, 0.10);
+  --ochre: #8a6100;
   --ochre-tint: rgba(138, 94, 18, 0.15);
   --date-invert: 0;
 }
@@ -227,24 +228,32 @@ body {
   padding: 0;
 }
 
-/* Carbon body-compact-01: 14px / 18px, letter-spacing 0.16px. */
+/* Statement body: 14px, tabular lining figures everywhere so every column of money aligns. */
 body {
   background-color: var(--cds-background);
   color: var(--cds-text-primary);
   font-family: var(--font-body);
   font-size: var(--type-body-01);
   font-weight: 400;
-  line-height: 1.42857;
-  letter-spacing: 0.16px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+  caret-color: var(--cds-interactive);
+  scrollbar-color: var(--cds-border-strong) transparent;
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Carbon focus: one 2px solid ring in $focus, drawn inside the control. */
+/* One 2px ring in the accent, drawn inside the control. */
 :focus-visible {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
+}
+
+::selection {
+  background: var(--steel-tint);
+  color: var(--cds-text-primary);
 }
 
 /* Visually hidden but still readable by assistive tech. */
@@ -268,12 +277,12 @@ body {
   flex-direction: column;
 }
 
-/* Carbon productive headings: weight 600, no extra letter-spacing. */
+/* Headings: weight 700 in the one family; the scale, not a second face, carries hierarchy. */
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0;
   margin: 0;
 }

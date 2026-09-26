@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>庫存總覽 · 對帳單版（示意）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Statement world, light: white paper, near-black ink, blue-gray ruling, one ruling blue. */
+:root {
+  color-scheme: light;
+  --paper: #ffffff;
+  --band: #eff3f7;
+  --band-strong: #e3e9f0;
+  --ink: #16191d;
+  --ink-2: #444d58;
+  --ink-3: #636c78;
+  --rule: #d3dae3;
+  --rule-strong: #16191d;
+  --accent: #2c5785;
+  --accent-hover: #234769;
+  --accent-ink: #ffffff;
+  --accent-tint: rgba(44, 87, 133, 0.10);
+  --up: #c42f2b;
+  --down: #17784a;
+  --focus: #2c5785;
+  --font: 'Public Sans', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --t-12: 0.75rem; --t-13: 0.8125rem; --t-14: 0.875rem; --t-16: 1rem; --t-20: 1.25rem; --t-24: 1.5rem; --t-40: 2.5rem;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Same statement at night: blue-black paper, pale ink. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #11151a;
+  --band: #182028;
+  --band-strong: #1f2833;
+  --ink: #e7ebf0;
+  --ink-2: #b3bdc9;
+  --ink-3: #8f9aa8;
+  --rule: #29323d;
+  --rule-strong: #e7ebf0;
+  --accent: #8db3e2;
+  --accent-hover: #a9c6ea;
+  --accent-ink: #0c1016;
+  --accent-tint: rgba(141, 179, 226, 0.14);
+  --up: #ff7d74;
+  --down: #52c98c;
+  --focus: #8db3e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --paper: #11151a; --band: #182028; --band-strong: #1f2833;
+    --ink: #e7ebf0; --ink-2: #b3bdc9; --ink-3: #8f9aa8;
+    --rule: #29323d; --rule-strong: #e7ebf0;
+    --accent: #8db3e2; --accent-hover: #a9c6ea; --accent-ink: #0c1016; --accent-tint: rgba(141, 179, 226, 0.14);
+    --up: #ff7d74; --down: #52c98c; --focus: #8db3e2;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-14);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums lining-nums;
+  -webkit-font-smoothing: antialiased;
+  caret-color: var(--accent);
+  scrollbar-color: var(--rule) transparent;
+}
+::selection { background: var(--accent-tint); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: 0; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.muted { color: var(--ink-3); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- App bar ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+.bar-inner {
+  max-width: 1200px; margin: 0 auto; padding: 0 var(--s-5);
+  height: 56px; display: flex; align-items: center; gap: var(--s-5);
+}
+.brand { display: flex; align-items: center; gap: var(--s-2); font-weight: 700; font-size: var(--t-16); white-space: nowrap; }
+.brand-mark { width: 22px; height: 22px; border: 1.5px solid var(--ink); display: grid; grid-template-rows: repeat(3, 1fr); padding: 3px; gap: 2px; }
+.brand-mark span { background: var(--ink); }
+.brand-mark span:nth-child(2) { width: 70%; }
+.brand-mark span:nth-child(3) { width: 45%; background: var(--up); }
+.nav { display: flex; align-self: stretch; }
+.nav a {
+  display: flex; align-items: center; padding: 0 var(--s-3);
+  color: var(--ink-2); text-decoration: none; font-weight: 500;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease);
+}
+.nav a:hover { color: var(--ink); border-bottom-color: var(--rule); }
+.nav a[aria-current='page'] { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.nav .sep { width: 1px; background: var(--rule); margin: 18px var(--s-2); }
+.spacer { flex: 1; }
+.ws {
+  display: flex; align-items: center; gap: var(--s-1);
+  height: 36px; padding: 0 var(--s-3);
+  border: 1px solid var(--rule); background: var(--paper); border-radius: 2px; cursor: pointer;
+  font-weight: 500;
+}
+.ws:hover { border-color: var(--ink-3); }
+.btn {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  height: 36px; padding: 0 var(--s-4); border-radius: 2px; cursor: pointer;
+  font-weight: 600; white-space: nowrap;
+  transition: background 150ms var(--ease), border-color 150ms var(--ease);
+}
+.btn-primary { background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-ghost { background: transparent; border: 1px solid transparent; color: var(--accent); padding: 0 var(--s-2); }
+.btn-ghost:hover { background: var(--accent-tint); }
+.icon-btn {
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border: 1px solid var(--rule); border-radius: 2px; background: transparent; cursor: pointer; color: var(--ink-2);
+}
+.icon-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* ---------- Page ---------- */
+main { max-width: 1200px; margin: 0 auto; padding: 0 var(--s-5) 96px; }
+
+/* Each fact sits beside the figure it qualifies: the as-of time on today's P&L,
+   the rate on the combined value, the fee basis on the unrealized P&L. */
+.asof { margin-left: var(--s-2); font-weight: 400; color: var(--ink-3); font-size: var(--t-13); }
+.linkish {
+  all: unset; cursor: pointer; color: var(--accent); font-weight: 600;
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px;
+  display: inline;
+}
+.linkish:hover { color: var(--accent-hover); }
+.linkish:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.linkish svg { width: 14px; height: 14px; margin-left: 2px; vertical-align: -2px; transition: transform 200ms var(--ease); }
+.linkish[aria-expanded='true'] svg { transform: rotate(180deg); }
+
+/* Workspace fee settings, opened in place under the statement header. The basis is derived
+   from these two answers, so there is no second setting to keep in sync. */
+.fee-panel { border-bottom: 1px solid var(--rule); background: var(--band); padding: var(--s-5); }
+.fee-panel h2 { font-size: var(--t-16); margin-bottom: var(--s-4); }
+.fp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1.4fr); gap: var(--s-6); align-items: start; }
+.fld { display: grid; gap: var(--s-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.fld > label, .fld legend { font-size: var(--t-13); font-weight: 600; color: var(--ink); padding: 0; margin-bottom: var(--s-2); }
+.fld select {
+  height: 40px; padding: 0 var(--s-3); font: inherit; font-size: var(--t-16); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--ink-3); border-radius: 2px;
+}
+.fld select:hover { border-color: var(--ink); }
+.radio { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s-2); align-items: start; padding: var(--s-2) 0; cursor: pointer; }
+.radio input { margin: 3px 0 0; accent-color: var(--accent); width: 16px; height: 16px; }
+.radio b { font-weight: 600; }
+.radio span { grid-column: 2; font-size: var(--t-13); color: var(--ink-3); }
+.radio:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.hint { margin: 0; font-size: var(--t-12); color: var(--ink-3); }
+.fp-result { border-left: 1px solid var(--rule); padding-left: var(--s-5); }
+.fp-result h3 { font-size: var(--t-13); color: var(--ink-2); font-weight: 600; margin-bottom: var(--s-2); }
+.fp-result p { margin: 0 0 var(--s-2); font-size: var(--t-14); }
+.fp-result .basis { font-weight: 700; }
+.fp-acts { display: flex; gap: var(--s-2); margin-top: var(--s-5); }
+.btn-plain { background: var(--paper); border: 1px solid var(--rule); color: var(--ink); }
+.btn-plain:hover { border-color: var(--ink-3); }
+
+/* Totals: the statement's closing figures, ended by a double rule. */
+.totals {
+  display: grid; grid-template-columns: 1.35fr 1fr 1fr;
+  padding: var(--s-6) 0 var(--s-5);
+  border-bottom: 3px double var(--rule-strong);
+}
+.tot { padding: 0 var(--s-5); border-left: 1px solid var(--rule); min-width: 0; }
+.tot:first-child { padding-left: 0; border-left: 0; }
+.tot h2 { font-size: var(--t-14); font-weight: 500; color: var(--ink-2); }
+.tot .fig { font-size: var(--t-24); font-weight: 700; line-height: 1.25; margin-top: var(--s-2); letter-spacing: -0.01em; }
+.tot.today .fig { font-size: var(--t-40); line-height: 1.1; letter-spacing: -0.02em; }
+.tot .fig .pct { font-size: var(--t-16); font-weight: 600; margin-left: var(--s-2); letter-spacing: 0; }
+.tot .sub { margin-top: var(--s-2); font-size: var(--t-13); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 0 var(--s-3); }
+.tot .sub b { font-weight: 600; color: var(--ink-2); }
+
+/* ---------- Holdings statement ---------- */
+.sec-head { display: flex; align-items: baseline; gap: var(--s-4); margin: var(--s-7) 0 var(--s-3); }
+.sec-head h2 { font-size: var(--t-20); }
+.sec-head .count { color: var(--ink-3); font-size: var(--t-13); }
+.tot h2 { display: flex; align-items: center; flex-wrap: wrap; }
+.refresh.icon-btn { width: 28px; height: 28px; margin: -6px 0 -6px var(--s-1); border-color: transparent; color: var(--ink-3); }
+.refresh.icon-btn:hover { border-color: var(--rule); color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 2px; }
+.seg button { border: 0; background: transparent; height: 32px; padding: 0 var(--s-3); cursor: pointer; color: var(--ink-2); font-size: var(--t-13); }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed='true'] { background: var(--band-strong); color: var(--ink); font-weight: 600; }
+
+table.ledger { width: 100%; border-collapse: collapse; }
+.ledger th, .ledger td { padding: 0 var(--s-3); text-align: right; white-space: nowrap; }
+.ledger th:first-child, .ledger td:first-child { text-align: left; padding-left: 0; }
+.ledger th:last-child, .ledger td:last-child { padding-right: 0; }
+.ledger thead th {
+  height: 36px; font-size: var(--t-12); font-weight: 500; color: var(--ink-3);
+  border-bottom: 1px solid var(--ink);
+  vertical-align: bottom; padding-bottom: 6px;
+}
+.ledger sup { font-size: 0.7em; margin-left: 1px; color: var(--ink-3); }
+.ledger .grp th {
+  height: 40px; padding-top: var(--s-4); text-align: left; font-size: var(--t-13); font-weight: 700;
+  border-bottom: 1px solid var(--rule);
+}
+.ledger .grp .ccy { color: var(--ink-3); font-weight: 500; margin-left: var(--s-2); }
+.row td { height: 48px; border-bottom: 1px solid var(--rule); font-size: var(--t-14); }
+.row { cursor: pointer; transition: background 120ms var(--ease); }
+.row:hover { background: var(--band); }
+.row[data-open='true'] { background: var(--band); }
+.row[data-open='true'] td { border-bottom-color: transparent; }
+.stock { display: flex; align-items: baseline; gap: var(--s-3); }
+.stock .code { font-weight: 600; min-width: 3.4em; }
+.stock .name { color: var(--ink-2); }
+.stock button {
+  all: unset; display: flex; align-items: baseline; gap: var(--s-3); cursor: pointer;
+}
+.stock button::after { content: ''; position: absolute; inset: 0; } /* whole row is the hit area */
+.row { position: relative; }
+.row td:first-child { position: static; }
+.stock button:focus-visible { outline: none; }
+.row:has(button:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.chev { width: 14px; height: 14px; color: var(--ink-3); transition: transform 200ms var(--ease); align-self: center; }
+.row[data-open='true'] .chev { transform: rotate(90deg); }
+.row .strong { font-weight: 600; }
+
+.subtotal td { height: 44px; font-weight: 700; border-bottom: 0; border-top: 1px solid var(--ink); font-size: var(--t-14); }
+.subtotal td:first-child { font-weight: 600; color: var(--ink-2); }
+
+/* Row detail: the holding's own sub-ledger. Hidden numbers only appear here. */
+.detail > td { padding: 0; border-bottom: 1px solid var(--rule); background: var(--band); text-align: left; white-space: normal; }
+.detail .wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 220ms var(--ease); }
+.detail[data-open='true'] .wrap { grid-template-rows: 1fr; }
+.detail .clip { overflow: hidden; }
+.detail .body { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 1.15fr); gap: var(--s-4) var(--s-6); padding: var(--s-2) 0 var(--s-5) calc(3.4em + 14px + var(--s-3)); }
+.cmp { width: 100%; border-collapse: collapse; font-size: var(--t-13); }
+.cmp th { font-size: var(--t-12); font-weight: 500; color: var(--ink-3); text-align: right; padding: 0 0 4px var(--s-3); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.cmp th:first-child { text-align: left; padding-left: 0; }
+.cmp td { padding: 6px 0 6px var(--s-3); text-align: right; border-bottom: 1px dashed var(--rule); white-space: nowrap; }
+.cmp td:first-child { text-align: left; padding-left: 0; white-space: normal; color: var(--ink-2); }
+.cmp tr:last-child td { border-bottom: 0; }
+.cmp tr.on td { font-weight: 700; }
+.cmp tr.on td:first-child { color: var(--ink); }
+.cmp td.na { color: var(--ink-3); font-weight: 400; }
+.tag { display: inline-block; margin-left: 6px; padding: 0 5px; font-size: var(--t-12); font-weight: 600; line-height: 18px; color: var(--accent); border: 1px solid var(--accent); border-radius: 2px; white-space: nowrap; }
+.detail h3 { font-size: var(--t-12); font-weight: 500; color: var(--ink-3); margin-bottom: var(--s-2); }
+.kv { display: grid; grid-template-columns: auto 1fr; max-width: 340px; gap: 6px var(--s-5); margin: 0; font-size: var(--t-13); }
+.kv dt { color: var(--ink-2); }
+.kv dd { margin: 0; text-align: right; font-weight: 600; }
+.kv dd small { display: block; font-weight: 400; color: var(--ink-3); font-size: var(--t-12); }
+.stops { list-style: none; margin: 0; padding: 0; font-size: var(--t-13); }
+.stops li { display: grid; grid-template-columns: 6.5em 2.5em 1fr; gap: var(--s-3); padding: 5px 0; border-bottom: 1px dashed var(--rule); }
+.stops li:last-child { border-bottom: 0; }
+.stops .t { font-weight: 600; }
+.stops .r { grid-column: 3; }
+.stops .r:empty { display: none; }
+.row td[data-c='unr'] .v { display: inline-flex; gap: 6px; }
+.acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s-2); margin-left: calc(-1 * var(--s-2)); }
+
+/* Footnotes replace the "?" icons: every definition is readable without hovering. */
+.notes { margin-top: var(--s-5); padding-top: var(--s-3); border-top: 1px solid var(--rule); font-size: var(--t-12); color: var(--ink-3); }
+.notes ol { margin: 0; padding-left: 1.4em; display: grid; gap: 2px; }
+.notes p { margin: var(--s-3) 0 0; }
+
+/* Watch list: the same ledger, lighter. */
+.watch td { height: 44px; border-bottom: 1px solid var(--rule); }
+
+.foot { max-width: 1200px; margin: 0 auto; padding: var(--s-5); font-size: var(--t-12); color: var(--ink-3); border-top: 1px solid var(--rule); }
+
+/* ---------- Bottom nav (phone) ---------- */
+.tabbar { display: none; }
+
+@media (max-width: 1020px) {
+  .nav a span.l { display: none; }
+}
+
+@media (max-width: 720px) {
+  .bar-inner { padding: 0 var(--s-4); gap: var(--s-3); height: 52px; }
+  .brand .t, .nav, .theme-btn { display: none; }
+  .ws { height: 36px; }
+  .btn-add .l { display: none; }
+  .btn-add { padding: 0 var(--s-3); }
+  main { padding: 0 var(--s-4) calc(88px + env(safe-area-inset-bottom)); }
+
+
+  .totals { grid-template-columns: 1fr 1fr; padding: var(--s-5) 0 var(--s-4); row-gap: var(--s-5); }
+  .tot.today { grid-column: 1 / -1; padding: 0; border: 0; }
+  .tot { padding: 0 0 0 var(--s-4); }
+  .tot:nth-child(2) { padding-left: 0; border-left: 0; }
+  .tot .fig { font-size: var(--t-20); }
+  .tot .fig .pct { display: block; margin: 2px 0 0; font-size: var(--t-13); }
+
+  .sec-head { flex-wrap: wrap; margin-top: var(--s-6); }
+  .sec-head .seg { margin-left: auto; }
+
+  /* The ledger becomes two-line entries: name and today's P&L on top, the rest underneath. */
+  .ledger > thead { display: none; }
+  .ledger, .ledger tbody { display: block; }
+  .ledger .grp { display: block; }
+  .ledger .grp th { display: flex; justify-content: space-between; height: auto; padding: var(--s-4) 0 var(--s-2); }
+  .row {
+    display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'stock today' 'meta chg' 'unr unr';
+    column-gap: var(--s-3); row-gap: 2px; padding: var(--s-3) 0; border-bottom: 1px solid var(--rule);
+  }
+  .row[data-open='true'] { border-bottom-color: transparent; }
+  .row td { display: block; height: auto; border: 0; padding: 0; }
+  .row td[data-c='qty'], .row td[data-c='mv'] { display: none; }
+  .row td[data-c='chg'] { grid-area: chg; font-size: var(--t-13); }
+  .row td[data-c='stock'] { grid-area: stock; }
+  .row td[data-c='today'] { grid-area: today; font-size: var(--t-16); font-weight: 700; }
+  .row td[data-c='px'] { grid-area: meta; text-align: left; font-size: var(--t-13); color: var(--ink-3); }
+  .row td[data-c='unr'] { grid-area: unr; font-size: var(--t-13); display: flex; justify-content: space-between; gap: var(--s-2); margin-top: 2px; }
+  .row td[data-c='unr'] .v { display: flex; gap: 6px; }
+  .row td[data-c='px'] .m-only, .row td[data-c='unr'] .m-only, .subtotal .m-only { display: inline; }
+  .stock .code { min-width: 0; order: 2; font-weight: 500; color: var(--ink-3); font-size: var(--t-13); }
+  .stock .name { order: 1; color: var(--ink); font-size: var(--t-16); font-weight: 600; }
+  .chev { display: none; }
+
+  .subtotal { display: grid; grid-template-columns: 1fr auto; padding: var(--s-3) 0; border-top: 1px solid var(--ink); }
+  .subtotal td { display: block; height: auto; border: 0; padding: 0; }
+  .subtotal td[data-c='qty'], .subtotal td[data-c='px'], .subtotal td[data-c='chg'], .subtotal td[data-c='mv'] { display: none; }
+  .subtotal td[data-c='today'] { text-align: right; }
+  .subtotal td[data-c='unr'] { grid-column: 1 / -1; display: flex; justify-content: space-between; font-weight: 500; font-size: var(--t-13); margin-top: 2px; }
+
+  .detail { display: block; }
+  .detail > td { display: block; }
+  .detail .body { grid-template-columns: 1fr; gap: var(--s-4); padding: 0 var(--s-3) var(--s-4); }
+  .fee-panel { padding: var(--s-4); }
+  .fp-grid { grid-template-columns: 1fr; gap: var(--s-4); }
+  .fp-result { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: var(--s-4); }
+
+  .watch .row { grid-template-columns: 1fr auto 5.5em; grid-template-areas: 'stock px today'; align-items: baseline; }
+  .watch .row td[data-c='px'] { grid-area: px; color: var(--ink-2); font-size: var(--t-14); text-align: right; }
+  .watch .row td[data-c='today'] { text-align: right; font-size: var(--t-14); }
+
+  .tabbar {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: var(--paper); border-top: 1px solid var(--rule);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar a {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    height: 56px; color: var(--ink-3); text-decoration: none; font-size: var(--t-12); font-weight: 500;
+    border-top: 2px solid transparent; margin-top: -1px;
+  }
+  .tabbar a[aria-current='page'] { color: var(--accent); border-top-color: var(--accent); font-weight: 700; }
+  .tabbar svg.i { width: 20px; height: 20px; }
+  .foot { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+}
+.m-only { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 9h16M4 14h16M10 9v11"/></symbol>
+  <symbol id="i-line" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5z"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-fx" viewBox="0 0 24 24"><path d="M7 7h13l-4-4M17 17H4l4 4"/></symbol>
+</svg>
+
+<header class="bar">
+  <div class="bar-inner">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span class="t">股票小幫手</span></div>
+    <nav class="nav" aria-label="主要頁面">
+      <a href="#" aria-current="page">庫存總覽</a>
+      <a href="#">個股分析</a>
+      <a href="#">年度收益</a>
+      <a href="#">交易紀錄</a>
+      <span class="sep" aria-hidden="true"></span>
+      <a href="#">總體經濟</a>
+      <a href="#">外幣匯率</a>
+    </nav>
+    <div class="spacer"></div>
+    <button class="ws" type="button" aria-label="切換帳戶：玉山證券">玉山證券 <svg class="i" style="width:16px;height:16px"><use href="#i-down"/></svg></button>
+    <button class="btn btn-primary btn-add" type="button"><svg class="i"><use href="#i-plus"/></svg><span class="l">新增交易</span></button>
+    <button class="icon-btn theme-btn" type="button" aria-label="切換深淺色" onclick="toggleTheme()"><svg class="i"><use href="#i-moon"/></svg></button>
+    <button class="icon-btn" type="button" aria-label="帳號選單"><svg class="i"><use href="#i-user"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <h1 class="sr-only">庫存總覽</h1>
+
+  <section class="totals" aria-label="合計">
+    <div class="tot today">
+      <h2>今日損益<span class="asof">9/25（五）收盤</span><button class="icon-btn refresh" type="button" aria-label="重新整理報價" title="重新整理報價"><svg class="i" style="width:16px;height:16px"><use href="#i-refresh"/></svg></button></h2>
+      <div class="fig num up">+NT$57,949<span class="pct">+0.92%</span></div>
+      <div class="sub"><span>台股 <b class="up">+NT$57,050</b></span><span>美股 <b class="up">+US$28.00</b></span></div>
+    </div>
+    <div class="tot">
+      <h2>持倉市值（台幣合計）</h2>
+      <div class="fig num">NT$6,372,621</div>
+      <div class="sub"><span>台股 NT$6,177,100</span><span>美股 US$6,091.00</span><span>匯率 32.10</span></div>
+    </div>
+    <div class="tot">
+      <h2>未實現淨損益</h2>
+      <div class="fig num" id="tot-unr"></div>
+      <div class="sub"><button class="linkish" id="basis-btn" type="button" aria-expanded="false" aria-controls="fee-panel"><span id="basis-label"></span><svg class="i"><use href="#i-down"/></svg></button></div>
+    </div>
+  </section>
+
+  <section class="fee-panel" id="fee-panel" hidden aria-labelledby="fp-title">
+    <h2 id="fp-title">玉山證券的手續費設定</h2>
+    <div class="fp-grid">
+      <div class="fld">
+        <label for="fee-rate">手續費折扣</label>
+        <select id="fee-rate">
+          <option value="1">不打折（0.1425%）</option>
+          <option value="0.6">6 折（0.0855%）</option>
+          <option value="0.28">2.8 折（0.0399%）</option>
+          <option value="0.2">2 折（0.0285%）</option>
+        </select>
+        <p class="hint">你和券商約定的電子下單折扣。新增交易會用它帶入手續費。</p>
+      </div>
+      <fieldset class="fld">
+        <legend>折扣怎麼退給你</legend>
+        <label class="radio"><input type="radio" name="rebate" id="rebate-instant" value="instant"><b>現折</b><span>成交當下就用折扣後的費率收。</span></label>
+        <label class="radio"><input type="radio" name="rebate" id="rebate-monthly" value="monthly"><b>月退</b><span>先收全額 0.1425%，下個月再退差額。</span></label>
+      </fieldset>
+      <div class="fp-result" aria-live="polite">
+        <h3>總覽的未實現淨損益會這樣算</h3>
+        <p id="fp-explain"></p>
+        <p class="hint">這個算法跟著左邊兩個設定走，不需要另外選。不含費用的數字在每檔股票的明細裡都看得到。</p>
+      </div>
+    </div>
+    <div class="fp-acts">
+      <button class="btn btn-primary" id="fp-save" type="button">儲存</button>
+      <button class="btn btn-plain" id="fp-cancel" type="button">取消</button>
+    </div>
+  </section>
+
+
+  <div class="sec-head">
+    <h2>持股明細</h2>
+    <span class="count">7 檔</span>
+    <div class="seg" role="group" aria-label="排序">
+      <button type="button" aria-pressed="true">今日損益</button>
+      <button type="button" aria-pressed="false">市值</button>
+      <button type="button" aria-pressed="false">代號</button>
+    </div>
+  </div>
+
+  <table class="ledger" id="ledger">
+    <thead>
+      <tr>
+        <th scope="col">股票</th>
+        <th scope="col">股數</th>
+        <th scope="col">現價<sup>1</sup></th>
+        <th scope="col">漲跌幅</th>
+        <th scope="col">今日損益<sup>2</sup></th>
+        <th scope="col">市值</th>
+        <th scope="col">未實現淨損益<sup>3</sup></th>
+      </tr>
+    </thead>
+    <tbody id="tw"></tbody>
+    <tbody id="us"></tbody>
+  </table>
+
+  <div class="notes">
+    <ol>
+      <li>現價：台股接近即時，每分鐘更新；美股最多延遲 15 分鐘。收盤後顯示當日收盤價。</li>
+      <li>今日損益：（現價 − 昨日收盤價）× 持有股數，沒扣任何費用，所以不受損益口徑影響。</li>
+      <li id="note-unr"></li>
+    </ol>
+  </div>
+
+  <div class="sec-head">
+    <h2>觀察名單</h2>
+    <span class="count">3 / 30</span>
+  </div>
+  <table class="ledger watch">
+    <thead><tr><th scope="col">股票</th><th scope="col">現價</th><th scope="col">漲跌幅</th></tr></thead>
+    <tbody>
+      <tr class="row"><td data-c="stock"><div class="stock"><span class="code">2382</span><span class="name">廣達</span></div></td><td class="num" data-c="px">312.50</td><td class="num up" data-c="today">+2.46%</td></tr>
+      <tr class="row"><td data-c="stock"><div class="stock"><span class="code">2603</span><span class="name">長榮</span></div></td><td class="num" data-c="px">198.00</td><td class="num down" data-c="today">−1.25%</td></tr>
+      <tr class="row"><td data-c="stock"><div class="stock"><span class="code">TSLA</span><span class="name">特斯拉</span></div></td><td class="num" data-c="px">US$441.20</td><td class="num up" data-c="today">+0.84%</td></tr>
+    </tbody>
+  </table>
+</main>
+
+<footer class="foot">此頁為設計示意，所有數字皆為虛構。報價並非全部即時（最長可能延遲 20 分鐘），僅供參考，不宜做為買賣依據 · 0.9.70</footer>
+
+<nav class="tabbar" aria-label="主要頁面">
+  <a href="#" aria-current="page"><svg class="i"><use href="#i-sheet"/></svg>總覽</a>
+  <a href="#"><svg class="i"><use href="#i-line"/></svg>分析</a>
+  <a href="#"><svg class="i"><use href="#i-cal"/></svg>年度</a>
+  <a href="#"><svg class="i"><use href="#i-book"/></svg>紀錄</a>
+  <a href="#"><svg class="i"><use href="#i-globe"/></svg>總經</a>
+  <a href="#"><svg class="i"><use href="#i-fx"/></svg>匯率</a>
+</nav>
+
+<script>
+// Synthetic demo data (not real positions).
+const TW = [
+  { code: '2330', name: '台積電', qty: 2000, px: 2475, chg: 30, today: 60000, mv: 4950000, unr: 3161316, roi: 178.50,
+    cost: 1771010, costRaw: 1770000, avg: 885.51, be: 888.68, unrRaw: 3180000, broker: 3157088,
+    stops: [['2024/03/05', '買進', '2,000 股 @ 720', ''], ['2024/08/12', '賣出', '1,000 股 @ 910', '已實現 +NT$185,690'], ['2025/02/10', '買進', '1,000 股 @ 1,050', '']] },
+  { code: '2317', name: '鴻海', qty: 1000, px: 250.5, chg: 3.5, today: 3500, mv: 250500, unr: 44415, roi: 21.65,
+    cost: 205120, costRaw: 205000, avg: 205.12, be: 205.86, unrRaw: 45500, broker: 44273,
+    stops: [['2024/11/01', '買進', '2,000 股 @ 205', ''], ['2025/04/18', '賣出', '1,000 股 @ 160', '已實現 −NT$45,940']] },
+  { code: '0050', name: '元大台灣50', qty: 3000, px: 112.4, chg: 0.55, today: 1650, mv: 337200, unr: -143705, roi: -29.92,
+    cost: 480280, costRaw: 480000, avg: 160.09, be: 160.35, unrRaw: -142800, broker: -143897,
+    stops: [['2024/05/20', '買進', '3,000 股 @ 160', '']] },
+  { code: '00878', name: '國泰永續高股息', qty: 10000, px: 21.34, chg: -0.06, today: -600, mv: 213400, unr: -2115, roi: -0.98,
+    cost: 215120, costRaw: 215000, avg: 21.51, be: 21.55, unrRaw: -1600, broker: -2181,
+    stops: [['2025/07/07', '買進', '10,000 股 @ 21.50', '']] },
+  { code: '2454', name: '聯發科', qty: 300, px: 1420, chg: -25, today: -7500, mv: 426000, unr: 70154, roi: 19.81,
+    cost: 354204, costRaw: 354000, avg: 1180.68, be: 1184.92, unrRaw: 72000, broker: 69898,
+    stops: [['2025/06/02', '買進', '500 股 @ 1,180', ''], ['2025/09/15', '賣出', '200 股 @ 1,320', '已實現 +NT$26,742']] },
+]
+const US = [
+  { code: 'NVDA', name: '輝達', qty: 20, px: 178.40, chg: 2.30, today: 46, mv: 3568, unr: 1367, roi: 62.11,
+    cost: 2201, costRaw: 2200, avg: 110.05, be: 110.12, unrRaw: 1368, broker: 1367,
+    stops: [['2025/03/03', '買進', '20 股 @ 110.00', '']] },
+  { code: 'AAPL', name: '蘋果', qty: 10, px: 252.30, chg: -1.80, today: -18, mv: 2523, unr: 622.33, roi: 32.74,
+    cost: 1900.67, costRaw: 1900, avg: 190.07, be: 190.19, unrRaw: 623, broker: 622.33,
+    stops: [['2025/05/05', '買進', '15 股 @ 190.00', ''], ['2025/10/10', '賣出', '5 股 @ 245.00', '已實現 +US$273.67']] },
+]
+
+const nf0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
+const nf2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const cls = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : '')
+const sign = (v) => (v > 0 ? '+' : v < 0 ? '−' : '')
+const money = (v, ccy, signed) => {
+  const p = ccy === 'TWD' ? 'NT$' : 'US$'
+  const f = ccy === 'TWD' ? nf0 : nf2
+  return (signed ? sign(v) : v < 0 ? '−' : '') + p + f.format(Math.abs(v))
+}
+const pct = (v) => sign(v) + nf2.format(Math.abs(v)) + '%'
+const price = (v, ccy) => (ccy === 'USD' ? 'US$' : '') + nf2.format(v)
+
+const FX = 32.1
+const LIST_RATE = 0.001425
+// Workspace fee settings are the single source; the P&L basis is derived from them.
+const saved = { discount: 0.28, rebate: 'monthly' }
+const basisOf = (st) => (st.rebate === 'monthly' && st.discount < 1 ? 'list' : 'net')
+const rateText = (r) => (r * 100).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '%'
+
+function basisText(st) {
+  if (basisOf(st) === 'list' || st.discount === 1) return `牌告 ${rateText(LIST_RATE)} 預扣`
+  return `折扣後 ${rateText(LIST_RATE * st.discount)} 預扣`
+}
+function explain(st) {
+  if (st.discount === 1)
+    return `沒有折扣，台股用 <span class="basis">牌告 ${rateText(LIST_RATE)}</span> 預扣賣出手續費，再扣證交稅。`
+  if (st.rebate === 'monthly')
+    return `月退制的券商 App 會先用全額預扣，所以台股用 <span class="basis">牌告 ${rateText(LIST_RATE)}</span> 預扣賣出手續費，再扣證交稅，數字才對得上 App。`
+  return `現折的券商 App 用折扣後的費率預扣，所以台股用 <span class="basis">折扣後 ${rateText(LIST_RATE * st.discount)}</span> 預扣賣出手續費，再扣證交稅。`
+}
+// A row's figure under a basis. US rows have no list-rate setting, so they always use the net figure.
+const unrOf = (r, basis, ccy) => (basis === 'list' && ccy === 'TWD' ? r.broker : r.unr)
+const roiOf = (r, basis, ccy) => (unrOf(r, basis, ccy) / r.cost) * 100
+const open = new Set()
+
+function renderGroup(el, rows, ccy, label, st) {
+  const basis = basisOf(st)
+  rows.sort((a, b) => b.today - a.today)
+  const sum = (f) => rows.reduce((acc, r) => acc + f(r), 0)
+  let h = `<tr class="grp"><th colspan="7" scope="rowgroup">${label}<span class="ccy">${ccy === 'TWD' ? '新台幣' : '美元'} · ${rows.length} 檔</span></th></tr>`
+  rows.forEach((r) => {
+    const id = `d-${r.code}`
+    const isOpen = open.has(id)
+    const chgPct = (r.chg / (r.px - r.chg)) * 100
+    const u = unrOf(r, basis, ccy)
+    const roi = roiOf(r, basis, ccy)
+    const used = ccy === 'TWD' ? basis : 'net'
+    const cmpRows = [
+      { key: 'net', label: ccy === 'TWD' ? `折扣後 ${rateText(LIST_RATE * st.discount)}` : '實際手續費', v: r.unr, roi: (r.unr / r.cost) * 100 },
+      { key: 'list', label: `牌告 ${rateText(LIST_RATE)}`, v: ccy === 'TWD' ? r.broker : null, roi: ccy === 'TWD' ? (r.broker / r.cost) * 100 : null },
+      { key: 'raw', label: '不含費用', v: r.unrRaw, roi: (r.unrRaw / r.costRaw) * 100 },
+    ]
+    h += `<tr class="row" data-open="${isOpen}">
+      <td data-c="stock"><div class="stock"><button type="button" aria-expanded="${isOpen}" aria-controls="${id}"><svg class="i chev"><use href="#i-right"/></svg><span class="code">${r.code}</span><span class="name">${r.name}</span></button></div></td>
+      <td class="num" data-c="qty">${nf0.format(r.qty)}</td>
+      <td class="num" data-c="px"><span class="m-only">${nf0.format(r.qty)} 股 · </span>${price(r.px, ccy)}</td>
+      <td class="num ${cls(r.chg)}" data-c="chg">${pct(chgPct)}</td>
+      <td class="num strong ${cls(r.today)}" data-c="today">${money(r.today, ccy, true)}</td>
+      <td class="num" data-c="mv">${money(r.mv, ccy)}</td>
+      <td class="num" data-c="unr"><span class="m-only muted">未實現淨損益</span><span class="v"><span class="${cls(u)}">${money(u, ccy, true)}</span><span class="${cls(u)}">(${pct(roi)})</span></span></td>
+    </tr>
+    <tr class="detail" id="${id}" data-open="${isOpen}"><td colspan="7"><div class="wrap"><div class="clip"><div class="body">
+      <div><h3>成本</h3><dl class="kv">
+        <dt>投入成本</dt><dd class="num">${money(r.cost, ccy)}<small>未含費 ${money(r.costRaw, ccy)}</small></dd>
+        <dt>平均成本</dt><dd class="num">${price(r.avg, ccy)}<small>未含費 ${price(r.costRaw / r.qty, ccy)}</small></dd>
+        <dt>保本賣出價</dt><dd class="num">${price(r.be, ccy)}</dd>
+      </dl></div>
+      <div><h3>未實現損益的三種算法</h3><table class="cmp"><thead><tr><th scope="col">算法</th><th scope="col">未實現損益</th><th scope="col">報酬率</th></tr></thead><tbody>
+        ${cmpRows.map((c) => `<tr class="${c.key === used ? 'on' : ''}"><td>${c.label}${c.key === used ? '<span class="tag">目前採用</span>' : ''}</td>${
+          c.v === null
+            ? '<td class="na">不適用</td><td class="na">—</td>'
+            : `<td class="num ${cls(c.v)}">${money(c.v, ccy, true)}</td><td class="num ${cls(c.v)}">${pct(c.roi)}</td>`
+        }</tr>`).join('')}
+      </tbody></table></div>
+      <div><h3>這檔股票的交易</h3><ul class="stops">${r.stops.map((t) => `<li><span class="num">${t[0]}</span><span class="t">${t[1]}</span><span class="num">${t[2]}</span><span class="num r muted">${t[3]}</span></li>`).join('')}</ul></div>
+      <div class="acts">${ccy === 'TWD' ? '<button class="btn btn-ghost" type="button">個股分析<svg class="i" style="width:16px;height:16px"><use href="#i-right"/></svg></button>' : ''}<button class="btn btn-ghost" type="button"><svg class="i" style="width:16px;height:16px"><use href="#i-plus"/></svg>新增這檔的交易</button></div>
+    </div></div></div></td></tr>`
+  })
+  const su = sum((r) => unrOf(r, basis, ccy))
+  const st2 = sum((r) => r.today)
+  h += `<tr class="subtotal"><td data-c="stock">${label}小計</td><td data-c="qty"></td><td data-c="px"></td><td data-c="chg"></td>
+    <td class="num ${cls(st2)}" data-c="today">${money(st2, ccy, true)}</td>
+    <td class="num" data-c="mv">${money(sum((r) => r.mv), ccy)}</td>
+    <td class="num" data-c="unr"><span class="m-only muted">未實現淨損益</span><span class="${cls(su)}">${money(su, ccy, true)}</span></td></tr>`
+  el.innerHTML = h
+  return { unr: su, cost: sum((r) => r.cost) }
+}
+
+function render(st) {
+  const tw = renderGroup(document.getElementById('tw'), TW, 'TWD', '台股', st)
+  const us = renderGroup(document.getElementById('us'), US, 'USD', '美股', st)
+  const unr = tw.unr + us.unr * FX
+  const roi = (unr / (tw.cost + us.cost * FX)) * 100
+  const fig = document.getElementById('tot-unr')
+  fig.className = 'fig num ' + cls(unr)
+  fig.innerHTML = `${money(Math.round(unr), 'TWD', true)}<span class="pct">${pct(roi)}</span>`
+  document.getElementById('basis-label').textContent = `台股依${basisText(st)}`
+  document.getElementById('note-unr').textContent =
+    `未實現淨損益：如果現在全部賣掉，大約會賺賠多少。台股依${basisText(st)}賣出手續費，再扣證交稅；美股扣實際手續費。算法由工作區的手續費設定決定，點合計下方的算法說明可以修改。點一列可以看三種算法的對照、含費與未含費的成本，以及這檔股票的每一筆交易。`
+}
+
+// Fee panel: edits a draft and previews the derived basis; only Save changes the page.
+const panel = document.getElementById('fee-panel')
+const basisBtn = document.getElementById('basis-btn')
+let draft = { ...saved }
+function syncPanel() {
+  document.getElementById('fee-rate').value = String(draft.discount)
+  document.getElementById('rebate-' + draft.rebate).checked = true
+  document.querySelectorAll('input[name=rebate]').forEach((el) => (el.disabled = draft.discount === 1))
+  document.getElementById('fp-explain').innerHTML = explain(draft)
+}
+function setPanel(show) {
+  panel.hidden = !show
+  basisBtn.setAttribute('aria-expanded', String(show))
+  if (show) {
+    draft = { ...saved }
+    syncPanel()
+    document.getElementById('fee-rate').focus()
+  } else basisBtn.focus()
+}
+basisBtn.addEventListener('click', () => setPanel(panel.hidden))
+document.getElementById('fee-rate').addEventListener('change', (e) => {
+  draft.discount = Number(e.target.value)
+  syncPanel()
+})
+document.querySelectorAll('input[name=rebate]').forEach((el) =>
+  el.addEventListener('change', () => {
+    draft.rebate = el.value
+    syncPanel()
+  }),
+)
+document.getElementById('fp-cancel').addEventListener('click', () => setPanel(false))
+document.getElementById('fp-save').addEventListener('click', () => {
+  Object.assign(saved, draft)
+  render(saved)
+  setPanel(false)
+})
+panel.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setPanel(false)
+})
+
+render(saved)
+
+document.getElementById('ledger').addEventListener('click', (e) => {
+  const row = e.target.closest('.row')
+  if (!row) return
+  const b = row.querySelector('button[aria-expanded]')
+  const id = b.getAttribute('aria-controls')
+  const isOpen = b.getAttribute('aria-expanded') !== 'true'
+  if (isOpen) open.add(id)
+  else open.delete(id)
+  b.setAttribute('aria-expanded', String(isOpen))
+  row.dataset.open = String(isOpen)
+  document.getElementById(id).dataset.open = String(isOpen)
+})
+
+function toggleTheme() {
+  const r = document.documentElement
+  const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+  r.dataset.theme = dark ? 'light' : 'dark'
+}
+const q = new URLSearchParams(location.search)
+if (q.get('theme')) document.documentElement.dataset.theme = q.get('theme')
+if (q.get('open')) q.get('open').split(',').forEach((code) => {
+  document.querySelectorAll('#ledger .row').forEach((row) => {
+    if (row.querySelector('.code').textContent === code) row.click()
+  })
+})
+</script>
+</body>
+</html>

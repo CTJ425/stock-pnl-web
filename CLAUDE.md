@@ -41,6 +41,12 @@ Then inspect code you will touch. Do not assume chat has full state.
 
 - After work: update `TASK.md` / `PROGRESS.md` (and bugs if needed). Significant records: `YYYY-MM-DD HH:mm:ss Asia/Taipei`.
 
+## Frontend changes
+
+- Before changing any frontend code, read `PRODUCT.md` at the repo root. If it does not exist
+  yet, say so and offer `/impeccable init` to create it.
+- For any UI / visual design work, use the **`impeccable`** skill (`.claude/skills/impeccable/`).
+
 ## Command rules
 
 - **The Verify line is `npm run build`, never `npx tsc --noEmit`.** The latter does not

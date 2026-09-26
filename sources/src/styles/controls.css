@@ -1,27 +1,26 @@
 /* ---------- Button ----------*/
-/* ---------- Carbon button ----------
- * Carbon buttons are square, 40px tall (md), and use asymmetric padding:
- * the label sits at the left edge, and the right side keeps room for an icon.
- * The default .btn is the Carbon tertiary/secondary style; .btn-primary is $button-primary.
+/* ---------- Statement button ----------
+ * A ruled box with a 2px corner, 36px tall, label centred and set in the body face at 600.
+ * The default .btn is the secondary (outlined) button; .btn-primary is the one ruling-blue fill.
  */
 .btn {
   appearance: none;
-  border: 1px solid var(--cds-border-strong);
-  background: transparent;
+  border: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
   color: var(--cds-text-primary);
   font: inherit;
   font-size: var(--type-body-01);
-  font-weight: 400;
-  letter-spacing: 0.16px;
-  min-height: var(--cds-size-md);
-  padding: 0 var(--sp-06) 0 var(--sp-04);
-  border-radius: 0;
+  font-weight: 600;
+  letter-spacing: 0;
+  min-height: 36px;
+  padding: 0 var(--sp-05);
+  border-radius: var(--radius);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: var(--sp-03);
-  text-align: left;
+  text-align: center;
   transition: background var(--cds-dur-fast) var(--cds-ease-productive),
     border-color var(--cds-dur-fast) var(--cds-ease-productive),
     color var(--cds-dur-fast) var(--cds-ease-productive);
@@ -29,7 +28,7 @@
 
 .btn:hover {
   border-color: var(--cds-border-strong);
-  background: var(--cds-background-hover);
+  background: var(--cds-layer-01);
 }
 
 .btn:active {
@@ -44,13 +43,14 @@
 }
 
 .btn-primary {
-  border: 1px solid transparent;
+  border: 1px solid var(--cds-button-primary);
   background: var(--cds-button-primary);
-  color: var(--cds-text-on-color);
+  color: var(--accent-ink);
   box-shadow: none;
 }
 
 .btn-primary:hover {
+  border-color: var(--cds-button-primary-hover);
   background: var(--cds-button-primary-hover);
   box-shadow: none;
 }
@@ -59,11 +59,16 @@
   background: var(--cds-button-primary-active);
 }
 
-/* Carbon danger--tertiary: a red outline that fills on hover. */
+/* Destructive: an outline that stays quiet until hovered or focused, then fills. */
 .btn-danger {
   border-color: var(--cds-button-danger);
   color: var(--cds-support-error);
   background: transparent;
+}
+
+.btn-danger:focus-visible {
+  background: var(--cds-button-danger);
+  color: var(--cds-text-on-color);
 }
 
 .btn-danger:hover {
@@ -77,21 +82,20 @@
   color: var(--cds-text-on-color);
 }
 
-/* Carbon icon-only button: square, and the label padding goes away. */
+/* Icon-only button: square, and the label padding goes away. */
 .btn-icon {
   padding: 0;
-  width: var(--cds-size-md);
-  min-height: var(--cds-size-md);
+  width: 36px;
+  min-height: 36px;
   justify-content: center;
   gap: 0;
 }
 
-/* Carbon small button: 32px tall. */
+/* Small button: 32px tall. */
 .btn-sm {
   min-height: var(--cds-size-sm);
-  padding: 0 var(--sp-05) 0 var(--sp-04);
+  padding: 0 var(--sp-04);
   font-size: var(--type-body-01);
-  border-radius: 0;
 }
 
 .btn-sm.btn-icon {
@@ -101,24 +105,24 @@
 
 
 /* ---------- Form ----------*/
-/* ---------- Carbon text input ----------
- * Carbon fields carry one $border-strong rule on the bottom edge only, sit on
- * $field-01, and are 40px tall. Focus draws a 2px $focus outline inside the box.
+/* ---------- Statement form field ----------
+ * A fully ruled box on the paper, 40px tall, 2px corner. Focus draws a 2px accent
+ * outline inside the box.
  */
 .field {
   margin-bottom: var(--sp-05);
   position: relative;
 }
 
-/* Carbon label-01: 12px / 16px, $text-secondary. */
+/* Field label: 13px, weight 600, ink. */
 .field label {
   display: block;
   margin-bottom: var(--sp-03);
-  font-size: var(--type-label-01);
-  line-height: 1.33333;
-  letter-spacing: 0.32px;
-  font-weight: 400;
-  color: var(--cds-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--cds-text-primary);
 }
 
 .field input,
@@ -129,12 +133,11 @@
   padding: 0 var(--sp-05);
   font: inherit;
   font-size: var(--type-body-01);
-  letter-spacing: 0.16px;
+  letter-spacing: 0;
   color: var(--cds-text-primary);
   background: var(--cds-field-01);
-  border: none;
-  border-bottom: 1px solid var(--cds-border-strong);
-  border-radius: 0;
+  border: 1px solid var(--cds-border-strong);
+  border-radius: var(--radius);
   outline: none;
   transition: background var(--cds-dur-fast) var(--cds-ease-productive),
     outline var(--cds-dur-fast) var(--cds-ease-productive);
@@ -158,7 +161,7 @@
 .field textarea:focus {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
-  border-bottom-color: transparent;
+  border-color: transparent;
   box-shadow: none;
 }
 
@@ -353,7 +356,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--cds-text-primary);
   background: var(--cds-layer-02);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 0 var(--sp-03);
   line-height: 20px;
 }
@@ -551,33 +554,34 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Tips and Badges ----------*/
-/* ---------- Carbon tag ----------
- * Carbon tags stay pill-shaped: 24px tall, 12px label, a filled tint, no border.
+/* ---------- Tag ----------
+ * A small stamped mark: 20px tall, 12px label at 600, a 1px rule and a 2px corner.
  */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-02);
-  height: 24px;
+  height: 20px;
   font-size: var(--type-label-01);
+  font-weight: 600;
   line-height: 1.33333;
-  padding: 0 var(--sp-03);
-  border-radius: 12px;
-  border: none;
-  background: var(--cds-layer-02);
-  color: var(--cds-text-primary);
+  padding: 0 var(--sp-02);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+  color: var(--cds-text-secondary);
   white-space: nowrap;
 }
 
 .badge.badge-warn {
-  color: var(--cds-text-primary);
-  border: none;
-  background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent);
+  color: var(--cds-support-warning);
+  border-color: color-mix(in srgb, var(--cds-support-warning) 55%, transparent);
+  background: color-mix(in srgb, var(--cds-support-warning) 10%, transparent);
 }
 
-/* ---------- Carbon inline notification ----------
- * A $layer-01 bar with a 3px status rule on the left edge. The text stays
- * $text-primary; the status color carries the meaning, not the type color.
+/* ---------- Inline notice ----------
+ * A ruled box tinted by its status. The text stays ink; the status colour carries the
+ * meaning through the rule and the tint, not a thick side stripe.
  */
 .notice {
   display: flex;
@@ -586,36 +590,35 @@ input[type='date']::-webkit-calendar-picker-indicator {
   gap: var(--sp-05);
   min-height: var(--cds-size-lg);
   padding: var(--sp-04) var(--sp-05);
-  border-radius: 0;
+  border-radius: var(--radius);
   font-size: var(--type-body-01);
-  line-height: 1.42857;
-  letter-spacing: 0.16px;
+  line-height: 1.5;
+  letter-spacing: 0;
   color: var(--cds-text-primary);
-  background: var(--cds-layer-01);
-  border: none;
-  border-left: 3px solid var(--cds-border-subtle);
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-subtle);
   margin-bottom: var(--sp-04);
 }
 
 .notice-error {
   color: var(--cds-text-primary);
-  border-left-color: var(--cds-support-error);
-  background: var(--cds-layer-01);
+  border-color: color-mix(in srgb, var(--cds-support-error) 55%, transparent);
+  background: color-mix(in srgb, var(--cds-support-error) 8%, var(--cds-layer-01));
 }
 
 .notice-ok {
   color: var(--cds-text-primary);
-  border-left-color: var(--cds-support-success);
-  background: var(--cds-layer-01);
+  border-color: color-mix(in srgb, var(--cds-support-success) 55%, transparent);
+  background: color-mix(in srgb, var(--cds-support-success) 8%, var(--cds-layer-01));
 }
 
 .notice-warn {
   color: var(--cds-text-primary);
-  border-left-color: var(--cds-support-warning);
-  background: var(--cds-layer-01);
+  border-color: color-mix(in srgb, var(--cds-support-warning) 55%, transparent);
+  background: color-mix(in srgb, var(--cds-support-warning) 8%, var(--cds-layer-01));
 }
 
-/* The dismiss control inside a notification is a Carbon ghost button. */
+/* The dismiss control inside a notification is a ghost button. */
 .notice > button {
   appearance: none;
   border: none;

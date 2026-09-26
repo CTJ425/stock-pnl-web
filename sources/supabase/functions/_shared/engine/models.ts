@@ -13,11 +13,20 @@ export type TxType = 'BUY' | 'SELL' | 'DIVIDEND' | 'STOCK_DIVIDEND'
 export type TxNature = 'SPOT' | 'DAY_TRADE' | 'MARGIN' | 'SHORT'
 export type Currency = 'TWD' | 'USD'
 
+/**
+ * How the broker hands back a fee discount (2026-09-26 redesign). `monthly` (月退) brokers
+ * charge the full statutory rate at trade time and refund the difference later, so their apps
+ * withhold the full rate on unrealized P&L; `instant` (現折) brokers charge the discounted rate
+ * up front. Null / missing means never set, which reads as `instant` (the pre-redesign figure).
+ */
+export type FeeRebate = 'instant' | 'monthly'
+
 export interface Workspace {
   id: string
   name: string
   created_at: string
   fee_rate?: number | null
+  fee_rebate?: FeeRebate | null
 }
 
 export interface Transaction {

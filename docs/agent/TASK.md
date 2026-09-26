@@ -21,6 +21,18 @@
 
 ## 📋 Active Tasks
 
+### Task 170: Redesign the whole UI as a broker statement (券商對帳單) (user, 2026-09-26)
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-27 05:37:04 Asia/Taipei
+- **Spec**: `DESIGN.md`, `PRODUCT.md`, `.impeccable/surfaces/sources-src-components-dashboard-dashboardpage-tsx.md`
+1. ~~Tokens, fonts, controls, navigation, notices restyled; dashboard rewritten; fee basis from 現折/月退~~ ✅ 0.9.71-dev.1
+2. ~~DEV: `workspaces.fee_rebate` column + CHECK~~ ✅ 2026-09-27
+3. DEV `stock-report` redeploy for the re-synced engine `models.ts` (type-only change) —— ⏳
+4. User review on DEV (logged-in pages were not screenshot-checked: analysis, macro, FX, admin, Discord) —— ⏳
+5. With the user's OK: release 0.9.71 to `main`, then apply the `fee_rebate` DDL on PROD and redeploy PROD `stock-report` —— ⏳
+6. Follow-ups not done: other pages only inherit the new tokens (年度收益 still has 「?」 heads and two-line cells; 交易紀錄 table still scrolls sideways on phones); app icons / favicon still the old bars —— ⏳
+
 ### Task 167: Remove AI, move 新增交易 to the header, Discord 券商 figure (user, 2026-09-24)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

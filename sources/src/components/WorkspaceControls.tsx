@@ -10,12 +10,11 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { getFeeRate } from '../utils/settings'
-import { describeTwFeeRate } from '../utils/feeRateHint'
 import { Modal } from './Common/Modal'
 import { HeaderMenu } from './Common/HeaderMenu'
 import { useToast } from './Common/Toast'
 import { useConfirm } from './Common/useConfirm'
+import { WorkspaceFeeSettings } from './WorkspaceFeeSettings'
 
 const RecalcFeesModal = lazy(() =>
   import('./Transactions/RecalcFeesModal').then((m) => ({ default: m.RecalcFeesModal })),
@@ -29,13 +28,11 @@ export function WorkspaceControls() {
     createWorkspace,
     renameWorkspace,
     deleteWorkspace,
-    setWorkspaceFeeRate,
   } = useWorkspace()
   const { show } = useToast()
   const confirm = useConfirm()
   const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
   const [nameInput, setNameInput] = useState('')
-  const [feeInput, setFeeInput] = useState('')
   // After the rate changes, batch recalculation preview is enabled so that historical records can be adjusted according to the new rate.
   const [showRecalc, setShowRecalc] = useState(false)
 
@@ -50,24 +47,11 @@ export function WorkspaceControls() {
   }
   const openFee = () => {
     if (!current) return
-    setFeeInput(String(getFeeRate(current.id)))
     setModal('fee')
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (modal === 'fee') {
-      const rate = parseFloat(feeInput)
-      if (!Number.isFinite(rate) || rate < 0 || rate >= 1) return
-      if (current) {
-        const changed = rate !== getFeeRate(current.id)
-        await setWorkspaceFeeRate(current.id, rate)
-        // When the rates change, batch recalculation will be carried out for simultaneous adjustment of historical records (can be checked or cancelled)
-        if (changed) setShowRecalc(true)
-      }
-      setModal(null)
-      return
-    }
     const name = nameInput.trim()
     if (!name) return
     if (modal === 'create') await createWorkspace(name)
@@ -165,7 +149,7 @@ export function WorkspaceControls() {
               }}
             >
               <Percent size={14} />
-              <span>預設手續費率</span>
+              <span>手續費設定</span>
             </button>
             <div className="hmenu-sep" />
             <button
@@ -191,41 +175,21 @@ export function WorkspaceControls() {
               ? '新增工作區'
               : modal === 'rename'
                 ? '重新命名工作區'
-                : `工作區設定 — ${current?.name ?? ''}`
+                : `手續費設定 — ${current?.name ?? ''}`
           }
           onClose={() => setModal(null)}
         >
-          <form onSubmit={(e) => void submit(e)}>
-            {modal === 'fee' ? (
-              <div className="field">
-                <label htmlFor="ws-fee-rate">預設手續費率</label>
-                <input
-                  id="ws-fee-rate"
-                  type="number"
-                  step="any"
-                  min="0"
-                  max="0.99"
-                  value={feeInput}
-                  autoFocus
-                  placeholder="例如 0.001425"
-                  onChange={(e) => setFeeInput(e.target.value)}
-                />
-                {(() => {
-                  const hint = describeTwFeeRate(parseFloat(feeInput))
-                  return (
-                    <>
-                      {hint.discount && <span className="fee-rate-hint">{hint.discount}</span>}
-                      {hint.warning && <span className="fee-rate-warning">{hint.warning}</span>}
-                    </>
-                  )
-                })()}
-                <div className="field-hint">
-                  台股標準是 0.001425。券商有折扣就填折扣後的數字（例如 0.0004275）。
-                  只套用在「{current?.name ?? '目前'}」工作區，新增交易時會自動帶入；
-                  改了費率會問你要不要把舊紀錄一起重算。
-                </div>
-              </div>
-            ) : (
+          {modal === 'fee' ? (
+            <WorkspaceFeeSettings
+              showTitle={false}
+              onClose={() => setModal(null)}
+              // A changed rate offers to recalculate the recorded fees (can be checked or cancelled).
+              onSaved={({ rateChanged }) => {
+                if (rateChanged) setShowRecalc(true)
+              }}
+            />
+          ) : (
+            <form onSubmit={(e) => void submit(e)}>
               <div className="field">
                 <label htmlFor="ws-name">工作區名稱</label>
                 <input
@@ -236,11 +200,11 @@ export function WorkspaceControls() {
                   onChange={(e) => setNameInput(e.target.value)}
                 />
               </div>
-            )}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-              {modal === 'create' ? '建立' : '儲存'}
-            </button>
-          </form>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+                {modal === 'create' ? '建立' : '儲存'}
+              </button>
+            </form>
+          )}
         </Modal>
       )}
 

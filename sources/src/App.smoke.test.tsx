@@ -190,7 +190,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect(container.querySelector('nav.bottom-nav')).toBeNull()
   })
 
-  it('未實現損益一律以「淨」命名，台股卡片不重複列出預扣說明', async () => {
+  it('未實現損益一律以「淨」命名，預扣的算法寫在合計下方與附註', async () => {
     // Task 159 D11: an empty account no longer shows the market cards, so seed one TW and one US holding.
     window.localStorage.setItem(
       'stock-pnl-web/local-store-v1',
@@ -208,16 +208,13 @@ describe('App（本機模式煙霧測試）', () => {
     await screen.findByText('本機模式')
 
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
-    // The unrealized gains and losses of both Taiwan stocks and US stocks cards are named "net" (card titles no longer have the market prefix starting from v0.3)
-    await waitFor(() => expect(container.querySelectorAll('.market-panel').length).toBe(2))
-    const netLabels = Array.from(container.querySelectorAll<HTMLElement>('.market-panel')).map((panel) =>
-      within(panel).getByText('未實現淨損益'),
-    )
-    expect(netLabels.length).toBe(2)
-    // The description is changed to the tooltip of the card title, which no longer occupies a line.
-    expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
-    // The tooltip of the Taiwan stock card (DOM appears first) indicates that the handling fee and securities tax have been withheld
-    expect(netLabels[0].getAttribute('title')).toContain('手續費和證交稅都已經扣掉了')
+    // 2026-09-26 statement redesign: one 未實現淨損益 total, its basis printed under it (local mode has no
+    // USD rate, so the headline is the TW figure and says so), and the column head points at footnote 3.
+    await waitFor(() => expect(container.querySelector('.stmt-totals')).toBeTruthy())
+    expect(screen.getByRole('heading', { level: 2, name: '未實現淨損益（台股）' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 預扣/ })).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: /未實現淨損益/ })).toBeTruthy()
+    expect(container.querySelector('.stmt-notes')?.textContent).toContain('再扣證交稅')
   })
 
   it('新增台股買入交易 → 庫存總覽與年度收益同步呈現', async () => {
@@ -253,8 +250,9 @@ describe('App（本機模式煙霧測試）', () => {
     expect(screen.getByText('現股買')).toBeTruthy()
     expect(screen.getByText('1,000')).toBeTruthy()
 
-    // Dashboard: Holdings and average price (500712 / 1000 = 500.712 → NT$500.71)
+    // Dashboard: Holdings and average price (500712 / 1000 = 500.712 → NT$500.71), in the row's detail
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
+    await user.click(await screen.findByTestId('holding-row-2330'))
     expect(await screen.findByText('NT$500.71')).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: /未實現淨損益/ })).toBeTruthy()
 
@@ -399,7 +397,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect(items.map((b) => b.textContent)).toEqual([
       '新增工作區',
       '重新命名',
-      '預設手續費率',
+      '手續費設定',
       '刪除工作區',
     ])
     // The current workspace is presented with menuitemradio and checked

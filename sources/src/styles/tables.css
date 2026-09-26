@@ -14,25 +14,26 @@ table.data-table {
   background: var(--cds-layer-01);
 }
 
-/* ---------- Carbon data table (compact) ----------
- * The header row sits on $layer-accent-01 and uses sentence case, weight 600.
- * Carbon does not set uppercase on column headers.
+/* ---------- Statement table ----------
+ * Column heads are small printed labels above one ink rule; rows are separated by
+ * hairlines, never by tinted bands.
  */
 .data-table th {
   text-align: left;
-  font-weight: 600;
+  font-weight: 500;
   font-size: var(--type-label-01);
   line-height: 1.33333;
-  letter-spacing: 0.32px;
+  letter-spacing: 0;
   text-transform: none;
-  color: var(--cds-text-primary);
+  color: var(--cds-text-helper);
   padding: var(--sp-03);
-  border-bottom: none;
+  border-bottom: 1px solid var(--cds-text-primary);
   white-space: nowrap;
-  background: var(--cds-layer-accent-01);
+  background: var(--table-head);
+  vertical-align: bottom;
 }
 
-/* Carbon data table, md size: every row is 40px. A stacked cell grows past it. */
+/* Every row is at least 40px. A stacked cell grows past it. */
 .data-table td {
   font-size: var(--type-body-01);
   height: var(--cds-size-md);
@@ -44,8 +45,8 @@ table.data-table {
   font-variant-numeric: tabular-nums;
 }
 
-/* Carbon row header: the first column anchors the row, so it keeps $text-primary
-   while the data cells stay one step back at $text-secondary. */
+/* The first column anchors the row, so it keeps the ink colour while the data cells
+   stay one step back. */
 .data-table td:first-child {
   color: var(--cds-text-primary);
 }
@@ -243,28 +244,7 @@ table.data-table {
   text-align: right;
 }
 
-/* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
-.holding-group td {
-  background: var(--row-band);
-  font-size: var(--type-label-01);
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  padding: 8px 12px;
-}
-
-.holding-group-short .holding-group-label {
-  color: var(--steel);
-}
-
-.row-short td {
-  background: var(--steel-tint);
-}
-
-.row-short td:first-child {
-  box-shadow: inset 3px 0 0 var(--steel);
-}
-
+/* ---------- Transaction nature chips (Task 142) ----------*/
 .tx-chip {
   display: inline-block;
   font-size: var(--type-label-01);
@@ -327,7 +307,7 @@ table.data-table {
 .whatif-ladder-tag {
   margin-left: 8px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--accent-strong);

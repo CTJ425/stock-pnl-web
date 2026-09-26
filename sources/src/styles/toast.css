@@ -18,14 +18,14 @@
   padding: var(--sp-04);
   background: var(--cds-layer-01);
   color: var(--cds-text-primary);
-  border: 1px solid var(--cds-border-subtle);
-  border-left: 3px solid var(--cds-support-success);
+  border: 1px solid color-mix(in srgb, var(--cds-support-success) 55%, var(--cds-border-subtle));
+  border-radius: var(--radius);
   font-size: var(--type-body-01);
   box-shadow: var(--cds-shadow-menu);
 }
 
 .toast-error {
-  border-left-color: var(--cds-support-error);
+  border-color: color-mix(in srgb, var(--cds-support-error) 55%, var(--cds-border-subtle));
 }
 
 .toast-message {

@@ -6,9 +6,9 @@
  * never changes with the theme.
  */
 export const CHART_COLORS = {
-  up: '#fa4d56', // Carbon red 50
-  down: '#24a148', // Carbon green 50
-  line: '#4589ff', // Carbon blue 50
+  up: '#dc4a44', // statement red, between the two themes' --up
+  down: '#1f9460', // statement green, between the two themes' --down
+  line: '#5b8cc6', // ruling blue, between the two themes' accent
   axis: '#8d8d8d', // Carbon gray 50
   grid: 'rgba(141, 141, 141, 0.3)',
   zero: 'rgba(141, 141, 141, 0.7)',

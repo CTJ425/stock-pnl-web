@@ -424,7 +424,7 @@
 .adm-log-level {
   display: inline-flex; align-items: center; justify-content: center;
   height: 24px; font-size: var(--type-label-01); font-weight: 400; padding: 0 var(--sp-03);
-  border-radius: 12px; border: none; white-space: nowrap;
+  border-radius: var(--radius-sm); border: none; white-space: nowrap;
   color: var(--cds-text-primary); background: var(--chip-neutral);
 }
 .adm-log-level-error { background: color-mix(in srgb, var(--danger) 28%, transparent); }
@@ -498,8 +498,8 @@
 /* ---------- Probe war room cards ----------
  * The two gradient bars that used to live here were dead CSS: no base rule ever
  * gave `.pwr-kpi-card::before` content or a box, so all three states drew the
- * same card. State now uses the device Carbon already uses for a status block —
- * a 3px rule on the leading edge in the $support colour — plus a Carbon tag.
+ * same card. State is a 2px status rule across the top of the card (a statement's
+ * ruled section head, not a side stripe) plus a tag.
  * Two hues only: $support-success for retired, $support-info for probing.
  */
 .pwr-kpi-card {
@@ -507,15 +507,15 @@
   flex-direction: column;
   justify-content: space-between;
   gap: 8px;
-  border-left: 3px solid var(--cds-border-subtle);
+  border-top: 2px solid var(--cds-border-subtle);
 }
 
 .pwr-kpi-card.pwr-retired {
-  border-left-color: var(--cds-support-success);
+  border-top-color: var(--cds-support-success);
 }
 
 .pwr-kpi-card.pwr-probing {
-  border-left-color: var(--cds-support-info);
+  border-top-color: var(--cds-support-info);
 }
 .pwr-kpi-label {
   display: flex;
@@ -560,7 +560,7 @@
   font-weight: 400;
   padding: 0 var(--sp-03);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   color: var(--cds-text-primary);
   background: var(--chip-neutral);
@@ -645,7 +645,7 @@
   font-weight: 400;
   padding: 0 var(--sp-03);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--chip-neutral);
   color: var(--cds-text-primary);
 }

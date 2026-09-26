@@ -46,30 +46,46 @@ beforeEach(() => {
 })
 
 describe('SupabaseProvider.listWorkspaces', () => {
-  it('D1 asks for fee_rate and returns the rows in one query', async () => {
+  it('D1 asks for fee_rate and fee_rebate and returns the rows in one query', async () => {
     setResults([{ data: rows, error: null }])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate'])
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate'])
     expect(got).toEqual(rows)
   })
 
-  it('D2 retries without fee_rate when the column does not exist yet', async () => {
+  it('D2 steps down to the legacy columns when neither new column exists yet', async () => {
     const legacy = [{ id: 'w1', name: '我的投資組合', created_at: '2026-01-01T00:00:00Z' }]
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate does not exist' } },
       { data: legacy, error: null },
     ])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate', 'id, name, created_at'])
+    expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rebate',
+      'id, name, created_at, fee_rate',
+      'id, name, created_at',
+    ])
     expect(got).toEqual(legacy)
   })
 
-  it('D3 throws when the retry also fails', async () => {
+  it('D5 keeps fee_rate when only fee_rebate is missing (frontend deployed before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } },
+      { data: rows, error: null },
+    ])
+    const got = await new SupabaseProvider().listWorkspaces()
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate', 'id, name, created_at, fee_rate'])
+    expect(got).toEqual(rows)
+  })
+
+  it('D3 throws when every column set fails', async () => {
+    setResults([
+      { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42501', message: '權限不足' } },
     ])
-    await expect(new SupabaseProvider().listWorkspaces()).rejects.toThrow('載入工作區失敗')
+    await expect(new SupabaseProvider().listWorkspaces()).rejects.toThrow('載入工作區失敗：權限不足')
   })
 })
 
@@ -78,6 +94,15 @@ describe('SupabaseProvider.setWorkspaceFeeRate', () => {
     setResults([{ data: null, error: { code: '42703', message: 'column does not exist' } }])
     await expect(new SupabaseProvider().setWorkspaceFeeRate('w1', 0.0004275)).rejects.toThrow(
       '儲存手續費率失敗',
+    )
+  })
+})
+
+describe('SupabaseProvider.setWorkspaceFeeRebate', () => {
+  it('D6 throws a named error when the update fails', async () => {
+    setResults([{ data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } }])
+    await expect(new SupabaseProvider().setWorkspaceFeeRebate('w1', 'monthly')).rejects.toThrow(
+      '儲存折扣退還方式失敗',
     )
   })
 })

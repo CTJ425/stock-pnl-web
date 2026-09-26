@@ -33,7 +33,7 @@
   align-items: baseline;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--border-strong);
   background: var(--surface-strong);
   white-space: nowrap;

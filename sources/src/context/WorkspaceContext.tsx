@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
-import type { NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRebate, NewTransaction, Transaction, Workspace } from '../types/models'
 import type { Ledger } from '../utils/pnlEngine'
 import { computeLedger } from '../utils/pnlEngine'
 import type { DataProvider, NewSplitLogEntry, SplitLogEntry, TxUpdate } from '../services/dataProvider'
@@ -50,6 +50,8 @@ export interface WorkspaceState {
   /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions: (ids: string[]) => Promise<void>
   setWorkspaceFeeRate: (id: string, rate: number) => Promise<void>
+  /** Persist how the broker refunds the fee discount; it decides the unrealized P&L basis. */
+  setWorkspaceFeeRebate: (id: string, rebate: FeeRebate) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -253,6 +255,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const setWorkspaceFeeRebate = useCallback(
+    async (id: string, rebate: FeeRebate) => {
+      // Unlike the rate there is no localStorage cache to fall back on: a failed write keeps the
+      // old value on screen and reports through the same `error` channel.
+      try {
+        await provider.setWorkspaceFeeRebate(id, rebate)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      }
+      setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, fee_rebate: rebate } : w)))
+    },
+    [provider],
+  )
+
   const value = useMemo<WorkspaceState>(
     () => ({
       workspaces,
@@ -272,6 +289,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordSplit,
       deleteTransactions,
       setWorkspaceFeeRate,
+      setWorkspaceFeeRebate,
     }),
     [
       workspaces,
@@ -291,6 +309,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordSplit,
       deleteTransactions,
       setWorkspaceFeeRate,
+      setWorkspaceFeeRebate,
     ],
   )
 

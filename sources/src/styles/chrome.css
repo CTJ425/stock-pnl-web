@@ -129,10 +129,11 @@
   font: inherit;
   font-size: var(--type-body-01);
   color: var(--cds-text-primary);
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  height: var(--cds-header-h);
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: var(--radius);
+  font-weight: 600;
+  height: 36px;
   padding: 0 var(--sp-04);
   cursor: pointer;
   display: inline-flex;
@@ -157,9 +158,9 @@
   color: var(--ink-secondary);
 }
 
-/* Carbon header action: no border at rest, $background-hover on hover. */
+/* The workspace is the statement's account: a ruled box that darkens its rule on hover. */
 .hmenu-ws:hover {
-  background: var(--cds-background-hover);
+  border-color: var(--cds-border-strong);
 }
 
 .hmenu-avatar {
@@ -170,7 +171,7 @@
   border-radius: 999px;
   border: none;
   background: var(--cds-button-primary);
-  color: var(--cds-text-on-color);
+  color: var(--accent-ink);
   font: inherit;
   font-size: var(--type-label-01);
   font-weight: 600;
@@ -340,12 +341,11 @@ a.hmenu-item {
   appearance: none;
   font: inherit;
   font-size: var(--type-body-01);
-  letter-spacing: 0.16px;
+  letter-spacing: 0;
   color: var(--cds-text-primary);
   background: var(--cds-field-01);
-  border: none;
-  border-bottom: 1px solid var(--cds-border-strong);
-  border-radius: 0;
+  border: 1px solid var(--cds-border-strong);
+  border-radius: var(--radius);
   height: var(--cds-size-md);
   padding: 0 var(--sp-08) 0 var(--sp-08);
   outline: none;
@@ -357,7 +357,7 @@ a.hmenu-item {
 .search-box .search-input:focus {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
-  border-bottom-color: transparent;
+  border-color: transparent;
   box-shadow: none;
   width: 240px;
 }
@@ -569,8 +569,8 @@ a.hmenu-item {
   gap: 12px 12px;
 }
 
-.tab {
-  padding: 8px 12px;
+.tabs .tab {
+  padding: 0 12px;
 }
 
 @media (max-width: 1120px) {
@@ -584,7 +584,11 @@ a.hmenu-item {
     display: none;
   }
 
-  .tab {
+  .tabs .tab svg {
+    display: inline;
+  }
+
+  .tabs .tab {
     padding: 0 var(--sp-04);
   }
 }

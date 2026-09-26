@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "source": "sources/src/styles/tokens.css",
+  "north_star": "今天這一頁的券商對帳單",
+  "themes": ["light", "dark"],
+  "extras": {
+    "focus-ring": "outline: 2px solid var(--cds-focus); outline-offset: -2px",
+    "totals-rule": "border-bottom: 3px double var(--cds-text-primary)",
+    "column-head-rule": "border-bottom: 1px solid var(--cds-text-primary)",
+    "shadow-menu": { "light": "0 4px 12px rgba(22, 25, 29, 0.12)", "dark": "0 4px 12px rgba(0, 0, 0, 0.4)" },
+    "shadow-modal": { "light": "0 12px 32px rgba(22, 25, 29, 0.18)", "dark": "0 12px 32px rgba(0, 0, 0, 0.5)" },
+    "motion": {
+      "ease-productive": "cubic-bezier(0.2, 0, 0.38, 0.9)",
+      "ease-entrance": "cubic-bezier(0, 0, 0.38, 0.9)",
+      "fast": "70ms",
+      "moderate": "110ms",
+      "slow": "240ms",
+      "signature": "ledger row sub-ledger reveal: 240ms opacity + 4px rise, disabled under prefers-reduced-motion"
+    }
+  }
+}

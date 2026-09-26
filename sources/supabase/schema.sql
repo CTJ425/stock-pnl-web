@@ -21,6 +21,14 @@ ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;
 ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range
     CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
 
+-- How the broker hands back the fee discount (2026-09-26 redesign): 'instant' (現折) or
+-- 'monthly' (月退). NULL means never set and reads as 'instant'. The dashboard derives its
+-- unrealized P&L basis from fee_rate + fee_rebate, so there is no separate basis column to drift.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rebate TEXT;
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rebate_values;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rebate_values
+    CHECK (fee_rebate IS NULL OR fee_rebate IN ('instant', 'monthly'));
+
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can manage their own workspaces" ON workspaces;

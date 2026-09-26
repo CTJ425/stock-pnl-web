@@ -1,4 +1,4 @@
-/* ---------- KPI big character poster ----------*/
+/* ---------- KPI tiles (年度收益, 匯率, 後台 …) ----------*/
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -36,164 +36,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- Market Panel (Inventory Overview: Taiwan Stocks/U.S. Stocks) ----------*/
-.market-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-}
-
-.market-panel {
-  padding: 16px 24px 0;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.market-panel .panel-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-/* The hero label sits at the right end of the head row, not above the number. */
-.market-panel .panel-head .kpi-label {
-  margin-left: auto;
-}
-
-.market-panel .panel-head h3,
-.market-panel .panel-head h2 {
-  font-size: var(--type-body-01);
-}
-
-.market-panel .panel-head .ccy {
-  color: var(--ink-muted);
-  font-size: var(--type-label-01);
-}
-
-.market-panel .metric {
-  padding-top: 12px;
-}
-
-.market-panel .metric-hero {
-  padding-top: 2px;
-}
-
-.market-panel .kpi-label {
-  color: var(--ink-secondary);
-  font-size: var(--type-label-01);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.market-panel .kpi-value {
-  margin-top: 4px;
-  font-family: var(--font-body);
-  font-size: var(--type-body-02);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-}
-
-.market-panel .metric-hero .kpi-value {
-  font-size: var(--type-heading-03);
-  letter-spacing: -0.02em;
-  line-height: 1.18;
-}
-
-.market-panel .metric-row {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.market-panel .metric-row .metric + .metric {
-  border-left: 1px solid var(--border);
-  padding-left: 16px;
-}
-
-.market-panel .kpi-sub {
-  margin-top: 2px;
-  color: var(--ink-muted);
-  font-size: var(--type-label-01);
-  font-family: var(--font-body);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ---------- Exposure bar (Task 142): long vs. short market value within one market ----------*/
-.exposure-bar {
-  display: flex;
-  height: 8px;
-  gap: 2px;
-  margin-top: 12px;
-}
-
-.exposure-seg-long {
-  background: var(--ink);
-}
-
-.exposure-seg-short {
-  background: var(--steel);
-}
-
-.exposure-key {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 8px;
-  font-size: var(--type-label-01);
-}
-
-/* One legend entry: swatch, label and value read as a single group. */
-.exposure-legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink-secondary);
-}
-
-.exposure-sw {
-  display: inline-block;
-  width: 12px;
-  height: 8px;
-}
-
-.exposure-sw-long {
-  background: var(--ink);
-}
-
-.exposure-sw-short {
-  background: var(--steel);
-}
-
-.market-note {
-  margin-top: 12px;
-  font-size: var(--type-label-01);
-  color: var(--ink-secondary);
-}
-
-.market-panel .market-foot {
-  margin: auto -24px 0;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-}
-
-.market-panel .market-foot .metric {
-  padding: 0 24px 16px;
-}
-
-.market-panel .market-foot .metric + .metric {
-  border-left: 1px solid var(--border);
-}
-
 /* ---------- Profit and loss color (red rises, green falls; values are always signed, not just color) ----------*/
 .pnl-up {
   color: var(--up);
@@ -207,25 +49,878 @@
   color: var(--ink-secondary);
 }
 
-/* Direction pill on the holdings table (Task 141): 台股慣例 red = up = long, green = down = short. */
-.dir-long,
-.dir-short {
-  display: inline-flex;
+/* =========================================================
+ * 庫存總覽 as a broker statement (2026-09-26 redesign)
+ * ========================================================= */
+
+/* ---------- Totals: the statement's closing figures, ended by a double rule ---------- */
+.stmt-totals {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  padding: var(--sp-07) 0 var(--sp-06);
+  border-bottom: 3px double var(--cds-text-primary);
+}
+
+.stmt-tot {
+  min-width: 0;
+  padding: 0 var(--sp-06);
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.stmt-tot:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.stmt-tot h2 {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: var(--type-label-01);
+  flex-wrap: wrap;
+  gap: 0 var(--sp-03);
+  font-size: var(--type-body-01);
+  font-weight: 500;
+  color: var(--cds-text-secondary);
+  line-height: 1.5;
+}
+
+.stmt-asof {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--cds-text-helper);
+}
+
+/* The refresh sits beside the time it renews; negative margins keep it from growing the label row. */
+.stmt-refresh {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0 -6px calc(-1 * var(--sp-02));
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--cds-text-helper);
+  cursor: pointer;
+}
+
+.stmt-refresh:hover:not(:disabled) {
+  border-color: var(--cds-border-subtle);
+  color: var(--cds-link-primary);
+}
+
+.stmt-refresh:disabled {
+  cursor: default;
+}
+
+.stmt-fig {
+  margin-top: var(--sp-03);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* Today's P&L is the one figure that never shrinks: the same size on a phone and a desktop. */
+.stmt-fig-hero {
+  font-size: 2.5rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.stmt-pct {
+  margin-left: var(--sp-03);
+  font-size: var(--type-body-02);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.stmt-sub {
+  margin-top: var(--sp-03);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--sp-04);
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.stmt-sub b {
   font-weight: 600;
 }
 
-.dir-long {
-  color: var(--up);
-  background: color-mix(in srgb, var(--up) 12%, transparent);
+.stmt-sub-lines span {
+  white-space: nowrap;
 }
 
-.dir-short {
+/* The fee basis is a link-styled button: it opens this workspace's fee settings in place. */
+.stmt-basis {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--cds-link-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.stmt-basis:hover {
+  color: var(--cds-link-hover);
+}
+
+.stmt-basis svg {
+  margin-left: 2px;
+  vertical-align: -2px;
+  transition: transform var(--cds-dur-slow) var(--cds-ease-productive);
+}
+
+.stmt-basis[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+/* ---------- Fee settings (dashboard panel and workspace-menu modal) ---------- */
+.stmt-fee-panel {
+  padding: var(--sp-06);
+  background: var(--cds-layer-02);
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.fee-settings-title {
+  font-size: var(--type-body-02);
+  margin-bottom: var(--sp-05);
+}
+
+.fee-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr);
+  gap: var(--sp-07);
+  align-items: start;
+}
+
+.fee-settings-grid .field {
+  margin-bottom: 0;
+}
+
+.fee-settings-custom {
+  margin-top: var(--sp-03);
+}
+
+.fee-settings-rebate {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fee-settings-rebate legend {
+  padding: 0;
+  margin-bottom: var(--sp-03);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.fee-settings-radio {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--sp-03);
+  align-items: start;
+  padding: var(--sp-03) 0;
+  cursor: pointer;
+}
+
+.fee-settings-radio input {
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--cds-interactive);
+}
+
+.fee-settings-radio span {
+  grid-column: 2;
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.fee-settings-rebate:disabled .fee-settings-radio {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fee-settings-result {
+  padding-left: var(--sp-06);
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.fee-settings-result h3 {
+  margin-bottom: var(--sp-03);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+.fee-settings-result p {
+  margin: 0 0 var(--sp-03);
+}
+
+.fee-settings-actions {
+  display: flex;
+  gap: var(--sp-03);
+  margin-top: var(--sp-06);
+}
+
+/* In the workspace-menu modal the three blocks stack. */
+.modal .fee-settings-grid {
+  grid-template-columns: 1fr;
+  gap: var(--sp-05);
+}
+
+.modal .fee-settings-result {
+  padding: var(--sp-05) 0 0;
+  border-left: 0;
+  border-top: 1px solid var(--cds-border-subtle);
+}
+
+/* ---------- Holdings statement ---------- */
+.stmt-holdings {
+  margin-top: var(--sp-09);
+}
+
+.hl-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-03) var(--sp-05);
+  margin-bottom: var(--sp-04);
+}
+
+.hl-head h2 {
+  font-size: var(--type-heading-03);
+}
+
+.hl-count {
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.hl-sort {
+  display: inline-flex;
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: var(--radius);
+}
+
+.hl-sort button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  height: 32px;
+  padding: 0 var(--sp-04);
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  cursor: pointer;
+}
+
+.hl-sort button + button {
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.hl-sort button:hover {
+  color: var(--cds-text-primary);
+}
+
+.hl-sort button[aria-pressed='true'] {
+  background: var(--cds-layer-accent-01);
+  color: var(--cds-text-primary);
+  font-weight: 600;
+}
+
+.hl-scroll {
+  overflow-x: auto;
+}
+
+table.hl-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.hl-table th,
+.hl-table td {
+  padding: 0 var(--sp-04);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hl-table .num {
+  text-align: right;
+}
+
+.hl-table th:first-child,
+.hl-table td:first-child {
+  padding-left: 0;
+}
+
+.hl-table th:last-child,
+.hl-table td:last-child {
+  padding-right: 0;
+}
+
+.hl-table > thead th {
+  height: 36px;
+  padding-bottom: 6px;
+  vertical-align: bottom;
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  border-bottom: 1px solid var(--cds-text-primary);
+}
+
+.hl-table sup {
+  margin-left: 1px;
+  font-size: 0.7em;
+}
+
+.hl-group-head th {
+  padding-top: var(--sp-05);
+  padding-bottom: var(--sp-03);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: normal;
+}
+
+.hl-group-meta {
+  margin-left: var(--sp-03);
+  font-weight: 400;
+  color: var(--cds-text-helper);
+}
+
+.hl-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-03);
+  margin-left: var(--sp-05);
+  font-weight: 500;
+  color: var(--cds-support-warning);
+}
+
+.hl-subgroup td {
+  padding-top: var(--sp-03);
+  padding-bottom: var(--sp-02);
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.hl-row {
+  cursor: pointer;
+  transition: background var(--cds-dur-moderate) var(--cds-ease-productive);
+}
+
+.hl-row td {
+  height: 48px;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.hl-row:hover,
+.hl-row[data-open='true'] {
+  background: var(--cds-background-hover);
+}
+
+.hl-row[data-open='true'] td {
+  border-bottom-color: transparent;
+}
+
+.hl-row:has(.hl-toggle:focus-visible) {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
+.hl-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-04);
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hl-toggle:focus-visible {
+  outline: none;
+}
+
+.hl-chev {
+  align-self: center;
+  color: var(--cds-text-helper);
+  transition: transform var(--cds-dur-slow) var(--cds-ease-productive);
+}
+
+.hl-row[data-open='true'] .hl-chev {
+  transform: rotate(90deg);
+}
+
+.hl-code {
+  min-width: 3.4em;
+  font-weight: 600;
+}
+
+.hl-name {
+  color: var(--cds-text-secondary);
+}
+
+.hl-strong {
+  font-weight: 600;
+}
+
+.hl-badge {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.hl-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--cds-link-primary);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+/* 空單 reads in the short-side ink (green = down side in the TW convention), as a label, not a band. */
+.hl-tag-short {
   color: var(--down);
-  background: color-mix(in srgb, var(--down) 12%, transparent);
+}
+
+.hl-unr {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.hl-m-only {
+  display: none;
+}
+
+.hl-subtotal td {
+  height: 44px;
+  font-weight: 700;
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.hl-subtotal td:first-child {
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+/* ---------- Row detail: the holding's own sub-ledger ---------- */
+.hl-table .hl-detail > td {
+  padding: 0 0 0 calc(3.4em + 14px + var(--sp-04));
+  background: var(--cds-background-hover);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  white-space: normal;
+}
+
+.hl-detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 1.15fr);
+  gap: var(--sp-05) var(--sp-07);
+  padding: var(--sp-03) 0 var(--sp-06);
+  animation: hl-reveal var(--cds-dur-slow) var(--cds-ease-entrance);
+}
+
+@keyframes hl-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.hl-detail-block h4 {
+  margin: 0 0 var(--sp-03);
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+}
+
+.hl-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px var(--sp-06);
+  max-width: 340px;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.hl-kv dt {
+  color: var(--cds-text-secondary);
+}
+
+.hl-kv dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+.hl-kv dd small {
+  display: block;
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  color: var(--cds-text-helper);
+}
+
+.hl-methods {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.hl-table .hl-methods th,
+.hl-table .hl-methods td {
+  padding: 6px 0 6px var(--sp-04);
+  text-align: right;
+  border-bottom: 1px dashed var(--cds-border-subtle);
+}
+
+.hl-table .hl-methods thead th {
+  padding-top: 0;
+  padding-bottom: 4px;
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.hl-table .hl-methods th:first-child {
+  padding-left: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.hl-methods tbody th {
+  font-weight: 400;
+  color: var(--cds-text-secondary);
+}
+
+.hl-methods tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.hl-methods tr.is-used > * {
+  font-weight: 700;
+}
+
+.hl-methods tr.is-used th {
+  color: var(--cds-text-primary);
+}
+
+.hl-na {
+  color: var(--cds-text-helper);
+}
+
+.hl-stops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+
+.hl-stops li {
+  display: grid;
+  grid-template-columns: 6.5em 4.5em 1fr;
+  gap: var(--sp-04);
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--cds-border-subtle);
+}
+
+.hl-stops li:last-child {
+  border-bottom: 0;
+}
+
+.hl-stop-realized {
+  grid-column: 3;
+}
+
+.hl-more {
+  margin: var(--sp-03) 0 0;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+.hl-link {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--cds-link-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.hl-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--sp-03);
+}
+
+/* ---------- Footnotes replace the "?" icons ---------- */
+.stmt-notes {
+  display: grid;
+  gap: 2px;
+  margin: var(--sp-05) 0 0;
+  padding: var(--sp-04) 0 0 1.4em;
+  border-top: 1px solid var(--cds-border-subtle);
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+  max-width: 110ch;
+}
+
+/* ---------- Phone: totals stack, the ledger becomes three-line entries ---------- */
+@media (max-width: 720px) {
+  .stmt-totals {
+    grid-template-columns: 1fr 1fr;
+    row-gap: var(--sp-06);
+    padding: var(--sp-06) 0 var(--sp-05);
+  }
+
+  .stmt-tot {
+    padding: 0 0 0 var(--sp-05);
+  }
+
+  .stmt-tot-today {
+    grid-column: 1 / -1;
+    padding: 0;
+    border: 0;
+  }
+
+  .stmt-tot:nth-child(2) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .stmt-fig {
+    font-size: 1.25rem;
+    white-space: normal;
+  }
+
+  .stmt-fig-hero {
+    font-size: 2.5rem;
+  }
+
+  .stmt-tot:not(.stmt-tot-today) .stmt-pct {
+    display: block;
+    margin: 2px 0 0;
+    font-size: 0.8125rem;
+  }
+
+  .stmt-sub-lines {
+    flex-direction: column;
+  }
+
+  .stmt-fee-panel {
+    padding: var(--sp-05) var(--sp-05);
+    margin: 0 calc(-1 * var(--sp-05));
+  }
+
+  .fee-settings-grid {
+    grid-template-columns: 1fr;
+    gap: var(--sp-05);
+  }
+
+  .fee-settings-result {
+    padding: var(--sp-05) 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  .stmt-holdings {
+    margin-top: var(--sp-07);
+  }
+
+  .hl-sort {
+    margin-left: auto;
+  }
+
+  .hl-scroll {
+    overflow-x: visible;
+  }
+
+  .hl-table,
+  .hl-table > tbody {
+    display: block;
+  }
+
+  .hl-table > thead {
+    display: none;
+  }
+
+  .hl-group-head,
+  .hl-group-head th,
+  .hl-subgroup,
+  .hl-subgroup td {
+    display: block;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .hl-group-meta {
+    display: block;
+    margin: 2px 0 0;
+  }
+
+  .hl-missing {
+    margin: var(--sp-03) 0 0;
+  }
+
+  .hl-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'stock today'
+      'px chg'
+      'unr unr';
+    gap: 2px var(--sp-04);
+    padding: var(--sp-04) 0;
+    border-bottom: 1px solid var(--cds-border-subtle);
+  }
+
+  .hl-row td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .hl-row td[data-c='qty'],
+  .hl-row td[data-c='mv'] {
+    display: none;
+  }
+
+  .hl-row td[data-c='stock'] {
+    grid-area: stock;
+    min-width: 0;
+  }
+
+  .hl-row td[data-c='today'] {
+    grid-area: today;
+    font-size: var(--type-body-02);
+    font-weight: 700;
+  }
+
+  .hl-row td[data-c='px'] {
+    grid-area: px;
+    text-align: left;
+    font-size: 0.8125rem;
+    color: var(--cds-text-helper);
+  }
+
+  .hl-row td[data-c='chg'] {
+    grid-area: chg;
+    font-size: 0.8125rem;
+  }
+
+  .hl-row td[data-c='unr'] {
+    grid-area: unr;
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-03);
+    margin-top: 2px;
+    font-size: 0.8125rem;
+  }
+
+  .hl-m-only {
+    display: inline;
+  }
+
+  .hl-m-label {
+    color: var(--cds-text-helper);
+  }
+
+  .hl-toggle {
+    gap: var(--sp-03);
+    flex-wrap: wrap;
+  }
+
+  .hl-chev {
+    display: none;
+  }
+
+  .hl-name {
+    order: -1;
+    font-size: var(--type-body-02);
+    font-weight: 600;
+    color: var(--cds-text-primary);
+  }
+
+  .hl-code {
+    min-width: 0;
+    font-weight: 500;
+    font-size: 0.8125rem;
+    color: var(--cds-text-helper);
+  }
+
+  .hl-subtotal {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--sp-04) 0;
+    border-top: 1px solid var(--cds-text-primary);
+  }
+
+  .hl-subtotal td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .hl-subtotal td[data-c='qty'],
+  .hl-subtotal td[data-c='px'],
+  .hl-subtotal td[data-c='chg'],
+  .hl-subtotal td[data-c='mv'] {
+    display: none;
+  }
+
+  .hl-subtotal td[data-c='unr'] {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .hl-detail,
+  .hl-table .hl-detail > td {
+    display: block;
+    padding: 0;
+  }
+
+  .hl-detail-body {
+    grid-template-columns: 1fr;
+    padding: 0 var(--sp-04) var(--sp-05);
+  }
+
+  .hl-kv {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-detail-body {
+    animation: none;
+  }
 }
