@@ -4,8 +4,8 @@
   "description": "股票交易與庫存損益管理，含台股盤後報告。",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#11151a",
-  "theme_color": "#11151a",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "icons": [
     { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" },
     { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
