@@ -6,7 +6,7 @@ import { QuoteTab } from './QuoteTab'
 import { quoteMeta } from './quoteMeta'
 import type { PriceQuote } from '../../services/priceProxy'
 import type { IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
-import type { ChipDay, ReportHolding } from '../../services/reportProxy'
+import type { ReportHolding } from '../../services/reportProxy'
 import type { DailyRow, DailySeries, RemoteDaily } from '../../services/dailyProxy'
 import type { DailyStatus } from './useDailySeries'
 import type { TechnicalView } from './technicalView'
@@ -85,31 +85,6 @@ const holding: ReportHolding = {
   roi: 0.1666,
 }
 
-const mockHistory: ChipDay[] = [
-  {
-    date: '2026-08-04',
-    institutional: {
-      foreign: { buy: 1000000, sell: 3000000, net: -2000000 },
-      foreignDealer: { buy: 0, sell: 0, net: 0 },
-      trust: { buy: 800000, sell: 300000, net: 500000 },
-      dealer: { buy: 400000, sell: 500000, net: -100000 },
-      total: { buy: 2200000, sell: 3800000, net: -1600000 },
-    },
-    margin: null,
-  },
-  {
-    date: '2026-08-05',
-    institutional: {
-      foreign: { buy: 5000000, sell: 2000000, net: 3000000 },
-      foreignDealer: { buy: 0, sell: 0, net: 0 },
-      trust: { buy: 1500000, sell: 500000, net: 1000000 },
-      dealer: { buy: 700000, sell: 200000, net: 500000 },
-      total: { buy: 7200000, sell: 2700000, net: 4500000 },
-    },
-    margin: null,
-  },
-]
-
 const latest = {
   date: '2026-08-04',
   ma5: 2358,
@@ -131,7 +106,6 @@ const show = (
   opts: {
     holding?: ReportHolding | null
     latest?: TechnicalView['latest'] | null
-    history?: ChipDay[] | null
     dailySeries?: DailySeries | null
     dailyStatus?: DailyStatus
   } = {},
@@ -143,7 +117,6 @@ const show = (
       name="台積電"
       holding={opts.holding ?? null}
       latest={opts.latest ?? null}
-      history={opts.history ?? null}
       dailySeries={opts.dailySeries ?? null}
       dailyStatus={opts.dailyStatus ?? 'ready'}
     />,
@@ -259,18 +232,18 @@ describe('QuoteTab', () => {
     expect(screen.queryByText('預估')).toBeNull()
   })
 
-  it('指標摘要搬到右欄，不再是下面的獨立區塊', () => {
+  it('指標摘要跟我的持股放在行情下方同一區', () => {
     show(closedQuote, { latest })
     const a = aside()!
     expect(a.textContent).toContain('指標摘要')
     expect(a.querySelector('.tech-summary')).toBeTruthy()
   })
 
-  it('右上顯示持有、成本、市值、今日', () => {
+  it('我的持股顯示持有、均價、市值、今日損益', () => {
     show(closedQuote, { holding })
     const a = aside()!.textContent!
     expect(a).toContain('持有')
-    expect(a).toContain('成本')
+    expect(a).toContain('均價')
     expect(a).toContain('市值')
     // 市值 = 3000 × 2405 = 7,215,000
     expect(a).toContain('7,215,000')
@@ -315,74 +288,10 @@ describe('QuoteTab', () => {
     expect(document.querySelectorAll('.m-stats .rpt-card')).toHaveLength(0)
   })
 
-  it('沒有法人歷史資料時，不顯示三大法人買賣超動向區塊', () => {
-    show(closedQuote, { history: null })
+  it('行情不再放三大法人 2 日卡片：同樣的數字改在籌碼分頁以長條圖呈現（2026-09-27）', () => {
+    show(closedQuote)
     expect(document.querySelector('.institutional-block')).toBeNull()
-  })
-
-  it('有 2 日法人歷史資料時，在走勢圖下方顯示三大法人買賣超動向卡片（最新在左、前日在右）', () => {
-    show(closedQuote, { history: mockHistory })
-    const block = document.querySelector('.institutional-block')
-    expect(block).toBeTruthy()
-    expect(block!.textContent).toContain('三大法人買賣超動向')
-    expect(block!.textContent).toContain('近 2 交易日')
-    expect(block!.textContent).toContain('單位：張（每日約 15:30 公布）')
-
-    const cards = document.querySelectorAll('.inst-day-card')
-    expect(cards).toHaveLength(2)
-
-    // Left card: 2026-08-05 (latest)
-    const leftCard = cards[0]
-    expect(leftCard.querySelector('.inst-day-title')!.textContent).toBe('08/05')
-    expect(leftCard.querySelector('.inst-day-tag')!.textContent).toBe('最新')
-    expect(leftCard.querySelector('.inst-day-tag')!.className).toContain('is-latest')
-    expect(leftCard.querySelector('.inst-total-val')!.textContent).toBe('+4,500 張')
-    expect(leftCard.querySelector('.inst-total-val')!.className).toContain('pnl-up')
-
-    const leftLegs = leftCard.querySelectorAll('.inst-leg-cell')
-    expect(leftLegs).toHaveLength(3)
-    expect(leftLegs[0].querySelector('.inst-leg-k')!.textContent).toBe('外資')
-    expect(leftLegs[0].querySelector('.inst-leg-v')!.textContent).toBe('+3,000')
-    expect(leftLegs[0].querySelector('.inst-leg-v')!.className).toContain('pnl-up')
-
-    expect(leftLegs[1].querySelector('.inst-leg-k')!.textContent).toBe('投信')
-    expect(leftLegs[1].querySelector('.inst-leg-v')!.textContent).toBe('+1,000')
-    expect(leftLegs[1].querySelector('.inst-leg-v')!.className).toContain('pnl-up')
-
-    expect(leftLegs[2].querySelector('.inst-leg-k')!.textContent).toBe('自營商')
-    expect(leftLegs[2].querySelector('.inst-leg-v')!.textContent).toBe('+500')
-    expect(leftLegs[2].querySelector('.inst-leg-v')!.className).toContain('pnl-up')
-
-    // Right card: 2026-08-04 (previous)
-    const rightCard = cards[1]
-    expect(rightCard.querySelector('.inst-day-title')!.textContent).toBe('08/04')
-    expect(rightCard.querySelector('.inst-day-tag')!.textContent).toBe('前日')
-    expect(rightCard.querySelector('.inst-day-tag')!.className).not.toContain('is-latest')
-    expect(rightCard.querySelector('.inst-total-val')!.textContent).toBe('-1,600 張')
-    expect(rightCard.querySelector('.inst-total-val')!.className).toContain('pnl-down')
-
-    const rightLegs = rightCard.querySelectorAll('.inst-leg-cell')
-    expect(rightLegs).toHaveLength(3)
-    expect(rightLegs[0].querySelector('.inst-leg-k')!.textContent).toBe('外資')
-    expect(rightLegs[0].querySelector('.inst-leg-v')!.textContent).toBe('-2,000')
-    expect(rightLegs[0].querySelector('.inst-leg-v')!.className).toContain('pnl-down')
-
-    expect(rightLegs[1].querySelector('.inst-leg-k')!.textContent).toBe('投信')
-    expect(rightLegs[1].querySelector('.inst-leg-v')!.textContent).toBe('+500')
-    expect(rightLegs[1].querySelector('.inst-leg-v')!.className).toContain('pnl-up')
-
-    expect(rightLegs[2].querySelector('.inst-leg-k')!.textContent).toBe('自營商')
-    expect(rightLegs[2].querySelector('.inst-leg-v')!.textContent).toBe('-100')
-    expect(rightLegs[2].querySelector('.inst-leg-v')!.className).toContain('pnl-down')
-  })
-
-  it('只有 1 日法人歷史資料時，只顯示 1 張最新卡片', () => {
-    show(closedQuote, { history: [mockHistory[1]] })
-    const cards = document.querySelectorAll('.inst-day-card')
-    expect(cards).toHaveLength(1)
-    expect(cards[0].querySelector('.inst-day-title')!.textContent).toBe('08/05')
-    expect(cards[0].querySelector('.inst-day-tag')!.textContent).toBe('最新')
-    expect(cards[0].querySelector('.inst-total-val')!.textContent).toBe('+4,500 張')
+    expect(screen.queryByText('三大法人買賣超動向')).toBeNull()
   })
 
   it('行情抬頭處顯示即時產業別徽章（優先取 quote.industry）', () => {
@@ -513,7 +422,6 @@ describe('QuoteTab 走勢區間', () => {
         name="台積電"
         holding={null}
         latest={null}
-        history={null}
         dailySeries={null}
         dailyStatus={dailyStatus}
       />

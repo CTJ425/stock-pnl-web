@@ -300,7 +300,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect(screen.queryByText(/2330/)).toBeNull()
     expect(screen.getByText(/2454/)).toBeTruthy()
     // The KPI cards stay lifetime totals —— the hint next to the box says so, and both stocks are still counted
-    expect(screen.getByText(/上方四張卡是全部交易的累計/)).toBeTruthy()
+    expect(screen.getByText(/最上方的合計與圖表是全部交易的累計/)).toBeTruthy()
 
     // No match is a different sentence from an empty ledger, per section
     await user.clear(box)
@@ -383,6 +383,9 @@ describe('App（本機模式煙霧測試）', () => {
 
     // Return rate: 98096 / 250356 = +39.18% including fees; 100000 / 250000 = +40.00% without fees for the deputy bank
     expect(screen.getAllByText('+39.18%').length).toBeGreaterThan(0)
+    // 2026-09-27: the fee-exclusive line lives on the sell row, the deepest expansion.
+    expect(screen.queryByText(/未含費 \+40\.00%/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: '全部展開' }))
     expect(screen.getAllByText(/未含費 \+40\.00%/).length).toBeGreaterThan(0)
   })
 

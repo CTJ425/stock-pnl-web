@@ -36,6 +36,51 @@ interface WhatIfTabProps {
 
 const LADDER_TAG: Record<string, string> = { current: '現價', breakEven: '回本', avgCost: '均價' }
 
+/**
+ * A horizontal price axis with one marker per price (現價 / 持有均價 / 回本 / 賣出). The stretch between
+ * 回本 and the sell price is tinted by the result's sign, which is the whole question of this tab.
+ * HTML, not SVG: the labels must stay at text size however narrow the phone is.
+ */
+function PriceScale({
+  points,
+  breakEven,
+  sellPnl,
+}: {
+  points: Array<{ kind: string; label: string; price: number }>
+  breakEven: number | null
+  sellPnl: number | null
+}) {
+  const prices = points.map((p) => p.price)
+  const lo = Math.min(...prices)
+  const hi = Math.max(...prices)
+  const pad = (hi - lo || hi * 0.02 || 1) * 0.08
+  const pos = (v: number) => ((v - (lo - pad)) / (hi - lo + pad * 2)) * 100
+  const sell = points.find((p) => p.kind === 'sell')
+  return (
+    <div className="whatif-scale" data-testid="whatif-scale" aria-hidden="true">
+      <div className="whatif-scale-track">
+        {sell && breakEven !== null && (
+          <span
+            className={`whatif-scale-span ${sellPnl !== null && sellPnl < 0 ? 'is-loss' : 'is-gain'}`}
+            style={{ left: `${Math.min(pos(sell.price), pos(breakEven))}%`, width: `${Math.abs(pos(sell.price) - pos(breakEven))}%` }}
+          />
+        )}
+        {[...points].sort((a, b) => a.price - b.price).map((p, i) => (
+          <span
+            key={p.kind}
+            className={`whatif-scale-mark whatif-scale-mark--${p.kind} ${i % 2 ? 'is-below' : 'is-above'}${
+              pos(p.price) < 15 ? ' at-start' : pos(p.price) > 85 ? ' at-end' : ''
+            }`}
+            style={{ left: `${pos(p.price)}%` }}
+          >
+            <b>{p.label}</b> {p.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, heldQty }: WhatIfTabProps) {
   const { current } = useWorkspace()
   const hasQuote = currentPrice !== null && currentPrice > 0
@@ -176,11 +221,24 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
       ]
     : []
 
+  // Price scale (2026-09-27): the marks and the typed sell price on one axis, so "how far is my
+  // price from break-even" is a distance on screen before it is a number in the table.
+  const scalePoints = [
+    ...markItems.map((m) => ({ kind: m.kind as string, label: m.label, price: m.price })),
+    ...(result !== null && Number.isFinite(sellPriceNum) && sellPriceNum > 0
+      ? [{ kind: 'sell', label: '賣出', price: sellPriceNum }]
+      : []),
+  ]
+  const breakEvenPrice = markItems.find((m) => m.kind === 'breakEven')?.price ?? null
+
   const pick = (row: LadderRow) => setSellPrice(String(row.price))
   const pickPrice = (price: number) => setSellPrice(String(price))
 
   return (
     <div className="rpt-section">
+      {scalePoints.length > 1 && (
+        <PriceScale points={scalePoints} breakEven={breakEvenPrice} sellPnl={result?.pnl ?? null} />
+      )}
       {markItems.length > 0 && (
         <div className="whatif-marks" data-testid="whatif-marks">
           {markItems.map((item) => (

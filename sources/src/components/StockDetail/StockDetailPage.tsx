@@ -1,15 +1,10 @@
 /**
  * Content area for individual stock analysis.
  *
- * Starting from 0.6.8, the four sections of "My Holdings/Chips/Fundamentals/Technicals" are merged into a single long page** (Type D: card grouping),
- * Only two tabs are left: "Analysis Content/What-if". AI analysis was removed in 0.9.68.
- *
- * Each segment has a `.glass` card (`.detail-card`), and the borders are separated by the white space between cards.
- * I chose this version because it has zero interaction and no problem of "things being put away and cannot be found".
- *
- * 0.6.36 Replace "My holdings" in the first paragraph with "Quotation" (today's open high and low volume/yesterday's close/today's close).
- * Holdings were initially excluded because they are private capital; the quotation is public market data.
- * There is no such concern, so all four segments are shown together.
+ * 2026-09-27 statement redesign: the quote (the stock's letterhead, its price chart and 我的持股) stays on
+ * top, and one tab row switches 籌碼 / 基本面 / 技術面 / 損益試算. Inside each tab the chart comes first
+ * and the exact numbers sit one disclosure below it. (0.6.8 had merged the sections into one long page of
+ * cards; AI analysis was removed in 0.9.68.)
  *
  * This is a pure presentation component: which level to look at and where the quote comes from are all determined by the caller (AnalysisPage).
  * The selector on the left side of the page is also passed in from the caller (currently it is a drop-down menu for switching individual stocks).
@@ -64,19 +59,21 @@ interface StockDetailPageProps extends StockDetailTarget {
 
 type DetailTab = 'analysis' | 'whatif'
 type AnalysisSectionTab = 'chips' | 'fundamental' | 'technical'
+/**
+ * One tab row since the 2026-09-27 statement redesign: the quote and 我的持股 always sit on top, and
+ * 籌碼 / 基本面 / 技術面 / 損益試算 are siblings under it (they used to be two levels, 分析內容 ▸ three
+ * sections, and 損益試算 beside 分析內容). The URL keeps its two params, so old links still land.
+ */
+type PageTab = AnalysisSectionTab | 'whatif'
 
-const TABS: Array<{ id: DetailTab; label: string }> = [
-  { id: 'analysis', label: '分析內容' },
+const PAGE_TABS: Array<{ id: PageTab; label: string }> = [
+  { id: 'chips', label: '籌碼' },
+  { id: 'fundamental', label: '基本面' },
+  { id: 'technical', label: '技術面' },
   { id: 'whatif', label: '損益試算' },
 ]
 
-const SECTION_TABS: Array<{ id: AnalysisSectionTab; label: string; meta: string }> = [
-  { id: 'chips', label: '籌碼分析', meta: '三大法人 · 融資融券' },
-  { id: 'fundamental', label: '基本面', meta: '估值 · 獲利能力 · 月營收' },
-  { id: 'technical', label: '技術面', meta: '日 K · 均線 · 布林 · 成交量 · KD' },
-]
-
-const SECTION_IDS = SECTION_TABS.map((t) => t.id)
+const PAGE_TAB_IDS = PAGE_TABS.map((t) => t.id)
 
 function isDetailTab(v: string | null): v is DetailTab {
   return v === 'analysis' || v === 'whatif'
@@ -136,17 +133,6 @@ function handleTabListKeyDown<T extends string>(
   buttons?.[nextIndex]?.focus()
 }
 
-/** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
-function CardHead({ title, meta }: { title: string; meta?: string }) {
-  return (
-    <div className="card-head">
-      <span className="card-dot" aria-hidden="true" />
-      <h3>{title}</h3>
-      {meta && <span className="card-meta">{meta}</span>}
-    </div>
-  )
-}
-
 export function StockDetailPage({
   ticker,
   name,
@@ -156,8 +142,13 @@ export function StockDetailPage({
   avgCost = null,
   selector,
 }: StockDetailPageProps) {
-  const [tab, setTab] = useState<DetailTab>(() => readTabFromUrl())
-  const [activeSection, setActiveSection] = useState<AnalysisSectionTab>(() => readSectionFromUrl())
+  const [pageTab, setPageTab] = useState<PageTab>(() =>
+    readTabFromUrl() === 'whatif' ? 'whatif' : readSectionFromUrl(),
+  )
+  const selectTab = (id: PageTab) => {
+    setPageTab(id)
+    setUrlParams(id === 'whatif' ? { tab: 'whatif' } : { tab: 'analysis', sub: id })
+  }
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
@@ -306,21 +297,14 @@ export function StockDetailPage({
     }
   }, [ticker, name, reloadKey])
 
-  const visibleTabs = TABS
-  const visibleTabIds = visibleTabs.map((t) => t.id)
-
   return (
-    <div className="section">
+    <div className="section sd-page">
       <div className={selector ? 'detail-head detail-head-analysis' : 'detail-head'}>
         {selector}
         <div className="detail-title">
           <h2>
             {ticker} {name}
-            {fundamental?.industry && (
-              <span className="badge" style={{ marginLeft: 8, verticalAlign: 'middle' }}>
-                {fundamental.industry}
-              </span>
-            )}
+            {fundamental?.industry && <span className="badge sd-industry">{fundamental.industry}</span>}
           </h2>
         </div>
         <button
@@ -334,103 +318,52 @@ export function StockDetailPage({
         </button>
       </div>
 
-      <nav className="subtabs" role="tablist" aria-label="個股分析分頁">
-        {visibleTabs.map(({ id, label }) => (
+      {/* The quote and 我的持股 stay on screen under every tab: they answer the first question. */}
+      <section className="sd-quote" aria-label={`行情・${quoteMeta(quote, 'TPE')}`} id="sec-quote">
+        <QuoteTab
+          quote={quote}
+          latest={technicalLatest}
+          ticker={ticker}
+          name={name}
+          holding={holding}
+          dailySeries={dailySeries}
+          dailyStatus={dailyStatus}
+        />
+      </section>
+
+      <nav className="subtabs sd-tabs" role="tablist" aria-label="個股分析分頁">
+        {PAGE_TABS.map(({ id, label }) => (
           <button
             key={id}
             type="button"
             role="tab"
-            aria-selected={tab === id}
-            className={tab === id ? 'subtab active' : 'subtab'}
-            onClick={() => {
-              setTab(id)
-              setUrlParams({ tab: id })
-            }}
-            onKeyDown={(e) =>
-              handleTabListKeyDown(e, visibleTabIds, tab, (nextId) => {
-                setTab(nextId)
-                setUrlParams({ tab: nextId })
-              })
-            }
+            aria-selected={pageTab === id}
+            className={pageTab === id ? 'subtab active' : 'subtab'}
+            onClick={() => selectTab(id)}
+            onKeyDown={(e) => handleTabListKeyDown(e, PAGE_TAB_IDS, pageTab, selectTab)}
           >
             {label}
           </button>
         ))}
       </nav>
 
-      {tab === 'analysis' ? (
-        <div className="detail-stack">
-          <section className="glass detail-card" aria-labelledby="sec-quote">
-            <CardHead title="行情" meta={quoteMeta(quote, 'TPE')} />
-            <div id="sec-quote">
-              <QuoteTab
-                quote={quote}
-                latest={technicalLatest}
-                ticker={ticker}
-                name={name}
-                holding={holding}
-                history={report?.history ?? null}
-                dailySeries={dailySeries}
-                dailyStatus={dailyStatus}
-              />
-            </div>
-          </section>
-
-          <div className="section-tabs-container">
-            <div className="section-tabs-header" role="tablist" aria-label="分析面向切換">
-              {SECTION_TABS.map((st) => (
-                <button
-                  key={st.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeSection === st.id}
-                  className={`sec-tab-btn ${activeSection === st.id ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveSection(st.id)
-                    setUrlParams({ sub: st.id })
-                  }}
-                  onKeyDown={(e) =>
-                    handleTabListKeyDown(e, SECTION_IDS, activeSection, (nextId) => {
-                      setActiveSection(nextId)
-                      setUrlParams({ sub: nextId })
-                    })
-                  }
-                >
-                  <span>{st.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {activeSection === 'chips' && (
-              <section className="glass detail-card" aria-labelledby="sec-chips">
-                <CardHead title="籌碼" meta="三大法人 · 融資融券" />
-                <div id="sec-chips">
-                  <ChipsTab report={report} status={status} errMsg={errMsg} />
-                </div>
-              </section>
-            )}
-
-            {activeSection === 'fundamental' && (
-              <section className="glass detail-card" aria-labelledby="sec-fundamental">
-                <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
-                <div id="sec-fundamental">
-                  <FundamentalTab fundamental={fundamental} loading={fundLoading} error={fundError} />
-                </div>
-              </section>
-            )}
-
-            {activeSection === 'technical' && (
-              <section className="glass detail-card" aria-labelledby="sec-technical">
-                <CardHead title="技術面" meta="日 K · 均線 · 布林 · 成交量 · KD" />
-                <div id="sec-technical">
-                  <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
-                </div>
-              </section>
-            )}
-          </div>
-        </div>
-      ) : tab === 'whatif' ? (
-        <div className="glass detail-body">
+      {pageTab === 'chips' && (
+        <section className="sd-section" id="sec-chips" aria-label="籌碼：三大法人 · 融資融券">
+          <ChipsTab report={report} status={status} errMsg={errMsg} />
+        </section>
+      )}
+      {pageTab === 'fundamental' && (
+        <section className="sd-section" id="sec-fundamental" aria-label="基本面：估值 · 獲利能力 · 月營收">
+          <FundamentalTab fundamental={fundamental} loading={fundLoading} error={fundError} />
+        </section>
+      )}
+      {pageTab === 'technical' && (
+        <section className="sd-section" id="sec-technical" aria-label="技術面：日 K · 均線 · 布林 · 成交量 · KD">
+          <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
+        </section>
+      )}
+      {pageTab === 'whatif' && (
+        <section className="sd-section" id="sec-whatif" aria-label="損益試算">
           <WhatIfTab
             ticker={ticker}
             currentPrice={quote?.price ?? null}
@@ -438,8 +371,8 @@ export function StockDetailPage({
             avgCost={avgCost}
             heldQty={holding?.qty ?? null}
           />
-        </div>
-      ) : null}
+        </section>
+      )}
     </div>
   )
 }

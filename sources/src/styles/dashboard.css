@@ -924,3 +924,189 @@ table.hl-table {
     animation: none;
   }
 }
+
+/* ---------- 年度收益 charts (2026-09-27) ---------- */
+.yr-totals {
+  margin-top: var(--sp-02);
+}
+
+.yr-overview {
+  margin-top: var(--sp-07);
+}
+
+.yr-ccy {
+  margin-bottom: var(--sp-04);
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: var(--radius);
+}
+
+.seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  height: 32px;
+  padding: 0 var(--sp-04);
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  cursor: pointer;
+}
+
+.seg button + button {
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.seg button[aria-pressed='true'] {
+  background: var(--cds-layer-accent-01);
+  color: var(--cds-text-primary);
+  font-weight: 600;
+}
+
+.yr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-05) var(--sp-08);
+  align-items: start;
+}
+
+.yr-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-02) var(--sp-04);
+  margin-bottom: var(--sp-03);
+}
+
+.yr-head h2 {
+  font-size: var(--type-heading-03);
+}
+
+.yr-note {
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.yr-contrib {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.yr-contrib li {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(0, 1.6fr) auto;
+  gap: var(--sp-04);
+  align-items: center;
+  min-height: 42px;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.yr-contrib-name {
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.yr-contrib-name b {
+  color: var(--cds-text-primary);
+  margin-right: var(--sp-02);
+}
+
+.yr-contrib-tag {
+  margin-left: var(--sp-03);
+  padding: 0 4px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  color: var(--cds-text-helper);
+}
+
+.yr-contrib-track,
+.gix-track,
+.fx-row-track {
+  position: relative;
+  height: 14px;
+}
+
+.yr-contrib-track::before,
+.gix-track::before,
+.fx-row-track::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  bottom: -8px;
+  width: 1px;
+  background: var(--cds-border-strong);
+}
+
+.yr-contrib-track i,
+.gix-track i,
+.fx-row-track i {
+  position: absolute;
+  top: 2px;
+  height: 10px;
+}
+
+.yr-contrib-track i.pos,
+.gix-track i.pos,
+.fx-row-track i.pos {
+  left: 50%;
+  background: var(--up);
+  border-radius: 0 4px 4px 0;
+}
+
+.yr-contrib-track i.neg,
+.gix-track i.neg,
+.fx-row-track i.neg {
+  right: 50%;
+  background: var(--down);
+  border-radius: 4px 0 0 4px;
+}
+
+.yr-contrib-value {
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.yr-cum {
+  margin-top: var(--sp-07);
+}
+
+@media (max-width: 900px) {
+  .yr-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .yr-contrib li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'name value' 'track track';
+    row-gap: 4px;
+    padding: var(--sp-03) 0;
+  }
+
+  .yr-contrib-name {
+    grid-area: name;
+  }
+
+  .yr-contrib-value {
+    grid-area: value;
+  }
+
+  .yr-contrib-track {
+    grid-area: track;
+  }
+}
+
+.yr-totals .stmt-sub-lines span {
+  white-space: normal;
+}

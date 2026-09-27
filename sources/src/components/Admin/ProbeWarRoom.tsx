@@ -109,6 +109,74 @@ function emptyStateLabel(window: string): string {
   return '時窗內尚未命中'
 }
 
+/** Point-in-time slots such as MOPS's "12:00 / 17:15 / 21:00", used when a window has no ranges. */
+function parseWindowSlots(window: string): number[] {
+  return [...window.matchAll(/(\d{1,2}):(\d{2})/g)].map((m) => Number(m[1]) * 60 + Number(m[2]))
+}
+
+const TL_START = 11 * 60
+const TL_END = 24 * 60
+const tlPos = (minutes: number) =>
+  `${Math.min(100, Math.max(0, ((minutes - TL_START) / (TL_END - TL_START)) * 100))}%`
+const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5))
+
+/**
+ * Arrival timeline (2026-09-27 statement redesign): one row per source on an 11:00–24:00 axis — the
+ * expected window as a tinted band, every hit as a dot, and the current time as a line. "Is it late
+ * today?" is read from where the dots sit against the bands, before any card is opened.
+ */
+function ProbeTimeline({ cards }: { cards: ProbeSourceCardData[] }) {
+  const now = taipeiMinutesNow()
+  const hours = Array.from({ length: (TL_END - TL_START) / 60 + 1 }, (_, i) => TL_START / 60 + i)
+  return (
+    <div className="pwr-tl" data-testid="pwr-timeline">
+      <div className="pwr-tl-axis" aria-hidden="true">
+        {hours.map((h) => (
+          <span key={h} style={{ left: tlPos(h * 60) }}>
+            {h}
+          </span>
+        ))}
+      </div>
+      {cards.map(({ config, hitTimes, statusType }) => {
+        const ranges = parseWindowRanges(config.window)
+        const slots = ranges.length === 0 ? parseWindowSlots(config.window) : []
+        return (
+          <div key={config.id} className="pwr-tl-row">
+            <span className="pwr-tl-name">
+              {config.name}
+              <span className={`pwr-tl-state ${statusType}`}>
+                {statusType === 'retired' ? '收工' : statusType === 'probing' ? '探測中' : '待機'}
+              </span>
+            </span>
+            <span className="pwr-tl-track" aria-label={`${config.name} 時窗 ${config.window}，命中 ${hitTimes.join('、') || '無'}`}>
+              {ranges.map((r) => (
+                <i
+                  key={`${r.start}-${r.end}`}
+                  className="pwr-tl-band"
+                  style={{ left: tlPos(r.start), width: `calc(${tlPos(r.end)} - ${tlPos(r.start)})` }}
+                />
+              ))}
+              {slots.map((m) => (
+                <i key={m} className="pwr-tl-band pwr-tl-slot" style={{ left: tlPos(m) }} />
+              ))}
+              {hitTimes.map((t, i) => (
+                <b key={`${t}-${i}`} className="pwr-tl-hit" style={{ left: tlPos(toMinutes(t)) }} title={`${t} 命中`} />
+              ))}
+            </span>
+          </div>
+        )
+      })}
+      {now >= TL_START && now <= TL_END && (
+        <span
+          className="pwr-tl-now"
+          style={{ left: `calc(var(--pwr-name) + (100% - var(--pwr-name)) * ${(now - TL_START) / (TL_END - TL_START)})` }}
+          aria-hidden="true"
+        />
+      )}
+    </div>
+  )
+}
+
 interface ProbeWarRoomProps {
   data: AdminStatus
   loading: boolean
@@ -196,7 +264,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
   const dataDate = data.chip?.dataDate || dashYmd(data.manifest?.ymd) || '—'
 
   return (
-    <div className="section glass" style={{ padding: '18px 20px' }}>
+    <div className="section pwr-section">
       {/* 頂部戰報抬頭 (統一採用 rpt-section-head) */}
       <div className="rpt-section-head">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -225,7 +293,11 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         全天候每 5 分鐘巡邏，命中即觸發抓取，3 次穩定到位自動退休收工（MOPS 兩源不退休，平日六槽全跑）。
       </p>
 
-      {/* 8 大資料源戰情卡片 (統一採用 .kpi-grid 與 .glass.kpi) */}
+      <ProbeTimeline cards={cards} />
+
+      {/* 8 大資料源明細卡片：時間軸下方，點開才看 */}
+      <details className="chart-more">
+        <summary>看各資料源明細</summary>
       <div className="kpi-grid pwr-grid">
         {cards.map((card) => {
           const { config, progressCount, target, isRetired, isProbing, hitTimes, statusText, statusType } = card
@@ -299,6 +371,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
           )
         })}
       </div>
+      </details>
     </div>
   )
 }

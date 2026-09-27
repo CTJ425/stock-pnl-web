@@ -13,8 +13,10 @@ import type {
   ReportData,
   SourceStamp,
 } from '../../services/reportProxy'
+import { BarSeriesChart } from '../Charts/BarSeriesChart'
+import { ChartLegend } from '../Charts/ChartLegend'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
-import { CHART_COLORS } from '../Charts/chartColors'
+import { CATEGORICAL_COLORS, CHART_COLORS } from '../Charts/chartColors'
 import { SparkCell } from '../Charts/SparkCell'
 import { streakAt } from './chipStreak'
 import {
@@ -266,6 +268,27 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
     return Math.abs(totalRow.cum - legCums.reduce((a, b) => a + b, 0)) > 1
   })()
 
+  /*
+    Chart first (2026-09-27 statement redesign): one stacked bar per day, 外資 (incl. its dealer arm) /
+    投信 / 自營商 in identity colours, positives up and negatives down, so the day's total and who drove it
+    read at a glance. 0.7.7 had removed an earlier bar chart as a duplicate of the matrix; now the matrix
+    is the one that steps back, into a disclosure under the chart, for the exact numbers.
+  */
+  const lotsOf = (pick: (i: InstitutionalChip) => number | null) =>
+    instDays.map((d) => {
+      if (!d.institutional) return null
+      const v = pick(d.institutional)
+      return v === null ? null : v / 1000
+    })
+  const addNet = (a: ChipLeg, b: ChipLeg): number | null =>
+    a.net === null && b.net === null ? null : (a.net ?? 0) + (b.net ?? 0)
+  const instSeries = [
+    { name: '外資', color: CATEGORICAL_COLORS[0], values: lotsOf((i) => addNet(i.foreign, i.foreignDealer)) },
+    { name: '投信', color: CATEGORICAL_COLORS[1], values: lotsOf((i) => i.trust.net) },
+    { name: '自營商', color: CATEGORICAL_COLORS[2], values: lotsOf((i) => i.dealer.net) },
+  ]
+  const fmtLotsSigned = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v).toLocaleString('en-US')} 張`
+
   return (
     <>
       {/* The report header says which stock, which day and when the report was produced */}
@@ -317,6 +340,22 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
               one click away at all times. All of them are now on screen at once, so the day picker has
               nothing left to do and is gone.
             */}
+            <div className="sd-inst-chart">
+              <p className="chart-caption">
+                近 {instDays.length} 個交易日・單位：張・往上是買超、往下是賣超
+              </p>
+              <BarSeriesChart
+                labels={instDays.map((d) => shortDate(d.date))}
+                series={instSeries}
+                stacked
+                height={220}
+                formatValue={fmtLotsSigned}
+                ariaLabel={`近 ${instDays.length} 日三大法人買賣超`}
+              />
+              <ChartLegend items={instSeries.map((s) => ({ label: s.name, color: s.color }))} />
+            </div>
+            <details className="chart-more">
+              <summary>看逐日數字</summary>
             <div className="table-scroll">
               <table className="data-table inst-matrix" aria-label="三大法人買賣超矩陣">
                 <thead>
@@ -435,6 +474,7 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
               買賣超是買進減掉賣出，紅色代表法人當天買得比賣得多；底色深淺是該法人自己這幾天的相對強度。
               走勢圖讀取歷史交易日，走勢圖上方「連買連賣」算到最近交易日為止連續幾天同方向，看的一律是買賣超，不隨上方口徑改變。
             </p>
+            </details>
           </>
         )}
       </section>
@@ -472,6 +512,36 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
           </p>
         ) : (
           <>
+            {history.length > 0 && margin !== null && (
+              <div className="chart-grid">
+                <div>
+                  <div className="chart-title">融資餘額（張）</div>
+                  <LineSeriesChart
+                    points={history.map((d) => ({
+                      label: shortDate(d.date),
+                      value: d.margin?.marginToday ?? null,
+                    }))}
+                    color={CATEGORICAL_COLORS[0]}
+                    formatValue={(v) => `${fmtInt(v)} 張`}
+                    ariaLabel={`近 ${history.length} 日融資餘額走勢`}
+                  />
+                </div>
+                <div>
+                  <div className="chart-title">融券餘額（張）</div>
+                  <LineSeriesChart
+                    points={history.map((d) => ({
+                      label: shortDate(d.date),
+                      value: d.margin?.shortToday ?? null,
+                    }))}
+                    color={CATEGORICAL_COLORS[2]}
+                    formatValue={(v) => `${fmtInt(v)} 張`}
+                    ariaLabel={`近 ${history.length} 日融券餘額走勢`}
+                  />
+                </div>
+              </div>
+            )}
+            <details className="chart-more">
+              <summary>看逐日數字</summary>
             <div className="table-scroll">
               <table className="data-table inst-matrix" aria-label="融資融券矩陣">
                 <thead>
@@ -768,43 +838,13 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
               融資是借錢買股票，餘額變多代表看多的人加碼；融券是借股票先賣，
               所以融券的「賣出」是放空、「買進」是回補。資券互抵為當日沖銷互抵張數。
               {margin?.source === 'openapi' && ' 今日改用備援來源，只有餘額、沒有買賣拆項。'}
+              兩張圖的縱軸各自獨立（融資量通常遠大於融券），不要直接比高低。
             </p>
+            </details>
           </>
         )}
       </section>
 
-      {history.length > 0 && margin !== null && (
-        <section className="rpt-section">
-          <h3>近 {history.length} 日餘額走勢</h3>
-          <div className="chart-grid">
-            <div>
-              <div className="chart-title">融資餘額（張）</div>
-              <LineSeriesChart
-                points={history.map((d) => ({
-                  label: shortDate(d.date),
-                  value: d.margin?.marginToday ?? null,
-                }))}
-                color={CHART_COLORS.up}
-                formatValue={(v) => `${fmtInt(v)} 張`}
-                ariaLabel={`近 ${history.length} 日融資餘額走勢`}
-              />
-            </div>
-            <div>
-              <div className="chart-title">融券餘額（張）</div>
-              <LineSeriesChart
-                points={history.map((d) => ({
-                  label: shortDate(d.date),
-                  value: d.margin?.shortToday ?? null,
-                }))}
-                color={CHART_COLORS.line}
-                formatValue={(v) => `${fmtInt(v)} 張`}
-                ariaLabel={`近 ${history.length} 日融券餘額走勢`}
-              />
-            </div>
-          </div>
-          <p className="hint">兩張圖的縱軸各自獨立（融資量通常遠大於融券），不要直接比高低。</p>
-        </section>
-      )}
 
       {borrow && (
         <section className="rpt-section">

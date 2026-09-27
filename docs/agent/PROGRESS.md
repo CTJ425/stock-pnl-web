@@ -1,9 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 170 — 0.9.71 released (statement redesign, app icons); old tasks archived out of TASK.md
-- Status: ✅ `main` = `dev` = 0.9.71 (495d974), Pages live. ⏳ PROD DDL `fee_rebate` owed by the user (`docs/agent/prod-0.9.71-migration.sql`); until then saving 月退 on PROD fails with 「儲存折扣退還方式失敗」, everything else works (column-set fallback)
-- Timestamp: 2026-09-27 06:10:00 Asia/Taipei
+- Action: Task 171 — chart-first redesign of the five remaining pages on `dev` as 0.9.72-dev.1
+- Status: 🔄 `dev` = 0.9.72-dev.1, `main` = 0.9.71. Waiting for the user's DEV review before `main`. Still owed from Task 170: PROD DDL `fee_rebate` (user, `docs/agent/prod-0.9.71-migration.sql`)
+- Timestamp: 2026-09-27 12:11:35 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-27 12:11:35 Asia/Taipei (Task 171, 0.9.72-dev.1)
+- User approved the chart-first demo (v2) and asked for all five pages at once. Implemented: 個股分析 (one tab row; letterhead + price chart + 我的持股 strip; stacked 三大法人 bars; margin/short lines above the matrix; matrices in `details.chart-more`; 損益試算 price scale), 年度收益 (`YearlyOverview`: year bars with pick, contributions list, cumulative line; one number per cell, 未含費 and fee split only on sell rows; footnotes replace HelpTh), 總體經濟 (index rows with diverging bars; US indicators as small line charts), 外幣匯率 (currency rows with diverging bars), 後台 (probe arrival timeline, cards under a disclosure).
+- Chart infra: `BarSeriesChart` gained `stacked`, `selectedIndex`, `onSelect` (ChartFrame click/Enter); `CATEGORICAL_COLORS` → `var(--chart-c1..4)` per theme (validated blue/yellow/violet/pink).
+- Removed on purpose: the 2-day 法人 cards in the quote block (the chips chart shows the same numbers), dead CSS for section tabs and detail cards.
+- Verify: vitest 149 files / 2,506 tests, 2,499 passed, 7 skipped; build, typecheck:edge, lint exit 0; detector 1 finding fixed (3px tab rule → 2px). Visual: vite on DEV env with Playwright routing auth/REST/admin-status to local fixtures and storage/stock-price to DEV (public reports, anon key); 1440 + 390, light + dark, no horizontal overflow, no page errors.
 
 ---
 
@@ -14,11 +22,3 @@
 - PROD DDL via the Management API was **denied** by the permission classifier ([Production Deploy]); not retried. SQL for the SQL Editor: `docs/agent/prod-0.9.71-migration.sql` (PROD identity guard + check query). PROD `stock-report` not redeployed (type-only engine change).
 - Verify before release: vitest 2,495 passed / 7 skipped / 0 failed; build, typecheck:edge, lint exit 0.
 
----
-
-## 📅 Log: 2026-09-27 05:37:04 Asia/Taipei (Task 170, 0.9.71-dev.1)
-- User asked (2026-09-26) for a full UI/UX redesign via the `impeccable` skill: PRODUCT.md written (init), direction round picked 「券商對帳單」 (seed 6e53c8cb, kind pick), mockup reviewed and published as a private artifact (claude.ai/artifact/TayczZvWjGtebLsoEWaTb3), user approved with two changes: fee basis derived from the workspace fee settings, no metadata strip. Direction contract: `.impeccable/surfaces/sources-src-components-dashboard-dashboardpage-tsx.md`; system: `DESIGN.md` + `.impeccable/design.json`.
-- DEV baseline before the change: REST export of every public table except `app_secrets` into `.snapshots/dev-baseline-2026-09-26-redesign/` (gitignored; `snapshot.cjs` needs Docker, which this host lacks) plus local-mode screenshots. Logged-in DEV screenshots were **not** taken: minting a session for a DEV account was denied by the permission classifier.
-- Code: tokens.css re-valued (Carbon names kept), Public Sans + Noto Sans TC, buttons/fields/tags/notices/toast/nav restyled; dashboard rewritten (`DashboardPage`, `HoldingsLedger`, `dashboardSums`), `WorkspaceFeeSettings` shared by the dashboard panel and the workspace menu; `utils/pnlBasis.ts` derives the basis (月退 + discount → 牌告 0.1425%); `useUsdTwdRate` for the TWD-combined totals; AnalysisPage uses the same basis.
-- Data: `workspaces.fee_rebate TEXT` + CHECK (instant|monthly) in schema.sql and verify.sql; applied on DEV with an identity guard, PostgREST sees it (HTTP 200). `listWorkspaces` steps down column sets so a DB without the column still logs in. Edge engine `models.ts` re-synced (type only).
-- Verify: vitest 147 files / 2,502 tests, 2,495 passed, 7 skipped, 0 failed; `npm run build`, `typecheck:edge`, `lint` exit 0; impeccable detector 0 findings on the new files; Playwright local mode 1440/390 light/dark: no horizontal overflow, no console errors.

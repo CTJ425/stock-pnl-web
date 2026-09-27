@@ -1,9 +1,11 @@
 /**
  * Annual income overview (realized gains and losses):
- * - Top 4 KPIs: Taiwan Stock Historical Realization (TWD), U.S. Stock Historical Realization (USD), Accumulated Handling Fees, Accumulated Number of Transactions
+ * - Statement totals (2026-09-27): 台股 / 美股 lifetime realized P&L, fees and trade counts, then the
+ *   charts (YearlyOverview), then the ledger.
  * - Taiwan stocks/U.S. stocks are divided into upper and lower divisions, with separate annual tables, and currencies are completely separated (the same as the GAS version)
- * - The amount field adopts double rows of "fee included/fee not included" (the same as the average cost of the inventory overview):
- *   The main figure is the actual money paid and received, and the side figure is simply the transaction price.
+ * - One number per cell: the fee-inclusive figure (actual money paid and received). The fee-exclusive
+ *   「未含費」 line and the 手續費 ｜ 交易稅 split only appear on the individual sell rows, the deepest
+ *   expansion — the same rule as 庫存總覽, where they live in the row's detail.
  * - The year column can be expanded with individual stock details (including those that were only bought but not sold during the year)
  *
  * Only the selling side (selling cost / selling income / realized profit and loss) is displayed, and the purchase amount of the year is deliberately not displayed:
@@ -17,8 +19,8 @@ import type { Currency } from '../../types/models'
 import type { SellDetail, YearTickerDetail } from '../../utils/pnlEngine'
 import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
-import { HelpTh } from '../Common/HelpTh'
 import { YEAR_HELP } from './columnHelp'
+import { YearlyOverview } from './YearlyOverview'
 
 // Task 166 EN-01: kept local rather than added to columnHelp.ts — that file is column-help text
 // for the pre-dividend report and isn't part of this task's file list.
@@ -144,12 +146,15 @@ function AmountCell({
   currency,
   signed,
   rawLabel = '未含費',
+  showRaw = false,
 }: {
   value: number
   raw: number
   currency: Currency
   signed?: boolean
   rawLabel?: string
+  /** Only the sell rows print the fee-exclusive line (see the file header). */
+  showRaw?: boolean
 }) {
   // When there is no corresponding entry or exit in the year (such as the three sell columns of "Buy Only" stocks), the whole box displays "—":
   // This is true only if both the fee-inclusive and the non-inclusive fees are 0 at the same time. A truly even sale will still have an uninclusive amount due to the fee difference, so there will be no misjudgment.
@@ -162,9 +167,11 @@ function AmountCell({
       <div style={{ fontWeight: signed ? 600 : undefined }}>
         {signed ? fmtSignedMoney(value, currency) : fmtMoney(value, currency)}
       </div>
-      <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
-        {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
-      </div>
+      {showRaw && (
+        <div className="cell-sub">
+          {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
+        </div>
+      )}
     </td>
   )
 }
@@ -180,11 +187,13 @@ function RoiCell({
   costBasis,
   raw,
   rawCostBasis,
+  showRaw = false,
 }: {
   realized: number
   costBasis: number
   raw: number
   rawCostBasis: number
+  showRaw?: boolean
 }) {
   const roi = costBasis !== 0 ? realized / costBasis : null
   const rawRoi = rawCostBasis !== 0 ? raw / rawCostBasis : null
@@ -194,20 +203,28 @@ function RoiCell({
   return (
     <td className={`num ${pnlClass(roi)}`}>
       <div style={{ fontWeight: 600 }}>{roi === null ? '—' : fmtSignedPercent(roi)}</div>
-      <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
-        未含費 {rawRoi === null ? '—' : fmtSignedPercent(rawRoi)}
-      </div>
+      {showRaw && <div className="cell-sub">未含費 {rawRoi === null ? '—' : fmtSignedPercent(rawRoi)}</div>}
     </td>
   )
 }
 
 /** Handling fee storage cell: The main number is the total of fees and taxes, and the sub-line is "handling fee | transaction tax"; the sub-line is not displayed when there is no tax (US stocks/buying only)*/
-function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; currency: Currency }) {
+function FeeCell({
+  fees,
+  feesTax,
+  currency,
+  showSplit = false,
+}: {
+  fees: number
+  feesTax: number
+  currency: Currency
+  showSplit?: boolean
+}) {
   return (
     <td className="num">
       <div>{fmtMoney(fees, currency, 2)}</div>
-      {feesTax > 0 && (
-        <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+      {showSplit && feesTax > 0 && (
+        <div className="cell-sub">
           手續費 {fmtMoney(fees - feesTax, currency, 2)} ｜ 交易稅 {fmtMoney(feesTax, currency, 2)}
         </div>
       )}
@@ -314,15 +331,12 @@ function YearlySection({ title, currency, query }: { title: string; currency: Cu
           <table className="data-table">
             <thead>
               <tr>
-                <HelpTh label="年度" help={YEAR_HELP.year} />
-                <HelpTh label="賣出成本" help={YEAR_HELP.costBasis} numeric />
-                <HelpTh label="賣出收入" help={YEAR_HELP.sellAmt} numeric />
-                <HelpTh label="已實現損益" help={YEAR_HELP.realized} numeric />
-                <HelpTh label="報酬率" help={YEAR_HELP.roi} numeric />
-                <HelpTh label="股利" help={DIVIDEND_HELP} numeric />
-                <HelpTh label="總報酬" help={TOTAL_RETURN_HELP} numeric />
-                <HelpTh label="手續費 / 稅金" help={YEAR_HELP.fees} numeric />
-                <HelpTh label="交易筆數" help={YEAR_HELP.count} numeric />
+                {HEADS.map(([label, , numeric], i) => (
+                  <th key={label} scope="col" className={numeric ? 'num' : undefined}>
+                    {label}
+                    <sup>{i + 1}</sup>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -347,6 +361,19 @@ function YearlySection({ title, currency, query }: { title: string; currency: Cu
     </div>
   )
 }
+
+/** Column heads with their footnotes, printed under the tables instead of behind 「?」 icons. */
+const HEADS: ReadonlyArray<readonly [string, string, boolean]> = [
+  ['年度', YEAR_HELP.year, false],
+  ['賣出成本', YEAR_HELP.costBasis, true],
+  ['賣出收入', YEAR_HELP.sellAmt, true],
+  ['已實現損益', YEAR_HELP.realized, true],
+  ['報酬率', YEAR_HELP.roi, true],
+  ['股利', DIVIDEND_HELP, true],
+  ['總報酬', TOTAL_RETURN_HELP, true],
+  ['手續費 / 稅金', YEAR_HELP.fees, true],
+  ['交易筆數', YEAR_HELP.count, true],
+]
 
 function YearRows({
   row,
@@ -464,18 +491,19 @@ function YearRows({
                         )}
                       </div>
                     </td>
-                    <AmountCell value={sell.costBasis} raw={sell.rawCostBasis} currency={currency} />
-                    <AmountCell value={sell.sellAmt} raw={sell.sellGross} currency={currency} />
-                    <AmountCell value={sell.realized} raw={rawRealized(sell)} currency={currency} signed />
+                    <AmountCell value={sell.costBasis} raw={sell.rawCostBasis} currency={currency} showRaw />
+                    <AmountCell value={sell.sellAmt} raw={sell.sellGross} currency={currency} showRaw />
+                    <AmountCell value={sell.realized} raw={rawRealized(sell)} currency={currency} signed showRaw />
                     <RoiCell
                       realized={sell.realized}
                       costBasis={sell.costBasis}
                       raw={rawRealized(sell)}
                       rawCostBasis={sell.rawCostBasis}
+                      showRaw
                     />
                     <MutedDashCell />
                     <MutedDashCell />
-                    <FeeCell fees={sell.fees} feesTax={sell.feesTax} currency={currency} />
+                    <FeeCell fees={sell.fees} feesTax={sell.feesTax} currency={currency} showSplit />
                     <MutedDashCell />
                   </tr>
                 ))}
@@ -502,47 +530,52 @@ export function YearlyPage() {
     )
   }
 
+  const fmtPlain = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 2 })
   return (
     <>
-      <div className="section kpi-grid">
-        <div className="glass kpi">
-          <div className="kpi-label">🇹🇼 台股歷史已實現 (TWD)</div>
-          <div className={`kpi-value ${pnlClass(summary.realizedTw)}`}>
+      {/* Lifetime totals over every trade: not filtered by the search below. */}
+      <section className="stmt-totals yr-totals" aria-label="歷年合計">
+        <div className="stmt-tot stmt-tot-today">
+          <h2>
+            台股歷史已實現 (TWD)<span className="stmt-asof">歷年合計，含費</span>
+          </h2>
+          <div className={`stmt-fig stmt-fig-hero ${pnlClass(summary.realizedTw)}`}>
             {fmtSignedMoney(summary.realizedTw, 'TWD')}
           </div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label">🇺🇸 美股歷史累計已實現 (USD)</div>
-          <div className={`kpi-value ${pnlClass(summary.realizedUs)}`}>
-            {fmtSignedMoney(summary.realizedUs, 'USD')}
+          <div className="stmt-sub">
+            <span>
+              股利 <b>{fmtMoney(summary.dividendsTw, 'TWD')}</b>
+            </span>
           </div>
         </div>
-        <div className="glass kpi">
-          <div className="kpi-label">歷史累計股利 (台美股合計)</div>
-          <div className="kpi-value">
-            {(summary.dividendsTw + summary.dividendsUs).toLocaleString('en-US', { maximumFractionDigits: 2 })}
-          </div>
-          <div className="kpi-sub">
-            台股 {summary.dividendsTw.toLocaleString('en-US', { maximumFractionDigits: 2 })} ｜ 美股{' '}
-            {summary.dividendsUs.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-          </div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label">歷史累計手續費 (台美股合計)</div>
-          <div className="kpi-value">{summary.fees.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
-          <div className="kpi-sub" title="交易稅是依稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）回推的估計值">
-            手續費 {summary.feesBrokerage.toLocaleString('en-US', { maximumFractionDigits: 2 })} ｜ 交易稅 {summary.feesTax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+        <div className="stmt-tot">
+          <h2>
+            美股歷史累計已實現 (USD)<span className="stmt-asof">歷年合計</span>
+          </h2>
+          <div className={`stmt-fig ${pnlClass(summary.realizedUs)}`}>{fmtSignedMoney(summary.realizedUs, 'USD')}</div>
+          <div className="stmt-sub">
+            <span>
+              股利 <b>{fmtMoney(summary.dividendsUs, 'USD')}</b>
+            </span>
           </div>
         </div>
-        <div className="glass kpi">
-          <div className="kpi-label">歷史累計交易筆數 (台美股合計)</div>
-          <div className="kpi-value">{fmtQty(summary.count)}</div>
-          <div className="kpi-sub">
-            買入 {fmtQty(summary.buyCount)} ｜ 賣出 {fmtQty(summary.sellCount)}
-            {summary.dividendCount > 0 && <> ｜ 股利 {fmtQty(summary.dividendCount)}</>}
+        <div className="stmt-tot">
+          <h2>歷史累計交易筆數 (台美股合計)</h2>
+          <div className="stmt-fig">{fmtQty(summary.count)}</div>
+          <div className="stmt-sub stmt-sub-lines">
+            <span>
+              買入 {fmtQty(summary.buyCount)}・賣出 {fmtQty(summary.sellCount)}
+              {summary.dividendCount > 0 && <>・股利 {fmtQty(summary.dividendCount)}</>}
+            </span>
+            <span title="交易稅是依稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）回推的估計值">
+              手續費與稅 {fmtPlain(summary.fees)}（手續費 {fmtPlain(summary.feesBrokerage)}・交易稅{' '}
+              {fmtPlain(summary.feesTax)}，台美股合計）
+            </span>
           </div>
         </div>
-      </div>
+      </section>
+
+      <YearlyOverview ledger={ledger} />
 
       {/*
         The box sits below the KPIs on purpose: the KPIs are lifetime totals over every trade and are
@@ -570,11 +603,18 @@ export function YearlyPage() {
             </button>
           )}
         </div>
-        {query.trim() && <span className="hint">上方四張卡是全部交易的累計，不受搜尋影響。</span>}
+        {query.trim() && <span className="hint">最上方的合計與圖表是全部交易的累計，不受搜尋影響。</span>}
       </div>
 
-      <YearlySection title="🇹🇼 台股 (TWD)" currency="TWD" query={query} />
-      <YearlySection title="🇺🇸 美股 (USD)" currency="USD" query={query} />
+      <YearlySection title="台股 (TWD)" currency="TWD" query={query} />
+      <YearlySection title="美股 (USD)" currency="USD" query={query} />
+      <ol className="stmt-notes">
+        {HEADS.map(([label, help]) => (
+          <li key={label}>
+            {label}：{help}
+          </li>
+        ))}
+      </ol>
     </>
   )
 }

@@ -146,7 +146,7 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
-    const head = container.querySelector('.detail-card .rpt-head')
+    const head = container.querySelector('#sec-chips .rpt-head')
     expect(head).toBeTruthy()
     expect(head!.textContent).toContain('2330 台積電｜盤後籌碼')
     expect(head!.textContent).toContain('資料日期 2026-07-23（最近交易日盤後）')
@@ -270,16 +270,15 @@ describe('StockDetailPage', () => {
     expect(table().querySelectorAll('tbody tr')[0].querySelectorAll('td.num')[0].className).toContain('pnl-up')
   })
 
-  it('籌碼段只剩融資/融券兩張走勢圖（0.7.7 移除近 N 日買賣超長條圖）', async () => {
+  it('籌碼段先畫圖：三大法人堆疊長條 + 融資／融券兩張走勢圖，逐日矩陣收在圖下（2026-09-27）', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
-    // The bar chart drew the same numbers the matrix already shows on every 法人 for every day
-    expect(screen.queryByText(/日買賣超$/)).toBeNull()
-    expect(container.querySelector('.chart-with-legend')).toBeNull()
-    expect(charts(container, 'chips').length).toBe(2)
+    expect(charts(container, 'chips').length).toBe(3)
     expect(container.querySelectorAll('polyline').length).toBeGreaterThan(0)
+    // The matrix is still there, one click away, for the exact numbers.
+    expect(container.querySelector('#sec-chips details.chart-more .inst-matrix')).toBeTruthy()
   })
 
   it('行情置頂，下方以頁籤切換 籌碼 / 基本面 / 技術面', async () => {
@@ -308,30 +307,25 @@ describe('StockDetailPage', () => {
     expect(screen.queryByText('基本面資料尚未產生')).toBeNull()
   })
 
-  it('兩個分頁籤：分析內容、損益試算', async () => {
+  it('一排分頁籤：籌碼、基本面、技術面、損益試算（2026-09-27 合併兩層分頁）', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
-    expect(tabs).toEqual(['分析內容', '損益試算'])
+    expect(tabs).toEqual(['籌碼', '基本面', '技術面', '損益試算'])
   })
 
-  it('行情卡片中包含三大法人買賣超動向 2 日卡片', async () => {
+  it('行情區不再放三大法人 2 日卡片，改在籌碼分頁畫近 N 日長條圖', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
-    await screen.findByText('三大法人買賣超動向')
-    const quoteSec = sec(container, 'quote')
-    expect(quoteSec.querySelector('.institutional-block')).toBeTruthy()
-    expect(quoteSec.textContent).toContain('三大法人買賣超動向')
-    expect(quoteSec.textContent).toContain('近 2 交易日')
-    const cards = quoteSec.querySelectorAll('.inst-day-card')
-    expect(cards).toHaveLength(2)
-    expect(cards[0].querySelector('.inst-day-title')!.textContent).toBe('07/23')
-    expect(cards[0].querySelector('.inst-day-tag')!.textContent).toBe('最新')
-    expect(cards[1].querySelector('.inst-day-title')!.textContent).toBe('07/22')
-    expect(cards[1].querySelector('.inst-day-tag')!.textContent).toBe('前日')
+    await screen.findByText('三大法人買賣超')
+    expect(sec(container, 'quote').querySelector('.institutional-block')).toBeNull()
+    const chart = sec(container, 'chips').querySelector('.sd-inst-chart')
+    expect(chart).toBeTruthy()
+    expect(chart!.querySelectorAll('rect').length).toBeGreaterThan(0)
+    expect(chart!.textContent).toContain('外資')
   })
 
   it('技術面畫日 K／均線／布林，指標摘要在行情卡（0.6.51）', async () => {
@@ -527,7 +521,7 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
     // The table footer counts the same days
     expect(screen.getByText('2 日累計')).toBeTruthy()
-    expect(screen.getByText('近 2 日餘額走勢')).toBeTruthy()
+    expect(screen.getByText(/近 2 個交易日・單位：張/)).toBeTruthy()
   })
 
   it('應包含「基本面」分頁籤；有資料時顯示估值，無資料時顯示尚未產生', async () => {
@@ -842,14 +836,14 @@ describe('StockDetailPage', () => {
         <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
       )
       await screen.findByText('三大法人買賣超')
-      const before = container.querySelector('.detail-card .rpt-head')!.textContent
+      const before = container.querySelector('#sec-chips .rpt-head')!.textContent
 
       // Return the same copy (different object entities, but the same generatedAt)
       fetchStoredReport.mockResolvedValue({ ...report })
       await fireVisible()
       await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(2))
 
-      expect(container.querySelector('.detail-card .rpt-head')!.textContent).toBe(before)
+      expect(container.querySelector('#sec-chips .rpt-head')!.textContent).toBe(before)
     })
 
     it('切到背景時不抓（只在使用者真的要看的時候才打 Storage）', async () => {

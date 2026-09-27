@@ -60,11 +60,11 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={onRefresh} />)
 
     expect(screen.getByText('盤後探針命中戰情室')).toBeTruthy()
-    expect(screen.getByText('全市場三大法人')).toBeTruthy()
-    expect(screen.getByText('個股三大法人')).toBeTruthy()
-    expect(screen.getByText('個股估值 (PE/PB/DY)')).toBeTruthy()
-    expect(screen.getByText('融資融券')).toBeTruthy()
-    expect(screen.getByText('借券賣出餘額')).toBeTruthy()
+    // Each source appears twice: its timeline row and its card under the timeline.
+    for (const name of ['全市場三大法人', '個股三大法人', '個股估值 (PE/PB/DY)', '融資融券', '借券賣出餘額']) {
+      expect(screen.getAllByText(name)).toHaveLength(2)
+    }
+    expect(screen.getByTestId('pwr-timeline').querySelectorAll('.pwr-tl-row')).toHaveLength(8)
   })
 
   it('抬頭統計用「收工」一詞，同時涵蓋退休與六槽跑完（Task 133）', () => {

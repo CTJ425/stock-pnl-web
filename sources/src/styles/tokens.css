@@ -158,6 +158,11 @@
   --steel-on: var(--accent-ink);
   --ochre: var(--cds-support-warning);
   --ochre-tint: rgba(232, 185, 73, 0.18);
+  /* Chart categorical series (never red / green: those mean up / down). Validated per theme, see chartColors.ts. */
+  --chart-c1: #3987e5;
+  --chart-c2: #c98500;
+  --chart-c3: #9085e9;
+  --chart-c4: #d55181;
 }
 
 :root[data-theme='light'] {
@@ -212,6 +217,10 @@
   --skeleton-b: #d3dae3;
   --chip-neutral: var(--cds-layer-accent-01);
   --accent-ink: #ffffff;
+  --chart-c1: #2a78d6;
+  --chart-c2: #eda100;
+  --chart-c3: #4a3aa7;
+  --chart-c4: #e87ba4;
   --steel-tint: rgba(44, 87, 133, 0.10);
   --ochre: #8a6100;
   --ochre-tint: rgba(138, 94, 18, 0.15);

@@ -116,13 +116,13 @@ describe('MacroPage', () => {
     expect(screen.queryByText(/盤後批次/)).toBeNull()
   })
 
-  it('指標壓成一行 chip，只有名稱與最新值（0.6.35）；rate 顯示區間無 + 前綴', async () => {
+  it('每個指標一張小圖：名稱與最新值在圖上方（2026-09-27）；rate 顯示區間無 + 前綴', async () => {
     const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
     await openUsTab(user)
     await screen.findByText('美國總體經濟')
-    const chips = [...container.querySelectorAll('.mac-chip')].map((e) => e.textContent)
+    const chips = [...container.querySelectorAll('.mac-chip-head')].map((e) => e.textContent)
     // % growth / rate range / thousand people / index
     expect(chips).toEqual([
       '核心 CPI+2.57%',

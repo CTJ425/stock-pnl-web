@@ -176,10 +176,7 @@
 .modal .field textarea,
 .glass .field input,
 .glass .field select,
-.glass .field textarea,
-.detail-card .field input,
-.detail-card .field select,
-.detail-card .field textarea {
+.glass .field textarea {
   background: var(--cds-field-02);
 }
 

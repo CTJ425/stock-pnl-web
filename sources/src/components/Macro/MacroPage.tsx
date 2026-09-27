@@ -15,6 +15,7 @@ import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from
 import { fetchMarketDaily, type MarketData } from '../../services/marketProxy'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
+import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 import { TwMarketSection } from './TwMarketSection'
 import { GlobalIndices, type IndexDef } from './GlobalIndices'
@@ -58,6 +59,12 @@ function fmtPeriod(period: string | undefined): string {
   if (day) return `${day[1]} 年 ${Number(day[2])} 月 ${Number(day[3])} 日`
   const m = period.match(/^(\d{4})-(\d{2})$/)
   return m ? `${m[1]} 年 ${m[2]} 月` : period
+}
+
+/** Short axis label for the small multiples: 2026-08 → 26/08, 2026-09-16 → 26/09/16. */
+function fmtPeriodShort(period: string): string {
+  const m = period.match(/^\d{2}(\d{2})-(\d{2})(?:-(\d{2}))?$/)
+  return m ? `${m[1]}/${m[2]}${m[3] ? `/${m[3]}` : ''}` : period
 }
 
 /**
@@ -139,18 +146,34 @@ function risingStreak(points: MacroPoint[]): { direction: 1 | -1; periods: numbe
 }
 
 /**
- * The reduced indicator chip (0.6.35 replaces the original five KPI cards).
+ * One small multiple per indicator (2026-09-27; 0.6.35 had reduced the KPI cards to a name + value chip).
  *
- * Only the name and latest value are left: period, compared to the previous period, trend, continuity, and description are all in the table below.
- * The card version is equivalent to saying the same number twice. The purpose of this line is just a quick look at "what % is now".
+ * Name and latest value on one line, then the indicator's own last periods as a small line chart —
+ * "where is this going" is a slope before it is a number. Every chart has its own y axis: the units
+ * (%, 千人, index points) cannot share one. The table below keeps the period-by-period numbers.
  */
 function IndicatorChip({ ind }: { ind: MacroIndicator }) {
+  const d = delta(ind.latest, ind.previous)
   return (
     <div className="mac-chip">
-      <span className="mac-chip-label">{ind.label}</span>
-      <span className="mac-chip-value">
-        {fmtValue(ind.latest?.value ?? null, ind.unit, ind.kind, ind.latest?.valueLow)}
-      </span>
+      <div className="mac-chip-head">
+        <span className="mac-chip-label">{ind.label}</span>
+        <span className="mac-chip-value">
+          {fmtValue(ind.latest?.value ?? null, ind.unit, ind.kind, ind.latest?.valueLow)}
+        </span>
+      </div>
+      <div className="mac-chip-meta">
+        {fmtPeriod(ind.latest?.period)}・較上期 <span className={chipClass(d)}>{fmtDelta(d, ind.unit, ind.kind)}</span>
+      </div>
+      {ind.points.length > 1 && (
+        <LineSeriesChart
+          points={ind.points.map((p) => ({ label: fmtPeriodShort(p.period), value: p.value }))}
+          color={CHART_COLORS.line}
+          height={110}
+          formatValue={(v) => fmtValue(v, ind.unit, ind.kind)}
+          ariaLabel={`${ind.label}近 ${ind.points.length} 期走勢`}
+        />
+      )}
     </div>
   )
 }

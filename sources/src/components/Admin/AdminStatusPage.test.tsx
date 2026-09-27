@@ -294,6 +294,6 @@ describe('AdminStatusPage 排程同步狀態面板', () => {
     })
     render(<AdminStatusPage />)
     expect(await screen.findByText('盤後探針命中戰情室')).toBeTruthy()
-    expect(await screen.findByText('全市場三大法人')).toBeTruthy()
+    expect((await screen.findAllByText('全市場三大法人')).length).toBeGreaterThan(0)
   })
 })

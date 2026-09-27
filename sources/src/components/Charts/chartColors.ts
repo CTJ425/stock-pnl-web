@@ -22,28 +22,21 @@ export const CHART_COLORS = {
  * Category color matching (when displaying multiple legal persons at the same time, use "identity" coloring instead of rising or falling).
  *
  * The up/down above is **polarity** encoding (red positive, green negative), which can only express the positive and negative of one sequence at a time;
- * When drawing four legal persons at the same time, the color must be changed to express "who is this", and the positive and negative values are given to the direction of the long bar above and below the zero axis.
+ * When drawing several series at once, the color must express "who is this", and the sign is carried by the bar's direction from the zero axis.
  * Two codes cannot be overlapped on the same set of tags.
  *
- * Taken from the fixed order of dataviz reference color matching (dark steps of slots 1–4), **assigned in sequence, no loop**.
- * The reason for choosing dark steps instead of light steps: this project uses one literal palette for
- * both themes, and dark steps are the only group that passes both ground checks.
- * (light steps will FAIL the brightness band on dark backgrounds). Validation results (validate_palette.js):
- *   Light bottom #fcfcfb: brightness/chroma/CVD/normal vision full PASS, contrast 2.99 is WARN
- *   Deep Bottom #131a2b: All PASS
- * Shallow contrast WARN requires "visible label or table view" as relief - this page has both
- * The legend text and the complete numerical table above are therefore established.
+ * 2026-09-27 statement redesign: blue / yellow / violet / pink, deliberately without red or green (those mean
+ * up / down here). They are CSS variables (`--chart-c1…4`, tokens.css) so each theme gets its own validated steps;
+ * `fill="var(--x)"` resolves in SVG presentation attributes. validate_palette.js:
+ *   light #2a78d6 #eda100 #4a3aa7 #e87ba4 on paper: all checks PASS, contrast WARN for yellow and pink
+ *   dark  #3987e5 #c98500 #9085e9 #d55181 on night paper: all PASS
+ * The contrast WARN requires visible labels or a table view as relief: every chart using these ships a legend and
+ * keeps its numbers in a table under it.
  */
 export const CATEGORICAL_COLORS = [
-  '#8a3ffc', // Carbon purple 60
-  '#1192e8', // Carbon cyan 50
-  '#009d9a', // Carbon teal 50
-  '#ee5396', // Carbon magenta 50
+  'var(--chart-c1)',
+  'var(--chart-c2)',
+  'var(--chart-c3)',
+  'var(--chart-c4)',
 ] as const
 
-/**
- * Carbon publishes two categorical orders: a dark set for light grounds and a light set for
- * dark grounds. This app needs one literal set for both themes,
- * so the four mid steps above are used. Every step keeps enough luminance separation from
- * both #161616 and the light ground #fcfcfb, and the legend plus the value table carry the labels.
- */

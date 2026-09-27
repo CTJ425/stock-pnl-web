@@ -16,8 +16,17 @@
 
 ## 📋 Active Tasks
 
-### Task 170: Redesign the whole UI as a broker statement (券商對帳單) (user, 2026-09-26)
+### Task 171: Chart-first redesign of 個股分析 / 年度收益 / 總體經濟 / 外幣匯率 / 後台 (user, 2026-09-27)
 - **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-27 12:11:35 Asia/Taipei
+- **Spec**: approved demo `docs/design/statement-pages-demo.html` (artifact claude.ai/artifact/P5pYEvsoJ5qYvK4XeYyRvB, v2); `DESIGN.md`
+1. ~~Implement all five pages chart-first, one commit~~ ✅ 0.9.72-dev.1
+2. User review on DEV (logged-in pages were checked locally with a mocked login against DEV's public report files, not with a real account) —— ⏳
+3. With the user's OK: release 0.9.72 to `main` (frontend only: no Edge or DDL change) —— ⏳
+
+### Task 170: Redesign the whole UI as a broker statement (券商對帳單) (user, 2026-09-26)
+- **Status**: 🔄 IN PROGRESS — only the PROD `fee_rebate` DDL (user) is left
 - **Agent**: Claude
 - **Timestamp**: 2026-09-27 05:37:04 Asia/Taipei
 - **Spec**: `DESIGN.md`, `PRODUCT.md`, `.impeccable/surfaces/sources-src-components-dashboard-dashboardpage-tsx.md`

@@ -128,7 +128,7 @@
   height: var(--cds-size-md);
   padding: 0 var(--sp-05);
   cursor: pointer;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
   border-radius: 0;
   transition: color var(--cds-dur-fast) var(--cds-ease-productive),
@@ -150,60 +150,6 @@
 
 .detail-body {
   padding: 16px 24px;
-}
-
-/* ---------- Individual stock analysis single page (0.6.8, version D: card grouping) ----------
- *
- * After the four sections (my holdings/chips/fundamentals/technical aspects) were combined into one page, the original .rpt-section
- * They are all of the same level, with the same spacing of 24px, so it’s hard to tell which paragraphs belong to whom. Give each segment its own card,
- * The boundaries are defined by the blank space between cards - no interaction is required, and there will be no "things being put away that can't be found".
- *
- * In 0.6.23, each table title was made into a collapse switch. In 0.6.24, the entire table title was removed: the collapsed block is not in the DOM.
- * The PDF export of that time had to expand every block and restore it: an invisible failure path in
- * exchange for less scrolling. That export is gone since 0.9.52; this note stays as the record of why
- * the switch went away.
- */
-.detail-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-/* Nested .detail-stack does not overlap the margins again.*/
-.detail-stack .detail-stack {
-  gap: 24px;
-}
-
-.detail-card {
-  padding: 16px 24px;
-}
-
-/* Group title: deliberately one level higher than the .rpt-section h3 (14px + 1px bottom line) within the paragraph,
-   否則同一頁 14 個標題全部長一樣，層級等於沒有 */
-.card-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.card-head h3 {
-  font-size: var(--type-body-02);
-  letter-spacing: 0.2px;
-}
-
-.card-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  flex: none;
-}
-
-.card-meta {
-  margin-left: auto;
-  font-size: var(--type-label-01);
-  color: var(--ink-muted);
 }
 
 /* Report header: shows the code number, data date and generation time */
@@ -1013,58 +959,6 @@
 }
 
 
-.section-tabs-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.section-tabs-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  background: var(--cds-layer-02);
-  border: 1px solid var(--border);
-  padding: 4px;
-  border-radius: var(--radius);
-  width: fit-content;
-}
-
-.sec-tab-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--cds-text-secondary);
-  font-size: var(--type-body-01);
-  font-weight: 400;
-  letter-spacing: 0.16px;
-  height: var(--cds-size-md);
-  padding: 0 var(--sp-05);
-  border-radius: 0;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-03);
-  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
-    background var(--cds-dur-fast) var(--cds-ease-productive),
-    border-color var(--cds-dur-fast) var(--cds-ease-productive);
-}
-
-.sec-tab-btn:hover {
-  color: var(--cds-text-primary);
-  background: var(--cds-background-hover);
-  border-bottom-color: var(--cds-border-strong);
-}
-
-.sec-tab-btn.active {
-  background: transparent;
-  color: var(--cds-text-primary);
-  font-weight: 600;
-  border-bottom-color: var(--cds-border-interactive);
-  box-shadow: none;
-}
-
 .intraday-block {
   margin-bottom: 24px;
 }
@@ -1226,14 +1120,6 @@
     padding: 16px;
   }
 
-  .detail-card {
-    padding: 16px;
-  }
-
-  /* The spacing between cards on mobile phones should be smaller, otherwise the whole page will be longer.*/
-  .detail-stack {
-    gap: 16px;
-  }
 
   .card-head h3 {
     font-size: var(--type-body-01);
@@ -1303,4 +1189,434 @@
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* =========================================================
+ * 個股分析 as a statement (2026-09-27 redesign)
+ * The stock's letterhead and its price chart side by side, 我的持股 as one ruled strip, one tab row,
+ * and inside each tab the chart first with the exact numbers one disclosure below it.
+ * ========================================================= */
+.sd-page .detail-title h2 {
+  font-size: var(--type-body-02);
+  color: var(--cds-text-secondary);
+  font-weight: 600;
+}
+
+.sd-industry {
+  margin-left: var(--sp-03);
+  vertical-align: 2px;
+}
+
+.sd-quote {
+  padding-top: var(--sp-04);
+}
+
+.sd-head {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 2fr);
+  gap: var(--sp-05) var(--sp-07);
+  align-items: start;
+  padding-bottom: var(--sp-05);
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.sd-head .quote-top-banner {
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin-bottom: var(--sp-04);
+}
+
+.sd-head .m-quote-head h2 {
+  font-size: 1.625rem;
+}
+
+.sd-head .m-price {
+  margin: var(--sp-03) 0 0;
+  row-gap: 2px;
+}
+
+.sd-head .m-price .big {
+  font-size: 2.5rem;
+  line-height: 1.05;
+}
+
+.sd-head .m-price .stamp {
+  flex-basis: 100%;
+  padding-bottom: 0;
+}
+
+/* The day's figures: a compact two-column list instead of a bordered grid of cells. */
+.sd-head .m-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--sp-06);
+  border: 0;
+  border-radius: 0;
+  margin-bottom: var(--sp-03);
+}
+
+.sd-head .m-stats .rpt-card {
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 1px dashed var(--cds-border-subtle);
+  background: none;
+}
+
+.sd-head .m-stats .rpt-card .k {
+  color: var(--cds-text-helper);
+}
+
+.sd-head .m-stats .rpt-card .v {
+  font-size: var(--type-body-01);
+  font-weight: 600;
+}
+
+.sd-head .hint {
+  font-size: var(--type-label-01);
+}
+
+.sd-head-chart .chart-wrap {
+  max-width: none;
+}
+
+.sd-aside {
+  gap: 0;
+}
+
+/* 我的持股: four figures in a ruled strip, closed by the double rule like every statement total. */
+.sd-mine {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: var(--sp-05) 0 var(--sp-05);
+  border-bottom: 3px double var(--cds-text-primary);
+}
+
+.sd-mine h4 {
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--cds-text-helper);
+  margin: 0 0 var(--sp-03);
+}
+
+.sd-mine-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sd-mine-grid > div {
+  min-width: 0;
+  padding: 0 var(--sp-05);
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.sd-mine-grid > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.sd-mine-grid .k {
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.sd-mine-grid .v {
+  margin-top: 2px;
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sd-mine-grid .v.holding-pnl-big {
+  font-size: var(--type-heading-03);
+}
+
+.sd-mine-grid .s {
+  margin-top: 2px;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+.sd-mine-grid .holding-roi {
+  font-size: var(--type-label-01);
+}
+
+.sd-aside .rpt-section {
+  margin-top: var(--sp-05);
+}
+
+.sd-tabs {
+  margin-top: var(--sp-07);
+}
+
+.sd-section {
+  padding-top: var(--sp-03);
+}
+
+/* Inside a tab the report furniture is quieter: no cards, section heads as printed labels. */
+.sd-section .rpt-head {
+  margin-bottom: var(--sp-05);
+}
+
+.sd-section .rpt-section {
+  margin-top: var(--sp-07);
+}
+
+.sd-section .rpt-section:first-of-type {
+  margin-top: var(--sp-05);
+}
+
+.sd-inst-chart {
+  margin: var(--sp-03) 0 var(--sp-04);
+}
+
+.chart-caption {
+  margin: 0 0 var(--sp-02);
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+/* The exact numbers under a chart: one disclosure, closed by default. */
+details.chart-more {
+  margin-top: var(--sp-04);
+  border-top: 1px solid var(--cds-border-subtle);
+  padding-top: var(--sp-03);
+}
+
+details.chart-more > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-02);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-link-primary);
+}
+
+details.chart-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.chart-more > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--cds-dur-slow) var(--cds-ease-productive);
+  margin-right: 2px;
+}
+
+details.chart-more[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+details.chart-more[open] > summary {
+  margin-bottom: var(--sp-04);
+}
+
+/* 估值 / 獲利 figures: printed rows (label, value, a line of plain words) instead of floating cards. */
+.sd-section .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 var(--sp-07);
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.sd-section .kpi-grid .kpi {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--sp-04);
+  align-items: baseline;
+  padding: var(--sp-03) 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.sd-section .kpi-grid .kpi .kpi-label {
+  font-size: var(--type-body-01);
+  color: var(--cds-text-secondary);
+}
+
+.sd-section .kpi-grid .kpi .kpi-value {
+  margin-top: 0;
+  font-size: var(--type-body-02);
+}
+
+.sd-section .kpi-grid .kpi .kpi-sub {
+  grid-column: 1 / -1;
+}
+
+/* 損益試算 price scale */
+.whatif-scale {
+  padding: 30px 8px 34px;
+  margin-bottom: var(--sp-04);
+}
+
+.whatif-scale-track {
+  position: relative;
+  height: 2px;
+  background: var(--cds-border-strong);
+}
+
+.whatif-scale-span {
+  position: absolute;
+  top: -4px;
+  height: 10px;
+  opacity: 0.35;
+}
+
+.whatif-scale-span.is-gain {
+  background: var(--up);
+}
+
+.whatif-scale-span.is-loss {
+  background: var(--down);
+}
+
+.whatif-scale-mark {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-secondary);
+}
+
+.whatif-scale-mark::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--cds-text-helper);
+  box-shadow: 0 0 0 2px var(--cds-background);
+}
+
+.whatif-scale-mark.is-above {
+  top: -30px;
+}
+
+.whatif-scale-mark.is-below {
+  top: 12px;
+}
+
+.whatif-scale-mark.is-above::before {
+  top: 24px;
+}
+
+.whatif-scale-mark.is-below::before {
+  top: -18px;
+}
+
+.whatif-scale-mark--current::before {
+  background: var(--cds-interactive);
+}
+
+.whatif-scale-mark--sell {
+  color: var(--cds-text-primary);
+}
+
+.whatif-scale-mark--sell::before {
+  background: var(--cds-text-primary);
+}
+
+@media (max-width: 900px) {
+  .sd-head {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .sd-mine-grid {
+    grid-template-columns: 1fr 1fr;
+    row-gap: var(--sp-05);
+  }
+
+  .sd-mine-grid > div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .sd-mine-grid .v {
+    font-size: var(--type-body-02);
+    white-space: normal;
+  }
+
+  .sd-head .m-price .big {
+    font-size: 2.25rem;
+  }
+}
+
+/* Fix pass (2026-09-27): labels never wrap per character, the page title is not repeated above the
+   letterhead, and 指標摘要 reads as printed columns rather than a boxed grid. */
+.sd-head .m-stats .rpt-card .k {
+  white-space: nowrap;
+  flex: none;
+}
+
+.sd-head .m-stats .rpt-card .v {
+  text-align: right;
+}
+
+.sd-page .detail-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.sd-aside .tech-summary {
+  border: 0;
+  border-top: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
+}
+
+.sd-aside .tech-cell {
+  border-right: 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  padding: var(--sp-04) var(--sp-05) var(--sp-04) 0;
+}
+
+/* Labels near either end of the price scale anchor to that end instead of centring off-screen. */
+.whatif-scale-mark.at-start {
+  transform: translateX(-6px);
+}
+
+.whatif-scale-mark.at-end {
+  transform: translateX(calc(-100% + 6px));
+}
+
+.whatif-scale-mark.at-start::before {
+  left: 6px;
+}
+
+.whatif-scale-mark.at-end::before {
+  left: calc(100% - 6px);
+}
+
+/* The day's figures need room for NT$ amounts: a wider letterhead column, values never clipped. */
+.sd-head {
+  grid-template-columns: minmax(340px, 0.95fr) minmax(0, 2fr);
+}
+
+.sd-head .m-stats {
+  overflow: visible;
+}
+
+.sd-head .m-stats .rpt-card .v {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .sd-head {
+    grid-template-columns: 1fr;
+  }
 }

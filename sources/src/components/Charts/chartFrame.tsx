@@ -104,6 +104,8 @@ interface ChartFrameProps {
    */
   hoverIndex?: number | null
   onHover?: (index: number | null) => void
+  /** Makes each point pickable by click or Enter (年度收益's year bars). */
+  onSelect?: (index: number) => void
   children: (geo: PlotGeometry) => ReactNode
 }
 
@@ -118,6 +120,7 @@ export function ChartFrame({
   tooltipAnchor,
   hoverIndex,
   onHover,
+  onSelect,
   children,
 }: ChartFrameProps) {
   const [ownHover, setOwnHover] = useState<number | null>(null)
@@ -208,6 +211,10 @@ export function ChartFrame({
           else if (e.key === 'Home') move(0)
           else if (e.key === 'End') move(last)
           else if (e.key === 'Escape') setHover(null)
+          else if (onSelect && (e.key === 'Enter' || e.key === ' ') && hover !== null) {
+            e.preventDefault()
+            onSelect(hover)
+          }
         }}
       >
         <title id={titleId}>{ariaLabel}</title>
@@ -279,6 +286,8 @@ export function ChartFrame({
               height={innerH}
               fill="transparent"
               onMouseEnter={() => setHover(i)}
+              onClick={onSelect ? () => onSelect(i) : undefined}
+              style={onSelect ? { cursor: 'pointer' } : undefined}
             />
           ))}
         </g>

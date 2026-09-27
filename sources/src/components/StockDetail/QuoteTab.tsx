@@ -36,7 +36,7 @@ import {
   pnlClass,
   roundPrice,
 } from '../../utils/formatters'
-import { fmtInt, fmtLotsFromShares, shortDate } from './chipFormat'
+import { fmtInt } from './chipFormat'
 import { IntradayChart, type TrendSeries } from './IntradayChart'
 import { finalVwap } from './intradayStats'
 import { getStockCategory } from '../../utils/stockCategory'
@@ -50,7 +50,7 @@ import {
   type TrendRange,
 } from './trendRange'
 import type { DailyStatus } from './useDailySeries'
-import type { ChipDay, ReportHolding } from '../../services/reportProxy'
+import type { ReportHolding } from '../../services/reportProxy'
 import { priceLimits } from './whatIf'
 
 type TechnicalLatest = TechnicalView['latest']
@@ -130,7 +130,6 @@ export function QuoteTab({
   ticker,
   name,
   holding = null,
-  history = null,
   dailySeries = null,
   dailyStatus = 'ready',
   market = 'TPE',
@@ -140,7 +139,6 @@ export function QuoteTab({
   ticker: string
   name: string
   holding?: ReportHolding | null
-  history?: ChipDay[] | null
   dailySeries?: DailySeries | null
   dailyStatus?: DailyStatus
   market?: Market
@@ -269,11 +267,6 @@ export function QuoteTab({
   const todayPnl =
     holding && quote.prevClose !== null ? holding.qty * (quote.price - quote.prevClose) : null
 
-  const recentDays = (history ?? [])
-    .filter((d) => d.institutional !== null && d.institutional !== undefined)
-    .slice(-2)
-    .reverse()
-
   const category = getStockCategory(ticker, name, quote.industry)
 
   // DT-02: TW-only 漲停/跌停 badge, from the same ±10% 昨收 band the chart's reference lines use.
@@ -287,33 +280,38 @@ export function QuoteTab({
 
   return (
     <>
-      <div className="quote-top-banner">
-        <div className="m-quote-head m-sym">
-          <h2>{name}</h2>
-          <span className="code">{ticker}</span>
-          {category && <span className="quote-badge">{category}</span>}
-        </div>
-        <div className="m-price">
-          <span className={`big ${pnlClass(dayChange)}`}>{fmtPrice(quote.price, 'TWD')}</span>
-          {limitState && (
-            <span className={`quote-limit-badge ${limitState === 'up' ? 'pnl-up' : 'pnl-down'}`}>
-              {limitState === 'up' ? '漲停' : '跌停'}
-            </span>
-          )}
-          {quote.trial && <span className="trial-marker">預估</span>}
-          <span className={`delta ${pnlClass(dayChange)}`}>
-            {dayChange === null
-              ? '—'
-              : `${dayChange >= 0 ? '▲' : '▼'} ${fmtDelta(Math.abs(dayChange))}${
-                  dayChangePct === null ? '' : `　${fmtSignedPercent(dayChangePct)}`
-                }`}
-          </span>
-          {stamp && <span className="stamp">{stamp}</span>}
-        </div>
-      </div>
+      {/*
+        2026-09-27 statement redesign: the stock's letterhead (name, price, move, the day's figures) on the
+        left, its price chart on the right, then 我的持股 as one ruled strip. The two-day 法人 cards that used
+        to sit here are gone: the 籌碼 tab now opens with a chart of the same numbers.
+      */}
+      <div className="sd-head">
+        <div className="sd-head-main">
+          <div className="quote-top-banner">
+            <div className="m-quote-head m-sym">
+              <h2>{name}</h2>
+              <span className="code">{ticker}</span>
+              {category && <span className="quote-badge">{category}</span>}
+            </div>
+            <div className="m-price">
+              <span className={`big ${pnlClass(dayChange)}`}>{fmtPrice(quote.price, 'TWD')}</span>
+              {limitState && (
+                <span className={`quote-limit-badge ${limitState === 'up' ? 'pnl-up' : 'pnl-down'}`}>
+                  {limitState === 'up' ? '漲停' : '跌停'}
+                </span>
+              )}
+              {quote.trial && <span className="trial-marker">預估</span>}
+              <span className={`delta ${pnlClass(dayChange)}`}>
+                {dayChange === null
+                  ? '—'
+                  : `${dayChange >= 0 ? '▲' : '▼'} ${fmtDelta(Math.abs(dayChange))}${
+                      dayChangePct === null ? '' : `　${fmtSignedPercent(dayChangePct)}`
+                    }`}
+              </span>
+              {stamp && <span className="stamp">{stamp}</span>}
+            </div>
+          </div>
 
-      <div className="quote-layout">
-        <div className="quote-main">
           <dl className="m-stats">
             <Cell
               label="成交量"
@@ -338,7 +336,9 @@ export function QuoteTab({
               ? '今天已經收盤，這是收盤的價格，到明天開盤前都不會再變。'
               : '盤中價格每分鐘更新一次。「預估」只有開盤前（8:30–9:00）和收盤前（13:25–13:30）試撮時才有。'}
           </p>
+        </div>
 
+        <div className="sd-head-chart">
           <IntradayChart
             series={series}
             loading={intradayLoading}
@@ -350,134 +350,65 @@ export function QuoteTab({
             ticker={ticker}
             market={market}
           />
-
-          {recentDays.length > 0 && (
-            <div className="institutional-block">
-              <div className="inst-header">
-                <div className="inst-header-left">
-                  <span className="inst-header-title">三大法人買賣超動向</span>
-                  <span className="inst-header-badge">近 2 交易日</span>
-                </div>
-                <span className="inst-header-note">單位：張（每日約 15:30 公布）</span>
-              </div>
-              <div className="inst-days-grid">
-                {recentDays.map((d, idx) => {
-                  const isLatest = idx === 0
-                  const tagLabel = isLatest ? '最新' : '前日'
-                  const inst = d.institutional
-                  const totalNet = inst?.total?.net
-                  const foreignNet = inst?.foreign?.net
-                  const trustNet = inst?.trust?.net
-                  const dealerNet = inst?.dealer?.net
-
-                  return (
-                    <div key={d.date} className="inst-day-card">
-                      <div className="inst-day-head">
-                        <span className="inst-day-title">{shortDate(d.date)}</span>
-                        <span className={`inst-day-tag ${isLatest ? 'is-latest' : ''}`}>
-                          {tagLabel}
-                        </span>
-                      </div>
-
-                      <div className="inst-day-total">
-                        <span className="inst-total-label">三大法人合計</span>
-                        <span className={`inst-total-val ${pnlClass(totalNet)}`}>
-                          {fmtLotsFromShares(totalNet)} 張
-                        </span>
-                      </div>
-
-                      <div className="inst-legs-grid">
-                        <div className="inst-leg-cell">
-                          <div className="inst-leg-k">外資</div>
-                          <div className={`inst-leg-v ${pnlClass(foreignNet)}`}>
-                            {fmtLotsFromShares(foreignNet)}
-                          </div>
-                        </div>
-                        <div className="inst-leg-cell">
-                          <div className="inst-leg-k">投信</div>
-                          <div className={`inst-leg-v ${pnlClass(trustNet)}`}>
-                            {fmtLotsFromShares(trustNet)}
-                          </div>
-                        </div>
-                        <div className="inst-leg-cell">
-                          <div className="inst-leg-k">自營商</div>
-                          <div className={`inst-leg-v ${pnlClass(dealerNet)}`}>
-                            {fmtLotsFromShares(dealerNet)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
+      </div>
 
-        <aside className="quote-aside">
-          {holding && (
-            <div className="quote-aside-private">
-              <h4>我的持股概況</h4>
-              <div className="holding-pnl">
-                <span className={`holding-pnl-big ${pnlClass(holding.unrealized)}`}>
+      <div className="quote-aside sd-aside">
+        {holding && (
+          <div className="quote-aside-private sd-mine" aria-label="我的持股概況">
+            <h4>我的持股概況</h4>
+            <div className="sd-mine-grid">
+              <div>
+                <div className="k">持有</div>
+                <div className="v">{fmtInt(holding.qty)} 股</div>
+                <div className="s">均價 {fmtPrice(holding.avgCost, 'TWD')}</div>
+              </div>
+              <div>
+                <div className="k">市值</div>
+                <div
+                  className="v"
+                  title={
+                    netMktVal !== null
+                      ? `若以現價全數賣出，扣除手續費與證交稅後的預估實收金額：約 NT$ ${fmtInt(netMktVal)}`
+                      : undefined
+                  }
+                >
+                  {marketValue === null ? '—' : `NT$${fmtInt(marketValue)}`}
+                </div>
+                {netMktVal !== null && <div className="s">全部賣出約可拿回 NT${fmtInt(netMktVal)}</div>}
+              </div>
+              <div>
+                <div className="k">今日損益</div>
+                <div className={`v ${pnlClass(todayPnl)}`}>{todayPnl === null ? '—' : fmtSignedMoney(todayPnl, 'TWD')}</div>
+                <div className="s">{fmtSignedPercent(dayChangePct)}</div>
+              </div>
+              <div>
+                <div className="k">未實現淨損益</div>
+                <div className={`v holding-pnl-big ${pnlClass(holding.unrealized)}`}>
                   {fmtSignedMoney(holding.unrealized, 'TWD')}
+                </div>
+                <div className="s">
+                  <span className={`holding-roi ${pnlClass(holding.roi)}`}>
+                    {holding.roi === null ? '—' : fmtSignedPercent(holding.roi)}
+                  </span>
                   {holding.brokerUnrealized !== undefined &&
                     holding.brokerUnrealized !== null &&
                     holding.brokerUnrealized !== holding.unrealized && (
-                      <span
-                        style={{ fontSize: 14, opacity: 0.75, fontWeight: 500, marginLeft: 6 }}
-                        title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑"
-                      >
-                        (券商 {fmtSignedMoney(holding.brokerUnrealized, 'TWD')})
+                      <span title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑">
+                        ・券商 {fmtSignedMoney(holding.brokerUnrealized, 'TWD')}
+                        {holding.brokerRoi !== undefined &&
+                          holding.brokerRoi !== null &&
+                          fmtSignedPercent(holding.brokerRoi) !== fmtSignedPercent(holding.roi) &&
+                          `（${fmtSignedPercent(holding.brokerRoi)}）`}
                       </span>
                     )}
-                </span>
-                <span className={`holding-roi ${pnlClass(holding.roi)}`}>
-                  {holding.roi === null ? '—' : fmtSignedPercent(holding.roi)}
-                  {holding.brokerRoi !== undefined &&
-                    holding.brokerRoi !== null &&
-                    fmtSignedPercent(holding.brokerRoi) !== fmtSignedPercent(holding.roi) && (
-                      <span
-                        style={{ fontSize: 12, opacity: 0.75, fontWeight: 400, marginLeft: 6 }}
-                        title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
-                      >
-                        (券商 {fmtSignedPercent(holding.brokerRoi)})
-                      </span>
-                    )}
-                </span>
-              </div>
-              <div className="holding-grid">
-                <div className="holding-cell">
-                  <div className="k">持有</div>
-                  <div className="v">{fmtInt(holding.qty)} 股</div>
-                </div>
-                <div className="holding-cell">
-                  <div className="k">成本</div>
-                  <div className="v">{fmtPrice(holding.avgCost, 'TWD')}</div>
-                </div>
-                <div className="holding-cell">
-                  <div className="k">市值</div>
-                  <div
-                    className="v"
-                    title={
-                      netMktVal !== null
-                        ? `若以現價全數賣出，扣除手續費與證交稅後的預估實收金額：約 NT$ ${fmtInt(netMktVal)}`
-                        : undefined
-                    }
-                  >
-                    {fmtInt(marketValue)}
-                  </div>
-                </div>
-                <div className="holding-cell">
-                  <div className="k">今日</div>
-                  <div className="v">{todayPnl === null ? '—' : fmtSignedMoney(todayPnl, 'TWD')}</div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {latest && <IndicatorSummary latest={latest} />}
-        </aside>
+        {latest && <IndicatorSummary latest={latest} />}
       </div>
     </>
   )

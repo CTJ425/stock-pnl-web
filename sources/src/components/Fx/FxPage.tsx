@@ -96,34 +96,47 @@ function cardView(cur: FxCurrency, quote: FxQuote | undefined) {
   return { price: cur.latest, pct: changePct(cur.latest, cur.prevClose), live: false, asOf: '' }
 }
 
+/**
+ * One currency per row (2026-09-27 statement redesign; it used to be a card grid): the day's move
+ * as a diverging bar on a scale shared by all eight rows, then the rate and the plain-words reading.
+ * Colour follows the TW convention — red when the foreign currency rose, i.e. 台幣貶值.
+ */
 function CurrencyCard({
   cur,
   quote,
   active,
+  maxPct,
   onSelect,
 }: {
   cur: FxCurrency
   quote: FxQuote | undefined
   active: boolean
+  maxPct: number
   onSelect: () => void
 }) {
   const v = cardView(cur, quote)
+  const width = v.pct === null ? 0 : Math.min(50, (Math.abs(v.pct) / maxPct) * 50)
   return (
     <button
       type="button"
-      className={`glass kpi fx-card${active ? ' is-active' : ''}`}
+      className={`fx-card fx-row${active ? ' is-active' : ''}`}
       onClick={onSelect}
       aria-pressed={active}
       title={`1 ${cur.code} = ${formatRate(v.price, cur.decimals)} TWD${
         v.live ? `（即時，${fmtUpdatedAt(v.asOf)}）` : '（前一交易日收盤）'
       }`}
     >
-      <div className="kpi-label">
-        {cur.name} {cur.code}
-      </div>
-      <div className="kpi-value">{formatRate(v.price, cur.decimals)}</div>
-      <div className="kpi-sub">{pctText(v.pct)}</div>
-      <div className="kpi-sub">{trendText(v.pct)}</div>
+      <span className="fx-row-name">
+        {cur.name} <b>{cur.code}</b>
+      </span>
+      <span className="fx-row-track" aria-hidden="true">
+        {v.pct !== null && <i className={v.pct >= 0 ? 'pos' : 'neg'} style={{ width: `${width}%` }} />}
+      </span>
+      <span className={`fx-row-pct ${v.pct === null ? '' : v.pct > 0 ? 'pnl-up' : v.pct < 0 ? 'pnl-down' : 'pnl-flat'}`}>
+        {pctText(v.pct)}
+      </span>
+      <span className="fx-row-rate">{formatRate(v.price, cur.decimals)}</span>
+      <span className="fx-row-note">{trendText(v.pct)}</span>
     </button>
   )
 }
@@ -351,6 +364,7 @@ export function FxPage() {
   const stale = isStale(fx.asOf, new Date())
   // If there is a real-time quote for any currency, it will be considered successful (eight are the same request, and only half will be returned)
   const liveAt = fx.currencies.map((c) => quotes[c.code]?.asOf).find(Boolean) ?? ''
+  const maxPct = Math.max(0.2, ...fx.currencies.map((c) => Math.abs(cardView(c, quotes[c.code]).pct ?? 0)))
 
   return (
     <>
@@ -361,7 +375,7 @@ export function FxPage() {
         </div>
       )}
 
-      <div className="section glass fx-panel">
+      <div className="section fx-panel">
         <div className="rpt-section-head">
           <h3 className="head-tight">外幣匯率</h3>
           {fx.asOf && (
@@ -373,13 +387,14 @@ export function FxPage() {
           </button>
         </div>
 
-        <div className="kpi-grid" style={{ marginTop: 14 }}>
+        <div className="fx-rows" style={{ marginTop: 14 }}>
           {fx.currencies.map((c) => (
             <CurrencyCard
               key={c.code}
               cur={c}
               quote={quotes[c.code]}
               active={c.code === current.code}
+              maxPct={maxPct}
               onSelect={() => select(c.code)}
             />
           ))}
@@ -388,8 +403,8 @@ export function FxPage() {
         <p className="hint" style={{ marginTop: 10 }}>
           數字為 1 單位外幣可換得的台幣，漲跌為與前一交易日相比。
           {liveAt
-            ? `卡片為市場即時中價（${fmtUpdatedAt(liveAt)}，最多延遲 10 分鐘）；下方走勢圖為每日收盤。`
-            : '目前取不到即時報價，卡片顯示的是前一交易日收盤價。'}
+            ? `列表為市場即時中價（${fmtUpdatedAt(liveAt)}，最多延遲 10 分鐘）；長條是今天的漲跌幅，點一列看下方走勢；走勢圖為每日收盤。`
+            : '目前取不到即時報價，列表顯示的是前一交易日收盤價。'}
         </p>
       </div>
 

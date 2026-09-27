@@ -2,7 +2,11 @@
  * 國際指數 subtab (task 162, 164): 9 indices across 4 regions (台灣/日本/韓國/美國),
  * refreshed every 60 s while that region is in session.
  *
- * Each card is a drill-down entry point to IndexDetail (task 164).
+ * Each row is a drill-down entry point to IndexDetail (task 164).
+ *
+ * 2026-09-27 statement redesign: the cards became one list whose rows carry a diverging bar of the
+ * day's move (right = up, left = down, one scale across every market), so "which market is up
+ * today" is read from lengths before any number.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchIndexQuotes, type IndexQuote } from '../../services/indexQuotes'
@@ -79,41 +83,57 @@ function fmtAsOf(asOf: string): string {
   return `${get('month')}/${get('day')} ${get('hour')}:${get('minute')}`
 }
 
+function changePctOf(quote: IndexQuote | undefined): number | null {
+  if (!quote || quote.prevClose === null || !quote.prevClose) return null
+  return ((quote.price - quote.prevClose) / quote.prevClose) * 100
+}
+
 function IndexCard({
   def,
   quote,
   sessionState,
+  maxPct,
   onSelect,
 }: {
   def: IndexDef
   quote: IndexQuote | undefined
   sessionState: SessionState
+  /** Largest |move| on screen, so every bar shares one scale. */
+  maxPct: number
   onSelect?: (def: IndexDef, quote?: IndexQuote) => void
 }) {
   const change = quote && quote.prevClose !== null ? quote.price - quote.prevClose : null
-  const changePct = change !== null && quote?.prevClose ? (change / quote.prevClose) * 100 : null
+  const changePct = changePctOf(quote)
   const asOf = quote?.asOf ?? null
   const stamp = asOf ? fmtAsOf(asOf) : ''
+  const width = changePct === null ? 0 : Math.min(50, (Math.abs(changePct) / maxPct) * 50)
 
   return (
     <button
       type="button"
-      className="rpt-card gix-card"
+      className="gix-card gix-row"
       data-testid={`gix-card-${def.ticker}`}
       onClick={() => onSelect?.(def, quote)}
     >
-      <div className="k">{def.label}</div>
-      <div className={`v ${pnlClass(change)}`}>{quote ? fmtIndexNum(quote.price) : '—'}</div>
-      <div className={`gix-change ${pnlClass(change)}`}>
-        {change === null ? '—' : `${change >= 0 ? '▲' : '▼'} ${fmtIndexNum(Math.abs(change))}`}
-        {changePct === null
-          ? ''
-          : `　${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`}
-      </div>
+      <span className="k">{def.label}</span>
+      <span className="gix-track" aria-hidden="true">
+        {changePct !== null && (
+          <i className={changePct >= 0 ? 'pos' : 'neg'} style={{ width: `${width}%` }} />
+        )}
+      </span>
+      <span className={`gix-pct ${pnlClass(change)}`}>
+        {changePct === null ? '—' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`}
+      </span>
+      <span className="gix-level">
+        <span className="v">{quote ? fmtIndexNum(quote.price) : '—'}</span>
+        <span className={`gix-change ${pnlClass(change)}`}>
+          {change === null ? '—' : `${change >= 0 ? '▲' : '▼'} ${fmtIndexNum(Math.abs(change))}`}
+        </span>
+      </span>
       {stamp !== '' && (
-        <div className="gix-stamp" data-testid={`gix-stamp-${def.ticker}`}>
+        <span className="gix-stamp" data-testid={`gix-stamp-${def.ticker}`}>
           {stamp}・{SESSION_LABELS[sessionState]}
-        </div>
+        </span>
       )}
     </button>
   )
@@ -171,9 +191,10 @@ export function GlobalIndices({
   }, [load, closedDates])
 
   const anyOpen = openRegions(now, closedDates).length > 0
+  const maxPct = Math.max(0.5, ...INDICES.map((d) => Math.abs(changePctOf(quotes[d.ticker]) ?? 0)))
 
   return (
-    <div className="section glass" style={{ padding: '18px 20px' }}>
+    <div className="section gix-section">
       <div className="rpt-section-head">
         <h3 className="head-tight">國際指數</h3>
         {lastUpdated && (
@@ -200,13 +221,14 @@ export function GlobalIndices({
                 </div>
                 <span className="badge">{SESSION_LABELS[session]}</span>
               </div>
-              <div className="rpt-cards">
+              <div className="gix-rows">
                 {INDICES.filter((i) => i.region === region).map((def) => (
                   <IndexCard
                     key={def.ticker}
                     def={def}
                     quote={quotes[def.ticker]}
                     sessionState={session}
+                    maxPct={maxPct}
                     onSelect={onSelect}
                   />
                 ))}

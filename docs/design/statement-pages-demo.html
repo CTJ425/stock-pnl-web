@@ -1,0 +1,679 @@
+<title>對帳單五頁示意</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #ffffff; --band: #eff3f7; --band-strong: #e3e9f0; --raised: #f6f8fa;
+  --ink: #16191d; --ink-2: #444d58; --ink-3: #636c78;
+  --rule: #d3dae3; --rule-strong: #8a94a1; --grid: #e6ebf1; --zero: #8a94a1;
+  --accent: #2c5785; --accent-ink: #ffffff; --accent-tint: rgba(44, 87, 133, 0.10);
+  --up: #c42f2b; --down: #17784a; --warn: #8a6100; --ok: #17784a; --err: #b3261e;
+  /* categorical (validated: blue / yellow / violet, light) — never red/green, those mean up/down */
+  --c1: #2a78d6; --c2: #eda100; --c3: #4a3aa7;
+  --font: 'Public Sans', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --paper: #11151a; --band: #1a2129; --band-strong: #1f2833; --raised: #151b21;
+    --ink: #e7ebf0; --ink-2: #b3bdc9; --ink-3: #8f9aa8; --rule: #29323d; --rule-strong: #5b6674; --grid: #212a34; --zero: #5b6674;
+    --accent: #8db3e2; --accent-ink: #0c1016; --accent-tint: rgba(141, 179, 226, 0.14);
+    --up: #ff7d74; --down: #52c98c; --warn: #e8b949; --ok: #52c98c; --err: #f28b82;
+    --c1: #3987e5; --c2: #c98500; --c3: #9085e9;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #11151a; --band: #1a2129; --band-strong: #1f2833; --raised: #151b21;
+  --ink: #e7ebf0; --ink-2: #b3bdc9; --ink-3: #8f9aa8; --rule: #29323d; --rule-strong: #5b6674; --grid: #212a34; --zero: #5b6674;
+  --accent: #8db3e2; --accent-ink: #0c1016; --accent-tint: rgba(141, 179, 226, 0.14);
+  --up: #ff7d74; --down: #52c98c; --warn: #e8b949; --ok: #52c98c; --err: #f28b82;
+  --c1: #3987e5; --c2: #c98500; --c3: #9085e9;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+td, .num, .fig, .tick { font-variant-numeric: tabular-nums lining-nums; }
+::selection { background: var(--accent-tint); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+h1, h2, h3, h4 { margin: 0; font-weight: 700; text-wrap: balance; }
+.up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--ink-3); }
+.num { text-align: right; white-space: nowrap; }
+svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--paper); border-bottom: 1px solid var(--rule); }
+.bar-inner { max-width: 1248px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 20px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; white-space: nowrap; }
+.nav { display: flex; align-self: stretch; overflow-x: auto; scrollbar-width: none; }
+.nav button { border: 0; background: none; padding: 0 12px; color: var(--ink-2); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+.nav button:hover { color: var(--ink); border-bottom-color: var(--rule); }
+.nav button[aria-current='page'] { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.nav .sep { width: 1px; background: var(--rule); margin: 18px 8px; flex: none; }
+.spacer { flex: 1; }
+.icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--rule); border-radius: 2px; background: none; cursor: pointer; color: var(--ink-2); flex: none; }
+.demo-note { max-width: 1248px; margin: 0 auto; padding: 10px 24px; font-size: 12px; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
+main { max-width: 1248px; margin: 0 auto; padding: 0 24px 96px; }
+
+/* statement parts */
+.totals { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr); padding: 28px 0 22px; border-bottom: 3px double var(--ink); }
+.tot { padding: 0 24px; border-left: 1px solid var(--rule); min-width: 0; }
+.tot:first-child { padding-left: 0; border-left: 0; }
+.tot h2 { font-size: 14px; font-weight: 500; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
+.tot h2 small { font-size: 13px; font-weight: 400; color: var(--ink-3); }
+.fig { margin-top: 8px; font-size: 24px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; white-space: nowrap; font-variant-numeric: lining-nums; }
+.fig.hero { font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
+.fig .pct { font-size: 16px; font-weight: 600; margin-left: 8px; letter-spacing: 0; }
+.sub { margin-top: 8px; font-size: 13px; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 0 14px; }
+.sub b { color: var(--ink-2); font-weight: 600; }
+.sec-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; margin: 40px 0 10px; }
+.sec-head h2 { font-size: 20px; }
+.sec-head h3 { font-size: 16px; }
+.sec-head .count { font-size: 13px; color: var(--ink-3); }
+.sec-head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 2px; }
+.seg button { border: 0; background: none; height: 32px; padding: 0 12px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed='true'] { background: var(--band-strong); color: var(--ink); font-weight: 600; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 2px; background: var(--paper); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--rule-strong); }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 13px; }
+
+/* charts */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--ink-3); font-size: 11px; font-family: var(--font); font-variant-numeric: tabular-nums; }
+.chart text.lbl { fill: var(--ink-2); font-size: 12px; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2); margin: 6px 0 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.legend i.line { height: 2px; width: 14px; border-radius: 0; }
+.legend i.dash { height: 0; width: 14px; border-top: 2px dashed var(--ink-3); background: none !important; }
+.tip { position: fixed; z-index: 50; pointer-events: none; background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 2px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 120px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tip b { display: block; margin-bottom: 2px; }
+.tip .r { display: flex; justify-content: space-between; gap: 16px; }
+.tip .r i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+.caption { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 40px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; }
+.mini-card h4 { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.mini-card h4 span { font-weight: 700; }
+.mini-card .when { font-size: 12px; color: var(--ink-3); }
+
+/* bar lists (HTML diverging bars: the list IS the chart) */
+.blist { border-top: 1px solid var(--ink); }
+.blist .grp { font-size: 13px; font-weight: 700; padding: 14px 0 6px; border-bottom: 1px solid var(--rule); }
+.blist .grp span { font-weight: 400; color: var(--ink-3); margin-left: 8px; }
+.brow { display: grid; grid-template-columns: minmax(150px, 1.3fr) minmax(0, 2fr) 84px minmax(90px, 0.7fr); align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.brow:hover, .brow[aria-selected='true'] { background: var(--band); }
+.brow .n { font-weight: 600; } .brow .n small { font-weight: 400; color: var(--ink-3); margin-left: 8px; }
+.track { position: relative; height: 18px; }
+.track::before { content: ''; position: absolute; left: 50%; top: -6px; bottom: -6px; width: 1px; background: var(--zero); }
+.track i { position: absolute; top: 3px; height: 12px; }
+.track i.pos { left: 50%; background: var(--up); border-radius: 0 4px 4px 0; }
+.track i.neg { right: 50%; background: var(--down); border-radius: 4px 0 0 4px; }
+.brow .p { text-align: right; font-weight: 700; }
+.brow .v { text-align: right; color: var(--ink-2); }
+
+/* ledger tables (kept below the charts) */
+.scroll { overflow-x: auto; }
+table.ledger { width: 100%; border-collapse: collapse; }
+.ledger th, .ledger td { padding: 0 10px; text-align: right; white-space: nowrap; }
+.ledger th:first-child, .ledger td:first-child { text-align: left; padding-left: 0; }
+.ledger th:last-child, .ledger td:last-child { padding-right: 0; }
+.ledger > thead th { height: 34px; padding-bottom: 6px; vertical-align: bottom; font-size: 12px; font-weight: 500; color: var(--ink-3); border-bottom: 1px solid var(--ink); }
+.ledger .row td { height: 42px; border-bottom: 1px solid var(--rule); }
+.ledger .subtotal td { height: 42px; font-weight: 700; border-top: 1px solid var(--ink); }
+details.more { margin-top: 10px; }
+details.more summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more[open] summary svg { transform: rotate(90deg); }
+details.more > div { margin-top: 8px; }
+.notes { margin: 20px 0 0; padding: 12px 0 0 1.4em; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-3); max-width: 110ch; display: grid; gap: 2px; }
+.tag { display: inline-block; margin-left: 6px; padding: 0 5px; font-size: 12px; font-weight: 600; line-height: 18px; border: 1px solid currentColor; border-radius: 2px; color: var(--accent); white-space: nowrap; }
+.tag.dim { color: var(--ink-3); } .tag.ok { color: var(--ok); }
+
+/* 個股分析 */
+.stock-head { display: grid; grid-template-columns: minmax(260px, 0.9fr) minmax(0, 2fr); gap: 16px 40px; padding: 24px 0 18px; border-bottom: 1px solid var(--rule); align-items: start; }
+.picker { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 2px; background: var(--paper); font-weight: 600; cursor: pointer; margin-bottom: 10px; }
+.stock-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.stock-title h1 { font-size: 26px; }
+.stock-title .tk { font-size: 15px; color: var(--ink-3); font-weight: 600; }
+.price { font-size: 40px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; margin-top: 8px; }
+.price small { font-size: 16px; font-weight: 600; margin-left: 8px; letter-spacing: 0; }
+.asof { font-size: 13px; color: var(--ink-3); margin-top: 4px; }
+.qs { display: grid; grid-template-columns: repeat(3, auto); gap: 2px 18px; font-size: 13px; margin-top: 14px; }
+.qs div { display: flex; justify-content: space-between; gap: 10px; } .qs span { color: var(--ink-3); }
+.mine { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 16px 0 18px; border-bottom: 3px double var(--ink); }
+.mine > div { padding: 0 20px; border-left: 1px solid var(--rule); }
+.mine > div:first-child { padding-left: 0; border-left: 0; }
+.mine h3 { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.mine .v { font-size: 20px; font-weight: 700; margin-top: 2px; white-space: nowrap; }
+.mine .s { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.mine-title { font-size: 12px; font-weight: 600; color: var(--ink-3); padding-top: 14px; }
+.tabs { display: flex; border-bottom: 1px solid var(--rule); margin-top: 28px; overflow-x: auto; scrollbar-width: none; }
+.tabs button { border: 0; background: none; height: 44px; padding: 0 16px; color: var(--ink-2); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected='true'] { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.panel { padding-top: 8px; }
+.panel .sec-head { margin-top: 28px; }
+.whatif { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 32px; align-items: start; margin-top: 24px; }
+.field { display: grid; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 13px; font-weight: 600; }
+.field input { height: 40px; padding: 0 12px; border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--paper); font: inherit; font-size: 16px; color: var(--ink); }
+.statement { border-top: 1px solid var(--ink); margin-top: 16px; }
+.statement .ln { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.statement .ln span:first-child { color: var(--ink-2); }
+.statement .ln.total { border-bottom: 3px double var(--ink); font-weight: 700; font-size: 16px; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+.st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st.ok { color: var(--ok); } .st.warn { color: var(--warn); } .st.err { color: var(--err); } .st.dim { color: var(--ink-3); }
+.st.dim::before { background: none; border: 1.5px solid currentColor; }
+
+@media (max-width: 1020px) { .stock-head { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .bar-inner, main, .demo-note { padding-left: 16px; padding-right: 16px; }
+  .bar-inner { gap: 10px; } .brand span { display: none; }
+  .totals { grid-template-columns: 1fr 1fr; row-gap: 18px; padding: 22px 0 16px; }
+  .tot { padding: 0 0 0 16px; } .tot:first-child { grid-column: 1 / -1; padding: 0; border: 0; } .tot:nth-child(2) { padding-left: 0; border-left: 0; }
+  .fig { font-size: 20px; white-space: normal; } .fig.hero { font-size: 36px; }
+  .tot:not(:first-child) .fig .pct { display: block; margin: 2px 0 0; font-size: 13px; }
+  .grid2, .grid3, .whatif { grid-template-columns: 1fr; }
+  .mine { grid-template-columns: 1fr 1fr; row-gap: 14px; } .mine > div:nth-child(3) { padding-left: 0; border-left: 0; }
+  .qs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .brow { grid-template-columns: minmax(0, 1fr) 72px; grid-template-areas: 'n p' 't t'; row-gap: 4px; padding: 8px 0; }
+  .brow .n { grid-area: n; } .brow .p { grid-area: p; } .brow .track { grid-area: t; } .brow .v { display: none; }
+  .ledger th, .ledger td { padding: 0 6px; font-size: 13px; }
+  .ledger .hide-m { display: none; }
+  .sec-head .right { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <div class="bar-inner">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="1" y="1" width="22" height="22" stroke="var(--ink)" stroke-width="2"/><rect x="5" y="6" width="14" height="2.5" fill="var(--ink)"/><rect x="5" y="10.75" width="10" height="2.5" fill="var(--ink)"/><rect x="5" y="15.5" width="6.5" height="2.5" fill="var(--up)"/></svg>
+      <span>股票小幫手</span>
+    </div>
+    <nav class="nav" aria-label="示意頁面">
+      <button data-v="analysis">個股分析</button>
+      <button data-v="yearly">年度收益</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button data-v="macro">總體經濟</button>
+      <button data-v="fx">外幣匯率</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button data-v="admin">後台</button>
+    </nav>
+    <div class="spacer"></div>
+    <button class="icon-btn" type="button" aria-label="切換深淺色" onclick="toggleTheme()"><svg class="i"><use href="#i-moon"/></svg></button>
+  </div>
+</header>
+<div class="demo-note">設計示意第 2 版：每頁先用圖表說重點，數字表收在圖下方。所有數字皆為虛構；圖上可以滑過看數值，列與分頁都能點。</div>
+
+<main>
+<!-- ============ 個股分析 ============ -->
+<section class="view" id="v-analysis" hidden>
+  <div class="stock-head">
+    <div>
+      <button class="picker" type="button">我的持股：2454 聯發科 <svg class="i"><use href="#i-down"/></svg></button>
+      <div class="stock-title"><h1>聯發科</h1><span class="tk">2454</span><span class="tag dim">半導體業</span></div>
+      <div class="price down">1,420.00<small>−25.00 (−1.73%)</small></div>
+      <div class="asof">9/25（五）13:30 收盤</div>
+      <div class="qs">
+        <div><span>開盤</span>1,445</div><div><span>最高</span><b class="up">1,450</b></div><div><span>最低</span><b class="down">1,415</b></div>
+        <div><span>昨收</span>1,445</div><div><span>本益比</span>18.6</div><div><span>殖利率</span>3.52%</div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-head" style="margin:0 0 4px"><h3>近 3 個月股價</h3><span class="count">虛線是你的均價</span></div>
+      <div class="chart" id="c-price"></div>
+    </div>
+  </div>
+  <div class="mine-title">我的持股・玉山證券</div>
+  <div class="mine">
+    <div><h3>持有</h3><div class="v">300 股</div><div class="s">均價 NT$1,180.68</div></div>
+    <div><h3>市值</h3><div class="v">NT$426,000</div><div class="s">保本賣出價 NT$1,184.92</div></div>
+    <div><h3>今日損益</h3><div class="v down">−NT$7,500</div><div class="s">−1.73%</div></div>
+    <div><h3>未實現淨損益</h3><div class="v up">+NT$69,898</div><div class="s">+19.73%・牌告 0.1425% 預扣</div></div>
+  </div>
+
+  <div class="tabs" role="tablist" id="a-tabs">
+    <button role="tab" aria-selected="true" data-t="chips">籌碼</button>
+    <button role="tab" aria-selected="false" data-t="fund">基本面</button>
+    <button role="tab" aria-selected="false" data-t="tech">技術面</button>
+    <button role="tab" aria-selected="false" data-t="whatif">損益試算</button>
+  </div>
+
+  <div class="panel" id="t-chips">
+    <div class="sec-head"><h3>三大法人每日買賣超</h3><span class="count">單位：張・近 20 個交易日・往上是買超、往下是賣超</span></div>
+    <div class="chart" id="c-inst"></div>
+    <div class="legend"><span><i style="background:var(--c1)"></i>外資</span><span><i style="background:var(--c2)"></i>投信</span><span><i style="background:var(--c3)"></i>自營商</span></div>
+    <div class="grid2" style="margin-top:8px">
+      <div>
+        <div class="sec-head"><h3>融資餘額</h3><span class="count">單位：張</span></div>
+        <div class="chart" id="c-margin"></div>
+      </div>
+      <div>
+        <div class="sec-head"><h3>融券餘額</h3><span class="count">單位：張</span></div>
+        <div class="chart" id="c-short"></div>
+      </div>
+    </div>
+    <details class="more"><summary><svg class="i"><use href="#i-right"/></svg>看逐日數字</summary><div class="scroll"><table class="ledger" id="t-inst"></table></div></details>
+  </div>
+
+  <div class="panel" id="t-fund" hidden>
+    <div class="sec-head"><h3>月營收</h3><span class="count">單位：億元・近 12 個月</span></div>
+    <div class="chart" id="c-rev"></div>
+    <div class="grid2">
+      <div>
+        <div class="sec-head"><h3>營收年增率</h3><span class="count">和去年同月比</span></div>
+        <div class="chart" id="c-yoy"></div>
+      </div>
+      <div>
+        <div class="sec-head"><h3>獲利能力</h3><span class="count">近 8 季</span></div>
+        <div class="chart" id="c-margins"></div>
+        <div class="legend"><span><i class="line" style="background:var(--c1)"></i>毛利率</span><span><i class="line" style="background:var(--c2)"></i>營益率</span><span><i class="line" style="background:var(--c3)"></i>稅後純益率</span></div>
+      </div>
+    </div>
+    <details class="more"><summary><svg class="i"><use href="#i-right"/></svg>看估值數字</summary><div>
+      <table class="ledger" style="max-width:520px"><tbody>
+        <tr class="row"><td>本益比 (PER)</td><td class="num">18.6 倍</td></tr><tr class="row"><td>股價淨值比 (PBR)</td><td class="num">5.1 倍</td></tr>
+        <tr class="row"><td>殖利率</td><td class="num">3.52%</td></tr><tr class="row"><td>每股盈餘 (EPS, TTM)</td><td class="num">NT$76.35</td></tr>
+      </tbody></table></div></details>
+  </div>
+
+  <div class="panel" id="t-tech" hidden>
+    <div class="sec-head"><h3>日 K 線與均線</h3><span class="count">近 60 個交易日</span></div>
+    <div class="chart" id="c-k"></div>
+    <div class="legend"><span><i class="line" style="background:var(--c2)"></i>MA5</span><span><i class="line" style="background:var(--c1)"></i>MA20</span><span><i class="line" style="background:var(--c3)"></i>MA60</span></div>
+    <div class="sec-head"><h3>成交量</h3><span class="count">單位：張</span></div>
+    <div class="chart" id="c-vol"></div>
+    <div class="sec-head"><h3>KD 指標</h3><span class="count">(9,3,3)・80 以上偏熱、20 以下偏冷</span></div>
+    <div class="chart" id="c-kd"></div>
+    <div class="legend"><span><i class="line" style="background:var(--c1)"></i>K</span><span><i class="line" style="background:var(--c2)"></i>D</span></div>
+  </div>
+
+  <div class="panel" id="t-whatif" hidden>
+    <div class="whatif">
+      <div>
+        <div class="field"><label for="w-price">賣出價</label><input id="w-price" type="number" value="1500" inputmode="decimal"></div>
+        <div class="field"><label for="w-qty">賣出股數</label><input id="w-qty" type="number" value="300" inputmode="numeric"></div>
+        <p class="muted" style="font-size:12px;margin:0">用這個工作區的手續費設定（2.8 折・月退）計算。</p>
+      </div>
+      <div>
+        <h3 style="font-size:16px">價格尺</h3>
+        <div class="chart" id="c-ladder"></div>
+        <div class="statement" id="w-out"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 年度收益 ============ -->
+<section class="view" id="v-yearly" hidden>
+  <div class="totals">
+    <div class="tot"><h2>台股已實現損益 <small>歷年合計，含費</small></h2><div class="fig hero up" id="y-total"></div>
+      <div class="sub"><span>股利 <b>NT$4,200</b></span><span>手續費 <b>NT$2,356</b></span><span>證交稅 <b>NT$4,002</b></span></div></div>
+    <div class="tot"><h2>美股已實現損益 <small>歷年合計</small></h2><div class="fig up">+US$273.67</div><div class="sub"><span>手續費 <b>US$3.00</b></span></div></div>
+    <div class="tot"><h2>交易筆數</h2><div class="fig">12</div><div class="sub"><span>買入 <b>8</b></span><span>賣出 <b>4</b></span><span>股利 <b>1</b></span></div></div>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="sec-head"><h2>每年賺賠</h2><span class="count">台股已實現損益＋股利・點柱子看那一年</span></div>
+      <div class="chart" id="c-years"></div>
+    </div>
+    <div>
+      <div class="sec-head"><h2 id="y-contrib-title">2025 各檔貢獻</h2><span class="count">已實現損益，由賺到賠排</span></div>
+      <div class="blist" id="y-contrib"></div>
+    </div>
+  </div>
+  <div class="sec-head"><h2>累計已實現損益</h2><span class="count">每一筆賣出後的累計，含股利</span></div>
+  <div class="chart" id="c-cum"></div>
+  <details class="more"><summary><svg class="i"><use href="#i-right"/></svg>看逐年、逐筆數字表</summary><div class="scroll"><table class="ledger" id="t-years"></table></div></details>
+  <ol class="notes"><li>已實現損益 = 實際入帳（已扣手續費與證交稅）− 賣出當下的平均成本（含買進手續費）。未含費的數字在逐筆數字表裡。</li></ol>
+</section>
+
+<!-- ============ 總體經濟 ============ -->
+<section class="view" id="v-macro" hidden>
+  <div class="tabs" role="tablist" id="m-tabs" style="margin-top:16px">
+    <button role="tab" aria-selected="true" data-t="idx">國際指數</button>
+    <button role="tab" aria-selected="false" data-t="us">美國經濟</button>
+  </div>
+  <div class="panel" id="t-idx">
+    <div class="sec-head"><h3>今天各市場漲跌幅</h3><span class="count">長條往右是漲、往左是跌・點一列看走勢</span></div>
+    <div class="blist" id="m-idx"></div>
+    <div class="sec-head"><h3 id="m-idx-title">加權指數 當日走勢</h3><span class="count">9/25（五）09:00–13:30・虛線是昨收</span></div>
+    <div class="chart" id="c-intraday"></div>
+  </div>
+  <div class="panel" id="t-us" hidden>
+    <div class="sec-head"><h3>美國經濟指標</h3><span class="count">近 24 個月・資料來自聖路易聯準銀行 FRED</span></div>
+    <div class="grid3" id="m-us"></div>
+  </div>
+</section>
+
+<!-- ============ 外幣匯率 ============ -->
+<section class="view" id="v-fx" hidden>
+  <div class="sec-head" style="margin-top:28px"><h2>今天的匯率變化</h2><span class="count">1 單位外幣可換多少台幣・市場中價，非銀行牌告・點一列看走勢</span></div>
+  <div class="blist" id="fx-list"></div>
+  <div class="sec-head">
+    <h2 id="fx-title">美元走勢</h2>
+    <div class="right"><div class="seg" id="fx-range"><button aria-pressed="false" data-n="63">3 個月</button><button aria-pressed="false" data-n="126">6 個月</button><button aria-pressed="true" data-n="250">1 年</button></div></div>
+  </div>
+  <div class="chart" id="c-fx"></div>
+  <div class="sub" id="fx-stats"></div>
+</section>
+
+<!-- ============ 後台 ============ -->
+<section class="view" id="v-admin" hidden>
+  <div class="tabs" role="tablist" id="ad-tabs">
+    <button role="tab" aria-selected="false" data-t="status">資料更新</button>
+    <button role="tab" aria-selected="true" data-t="probe">抓取狀況</button>
+    <button role="tab" aria-selected="false">手動更新</button><button role="tab" aria-selected="false">帳號</button><button role="tab" aria-selected="false">執行記錄</button><button role="tab" aria-selected="false">備份</button><button role="tab" aria-selected="false">Discord</button>
+  </div>
+  <div class="panel" id="t-probe">
+    <div class="sec-head"><h3>盤後資料到站時間</h3><span class="count">9/25（五）・淡色帶是預期時段，點是實際抓到的時間</span></div>
+    <div class="chart" id="c-probe"></div>
+    <div class="legend"><span><i style="background:var(--band-strong)"></i>預期時段</span><span><i style="background:var(--ok);border-radius:50%"></i>已抓到</span><span><i style="background:var(--warn);border-radius:50%"></i>探測中</span></div>
+  </div>
+  <div class="panel" id="t-status" hidden>
+    <div class="sec-head"><h3>近 14 天排程結果</h3><span class="count">每格一天：實心成功、空心沒跑、紅色失敗</span></div>
+    <div class="chart" id="c-runs"></div>
+    <div class="sec-head"><h3>資料檔狀態</h3><span class="count">9/26 06:10 檢查</span></div>
+    <table class="ledger"><thead><tr><th>項目</th><th class="num">狀態</th><th class="num hide-m">涵蓋到</th><th class="num">最後更新</th></tr></thead><tbody>
+      <tr class="row"><td>日線檔</td><td class="num"><span class="st ok">正常</span></td><td class="num hide-m">9/25・1,812 檔</td><td class="num">9/25 17:32</td></tr>
+      <tr class="row"><td>法人金額</td><td class="num"><span class="st ok">正常</span></td><td class="num hide-m">9/25</td><td class="num">9/25 15:12</td></tr>
+      <tr class="row"><td>基本面檔</td><td class="num"><span class="st warn">部分缺漏</span></td><td class="num hide-m">8 月營收・缺 12 檔</td><td class="num">9/25 21:04</td></tr>
+      <tr class="row"><td>台幣匯率</td><td class="num"><span class="st ok">正常</span></td><td class="num hide-m">8 種外幣</td><td class="num">9/26 00:10</td></tr>
+    </tbody></table>
+  </div>
+</section>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+/* ---------- helpers ---------- */
+const nf0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
+const nf1 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const nf2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '')
+const cls = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : '')
+const tw = (v, s) => (s ? sgn(v) : v < 0 ? '−' : '') + 'NT$' + nf0.format(Math.abs(v))
+const pct = (v) => sgn(v) + nf2.format(Math.abs(v)) + '%'
+let seed = 7
+const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim()
+const NS = 'http://www.w3.org/2000/svg'
+function niceTicks(lo, hi, n = 4) {
+  const span = hi - lo || 1, raw = span / n, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw)
+  const t = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) t.push(+v.toFixed(10)); return t
+}
+const tip = document.getElementById('tip')
+function showTip(e, html) { tip.innerHTML = html; tip.hidden = false; const r = tip.getBoundingClientRect(); let x = e.clientX + 14, y = e.clientY + 14; if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14; if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14; tip.style.left = x + 'px'; tip.style.top = y + 'px' }
+function hideTip() { tip.hidden = true }
+const row = (color, k, v) => `<div class="r"><span>${color ? `<i style="background:${color}"></i>` : ''}${k}</span><span>${v}</span></div>`
+
+/* frame: returns svg + scales, draws y grid */
+function frame(el, { h = 220, lo, hi, fmt = (v) => nf0.format(v), padL = 48, padR = 12, padT = 10, padB = 24, zeroLine = false }) {
+  const w = Math.max(280, el.clientWidth)
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('height', h)
+  const ticks = niceTicks(lo, hi); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1])
+  const y = (v) => padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo || 1))
+  let g = ''
+  ticks.forEach((t) => (g += `<line x1="${padL}" x2="${w - padR}" y1="${y(t)}" y2="${y(t)}" stroke="${zeroLine && t === 0 ? css('--zero') : css('--grid')}" stroke-width="1"/><text class="tick" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`))
+  svg.innerHTML = g; el.innerHTML = ''; el.appendChild(svg)
+  return { svg, w, h, y, padL, padR, padT, padB, x0: padL, x1: w - padR, add: (s) => svg.insertAdjacentHTML('beforeend', s) }
+}
+/* line chart with crosshair tooltip. series: [{name, color, values, area, dash}] */
+function lineChart(el, { labels, series, h = 220, fmt, refs = [], tipFmt, xTicks = 4, band }) {
+  const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.v))
+  let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.08; lo -= pad; hi += pad
+  const f = frame(el, { h, lo, hi, fmt })
+  const n = labels.length, x = (i) => f.x0 + ((f.x1 - f.x0) * i) / (n - 1)
+  if (band) f.add(`<rect x="${f.x0}" y="${f.y(band[1])}" width="${f.x1 - f.x0}" height="${f.y(band[0]) - f.y(band[1])}" fill="${css('--band')}"/>`)
+  for (let k = 0; k < xTicks; k++) { const i = Math.round(((n - 1) * k) / (xTicks - 1)); f.add(`<text x="${x(i)}" y="${h - 6}" text-anchor="${k === 0 ? 'start' : k === xTicks - 1 ? 'end' : 'middle'}">${labels[i]}</text>`) }
+  refs.forEach((r) => f.add(`<line x1="${f.x0}" x2="${f.x1}" y1="${f.y(r.v)}" y2="${f.y(r.v)}" stroke="${css('--ink-3')}" stroke-dasharray="4 4"/><text class="lbl" x="${f.x0 + 4}" y="${f.y(r.v) - 5}">${r.label}</text>`))
+  series.forEach((s) => {
+    const pts = s.values.map((v, i) => `${x(i)},${f.y(v)}`).join(' ')
+    if (s.area) f.add(`<polygon points="${x(0)},${f.h - f.padB} ${pts} ${x(n - 1)},${f.h - f.padB}" fill="${s.color}" opacity="0.1"/>`)
+    f.add(`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`)
+    const lv = s.values[n - 1]; f.add(`<circle cx="${x(n - 1)}" cy="${f.y(lv)}" r="4" fill="${s.color}" stroke="${css('--paper')}" stroke-width="2"/>`)
+  })
+  const cross = document.createElementNS(NS, 'line'); cross.setAttribute('stroke', css('--rule-strong')); cross.setAttribute('y1', f.padT); cross.setAttribute('y2', f.h - f.padB); cross.style.display = 'none'; f.svg.appendChild(cross)
+  const hit = document.createElementNS(NS, 'rect'); hit.setAttribute('x', f.x0); hit.setAttribute('y', 0); hit.setAttribute('width', f.x1 - f.x0); hit.setAttribute('height', f.h); hit.setAttribute('fill', 'transparent'); f.svg.appendChild(hit)
+  hit.addEventListener('pointermove', (e) => { const r = f.svg.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * f.w; const i = Math.max(0, Math.min(n - 1, Math.round(((px - f.x0) / (f.x1 - f.x0)) * (n - 1)))); cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.display = ''
+    showTip(e, `<b>${labels[i]}</b>` + series.map((s) => row(s.color, s.name, (tipFmt || fmt || nf0.format)(s.values[i]))).join('')) })
+  hit.addEventListener('pointerleave', () => { cross.style.display = 'none'; hideTip() })
+  return { f, x }
+}
+/* columns (signed or plain). data: [{label, value, color?}] */
+function columns(el, { data, h = 200, signed = true, fmt = (v) => nf0.format(v), onPick, picked, labelEvery = 1, valueLabels = false }) {
+  const vals = data.map((d) => d.value); const lo = signed ? Math.min(0, ...vals) : 0, hi = Math.max(0, ...vals)
+  const f = frame(el, { h, lo: lo * (valueLabels ? 1.25 : 1), hi: hi * (valueLabels ? 1.15 : 1), fmt, zeroLine: true, padB: 24 })
+  const n = data.length, slot = (f.x1 - f.x0) / n, bw = Math.min(24, slot * 0.6)
+  data.forEach((d, i) => {
+    const cx = f.x0 + slot * (i + 0.5), y0 = f.y(0), y1 = f.y(d.value), top = Math.min(y0, y1), hgt = Math.max(1, Math.abs(y1 - y0))
+    const color = d.color || (signed ? (d.value >= 0 ? css('--up') : css('--down')) : css('--c1'))
+    const r = Math.min(4, hgt), up = d.value >= 0
+    const path = up ? `M${cx - bw / 2},${y0} V${top + r} Q${cx - bw / 2},${top} ${cx - bw / 2 + r},${top} H${cx + bw / 2 - r} Q${cx + bw / 2},${top} ${cx + bw / 2},${top + r} V${y0} Z`
+      : `M${cx - bw / 2},${y0} V${top + hgt - r} Q${cx - bw / 2},${top + hgt} ${cx - bw / 2 + r},${top + hgt} H${cx + bw / 2 - r} Q${cx + bw / 2},${top + hgt} ${cx + bw / 2},${top + hgt - r} V${y0} Z`
+    const op = picked === undefined || picked === i ? 1 : 0.35
+    f.add(`<path d="${path}" fill="${color}" opacity="${op === 1 ? 1 : 0.45}"/>`)
+    if (valueLabels) f.add(`<text class="lbl" x="${cx}" y="${up ? top - 6 : top + hgt + 14}" text-anchor="middle">${d.short || fmt(d.value)}</text>`)
+    if (i % labelEvery === 0 || i === n - 1) f.add(`<text x="${cx}" y="${h - 6}" text-anchor="middle">${d.label}</text>`)
+    const hit = document.createElementNS(NS, 'rect'); hit.setAttribute('x', cx - slot / 2); hit.setAttribute('y', 0); hit.setAttribute('width', slot); hit.setAttribute('height', h); hit.setAttribute('fill', 'transparent'); hit.style.cursor = onPick ? 'pointer' : 'default'
+    hit.addEventListener('pointermove', (e) => showTip(e, `<b>${d.label}</b>${row(color, d.name || '數值', d.tip || fmt(d.value))}`)); hit.addEventListener('pointerleave', hideTip)
+    if (onPick) hit.addEventListener('click', () => onPick(i))
+    f.svg.appendChild(hit)
+  })
+}
+/* stacked diverging columns. series: [{name, color, values}] */
+function stackedDiv(el, { labels, series, h = 240, labelEvery = 1 }) {
+  const n = labels.length
+  const pos = labels.map((_, i) => series.reduce((a, s) => a + Math.max(0, s.values[i]), 0)), neg = labels.map((_, i) => series.reduce((a, s) => a + Math.min(0, s.values[i]), 0))
+  const f = frame(el, { h, lo: Math.min(...neg), hi: Math.max(...pos), zeroLine: true, fmt: (v) => nf0.format(v) })
+  const slot = (f.x1 - f.x0) / n, bw = Math.min(22, slot * 0.62)
+  labels.forEach((lab, i) => {
+    const cx = f.x0 + slot * (i + 0.5); let up = 0, dn = 0
+    series.forEach((s) => { const v = s.values[i]; if (!v) return
+      const a = v > 0 ? up : dn, b = a + v; const y1 = f.y(a), y2 = f.y(b); const top = Math.min(y1, y2), hgt = Math.max(0, Math.abs(y2 - y1) - 2)
+      f.add(`<rect x="${cx - bw / 2}" y="${v > 0 ? top + 2 : top}" width="${bw}" height="${hgt}" fill="${s.color}"/>`)
+      if (v > 0) up = b; else dn = b })
+    if (i % labelEvery === 0 || i === n - 1) f.add(`<text x="${cx}" y="${h - 6}" text-anchor="middle">${lab}</text>`)
+    const total = series.reduce((a, s) => a + s.values[i], 0)
+    const hit = document.createElementNS(NS, 'rect'); hit.setAttribute('x', cx - slot / 2); hit.setAttribute('y', 0); hit.setAttribute('width', slot); hit.setAttribute('height', h); hit.setAttribute('fill', 'transparent')
+    hit.addEventListener('pointermove', (e) => showTip(e, `<b>${lab}</b>` + series.map((s) => row(s.color, s.name, sgn(s.values[i]) + nf0.format(Math.abs(s.values[i])) + ' 張')).join('') + row('', '<b>合計</b>', `<b>${sgn(total)}${nf0.format(Math.abs(total))} 張</b>`)))
+    hit.addEventListener('pointerleave', hideTip); f.svg.appendChild(hit)
+  })
+}
+/* HTML diverging bar list */
+function barList(el, { groups, max, onPick, selected }) {
+  let h = ''
+  groups.forEach((g) => {
+    if (g.title) h += `<div class="grp">${g.title}<span>${g.note || ''}</span></div>`
+    g.rows.forEach((r) => { const w = Math.min(50, (Math.abs(r.p) / max) * 50)
+      h += `<div class="brow" role="button" tabindex="0" data-k="${r.k}" aria-selected="${r.k === selected}"><div class="n">${r.name}<small>${r.sub || ''}</small></div><div class="track"><i class="${r.p >= 0 ? 'pos' : 'neg'}" style="width:${w}%"></i></div><div class="p ${cls(r.p)}">${pct(r.p)}</div><div class="v">${r.v}</div></div>` })
+  })
+  el.innerHTML = h
+  if (onPick) el.querySelectorAll('.brow').forEach((b) => { b.addEventListener('click', () => onPick(b.dataset.k)); b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(b.dataset.k) } }) })
+}
+
+/* ---------- navigation ---------- */
+const views = ['analysis', 'yearly', 'macro', 'fx', 'admin']
+let current = 'analysis'
+function show(v) {
+  current = v
+  views.forEach((x) => (document.getElementById('v-' + x).hidden = x !== v))
+  document.querySelectorAll('.nav button').forEach((b) => (b.dataset.v === v ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')))
+  try { localStorage.setItem('demo-view', v) } catch (e) {}
+  drawAll(); window.scrollTo(0, 0)
+}
+document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('click', () => show(b.dataset.v)))
+function tabs(listId) {
+  const list = document.getElementById(listId)
+  list.addEventListener('click', (e) => { const b = e.target.closest('button[data-t]'); if (!b) return
+    list.querySelectorAll('button').forEach((x) => x.setAttribute('aria-selected', String(x === b)))
+    list.querySelectorAll('button[data-t]').forEach((x) => { const p = document.getElementById('t-' + x.dataset.t); if (p) p.hidden = x !== b })
+    drawAll() })
+}
+tabs('a-tabs'); tabs('m-tabs'); tabs('ad-tabs')
+function toggleTheme() { const r = document.documentElement; const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.dataset.theme = dark ? 'light' : 'dark'; drawAll() }
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawAll, 120) })
+const visible = (id) => { const el = document.getElementById(id); return el && el.offsetParent !== null }
+
+/* ---------- data ---------- */
+const DAYS = (() => { const out = []; const d = new Date(2026, 8, 25); while (out.length < 63) { if (d.getDay() % 6) out.unshift(`${d.getMonth() + 1}/${d.getDate()}`); d.setDate(d.getDate() - 1) } return out })()
+seed = 11; const PRICE = (() => { let p = 1150; const raw = DAYS.map(() => (p = p * (1 + (rnd() - 0.44) * 0.024))); const k = 1445 / raw[raw.length - 2]; const out = raw.map((v) => v * k); out[out.length - 1] = 1420; return out })()
+seed = 23; const INST = DAYS.slice(-20).map(() => [Math.round((rnd() - 0.5) * 6000), Math.round((rnd() - 0.42) * 900), Math.round((rnd() - 0.5) * 1200)])
+seed = 31; const MARGIN = DAYS.slice(-40).map((_, i, a) => 5200 + Math.round(Math.sin(i / 6) * 300 + i * 12 + rnd() * 80)); const SHORT = DAYS.slice(-40).map((_, i) => 140 + Math.round(Math.cos(i / 5) * 30 + rnd() * 20))
+
+/* ---------- 個股分析 ---------- */
+function drawAnalysis() {
+  lineChart(document.getElementById('c-price'), { labels: DAYS, h: 190, series: [{ name: '收盤價', color: css('--accent'), values: PRICE, area: true }], refs: [{ v: 1180.68, label: '你的均價 1,180.68' }], tipFmt: (v) => nf2.format(v), fmt: (v) => nf0.format(v) })
+  if (visible('t-chips')) {
+    const d20 = DAYS.slice(-20)
+    stackedDiv(document.getElementById('c-inst'), { labels: d20, series: [{ name: '外資', color: css('--c1'), values: INST.map((r) => r[0]) }, { name: '投信', color: css('--c2'), values: INST.map((r) => r[1]) }, { name: '自營商', color: css('--c3'), values: INST.map((r) => r[2]) }], labelEvery: innerWidth < 720 ? 5 : 2 })
+    lineChart(document.getElementById('c-margin'), { labels: DAYS.slice(-40), h: 170, series: [{ name: '融資餘額', color: css('--c1'), values: MARGIN, area: true }], fmt: (v) => nf0.format(v), xTicks: 3 })
+    lineChart(document.getElementById('c-short'), { labels: DAYS.slice(-40), h: 170, series: [{ name: '融券餘額', color: css('--c3'), values: SHORT, area: true }], fmt: (v) => nf0.format(v), xTicks: 3 })
+    let t = `<thead><tr><th>日期</th><th class="num">外資</th><th class="num">投信</th><th class="num">自營商</th><th class="num">合計</th></tr></thead><tbody>`
+    DAYS.slice(-20).map((d, i) => [d, ...INST[i]]).reverse().slice(0, 10).forEach(([d, a, b, c]) => { const s = a + b + c; t += `<tr class="row"><td>${d}</td>${[a, b, c, s].map((v) => `<td class="num ${cls(v)}">${sgn(v)}${nf0.format(Math.abs(v))}</td>`).join('')}</tr>` })
+    document.getElementById('t-inst').innerHTML = t + '</tbody>'
+  }
+  if (visible('t-fund')) {
+    seed = 41; const months = ['10月', '11月', '12月', '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月'].slice(0, 12)
+    const rev = months.map((_, i) => 380 + i * 6 + Math.round((rnd() - 0.5) * 60)); const yoy = months.map(() => Math.round((rnd() * 40 - 8) * 10) / 10)
+    columns(document.getElementById('c-rev'), { data: months.map((m, i) => ({ label: m, value: rev[i], name: '營收', tip: rev[i] + ' 億' })), signed: false, h: 200, valueLabels: true })
+    columns(document.getElementById('c-yoy'), { data: months.map((m, i) => ({ label: m, value: yoy[i], name: '年增率', tip: pct(yoy[i]) })), h: 170, fmt: (v) => v + '%', labelEvery: 3 })
+    const q = ['24Q2', '24Q3', '24Q4', '25Q1', '25Q2', '25Q3', '25Q4', '26Q1']
+    lineChart(document.getElementById('c-margins'), { labels: q, h: 170, series: [{ name: '毛利率', color: css('--c1'), values: [47.1, 47.8, 48.9, 48.2, 49.5, 49.1, 50.2, 49.8] }, { name: '營益率', color: css('--c2'), values: [19.2, 20.4, 21.5, 20.1, 22.3, 21.8, 23.0, 22.6] }, { name: '稅後純益率', color: css('--c3'), values: [18.1, 18.9, 19.6, 18.8, 20.2, 19.9, 21.1, 20.4] }], fmt: (v) => v + '%', tipFmt: (v) => nf1.format(v) + '%', xTicks: 3 })
+  }
+  if (visible('t-tech')) {
+    const el = document.getElementById('c-k'); seed = 11; const n = 60; const c = []
+    for (let i = 0; i < n; i++) { const cl = PRICE[PRICE.length - n + i], o = PRICE[PRICE.length - n + i - 1] ?? cl, hi = Math.max(o, cl) * (1 + rnd() * 0.01), lo = Math.min(o, cl) * (1 - rnd() * 0.01); c.push({ o, cl, hi, lo }) }
+    const labels = DAYS.slice(-n), lo = Math.min(...c.map((k) => k.lo)), hi = Math.max(...c.map((k) => k.hi))
+    const f = frame(el, { h: 260, lo, hi }); const slot = (f.x1 - f.x0) / n, bw = Math.max(2, Math.min(8, slot * 0.6))
+    c.forEach((k, i) => { const cx = f.x0 + slot * (i + 0.5), col = k.cl >= k.o ? css('--up') : css('--down')
+      f.add(`<line x1="${cx}" x2="${cx}" y1="${f.y(k.hi)}" y2="${f.y(k.lo)}" stroke="${col}"/><rect x="${cx - bw / 2}" y="${f.y(Math.max(k.o, k.cl))}" width="${bw}" height="${Math.max(1, Math.abs(f.y(k.o) - f.y(k.cl)))}" fill="${k.cl >= k.o ? css('--paper') : col}" stroke="${col}"/>`) })
+    ;[[5, '--c2'], [20, '--c1'], [60, '--c3']].forEach(([m, v]) => { const pts = c.map((_, i) => { const idx = PRICE.length - n + i, s = PRICE.slice(Math.max(0, idx - m + 1), idx + 1); return `${f.x0 + slot * (i + 0.5)},${f.y(s.reduce((a, b) => a + b, 0) / s.length)}` }); f.add(`<polyline points="${pts.join(' ')}" fill="none" stroke="${css(v)}" stroke-width="2"/>`) })
+    ;[0, 20, 40, 59].forEach((i, k) => f.add(`<text x="${f.x0 + slot * (i + 0.5)}" y="${f.h - 6}" text-anchor="${k === 0 ? 'start' : k === 3 ? 'end' : 'middle'}">${labels[i]}</text>`))
+    seed = 5; columns(document.getElementById('c-vol'), { data: labels.map((d, i) => ({ label: d, value: 3000 + Math.round(rnd() * 5000), color: c[i].cl >= c[i].o ? css('--up') : css('--down'), name: '成交量', tip: '' })).map((d) => ({ ...d, tip: nf0.format(d.value) + ' 張' })), signed: false, h: 120, labelEvery: 20 })
+    seed = 9; let K = 50, D = 50; const kv = [], dv = []; labels.forEach(() => { K = Math.max(5, Math.min(95, K + (rnd() - 0.5) * 18)); D = D * 2 / 3 + K / 3; kv.push(K); dv.push(D) })
+    lineChart(document.getElementById('c-kd'), { labels, h: 150, series: [{ name: 'K', color: css('--c1'), values: kv }, { name: 'D', color: css('--c2'), values: dv }], fmt: (v) => nf0.format(v), tipFmt: (v) => nf1.format(v), band: [20, 80] })
+  }
+  if (visible('t-whatif')) whatif()
+}
+function whatif() {
+  const px = Number(document.getElementById('w-price').value) || 0, q = Number(document.getElementById('w-qty').value) || 0
+  const avg = 1180.68, be = 1184.92, now = 1420
+  const gross = px * q, fee = Math.floor(gross * 0.001425), tax = Math.floor(gross * 0.003), cost = avg * q, net = gross - fee - tax, real = net - cost
+  const el = document.getElementById('c-ladder'); const w = Math.max(280, el.clientWidth), h = 86
+  const lo = Math.min(avg, px, now) * 0.97, hi = Math.max(avg, px, now) * 1.03, x = (v) => 16 + (w - 32) * ((v - lo) / (hi - lo))
+  const mk = (v, label, color, row) => `<line x1="${x(v)}" x2="${x(v)}" y1="30" y2="54" stroke="${color}" stroke-width="2"/><circle cx="${x(v)}" cy="42" r="5" fill="${color}" stroke="${css('--paper')}" stroke-width="2"/><text class="lbl" x="${x(v)}" y="${row ? 76 : 20}" text-anchor="middle">${label}</text>`
+  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" height="${h}"><line x1="16" x2="${w - 16}" y1="42" y2="42" stroke="${css('--rule-strong')}"/>
+    <rect x="${Math.min(x(be), x(px))}" y="38" width="${Math.abs(x(px) - x(be))}" height="8" fill="${px >= be ? css('--up') : css('--down')}" opacity="0.35"/>
+    ${mk(avg, '均價 ' + nf0.format(avg), css('--ink-3'), 1)}${mk(now, '現價 ' + nf0.format(now), css('--accent'), 0)}${mk(px, '賣出 ' + nf0.format(px), px >= be ? css('--up') : css('--down'), 1)}</svg>`
+  document.getElementById('w-out').innerHTML = `<div class="ln"><span>成交價金</span><span>${tw(gross)}</span></div><div class="ln"><span>手續費（牌告 0.1425%，月退）</span><span>−${tw(fee)}</span></div><div class="ln"><span>證交稅 0.3%</span><span>−${tw(tax)}</span></div><div class="ln"><span>賣出成本（均價 × ${nf0.format(q)}）</span><span>−${tw(cost)}</span></div><div class="ln total"><span>已實現損益</span><span class="${cls(real)}">${tw(real, true)} (${pct((real / cost) * 100)})</span></div>`
+}
+document.getElementById('w-price').addEventListener('input', whatif); document.getElementById('w-qty').addEventListener('input', whatif)
+
+/* ---------- 年度收益 ---------- */
+const YEARS = [{ y: '2022', v: -38500 }, { y: '2023', v: 42800 }, { y: '2024', v: 185690 }, { y: '2025', v: -14932 }, { y: '2026', v: 23540 }]
+const CONTRIB = { 2025: [['2454', '聯發科', 26696], ['00878', '國泰永續高股息', 4200, '股利'], ['2317', '鴻海', -45828]], 2024: [['2330', '台積電', 185690]], 2023: [['2603', '長榮', 61200], ['2002', '中鋼', -18400]], 2022: [['2412', '中華電', 3100], ['3481', '群創', -41600]], 2026: [['2382', '廣達', 23540]] }
+let yPick = 3
+function drawYearly() {
+  const total = YEARS.reduce((a, b) => a + b.v, 0)
+  document.getElementById('y-total').innerHTML = `${tw(total, true)}`
+  columns(document.getElementById('c-years'), { data: YEARS.map((d) => ({ label: d.y, value: d.v, name: '已實現＋股利', tip: tw(d.v, true), short: (d.v >= 0 ? '+' : '−') + nf1.format(Math.abs(d.v) / 10000) + '萬' })), h: 230, valueLabels: true, picked: yPick, fmt: (v) => nf0.format(v / 10000) + '萬', onPick: (i) => { yPick = i; drawYearly() } })
+  const y = YEARS[yPick].y, rows = (CONTRIB[y] || []).slice().sort((a, b) => b[2] - a[2]), max = Math.max(...rows.map((r) => Math.abs(r[2])))
+  document.getElementById('y-contrib-title').textContent = `${y} 各檔貢獻`
+  document.getElementById('y-contrib').innerHTML = rows.map(([c, n, v, t]) => `<div class="brow"><div class="n">${c}<small>${n}${t ? ' · ' + t : ''}</small></div><div class="track"><i class="${v >= 0 ? 'pos' : 'neg'}" style="width:${(Math.abs(v) / max) * 50}%"></i></div><div class="p ${cls(v)}">${tw(v, true)}</div><div class="v"></div></div>`).join('')
+  let acc = 0; const cum = []; const labels = []
+  ;[['2022/03', -12000], ['2022/08', -26500], ['2023/02', 61200], ['2023/11', -18400], ['2024/08', 185690], ['2025/04', -45828], ['2025/07', 4200], ['2025/09', 26696], ['2026/05', 23540]].forEach(([d, v]) => { acc += v; cum.push(acc); labels.push(d) })
+  lineChart(document.getElementById('c-cum'), { labels, h: 200, series: [{ name: '累計已實現', color: css('--accent'), values: cum, area: true }], fmt: (v) => nf0.format(v / 10000) + '萬', tipFmt: (v) => tw(v, true), xTicks: 3 })
+  let t = `<thead><tr><th>年度</th><th class="num hide-m">賣出收入</th><th class="num hide-m">賣出成本</th><th class="num">已實現損益</th><th class="num">股利</th><th class="num hide-m">手續費／稅</th></tr></thead><tbody>
+    <tr class="row"><td>2025</td><td class="num hide-m">NT$422,124</td><td class="num hide-m">NT$441,256</td><td class="num down">−NT$19,132</td><td class="num">NT$4,200</td><td class="num hide-m">NT$1,876</td></tr>
+    <tr class="row"><td>2024</td><td class="num hide-m">NT$906,100</td><td class="num hide-m">NT$720,410</td><td class="num up">+NT$185,690</td><td class="num">—</td><td class="num hide-m">NT$3,900</td></tr></tbody>`
+  document.getElementById('t-years').innerHTML = t
+}
+
+/* ---------- 總體經濟 ---------- */
+const IDX = [['台灣', '收盤 13:30', [['twii', '加權指數', 22450.12, 0.58]]], ['日本', '收盤 14:00', [['n225', '日經 225', 38512.3, -0.55]]], ['韓國', '收盤 14:30', [['kospi', 'KOSPI', 2612.4, 0.31], ['kosdaq', 'KOSDAQ', 745.1, -0.41]]], ['美國', '收盤 04:00（紐約 9/25 16:00）', [['sox', '費城半導體', 6012.2, 1.01], ['ixic', '那斯達克', 22140.6, 0.43], ['gspc', 'S&P 500', 6612.8, 0.28], ['dji', '道瓊', 45210.5, 0.27], ['rut', '羅素 2000', 2410.3, -0.17]]]]
+let idxPick = 'twii'
+function drawMacro() {
+  if (visible('t-idx')) {
+    barList(document.getElementById('m-idx'), { groups: IDX.map(([t, n, rows]) => ({ title: t, note: n, rows: rows.map(([k, name, v, p]) => ({ k, name, p, v: nf2.format(v) })) })), max: 1.2, selected: idxPick, onPick: (k) => { idxPick = k; drawMacro() } })
+    const r = IDX.flatMap((g) => g[2]).find((x) => x[0] === idxPick); document.getElementById('m-idx-title').textContent = `${r[1]} 當日走勢`
+    seed = idxPick.charCodeAt(0) * 13 + idxPick.length; const n = 54, prev = r[2] / (1 + r[3] / 100); const vals = []; let v = prev
+    for (let i = 0; i < n; i++) { v += (r[2] - prev) / n + (rnd() - 0.5) * prev * 0.0018; vals.push(v) } vals[n - 1] = r[2]
+    const labels = Array.from({ length: n }, (_, i) => { const m = 9 * 60 + i * 5; return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` })
+    lineChart(document.getElementById('c-intraday'), { labels, h: 220, series: [{ name: r[1], color: r[3] >= 0 ? css('--up') : css('--down'), values: vals, area: true }], refs: [{ v: prev, label: '昨收 ' + nf2.format(prev) }], fmt: (v) => nf0.format(v), tipFmt: (v) => nf2.format(v) })
+  }
+  if (visible('t-us')) {
+    const U = [['核心 CPI 年增率', 2.9, 3.0, '%', '9/11 發布・下次 10/15', 3.9], ['核心 PPI 年增率', 2.6, 2.8, '%', '9/12 發布・下次 10/16', 3.4], ['核心 PCE 年增率', 2.7, 2.8, '%', '9/26 發布・下次 10/31', 3.5], ['非農就業人數', 142, 89, 'K', '9/5 發布・下次 10/3', 230], ['失業率', 4.3, 4.2, '%', '9/5 發布・下次 10/3', 3.8], ['消費者信心', 98.7, 97.2, '', '9/30 發布・下次 10/28', 104]]
+    const el = document.getElementById('m-us'); el.innerHTML = U.map((u, i) => `<div class="mini-card"><h4>${u[0]}<span>${u[3] === 'K' ? '+' + u[1] + 'K' : u[1] + u[3]}</span></h4><div class="when">前值 ${u[3] === 'K' ? '+' + u[2] + 'K' : u[2] + u[3]}・${u[4]}</div><div class="chart" id="us-${i}"></div></div>`).join('')
+    const months = Array.from({ length: 24 }, (_, i) => { const d = new Date(2024, 8 + i, 1); return `${d.getFullYear() % 100}/${d.getMonth() + 1}` })
+    U.forEach((u, i) => { seed = 100 + i; const vals = months.map((_, k) => u[5] + (u[1] - u[5]) * (k / 23) + (rnd() - 0.5) * (u[3] === 'K' ? 60 : 0.25)); vals[23] = u[1]; vals[22] = u[2]
+      lineChart(document.getElementById('us-' + i), { labels: months, h: 120, series: [{ name: u[0], color: css('--accent'), values: vals }], fmt: (v) => (u[3] === 'K' ? nf0.format(v) : String(+v.toFixed(2))), tipFmt: (v) => (u[3] === 'K' ? nf0.format(v) + 'K' : nf1.format(v) + u[3]), xTicks: 2 }) })
+  }
+}
+
+/* ---------- 外幣匯率 ---------- */
+const FX = [['USD', '美元', 32.105, 0.14, 3], ['JPY', '日圓', 0.2152, -0.37, 4], ['EUR', '歐元', 35.62, 0.31, 3], ['GBP', '英鎊', 42.81, -0.16, 3], ['CNY', '人民幣', 4.498, 0.09, 4], ['HKD', '港幣', 4.127, 0.15, 4], ['AUD', '澳幣', 21.05, -0.14, 3], ['KRW', '韓元', 0.02318, 0.17, 5]]
+let fxSel = 'USD', fxN = 250
+function series(code) { seed = code.charCodeAt(0) * 97 + code.charCodeAt(1); const cur = FX.find((f) => f[0] === code); const arr = []; let v = cur[2] * 0.94; for (let i = 0; i < 250; i++) { v *= 1 + (rnd() - 0.48) * 0.006; arr.push(v) } const k = cur[2] / arr[arr.length - 1]; return arr.map((a) => a * k) }
+const FXDAYS = (() => { const out = []; const d = new Date(2025, 8, 1); while (out.length < 250) { if (d.getDay() % 6) out.push(`${d.getFullYear() % 100}/${d.getMonth() + 1}/${d.getDate()}`); d.setDate(d.getDate() + 1) } return out })()
+function drawFx() {
+  barList(document.getElementById('fx-list'), { groups: [{ rows: FX.map(([c, n, v, p, dec]) => ({ k: c, name: c, sub: n, p, v: v.toFixed(dec) })) }], max: 0.45, selected: fxSel, onPick: (k) => { fxSel = k; drawFx() } })
+  const cur = FX.find((f) => f[0] === fxSel), s = series(fxSel).slice(-fxN), labels = FXDAYS.slice(-fxN)
+  lineChart(document.getElementById('c-fx'), { labels, h: 240, series: [{ name: cur[1], color: css('--accent'), values: s, area: true }], fmt: (v) => v.toFixed(Math.max(1, cur[4] - 1)), tipFmt: (v) => v.toFixed(cur[4]) })
+  document.getElementById('fx-title').textContent = `${cur[1]}走勢`
+  const lo = Math.min(...s), hi = Math.max(...s), chg = ((s[s.length - 1] - s[0]) / s[0]) * 100
+  document.getElementById('fx-stats').innerHTML = `<span>區間最高 <b>${hi.toFixed(cur[4])}</b></span><span>區間最低 <b>${lo.toFixed(cur[4])}</b></span><span>區間漲跌 <b class="${cls(chg)}">${pct(chg)}</b></span>`
+}
+document.getElementById('fx-range').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; fxN = Number(b.dataset.n); document.querySelectorAll('#fx-range button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); drawFx() })
+
+/* ---------- 後台 ---------- */
+function drawAdmin() {
+  if (visible('t-probe')) {
+    const P = [['MOPS 營收', 11.5, 13, [12.05], 'ok'], ['BFI82U 三大法人金額', 15.08, 19.67, [15.2, 15.35, 15.5], 'ok'], ['T86 法人個股', 16.08, 16.75, [16.35, 16.5, 16.6], 'ok'], ['TWT38U 外資持股', 17, 17.17, [17.07, 17.12], 'ok'], ['BWIBBU 本益比', 17.08, 17.58, [17.3, 17.45], 'ok'], ['MARGIN 融資融券', 20.75, 21, [], 'warn'], ['BORROW 借券賣出', 22.25, 23.5, [], 'dim']]
+    const el = document.getElementById('c-probe'), w = Math.max(300, el.clientWidth), rowH = 34, left = innerWidth < 720 ? 116 : 170, h = P.length * rowH + 30
+    const x = (t) => left + (w - left - 12) * ((t - 11) / 13)
+    let s = ''
+    for (let t = 11; t <= 24; t += innerWidth < 720 ? 3 : 1) s += `<line x1="${x(t)}" x2="${x(t)}" y1="0" y2="${h - 22}" stroke="${css('--grid')}"/><text x="${x(t)}" y="${h - 6}" text-anchor="middle">${t}:00</text>`
+    const nowX = x(21.42); s += `<line x1="${nowX}" x2="${nowX}" y1="0" y2="${h - 22}" stroke="${css('--accent')}" stroke-dasharray="3 3"/><text class="lbl" x="${nowX + 4}" y="10">現在 21:25</text>`
+    P.forEach(([name, a, b, hits, st], i) => { const cy = i * rowH + rowH / 2 + 8
+      s += `<text class="lbl" x="0" y="${cy + 4}">${innerWidth < 720 ? name.split(' ')[0] : name}</text><rect x="${x(a)}" y="${cy - 8}" width="${Math.max(3, x(b) - x(a))}" height="16" fill="${css('--band-strong')}" rx="2"/>`
+      hits.forEach((t) => (s += `<circle cx="${x(t)}" cy="${cy}" r="5" fill="${css('--ok')}" stroke="${css('--paper')}" stroke-width="2"><title>${name} ${Math.floor(t)}:${String(Math.round((t % 1) * 60)).padStart(2, '0')} 抓到</title></circle>`))
+      if (st === 'warn') s += `<circle cx="${x(a) + 6}" cy="${cy}" r="5" fill="none" stroke="${css('--warn')}" stroke-width="2"/>` })
+    el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" height="${h}">${s}</svg>`
+  }
+  if (visible('t-status')) {
+    const J = ['盤後資料 generate-all', '探針 source-probe', 'Discord 帳號排程', '備份 backup', '日誌清理 app-log-prune']
+    const el = document.getElementById('c-runs'), w = Math.max(300, el.clientWidth), left = innerWidth < 720 ? 110 : 190, cell = Math.min(28, (w - left) / 14 - 4), h = J.length * 32 + 24
+    let s = ''; seed = 3
+    J.forEach((j, r) => { s += `<text class="lbl" x="0" y="${r * 32 + 20}">${innerWidth < 720 ? j.split(' ')[0] : j}</text>`
+      for (let d = 0; d < 14; d++) { const wk = (d + 1) % 7 >= 5, x0 = left + d * (cell + 4), y0 = r * 32 + 6, fail = r === 3 && d === 13
+        s += wk && r === 0 ? `<rect x="${x0 + 1}" y="${y0 + 1}" width="${cell - 2}" height="18" rx="2" fill="none" stroke="${css('--rule-strong')}"/>` : `<rect x="${x0}" y="${y0}" width="${cell}" height="20" rx="2" fill="${fail ? css('--err') : css('--ok')}" opacity="${fail ? 1 : 0.75}"/>` } })
+    for (let d = 0; d < 14; d += 2) s += `<text x="${left + d * (cell + 4) + cell / 2}" y="${h - 4}" text-anchor="middle">9/${13 + d}</text>`
+    el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" height="${h}">${s}</svg>`
+  }
+}
+
+function drawAll() {
+  if (current === 'analysis') drawAnalysis()
+  if (current === 'yearly') drawYearly()
+  if (current === 'macro') drawMacro()
+  if (current === 'fx') drawFx()
+  if (current === 'admin') drawAdmin()
+}
+let start = 'analysis'
+try { start = localStorage.getItem('demo-view') || start } catch (e) {}
+show(views.includes(start) ? start : 'analysis')
+</script>

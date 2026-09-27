@@ -164,6 +164,7 @@ Square statement geometry. Tables, blocks and panels have 0px corners; controls 
 - **Holdings ledger:** 7 columns (股票, 股數, 現價, 漲跌幅, 今日損益, 市值, 未實現淨損益); the whole row toggles its sub-ledger (cost, the three unrealized-P&L methods with 「目前採用」, the trades of that stock, 個股分析).
 - **Fee settings:** one form (`WorkspaceFeeSettings`) opened in place from the 未實現淨損益 basis link or in a modal from the workspace menu. The P&L basis is derived from discount + 現折/月退, never stored separately.
 - **Tags:** 20px, 12px/600, 1px rule, 2px corner.
+- **Charts first (2026-09-27):** every analysis page opens with a picture and keeps the exact numbers one `details.chart-more` disclosure below it. Polarity (漲跌, 買賣超) is red above / green below a zero line; identity (外資 / 投信 / 自營商, margin lines, several indicators) uses `var(--chart-c1..4)` — blue, yellow, violet, pink, never red or green — with a legend. Lists of moves (國際指數, 外幣匯率, 各檔貢獻) are diverging bars on one shared scale, the list itself being the chart.
 
 ## Do's and Don'ts
 

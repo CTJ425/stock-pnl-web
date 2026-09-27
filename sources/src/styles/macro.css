@@ -22,33 +22,43 @@
  * An equal-width grid will leave large gaps to the right of the shorter ones.
  */
 .mac-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sp-06) var(--sp-07);
+  margin-top: var(--sp-05);
 }
 
+/* One small multiple per indicator (2026-09-27): a printed head line, then its own line chart. */
 .mac-chip {
-  display: inline-flex;
+  min-width: 0;
+  padding-top: var(--sp-03);
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.mac-chip-head {
+  display: flex;
+  justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-strong);
-  white-space: nowrap;
+  gap: var(--sp-03);
 }
 
 .mac-chip-label {
-  font-size: var(--type-label-01);
-  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-text-primary);
 }
 
-/* Use equal-width numbers for values: When five chips are placed side by side, the proportional numbers will cause the decimal points to be misaligned.*/
+/* Equal-width numbers so the heads line up across the grid. */
 .mac-chip-value {
-  font-size: var(--type-body-01);
-  font-weight: 600;
+  font-size: var(--type-body-02);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.mac-chip-meta {
+  margin: 2px 0 var(--sp-02);
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
 }
 
 /* The indicator name is on the same line as the "N periods behind" badge*/
@@ -87,9 +97,95 @@
 /* `.rpt-card` is `flex: 1 1 140px`, so a group holding one index (日本) stretched the card
  * across the whole row while the 5-card US group sat at ~270px. Cap the basis here only —
  * changing `.rpt-card` itself would move every other report card on the site. */
-.gix-groups .rpt-card {
-  flex: 1 1 160px;
-  max-width: 320px;
+/* One index per row (2026-09-27): name, the day's move as a diverging bar on one shared scale,
+   the percentage, the level. The whole row is the drill-down button. */
+.gix-rows {
+  border-top: 1px solid var(--cds-border-subtle);
+}
+
+.gix-row {
+  appearance: none;
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, 2fr) 84px minmax(120px, auto) minmax(110px, auto);
+  gap: var(--sp-04);
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 var(--sp-03);
+  border: 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--cds-dur-moderate) var(--cds-ease-productive);
+}
+
+.gix-row:hover {
+  background: var(--cds-background-hover);
+}
+
+.gix-row .k {
+  font-weight: 600;
+}
+
+.gix-pct {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.gix-level {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.gix-level .v {
+  font-weight: 600;
+}
+
+.gix-row .gix-stamp {
+  text-align: right;
+  margin-top: 0;
+}
+
+.gix-section {
+  padding: 0;
+}
+
+@media (max-width: 720px) {
+  .gix-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'k pct' 'track track' 'level stamp';
+    row-gap: 4px;
+    padding: var(--sp-03) var(--sp-02);
+  }
+
+  .gix-row .k {
+    grid-area: k;
+  }
+
+  .gix-pct {
+    grid-area: pct;
+  }
+
+  .gix-track {
+    grid-area: track;
+  }
+
+  .gix-level {
+    grid-area: level;
+    flex-direction: row;
+    gap: var(--sp-03);
+    align-items: baseline;
+  }
+
+  .gix-row .gix-stamp {
+    grid-area: stamp;
+  }
 }
 
 /* No color here (unlike .mac-row-note/.mac-row-period): pnlClass supplies it. */
@@ -137,4 +233,11 @@ button.rpt-card:hover {
 
 .index-detail {
   padding: 18px 20px;
+}
+
+/* Long update stamps wrap on phones instead of pushing the page sideways. */
+@media (max-width: 720px) {
+  .rpt-section-head .section-stamp {
+    white-space: normal;
+  }
 }

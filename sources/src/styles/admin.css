@@ -693,3 +693,135 @@
      two tracks and let the remaining cells wrap. */
   .adm-log-head { grid-template-columns: 1fr auto; }
 }
+
+/* ---------- Probe arrival timeline (2026-09-27) ----------
+ * One row per source on an 11:00–24:00 axis: the expected window as a band, each hit as a dot, and
+ * the current time as a line. HTML with percentage positions so labels stay at text size on phones. */
+.pwr-section {
+  padding: 0;
+}
+
+.pwr-tl {
+  --pwr-name: 190px;
+  position: relative;
+  margin: var(--sp-05) 0 var(--sp-03);
+  padding-top: 22px;
+}
+
+.pwr-tl-axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pwr-name);
+  right: 0;
+  pointer-events: none;
+}
+
+.pwr-tl-axis span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--cds-text-helper);
+  font-variant-numeric: tabular-nums;
+}
+
+.pwr-tl-axis span::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--cds-border-subtle);
+  opacity: 0.6;
+}
+
+.pwr-tl-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--pwr-name) minmax(0, 1fr);
+  align-items: center;
+  min-height: 34px;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.pwr-tl-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  padding-right: var(--sp-04);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.pwr-tl-state {
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+}
+
+.pwr-tl-state.retired {
+  color: var(--cds-support-success);
+}
+
+.pwr-tl-state.probing {
+  color: var(--cds-support-warning);
+}
+
+.pwr-tl-track {
+  position: relative;
+  height: 18px;
+}
+
+.pwr-tl-band {
+  position: absolute;
+  top: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--cds-layer-accent-01);
+}
+
+.pwr-tl-slot {
+  width: 6px;
+  margin-left: -3px;
+  background: var(--cds-border-strong);
+  opacity: 0.6;
+}
+
+.pwr-tl-hit {
+  position: absolute;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--cds-support-success);
+  box-shadow: 0 0 0 2px var(--cds-background);
+}
+
+/* The "now" line lives in the track's coordinate space: offset by the name column. */
+.pwr-tl-now {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  width: 0;
+  border-left: 1.5px dashed var(--cds-interactive);
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .pwr-tl {
+    --pwr-name: 104px;
+  }
+
+  .pwr-tl-state {
+    display: none;
+  }
+
+  .pwr-tl-axis span:nth-child(3n + 2),
+  .pwr-tl-axis span:nth-child(3n + 3) {
+    color: transparent;
+  }
+}
