@@ -1,9 +1,16 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 171 — chart-first redesign of the five remaining pages on `dev` as 0.9.72-dev.1
-- Status: 🔄 `dev` = 0.9.72-dev.1, `main` = 0.9.71. Waiting for the user's DEV review before `main`. Still owed from Task 170: PROD DDL `fee_rebate` (user, `docs/agent/prod-0.9.71-migration.sql`)
-- Timestamp: 2026-09-27 12:11:35 Asia/Taipei
+- Action: 0.10.0 released (Tasks 170 + 171: statement redesign, chart-first pages); PROD DDL + Edge done
+- Status: ✅ `main` = `dev` = 0.10.0 (f010f7d), Pages live; PROD `workspaces.fee_rebate` applied; PROD `stock-report` v19 = DEV bundle
+- Timestamp: 2026-09-28 07:16:51 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-28 07:16:51 Asia/Taipei (0.10.0 released)
+- User approved DEV and asked to merge with version 0.10.0 and handle PROD Supabase. f010f7d `chore(release): 0.10.0` (0.9.72-dev.1 entry renamed 0.10.0 in CHANGELOG), ff `main`, `main:dev` synced; CI + Sync GitHub Releases success, Release 0.10.0 exists; Pages serves the new CSS.
+- PROD DDL (authorized this time): Management API `database/query` with the PROD identity guard in the same DO block; check query → is_prod true, is_dev false, `fee_rebate` text, CHECK instant|monthly, 0 rows set; PROD REST `select=fee_rebate` → 200.
+- PROD `stock-report`: deployed from clean `main` f010f7d with `--no-verify-jwt`; v18 → v19, ezbr `08606770…` → `27ef30af…` (same as DEV v31); POST `{}` → 400 Unknown action.
 
 ---
 
@@ -12,13 +19,3 @@
 - Chart infra: `BarSeriesChart` gained `stacked`, `selectedIndex`, `onSelect` (ChartFrame click/Enter); `CATEGORICAL_COLORS` → `var(--chart-c1..4)` per theme (validated blue/yellow/violet/pink).
 - Removed on purpose: the 2-day 法人 cards in the quote block (the chips chart shows the same numbers), dead CSS for section tabs and detail cards.
 - Verify: vitest 149 files / 2,506 tests, 2,499 passed, 7 skipped; build, typecheck:edge, lint exit 0; detector 1 finding fixed (3px tab rule → 2px). Visual: vite on DEV env with Playwright routing auth/REST/admin-status to local fixtures and storage/stock-price to DEV (public reports, anon key); 1440 + 390, light + dark, no horizontal overflow, no page errors.
-
----
-
-## 📅 Log: 2026-09-27 06:10:00 Asia/Taipei (Task 170, 0.9.71 released)
-- User approved the DEV build (「目前這個版本看起來不錯」) and asked to archive old handoff items and finish the new task. TASK.md: every task opened before Task 170 moved verbatim to `TASK_ARCHIVE.md` (`## Archived 2026-09-27 —— unfinished tasks before Task 170`); Task 47 (recurring) kept.
-- Icons: favicon.svg, apple-touch-icon (180), icon-192/512, maskable-512 re-rendered from the statement mark (Playwright, white tile; maskable at 50% for the safe circle); manifest background/theme `#ffffff`. 02e2642 (0.9.71-dev.2).
-- Release: 495d974 `chore(release): 0.9.71`, ff to `main`, `main:dev` synced. CI + Sync GitHub Releases success, Release 0.9.71 exists; Pages serves the new bundle (`fee_rebate` present) and the new favicon.
-- PROD DDL via the Management API was **denied** by the permission classifier ([Production Deploy]); not retried. SQL for the SQL Editor: `docs/agent/prod-0.9.71-migration.sql` (PROD identity guard + check query). PROD `stock-report` not redeployed (type-only engine change).
-- Verify before release: vitest 2,495 passed / 7 skipped / 0 failed; build, typecheck:edge, lint exit 0.
-

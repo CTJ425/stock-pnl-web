@@ -1,5 +1,27 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 171: Chart-first redesign of 個股分析 / 年度收益 / 總體經濟 / 外幣匯率 / 後台 (user, 2026-09-27)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-27 12:11:35 Asia/Taipei
+- **Spec**: approved demo `docs/design/statement-pages-demo.html` (artifact claude.ai/artifact/P5pYEvsoJ5qYvK4XeYyRvB, v2); `DESIGN.md`
+1. ~~Implement all five pages chart-first, one commit~~ ✅ 0.9.72-dev.1
+2. ~~User review on DEV~~ ✅ 2026-09-27 (user: 「看起來都很棒」)
+3. ~~Release to `main` as 0.10.0 (user-chosen number)~~ ✅ f010f7d, CI + Release 0.10.0 success, Pages serving the new assets
+
+### Task 170: Redesign the whole UI as a broker statement (券商對帳單) (user, 2026-09-26)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-27 05:37:04 Asia/Taipei
+- **Spec**: `DESIGN.md`, `PRODUCT.md`, `.impeccable/surfaces/sources-src-components-dashboard-dashboardpage-tsx.md`
+1. ~~Tokens, fonts, controls, navigation, notices restyled; dashboard rewritten; fee basis from 現折/月退~~ ✅ 0.9.71-dev.1
+2. ~~DEV: `workspaces.fee_rebate` column + CHECK~~ ✅ 2026-09-27
+3. ~~DEV `stock-report` redeploy for the re-synced engine `models.ts` (type-only change)~~ ✅ v31, ezbr `27ef30af…` from clean tree at bfb9e55; POST `{}` → 400 Unknown action (boots)
+4. ~~User review on DEV~~ ✅ 2026-09-27 (user: 「目前這個版本看起來不錯」; logged-in pages were checked by the user, not by screenshot)
+5. ~~Release 0.9.71 to `main`~~ ✅ 495d974 (main = dev; CI + Release sync success; Pages live bundle carries `fee_rebate`, new favicon served) · ~~PROD DDL `fee_rebate`~~ ✅ 2026-09-28 07:16:51 (user authorized; Management API, PROD identity guard; column text + CHECK verified, PostgREST 200) · ~~PROD `stock-report` redeploy~~ ✅ v18 → v19 from clean `main` f010f7d, ezbr `27ef30af…` (= DEV), verify_jwt false, POST `{}` → 400
+6. ~~App icons / favicon / manifest colours to the statement mark (user 2026-09-27)~~ ✅ 0.9.71-dev.2
+
+
 ## Archived 2026-09-27 —— unfinished tasks before Task 170 (user request)
 
 > Moved verbatim from `TASK.md` so the hot file only carries the current redesign. Items marked ⏳ below are still open, not done.
