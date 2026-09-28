@@ -235,8 +235,8 @@ describe('DashboardPage — 融券空單（Task 141 Stage B）', () => {
     expect(screen.queryByTestId('holding-group-SHORT-mktval')).toBeNull()
     expect(longGroup.querySelectorAll('td')).toHaveLength(1)
     expect(shortGroup.querySelectorAll('td')).toHaveLength(1)
-    expect(longGroup.querySelector('td')?.getAttribute('colspan')).toBe('7')
-    expect(shortGroup.querySelector('td')?.getAttribute('colspan')).toBe('7')
+    expect(longGroup.querySelector('td')?.getAttribute('colspan')).toBe('6')
+    expect(shortGroup.querySelector('td')?.getAttribute('colspan')).toBe('6')
   })
 
   it('T14 只有一條腿有價格時，淨額不成立：不顯示數字', () => {
@@ -458,14 +458,13 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     expect(screen.queryByRole('heading', { name: '主要工作區的手續費設定' })).toBeNull()
   })
 
-  it('持股列數值單元格帶上 pnl-up 與 pnl-down 類別（漲跌幅、今日損益、未實現淨損益）', () => {
+  it('持股列數值單元格帶上 pnl-up 與 pnl-down 類別（漲跌幅、未實現淨損益）', () => {
     // 獲利情境：2330 買進 950，現價 1000（昨收 980，漲）
     mockWorkspace()
     render(<DashboardPage onSelectTicker={vi.fn()} />)
     const cell = (row: HTMLElement, c: string) => row.querySelector(`td[data-c="${c}"]`) as HTMLElement
     const rowWin = screen.getByTestId('holding-row-2330')
     expect(cell(rowWin, 'chg').className).toContain('pnl-up')
-    expect(cell(rowWin, 'today').className).toContain('pnl-up')
     expect(cell(rowWin, 'unr').className).toContain('pnl-up')
 
     // 虧損情境：2330 買進 1050，現價 1000（昨收 1020，跌）
@@ -501,7 +500,6 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     render(<DashboardPage onSelectTicker={vi.fn()} />)
     const rowLoss = screen.getByTestId('holding-row-2330')
     expect(cell(rowLoss, 'chg').className).toContain('pnl-down')
-    expect(cell(rowLoss, 'today').className).toContain('pnl-down')
     expect(cell(rowLoss, 'unr').className).toContain('pnl-down')
   })
 })
@@ -517,25 +515,24 @@ describe('DashboardPage — structure, empty account, missing quotes', () => {
 
   it('opens with the statement totals, then the 持股明細 grouped by market', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
-    expect(screen.getByRole('heading', { level: 2, name: /今日損益/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: /未實現淨損益/ })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: '持股明細' })).toBeTruthy()
     expect(screen.getByTestId('holding-market-tw').textContent).toContain('台股小計')
     expect(screen.getByTestId('holding-market-us').textContent).toContain('美股小計')
   })
 
-  it('today’s P&L: without a USD rate the headline is the TW figure alone, and says so', () => {
+  it('unrealized P&L: without a USD rate the headline is the TW figure alone, and says so', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
-    // 2330: (1000 − 980) × 1000 = +20,000; AAPL: (220 − 215) × 10 = +US$50
-    expect(screen.getByTestId('today-pnl').textContent).toBe('+NT$20,000')
-    expect(screen.getByRole('heading', { level: 2, name: /今日損益（台股）/ })).toBeTruthy()
+    const twSplit = document.querySelector('.stmt-tot-lead .stmt-sub b')!.textContent
+    expect(screen.getByTestId('total-unrealized').textContent).toBe(twSplit)
+    expect(screen.getByRole('heading', { level: 2, name: /未實現淨損益（台股）/ })).toBeTruthy()
     expect(screen.getByText(/沒有匯率，未合計/)).toBeTruthy()
   })
 
-  it('today’s P&L: with a USD rate both markets combine in TWD', () => {
+  it('unrealized P&L: with a USD rate both markets combine in TWD', () => {
     useUsdTwdRate.mockReturnValue(32)
     render(<DashboardPage onSelectTicker={vi.fn()} />)
-    // 20,000 + 50 × 32
-    expect(screen.getByTestId('today-pnl').textContent).toBe('+NT$21,600')
+    expect(screen.queryByRole('heading', { level: 2, name: /未實現淨損益（台股）/ })).toBeNull()
     expect(screen.getByRole('heading', { level: 2, name: /持倉市值（台幣合計）/ })).toBeTruthy()
     expect(screen.queryByText(/沒有匯率/)).toBeNull()
   })

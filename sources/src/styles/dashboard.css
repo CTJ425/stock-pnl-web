@@ -56,7 +56,10 @@
 /* ---------- Totals: the statement's closing figures, ended by a double rule ---------- */
 .stmt-totals {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  /* The lead figure is wider; any number of further totals share the rest (庫存總覽 1, 年度收益 2). */
+  grid-template-columns: minmax(0, 1.35fr);
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   padding: var(--sp-07) 0 var(--sp-06);
   border-bottom: 3px double var(--cds-text-primary);
 }
@@ -122,7 +125,7 @@
   white-space: nowrap;
 }
 
-/* Today's P&L is the one figure that never shrinks: the same size on a phone and a desktop. */
+/* 未實現淨損益 is the one figure that never shrinks: the same size on a phone and a desktop. */
 .stmt-fig-hero {
   font-size: 2.5rem;
   line-height: 1.1;
@@ -478,10 +481,6 @@ table.hl-table {
   color: var(--cds-text-secondary);
 }
 
-.hl-strong {
-  font-weight: 600;
-}
-
 .hl-badge {
   margin-left: 6px;
   vertical-align: 1px;
@@ -693,6 +692,7 @@ table.hl-table {
 @media (max-width: 720px) {
   .stmt-totals {
     grid-template-columns: 1fr 1fr;
+    grid-auto-flow: row;
     row-gap: var(--sp-06);
     padding: var(--sp-06) 0 var(--sp-05);
   }
@@ -701,7 +701,7 @@ table.hl-table {
     padding: 0 0 0 var(--sp-05);
   }
 
-  .stmt-tot-today {
+  .stmt-tot-lead {
     grid-column: 1 / -1;
     padding: 0;
     border: 0;
@@ -710,6 +710,11 @@ table.hl-table {
   .stmt-tot:nth-child(2) {
     padding-left: 0;
     border-left: 0;
+  }
+
+  /* A lone second total takes the full row instead of leaving half of it empty. */
+  .stmt-tot:nth-child(2):last-child {
+    grid-column: 1 / -1;
   }
 
   .stmt-fig {
@@ -721,7 +726,7 @@ table.hl-table {
     font-size: 2.5rem;
   }
 
-  .stmt-tot:not(.stmt-tot-today) .stmt-pct {
+  .stmt-tot:not(.stmt-tot-lead) .stmt-pct {
     display: block;
     margin: 2px 0 0;
     font-size: 0.8125rem;
@@ -788,11 +793,11 @@ table.hl-table {
 
   .hl-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    /* Right: the P&L over its return. Left: name, then shares · price with the day's move after it. */
+    grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas:
-      'stock today'
-      'px chg'
-      'unr unr';
+      'stock stock unr'
+      'px chg unr';
     gap: 2px var(--sp-04);
     padding: var(--sp-04) 0;
     border-bottom: 1px solid var(--cds-border-subtle);
@@ -815,11 +820,6 @@ table.hl-table {
     min-width: 0;
   }
 
-  .hl-row td[data-c='today'] {
-    grid-area: today;
-    font-size: var(--type-body-02);
-    font-weight: 700;
-  }
 
   .hl-row td[data-c='px'] {
     grid-area: px;
@@ -830,16 +830,30 @@ table.hl-table {
 
   .hl-row td[data-c='chg'] {
     grid-area: chg;
+    text-align: left;
     font-size: 0.8125rem;
   }
 
   .hl-row td[data-c='unr'] {
     grid-area: unr;
+    font-size: var(--type-body-02);
+    font-weight: 700;
+  }
+
+  /* Top-right of the entry: the figure is the row's headline, so its label would only repeat the page's. */
+  .hl-row td[data-c='unr'] .hl-m-label {
+    display: none;
+  }
+
+  .hl-row .hl-unr {
     display: flex;
-    justify-content: space-between;
-    gap: var(--sp-03);
-    margin-top: 2px;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .hl-row .hl-unr > span + span {
     font-size: 0.8125rem;
+    font-weight: 500;
   }
 
   .hl-m-only {
@@ -895,12 +909,11 @@ table.hl-table {
   }
 
   .hl-subtotal td[data-c='unr'] {
-    grid-column: 1 / -1;
-    display: flex;
-    justify-content: space-between;
-    margin-top: 2px;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: var(--type-body-02);
+  }
+
+  .hl-subtotal td[data-c='unr'] .hl-m-label {
+    display: none;
   }
 
   .hl-detail,

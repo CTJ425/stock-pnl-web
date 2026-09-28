@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HoldingRow } from '../../utils/holdingRows'
-import { asOfLabel, combine, marketSums, rowToday } from './dashboardSums'
+import { asOfLabel, combine, marketSums } from './dashboardSums'
 
 const row = (over: Partial<HoldingRow> & { currency?: 'TWD' | 'USD'; cost?: number }): HoldingRow =>
   ({
@@ -20,27 +20,17 @@ const row = (over: Partial<HoldingRow> & { currency?: 'TWD' | 'USD'; cost?: numb
     ...over,
   }) as unknown as HoldingRow
 
-describe('rowToday', () => {
-  it('is the move times the shares; a short row loses on a rise', () => {
-    expect(rowToday(row({}))).toBe(2_000)
-    expect(rowToday(row({ direction: 'SHORT', rowQty: -1000 }))).toBe(-2_000)
-    expect(rowToday(row({ dayChange: null }))).toBeNull()
-  })
-})
-
 describe('marketSums', () => {
-  it('sums today, value and the chosen basis; cost counts the long leg only', () => {
+  it('sums value and the chosen basis; cost counts the long leg only', () => {
     const s = marketSums(
       [row({}), row({ direction: 'SHORT', rowQty: -500, mktVal: 50_000, unrealized: -1_000, brokerUnrealized: -1_100 })],
       'TWD',
       'list',
       false,
     )
-    expect(s.today).toBe(2_000 - 1_000)
     expect(s.netMkt).toBe(50_000)
     expect(s.cost).toBe(95_000)
     expect(s.unrealized).toBe(4_800 - 1_100)
-    expect(s.prevValue).toBe(98_000 + 49_000)
   })
 
   it('a missing leg leaves the net value unknown instead of reading it as 0', () => {

@@ -1,5 +1,5 @@
 /**
- * The dashboard's statement totals (2026-09-26 redesign): per-market sums, today's P&L, and the
+ * The dashboard's statement totals (2026-09-26 redesign): per-market sums and the
  * TWD-combined figure. Pure, so the arithmetic is tested without rendering the page.
  */
 import type { Currency } from '../../types/models'
@@ -10,21 +10,6 @@ import { rowUnrealized, type PnlBasis } from '../../utils/pnlBasis'
 export function sumOrNull(values: Array<number | null>): number | null {
   const known = values.filter((v): v is number => v !== null)
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
-}
-
-/**
- * Today's P&L of one row: the move since yesterday's close times the shares. `rowQty` is
- * negative on a SHORT row, so a rise costs a short position money without a special case.
- * No fees: nothing was traded today, so there is nothing to withhold.
- */
-export function rowToday(row: HoldingRow): number | null {
-  return row.dayChange === null ? null : row.dayChange * row.rowQty
-}
-
-/** Yesterday's value of the row, the denominator of today's percentage. */
-function rowPrevValue(row: HoldingRow): number | null {
-  if (row.dayChange === null || row.price === null) return null
-  return Math.abs((row.price - row.dayChange) * row.rowQty)
 }
 
 export interface MarketSums {
@@ -40,8 +25,6 @@ export interface MarketSums {
   /** Cost of the long leg only: a position with both legs shares one holding object. */
   cost: number | null
   unrealized: number | null
-  today: number | null
-  prevValue: number | null
   /** Quotes finished loading and at least one row still has no price. */
   quoteMissing: boolean
 }
@@ -66,8 +49,6 @@ export function marketSums(rows: HoldingRow[], currency: Currency, basis: PnlBas
     netMkt,
     cost: longRows.length === 0 ? 0 : sumOrNull(longRows.map((r) => r.holding.cost)),
     unrealized: sumOrNull(rows.map((r) => rowUnrealized(r, basis))),
-    today: sumOrNull(rows.map(rowToday)),
-    prevValue: sumOrNull(rows.map(rowPrevValue)),
     quoteMissing: !loading && rows.length > 0 && rows.some((r) => r.price === null),
   }
 }
@@ -100,7 +81,7 @@ export function combine(
 }
 
 /**
- * The as-of phrase printed beside 今日損益: 「9/25 收盤」 once every quoted TW row (or, without TW
+ * The as-of phrase printed beside 未實現淨損益: 「9/25 收盤」 once every quoted TW row (or, without TW
  * rows, every quoted row) is a finalised close, 「試撮中」 during an auction, otherwise the time
  * the quotes were refreshed.
  */

@@ -74,6 +74,23 @@ describe('YearlyPage 股利與 ROI', () => {
   })
 })
 
+describe('YearlyPage 手續費與交易稅分欄', () => {
+  it('手續費與交易稅各自一欄，年度列直接顯示兩個數字', async () => {
+    renderWith([
+      tx('2024-01-10', 'BUY', 500, 1000, 712),
+      tx('2024-06-01', 'SELL', 600, 1000, 2655),
+    ])
+    const heads = screen.getAllByRole('columnheader').map((th) => th.textContent)
+    expect(heads.some((t) => t?.startsWith('手續費'))).toBe(true)
+    expect(heads.some((t) => t?.startsWith('交易稅'))).toBe(true)
+    expect(heads.some((t) => t?.includes('/ 稅金'))).toBe(false)
+    // 交易稅 600,000 × 0.3% = 1,800；手續費 712 + (2,655 − 1,800) = 1,567
+    const row = (await screen.findByText('2024')).closest('tr')!
+    expect(within(row).getByText(/^NT\$1,567/)).toBeTruthy()
+    expect(within(row).getByText(/^NT\$1,800/)).toBeTruthy()
+  })
+})
+
 describe('YearlyPage 搜尋', () => {
   it('輸入搜尋後自動展開年度與逐筆賣出，清除後收回', async () => {
     renderWith([

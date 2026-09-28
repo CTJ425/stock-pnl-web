@@ -4,8 +4,8 @@
  *   charts (YearlyOverview), then the ledger.
  * - Taiwan stocks/U.S. stocks are divided into upper and lower divisions, with separate annual tables, and currencies are completely separated (the same as the GAS version)
  * - One number per cell: the fee-inclusive figure (actual money paid and received). The fee-exclusive
- *   「未含費」 line and the 手續費 ｜ 交易稅 split only appear on the individual sell rows, the deepest
- *   expansion — the same rule as 庫存總覽, where they live in the row's detail.
+ *   「未含費」 line only appears on the individual sell rows, the deepest expansion — the same rule as
+ *   庫存總覽, where it lives in the row's detail. 手續費 and 交易稅 are separate columns on every row.
  * - The year column can be expanded with individual stock details (including those that were only bought but not sold during the year)
  *
  * Only the selling side (selling cost / selling income / realized profit and loss) is displayed, and the purchase amount of the year is deliberately not displayed:
@@ -208,27 +208,18 @@ function RoiCell({
   )
 }
 
-/** Handling fee storage cell: The main number is the total of fees and taxes, and the sub-line is "handling fee | transaction tax"; the sub-line is not displayed when there is no tax (US stocks/buying only)*/
-function FeeCell({
-  fees,
-  feesTax,
-  currency,
-  showSplit = false,
-}: {
-  fees: number
-  feesTax: number
-  currency: Currency
-  showSplit?: boolean
-}) {
+/**
+ * 手續費 and 交易稅 as two columns (2026-09-28, at the owner's request): the tax is the part of
+ * `fees` backed out from the statutory rate, the brokerage fee is the rest. A zero prints the muted
+ * dash (US stocks and buy-only rows pay no tax). TW figures print as whole dollars, USD with cents.
+ */
+function FeeCells({ fees, feesTax, currency }: { fees: number; feesTax: number; currency: Currency }) {
+  const brokerage = fees - feesTax
   return (
-    <td className="num">
-      <div>{fmtMoney(fees, currency, 2)}</div>
-      {showSplit && feesTax > 0 && (
-        <div className="cell-sub">
-          手續費 {fmtMoney(fees - feesTax, currency, 2)} ｜ 交易稅 {fmtMoney(feesTax, currency, 2)}
-        </div>
-      )}
-    </td>
+    <>
+      {brokerage === 0 ? <MutedDashCell /> : <td className="num">{fmtMoney(brokerage, currency)}</td>}
+      {feesTax === 0 ? <MutedDashCell /> : <td className="num">{fmtMoney(feesTax, currency)}</td>}
+    </>
   )
 }
 
@@ -371,7 +362,8 @@ const HEADS: ReadonlyArray<readonly [string, string, boolean]> = [
   ['報酬率', YEAR_HELP.roi, true],
   ['股利', DIVIDEND_HELP, true],
   ['總報酬', TOTAL_RETURN_HELP, true],
-  ['手續費 / 稅金', YEAR_HELP.fees, true],
+  ['手續費', YEAR_HELP.brokerage, true],
+  ['交易稅', YEAR_HELP.tax, true],
   ['交易筆數', YEAR_HELP.count, true],
 ]
 
@@ -422,7 +414,7 @@ function YearRows({
         />
         <DividendCell value={row.dividends} currency={currency} />
         <TotalReturnCell realized={row.realized} dividends={row.dividends} currency={currency} />
-        <FeeCell fees={row.fees} feesTax={row.feesTax} currency={currency} />
+        <FeeCells fees={row.fees} feesTax={row.feesTax} currency={currency} />
         <td className="num">{fmtQty(row.count)}</td>
       </tr>
       {/* Detail rows live inside the same table: a nested table computes its own column widths and the numbers stop lining up with the header above */}
@@ -474,7 +466,7 @@ function YearRows({
                 />
                 <DividendCell value={yt.dividends} currency={currency} />
                 <MutedDashCell />
-                <FeeCell fees={yt.fees} feesTax={yt.feesTax} currency={currency} />
+                <FeeCells fees={yt.fees} feesTax={yt.feesTax} currency={currency} />
                 <td className="num">{fmtQty(yt.count)}</td>
               </tr>
               {isTickerOpen &&
@@ -503,7 +495,7 @@ function YearRows({
                     />
                     <MutedDashCell />
                     <MutedDashCell />
-                    <FeeCell fees={sell.fees} feesTax={sell.feesTax} currency={currency} showSplit />
+                    <FeeCells fees={sell.fees} feesTax={sell.feesTax} currency={currency} />
                     <MutedDashCell />
                   </tr>
                 ))}
@@ -535,7 +527,7 @@ export function YearlyPage() {
     <>
       {/* Lifetime totals over every trade: not filtered by the search below. */}
       <section className="stmt-totals yr-totals" aria-label="歷年合計">
-        <div className="stmt-tot stmt-tot-today">
+        <div className="stmt-tot stmt-tot-lead">
           <h2>
             台股歷史已實現 (TWD)<span className="stmt-asof">歷年合計，含費</span>
           </h2>

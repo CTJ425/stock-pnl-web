@@ -239,7 +239,7 @@ describe('QuoteTab', () => {
     expect(a.querySelector('.tech-summary')).toBeTruthy()
   })
 
-  it('我的持股顯示持有、均價、市值、今日損益', () => {
+  it('我的持股顯示持有、均價、市值，不顯示今日損益', () => {
     show(closedQuote, { holding })
     const a = aside()!.textContent!
     expect(a).toContain('持有')
@@ -247,6 +247,7 @@ describe('QuoteTab', () => {
     expect(a).toContain('市值')
     // 市值 = 3000 × 2405 = 7,215,000
     expect(a).toContain('7,215,000')
+    expect(a).not.toContain('今日損益')
   })
 
   it('損益直接用傳進來的 unrealized，不在這裡重算', () => {
@@ -260,13 +261,6 @@ describe('QuoteTab', () => {
   it('報酬率也直接用傳進來的 roi', () => {
     show(closedQuote, { holding })
     expect(aside()!.textContent).toContain('16.66%')
-  })
-
-  it('沒有昨收就算不出今日損益', () => {
-    show({ ...closedQuote, prevClose: null }, { holding })
-    const a = aside()!.textContent!
-    expect(a).toContain('999,111')
-    expect(a).toContain('今日')
   })
 
   it('只是觀察沒有持有時，整個持股區塊不出現', () => {

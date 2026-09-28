@@ -264,8 +264,6 @@ export function QuoteTab({
     holding && holding.unrealized !== null
       ? holding.qty * holding.avgCost + holding.unrealized
       : null
-  const todayPnl =
-    holding && quote.prevClose !== null ? holding.qty * (quote.price - quote.prevClose) : null
 
   const category = getStockCategory(ticker, name, quote.industry)
 
@@ -376,11 +374,6 @@ export function QuoteTab({
                   {marketValue === null ? '—' : `NT$${fmtInt(marketValue)}`}
                 </div>
                 {netMktVal !== null && <div className="s">全部賣出約可拿回 NT${fmtInt(netMktVal)}</div>}
-              </div>
-              <div>
-                <div className="k">今日損益</div>
-                <div className={`v ${pnlClass(todayPnl)}`}>{todayPnl === null ? '—' : fmtSignedMoney(todayPnl, 'TWD')}</div>
-                <div className="s">{fmtSignedPercent(dayChangePct)}</div>
               </div>
               <div>
                 <div className="k">未實現淨損益</div>

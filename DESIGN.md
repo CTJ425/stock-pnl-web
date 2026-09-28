@@ -133,7 +133,7 @@ Restrained: neutrals of paper and ink plus one ruling blue; the market colours a
 
 **Face:** Public Sans (Latin, figures) with Noto Sans TC (CJK), one family for everything; fallbacks PingFang TC, Microsoft JhengHei.
 
-- **Hero figure** (2.5rem/700): 今日損益 only, and it never shrinks — the same size on a phone and a desktop.
+- **Hero figure** (2.5rem/700): one per page — 未實現淨損益 on the dashboard (今日損益 removed 2026-09-28 at the owner's request), 台股歷史已實現 on 年度收益 — and it never shrinks: the same size on a phone and a desktop.
 - **Figure** (1.5rem/700, 1.25rem on phones): the other statement totals.
 - **Section title** (1.25rem/700): 持股明細 and page sections.
 - **Body** (0.875rem/400, 1.5): table cells and prose.
@@ -144,8 +144,8 @@ Restrained: neutrals of paper and ink plus one ruling blue; the market colours a
 ## Layout
 
 - Content column 1200px (container 1248px with 24px gutters; 16px on phones). The app bar is 56px with a hairline below.
-- The dashboard opens with the totals block (three columns split by vertical hairlines, closed by a 3px double rule), then the holdings ledger grouped by market, then footnotes.
-- Phones (≤720px): totals stack (today full width, the other two side by side); ledger rows become three-line entries (name + today's P&L / shares · price + move / unrealized); navigation moves to a fixed bottom bar.
+- The dashboard opens with the totals block (未實現淨損益 wide, 持倉市值 beside it, split by a vertical hairline, closed by a 3px double rule), then the holdings ledger grouped by market, then footnotes.
+- Phones (≤720px): totals stack (the lead figure full width; further totals side by side, a lone one full width); ledger rows become two-line entries (name + unrealized / shares · price + move + return, the return right-aligned under the P&L); navigation moves to a fixed bottom bar.
 - More space above a heading than below it; the ledger starts 48px under the totals.
 
 ## Elevation & Depth
@@ -161,7 +161,7 @@ Square statement geometry. Tables, blocks and panels have 0px corners; controls 
 - **Buttons:** 36px (32px small), label centred at 600. Primary is the only filled button. Destructive stays an outline until hovered or focused.
 - **Fields:** fully ruled 40px boxes (44px on phones, 16px text to stop iOS zoom); focus is a 2px ruling-blue inset ring.
 - **Header navigation:** text links the full bar height; current page is ink 700 over a 2px ruling-blue underline. Icons appear only when labels collapse (≤1020px). Bottom bar: accent colour plus a 2px top rule on the current cell.
-- **Holdings ledger:** 7 columns (股票, 股數, 現價, 漲跌幅, 今日損益, 市值, 未實現淨損益); the whole row toggles its sub-ledger (cost, the three unrealized-P&L methods with 「目前採用」, the trades of that stock, 個股分析).
+- **Holdings ledger:** 6 columns (股票, 股數, 現價, 漲跌幅, 市值, 未實現淨損益), sorted by 市值 by default (市值 / 未實現損益 / 代號); the whole row toggles its sub-ledger (cost, the three unrealized-P&L methods with 「目前採用」, the trades of that stock, 個股分析).
 - **Fee settings:** one form (`WorkspaceFeeSettings`) opened in place from the 未實現淨損益 basis link or in a modal from the workspace menu. The P&L basis is derived from discount + 現折/月退, never stored separately.
 - **Tags:** 20px, 12px/600, 1px rule, 2px corner.
 - **Charts first (2026-09-27):** every analysis page opens with a picture and keeps the exact numbers one `details.chart-more` disclosure below it. Polarity (漲跌, 買賣超) is red above / green below a zero line; identity (外資 / 投信 / 自營商, margin lines, several indicators) uses `var(--chart-c1..4)` — blue, yellow, violet, pink, never red or green — with a legend. Lists of moves (國際指數, 外幣匯率, 各檔貢獻) are diverging bars on one shared scale, the list itself being the chart.

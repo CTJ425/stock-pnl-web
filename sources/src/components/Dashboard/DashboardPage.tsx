@@ -1,8 +1,8 @@
 /**
  * 庫存總覽, redesigned 2026-09-26 as today's page of a broker statement:
- * - The totals open the page: 今日損益 (the first question on opening the app), 持倉市值 and
- *   未實現淨損益, each carrying its own qualifier — the as-of time, the FX rate, the fee basis —
- *   instead of a separate metadata strip.
+ * - The totals open the page: 未實現淨損益 (the figure reconciled against the broker app) and
+ *   持倉市值, each carrying its own qualifier — the as-of time, the fee basis, the FX rate —
+ *   instead of a separate metadata strip. 今日損益 was removed 2026-09-28 at the owner's request.
  * - Both markets are combined in TWD when a USD rate is known; without one (local mode) the
  *   markets stay apart and the page says so, rather than guessing a conversion.
  * - 未實現淨損益 follows the workspace's fee settings (utils/pnlBasis): a 月退 broker's app withholds
@@ -57,24 +57,21 @@ function StatementTotals({
 }) {
   const hasTw = tw.rows.length > 0
   const hasUs = us.rows.length > 0
-  const today = combine(tw.today, us.today, hasTw, hasUs, usdTwd)
-  const prev = combine(tw.prevValue, us.prevValue, hasTw, hasUs, usdTwd)
   const mkt = combine(tw.netMkt, us.netMkt, hasTw, hasUs, usdTwd)
   const unreal = combine(tw.unrealized, us.unrealized, hasTw, hasUs, usdTwd)
   const cost = combine(tw.cost, us.cost, hasTw, hasUs, usdTwd)
-  const todayPct = today.value !== null && prev.value ? today.value / prev.value : null
   const roi = unreal.value !== null && cost.value ? unreal.value / cost.value : null
   const anyShort = tw.hasShort || us.hasShort
   const combined = hasTw && hasUs && !mkt.usLeftOut
   // Both markets held but no rate: the headline is the TW figure alone, and its label says so.
-  const scope = hasTw && hasUs && today.usLeftOut ? '（台股）' : ''
+  const scope = hasTw && hasUs && unreal.usLeftOut ? '（台股）' : ''
   const pending = (c: Combined) => c.value === null && loading
 
   return (
     <section className="stmt-totals" aria-label="合計">
-      <div className="stmt-tot stmt-tot-today">
+      <div className="stmt-tot stmt-tot-lead">
         <h2>
-          今日損益{scope}
+          未實現淨損益{scope}
           {asOf && <span className="stmt-asof">{asOf}</span>}
           <button
             type="button"
@@ -87,25 +84,41 @@ function StatementTotals({
             <RefreshCw size={16} className={loading ? 'spin' : undefined} aria-hidden="true" />
           </button>
         </h2>
-        <div className={`stmt-fig stmt-fig-hero ${pnlClass(today.value)}`}>
-          {pending(today) ? (
-            <span className="skeleton" style={{ width: '9ch', height: 36 }} aria-label="今日損益載入中" />
+        <div className={`stmt-fig stmt-fig-hero ${pnlClass(unreal.value)}`}>
+          {pending(unreal) ? (
+            <span className="skeleton" style={{ width: '9ch', height: 36 }} aria-label="損益載入中" />
           ) : (
-            <Figure c={today} signed testId="today-pnl" />
+            <Figure c={unreal} signed testId="total-unrealized" />
           )}
-          {todayPct !== null && <span className="stmt-pct">{fmtSignedPercent(todayPct)}</span>}
+          {roi !== null && <span className="stmt-pct">{fmtSignedPercent(roi)}</span>}
         </div>
         {hasTw && hasUs && (
           <div className="stmt-sub">
             <span>
-              台股 <b className={pnlClass(tw.today)}>{fmtSignedMoney(tw.today, 'TWD')}</b>
+              台股 <b className={pnlClass(tw.unrealized)}>{fmtSignedMoney(tw.unrealized, 'TWD')}</b>
             </span>
             <span>
-              美股 <b className={pnlClass(us.today)}>{fmtSignedMoney(us.today, 'USD')}</b>
-              {today.usLeftOut && '（沒有匯率，未合計）'}
+              美股 <b className={pnlClass(us.unrealized)}>{fmtSignedMoney(us.unrealized, 'USD')}</b>
+              {unreal.usLeftOut && '（沒有匯率，未合計）'}
             </span>
           </div>
         )}
+        <div className="stmt-sub">
+          {hasTw ? (
+            <button
+              type="button"
+              className="stmt-basis"
+              aria-expanded={feeOpen}
+              aria-controls="stmt-fee-panel"
+              onClick={onToggleFee}
+            >
+              台股依{basisText}
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          ) : (
+            <span>已扣買進手續費；美股不預扣賣出費用</span>
+          )}
+        </div>
       </div>
 
       <div className="stmt-tot">
@@ -139,34 +152,6 @@ function StatementTotals({
             </span>
           )}
           {combined && usdTwd !== null && <span>匯率 {usdTwd.toFixed(2)}</span>}
-        </div>
-      </div>
-
-      <div className="stmt-tot">
-        <h2>未實現淨損益{scope}</h2>
-        <div className={`stmt-fig ${pnlClass(unreal.value)}`}>
-          {pending(unreal) ? (
-            <span className="skeleton" style={{ width: '11ch', height: 24 }} aria-label="損益載入中" />
-          ) : (
-            <Figure c={unreal} signed testId="total-unrealized" />
-          )}
-          {roi !== null && <span className="stmt-pct">{fmtSignedPercent(roi)}</span>}
-        </div>
-        <div className="stmt-sub">
-          {hasTw ? (
-            <button
-              type="button"
-              className="stmt-basis"
-              aria-expanded={feeOpen}
-              aria-controls="stmt-fee-panel"
-              onClick={onToggleFee}
-            >
-              台股依{basisText}
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
-          ) : (
-            <span>已扣買進手續費；美股不預扣賣出費用</span>
-          )}
         </div>
       </div>
     </section>
@@ -288,7 +273,6 @@ export function DashboardPage({
             {/* Footnotes replace the header "?" icons: every definition is readable without hovering. */}
             <ol className="stmt-notes">
               <li>現價：台股接近即時，每分鐘更新；美股最多延遲 20 分鐘。收盤後是當天的收盤價。標「快取」代表暫時抓不到新價格。</li>
-              <li>今日損益：（現價 − 昨天收盤價）× 持有股數，沒有扣任何費用，所以不受損益口徑影響。</li>
               <li>
                 未實現淨損益：如果現在全部賣掉，大約會賺賠多少。台股依{basisText}賣出手續費，再扣證交稅；美股只扣買進手續費。
                 算法跟著這個工作區的手續費設定走。點一列可以看三種算法的對照、含費與未含費的成本，以及這檔股票的每一筆交易。

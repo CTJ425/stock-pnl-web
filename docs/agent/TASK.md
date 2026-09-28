@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-28 07:16:51 Asia/Taipei
+- Timestamp: 2026-09-28 14:54:57 Asia/Taipei
 
 ---
 
@@ -15,6 +15,16 @@
 - Front end deploys from `main` via Cloudflare Pages; Edge Functions and DDL never travel with a push (see CLAUDE.md § Release workflow).
 
 ## 📋 Active Tasks
+
+### Task 172: Remove 今日損益; split 年度收益 fees into 手續費 / 交易稅
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-28 14:54:57 Asia/Taipei
+- Owner: 今日損益 "沒意思" → delete everywhere; 年度收益 fee column option C (two columns). Hero = 未實現淨損益, keep 漲跌幅 (user picks 2026-09-28).
+1. ~~Implement dashboard / 個股分析 / 年度收益 changes, tests, DESIGN.md~~ ✅ (see PROGRESS 2026-09-28 14:54:57 Asia/Taipei)
+2. User reviews the result (local screenshots or DEV) —— ⏳
+3. Bump `0.10.1-dev.1` (or per `versioning`), zh-TW CHANGELOG entry, commit + push `dev` —— ⏳
+4. Release to `main` only after the user's OK —— ⏳
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**

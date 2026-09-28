@@ -1,6 +1,6 @@
 /**
  * The holdings statement (2026-09-26 redesign): one printed line per holding, grouped by market
- * with a subtotal, seven columns on desktop and a three-line entry on phones.
+ * with a subtotal, six columns on desktop and a two-line entry on phones.
  *
  * Each row carries one number per cell. Everything that used to sit on a second line (未含費,
  * 券商, 淨收, cost, break-even) opens under the row: the holding's own sub-ledger, with the three
@@ -23,11 +23,11 @@ import {
   pnlClass,
 } from '../../utils/formatters'
 import { displayStockName } from '../../services/usStockNames'
-import { rowToday, type MarketSums } from './dashboardSums'
+import type { MarketSums } from './dashboardSums'
 
-export type LedgerSort = 'today' | 'mktVal' | 'ticker'
+export type LedgerSort = 'unrealized' | 'mktVal' | 'ticker'
 
-const COLS = 7
+const COLS = 6
 /** Trades shown per holding before the list points to 交易紀錄. */
 const STOPS_SHOWN = 6
 
@@ -57,12 +57,12 @@ function dayChangePct(row: HoldingRow): number | null {
   return prev === 0 ? null : row.dayChange / prev
 }
 
-function sortRows(rows: HoldingRow[], sort: LedgerSort): HoldingRow[] {
+function sortRows(rows: HoldingRow[], sort: LedgerSort, basis: PnlBasis): HoldingRow[] {
   const byNull = (v: number | null) => (v === null ? -Infinity : v)
   const out = [...rows]
   if (sort === 'ticker') out.sort((a, b) => a.holding.ticker.localeCompare(b.holding.ticker))
   else if (sort === 'mktVal') out.sort((a, b) => byNull(b.mktVal) - byNull(a.mktVal))
-  else out.sort((a, b) => byNull(rowToday(b)) - byNull(rowToday(a)))
+  else out.sort((a, b) => byNull(rowUnrealized(b, basis)) - byNull(rowUnrealized(a, basis)))
   return out
 }
 
@@ -279,8 +279,8 @@ function MarketGroup({
 }) {
   const { currency, rows, hasShort } = sums
   const prefix = currency === 'TWD' ? 'tw' : 'us'
-  const longRows = sortRows(rows.filter((r) => r.direction === 'LONG'), sort)
-  const shortRows = sortRows(rows.filter((r) => r.direction === 'SHORT'), sort)
+  const longRows = sortRows(rows.filter((r) => r.direction === 'LONG'), sort, basis)
+  const shortRows = sortRows(rows.filter((r) => r.direction === 'SHORT'), sort, basis)
 
   const renderRow = (row: HoldingRow) => {
     const h = row.holding
@@ -288,7 +288,6 @@ function MarketGroup({
     const name = displayStockName(h.market, h.ticker, h.name)
     const detailId = `hl-${row.rowKey.replace(/[^A-Za-z0-9_-]/g, '-')}`
     const isOpen = open.has(row.rowKey)
-    const today = rowToday(row)
     const pct = dayChangePct(row)
     const unreal = rowUnrealized(row, basis)
     const roi = rowRoi(row, basis)
@@ -349,9 +348,6 @@ function MarketGroup({
           </td>
           <td className={`num ${moveClass}`} data-c="chg">
             {fmtSignedPercent(pct)}
-          </td>
-          <td className={`num hl-strong ${pnlClass(today)}`} data-c="today">
-            {missing && loading ? <Skeleton label="今日損益載入中" /> : fmtSignedMoney(today, currency)}
           </td>
           <td className="num" data-c="mv">
             {missing && loading ? <Skeleton label="市值載入中" /> : fmtMoney(row.mktVal, currency)}
@@ -433,9 +429,6 @@ function MarketGroup({
         <td data-c="qty" />
         <td data-c="px" />
         <td data-c="chg" />
-        <td className={`num ${pnlClass(sums.today)}`} data-c="today">
-          {fmtSignedMoney(sums.today, currency)}
-        </td>
         <td className="num" data-c="mv">
           {fmtMoney(sums.netMkt, currency)}
         </td>
@@ -469,7 +462,7 @@ export function HoldingsLedger({
   onSelectTicker?: (ticker: string, name: string) => void
   onGoToTransactions?: () => void
 }) {
-  const [sort, setSort] = useState<LedgerSort>('today')
+  const [sort, setSort] = useState<LedgerSort>('mktVal')
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const toggle = (key: string) =>
     setOpen((prev) => {
@@ -501,8 +494,8 @@ export function HoldingsLedger({
         <div className="hl-sort" role="group" aria-label="排序">
           {(
             [
-              ['today', '今日損益'],
               ['mktVal', '市值'],
+              ['unrealized', '未實現損益'],
               ['ticker', '代號'],
             ] as const
           ).map(([key, text]) => (
@@ -522,12 +515,9 @@ export function HoldingsLedger({
                 現價<sup>1</sup>
               </th>
               <th scope="col" className="num">漲跌幅</th>
-              <th scope="col" className="num">
-                今日損益<sup>2</sup>
-              </th>
               <th scope="col" className="num">市值</th>
               <th scope="col" className="num">
-                未實現淨損益<sup>3</sup>
+                未實現淨損益<sup>2</sup>
               </th>
             </tr>
           </thead>
