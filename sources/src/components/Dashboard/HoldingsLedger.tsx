@@ -25,8 +25,6 @@ import {
 import { displayStockName } from '../../services/usStockNames'
 import type { MarketSums } from './dashboardSums'
 
-export type LedgerSort = 'unrealized' | 'mktVal' | 'ticker'
-
 const COLS = 6
 /** Trades shown per holding before the list points to 交易紀錄. */
 const STOPS_SHOWN = 6
@@ -57,13 +55,13 @@ function dayChangePct(row: HoldingRow): number | null {
   return prev === 0 ? null : row.dayChange / prev
 }
 
-function sortRows(rows: HoldingRow[], sort: LedgerSort, basis: PnlBasis): HoldingRow[] {
+/**
+ * Largest position first, a missing quote last. One fixed order: the sort buttons were removed
+ * 2026-09-28 — within a market group of a few holdings they rarely changed anything.
+ */
+function sortRows(rows: HoldingRow[]): HoldingRow[] {
   const byNull = (v: number | null) => (v === null ? -Infinity : v)
-  const out = [...rows]
-  if (sort === 'ticker') out.sort((a, b) => a.holding.ticker.localeCompare(b.holding.ticker))
-  else if (sort === 'mktVal') out.sort((a, b) => byNull(b.mktVal) - byNull(a.mktVal))
-  else out.sort((a, b) => byNull(rowUnrealized(b, basis)) - byNull(rowUnrealized(a, basis)))
-  return out
+  return [...rows].sort((a, b) => byNull(b.mktVal) - byNull(a.mktVal))
 }
 
 /** Sell legs' realized P&L by transaction id, for the trade list under a row. */
@@ -253,7 +251,6 @@ function MarketGroup({
   label,
   basis,
   feeRate,
-  sort,
   loading,
   open,
   onToggle,
@@ -267,7 +264,6 @@ function MarketGroup({
   label: string
   basis: PnlBasis
   feeRate: number
-  sort: LedgerSort
   loading: boolean
   open: Set<string>
   onToggle: (key: string) => void
@@ -279,8 +275,8 @@ function MarketGroup({
 }) {
   const { currency, rows, hasShort } = sums
   const prefix = currency === 'TWD' ? 'tw' : 'us'
-  const longRows = sortRows(rows.filter((r) => r.direction === 'LONG'), sort, basis)
-  const shortRows = sortRows(rows.filter((r) => r.direction === 'SHORT'), sort, basis)
+  const longRows = sortRows(rows.filter((r) => r.direction === 'LONG'))
+  const shortRows = sortRows(rows.filter((r) => r.direction === 'SHORT'))
 
   const renderRow = (row: HoldingRow) => {
     const h = row.holding
@@ -462,7 +458,6 @@ export function HoldingsLedger({
   onSelectTicker?: (ticker: string, name: string) => void
   onGoToTransactions?: () => void
 }) {
-  const [sort, setSort] = useState<LedgerSort>('mktVal')
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const toggle = (key: string) =>
     setOpen((prev) => {
@@ -490,20 +485,7 @@ export function HoldingsLedger({
     <>
       <div className="hl-head">
         <h2>持股明細</h2>
-        <span className="hl-count">{count} 檔</span>
-        <div className="hl-sort" role="group" aria-label="排序">
-          {(
-            [
-              ['mktVal', '市值'],
-              ['unrealized', '未實現損益'],
-              ['ticker', '代號'],
-            ] as const
-          ).map(([key, text]) => (
-            <button key={key} type="button" aria-pressed={sort === key} onClick={() => setSort(key)}>
-              {text}
-            </button>
-          ))}
-        </div>
+        <span className="hl-count">{count} 檔・依市值排列</span>
       </div>
       <div className="hl-scroll">
         <table className="hl-table">
@@ -528,7 +510,6 @@ export function HoldingsLedger({
               label={label}
               basis={basis}
               feeRate={feeRate}
-              sort={sort}
               loading={loading}
               open={open}
               onToggle={toggle}

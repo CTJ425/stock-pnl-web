@@ -519,6 +519,9 @@ describe('DashboardPage — structure, empty account, missing quotes', () => {
     expect(screen.getByRole('heading', { level: 2, name: '持股明細' })).toBeTruthy()
     expect(screen.getByTestId('holding-market-tw').textContent).toContain('台股小計')
     expect(screen.getByTestId('holding-market-us').textContent).toContain('美股小計')
+    // 排序按鈕已移除（2026-09-28），固定依市值排列
+    expect(screen.queryByRole('group', { name: '排序' })).toBeNull()
+    expect(screen.getByText(/依市值排列/)).toBeTruthy()
   })
 
   it('unrealized P&L: without a USD rate the headline is the TW figure alone, and says so', () => {
