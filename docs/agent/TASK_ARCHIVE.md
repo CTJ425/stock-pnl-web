@@ -1,5 +1,13 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 173: Remove the 持股明細 sort buttons
+- **Status**: ✅ DONE (0.10.2)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-28 15:22:00 Asia/Taipei
+- Owner: the 市值 / 未實現損益 / 代號 buttons "好像沒用" → remove, fixed 市值 order, merge to `main` directly.
+1. ~~Remove buttons, fixed order, DESIGN.md, test~~ ✅ 30158f1
+2. ~~Release~~ ✅ b6cd4fe, Release 0.10.2, Pages live
+
 ### Task 172: Remove 今日損益; split 年度收益 fees into 手續費 / 交易稅
 - **Status**: ✅ DONE (0.10.1)
 - **Agent**: Claude
