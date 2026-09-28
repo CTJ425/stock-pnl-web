@@ -1,5 +1,15 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 172: Remove 今日損益; split 年度收益 fees into 手續費 / 交易稅
+- **Status**: ✅ DONE (0.10.1)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-28 14:54:57 Asia/Taipei
+- Owner: 今日損益 "沒意思" → delete everywhere; 年度收益 fee column option C (two columns). Hero = 未實現淨損益, keep 漲跌幅 (user picks 2026-09-28).
+1. ~~Implement dashboard / 個股分析 / 年度收益 changes, tests, DESIGN.md~~ ✅ (see PROGRESS 2026-09-28 14:54:57 Asia/Taipei)
+2. ~~User reviews the result~~ ✅ (approved local screenshots)
+3. ~~Bump 0.10.1-dev.1, CHANGELOG, commit + push `dev`~~ ✅ c77f523
+4. ~~Release to `main`~~ ✅ cdcac9d, Release 0.10.1, Pages live
+
 ### Task 171: Chart-first redesign of 個股分析 / 年度收益 / 總體經濟 / 外幣匯率 / 後台 (user, 2026-09-27)
 - **Status**: ✅ DONE
 - **Agent**: Claude
