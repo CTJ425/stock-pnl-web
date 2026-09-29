@@ -3,7 +3,14 @@
 - Agent: Claude
 - Action: 0.10.4 released (BUG-086 quote cache lock measured from fetch time); BUG-087 (same-day buy vs broker) opened
 - Status: ✅ `main` = `dev` = 0.10.4 (d75445e), `stock-price` deployed DEV v24 + PROD v14 (sha `66664c27…`); main CI green, Release 0.10.4 created
-- Timestamp: 2026-09-29 14:30:00 Asia/Taipei
+- Timestamp: 2026-09-29 15:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-29 15:20:00 Asia/Taipei (DEV data synced from PROD; BUG-088 opened)
+- User saw DEV and PROD dashboards differ for the same workspace. Cause: DEV transaction data had drifted (DEV RON held 2303 2,000 @160 from test rows dated 9/27, a Sunday; PROD has the real 9/7–9/23 trades). Not code.
+- Synced PROD → DEV on user request (PROD read-only): PROD 玉山證卷 → DEV SNAP正式區 (63 rows), PROD Ron的投資組合 → DEV RON (62 rows); DEV rows deleted and re-inserted with PROD ids and the DEV workspace owner's user_id, fee_rate / fee_rebate copied. Guarded by the DEV identity predicate inside one DO block. Verified: per-workspace md5 over all columns identical on both sides. Pre-sync DEV backup (120 rows, 2 workspaces) kept in the session scratchpad only. No triggers on `transactions`; `tx_split_log` empty on both.
+- Remaining 2 TWD gap vs 元大 on 2303 → BUG-088 (per-lot vs whole-position flooring).
 
 ---
 
@@ -14,12 +21,3 @@
 - Release: 3fa4075 at 0.10.4-dev.1 on `dev`, d75445e `chore(release): 0.10.4`, ff `main`, `main:dev` synced. User authorized merging to PROD in this session.
 
 ---
-
-## 📅 Log: 2026-09-29 13:26:55 Asia/Taipei (Task 174, 0.10.3 released)
-- User wanted each holding's current price readable at a glance. Two mockups (stronger price in the ledger / a 今日行情 strip) were rejected; the owner chose colouring the price itself: red above, green below, normal ink when flat. Baseline is yesterday's close (`prevClose`) — the holdings quote carries no open price, and broker apps use 平盤價 too.
-- `HoldingsLedger.tsx`: price span gets `hl-px` + `pnl-up`/`pnl-down`; no colour when `priceStale`, `dayChange` null or 0. `dashboard.css`: `.hl-px` bold in `--ink` (also overrides the grey phone cell). Footnote 1 explains the colours. New DashboardPage test covers up / down / flat / stale / no prevClose.
-- Verify: vitest 148 files / 2,506 tests, 2,499 passed, 7 skipped; build, typecheck:edge, lint exit 0. No browser pass.
-- Release: 049976f at 0.10.3-dev.1 on `dev`, dbf1c10 `chore(release): 0.10.3`, ff `main`, `main:dev` synced — all refs at dbf1c10. `main` CI green, Release 0.10.3 created, Pages CSS carries `.hl-px`. No Supabase change.
-
----
-

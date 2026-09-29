@@ -8,6 +8,14 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### BUG-088 — 元大 rounds sell fee/tax on the whole position, 玉山 per lot; the dashboard only does per lot
+- **Found**: 2026-09-29. PROD workspace Ron的投資組合 (元大 account): 2303 two lots (1,000 @163.5 + 1,000 @160, cost 323,637), price 153.5, 牌告 basis. 元大 −17,995 = 307,000 − floor(307,000 × 0.1425%) 437 − 921 − 323,637; dashboard −17,993 = per-lot fee 218 + 218, tax 460 + 460.
+- **History**: 0.9.0–0.9.24 floored on the aggregate (would match 元大). e120041 (0.9.25, Task 136, 2026-09-01) switched to per-lot flooring to match 玉山 (0050 four lots: 10,770 per lot vs 10,767 aggregate). 玉山 still matches per lot (2026-09-29: 0050 five lots sum 49,555 = dashboard). One rule cannot match both brokers; the gap is ≤ 1 TWD per open lot per term.
+- **Option**: a per-workspace rounding choice (per lot / whole position) in fee settings, applied in `estimateUnrealized` and `breakEvenPrice`. Not started — needs the user's decision.
+- **Status**: OPEN (awaiting user decision)
+
+---
+
 ### BUG-087 — Same-day buy: broker (玉山) unrealized P&L / break-even differ from the dashboard
 - **Found**: 2026-09-29, reported by the user on PROD. 6560 欣普羅 bought 2026-09-29, 32.6 × 1000, fee_tax 46, fee_rate 0.001425 (standard); close 32.40.
 - **Numbers**: dashboard −389 / −1.19% / break-even 32.79; broker −340 / −1.04% / break-even 32.75. 0050 and 2303 (held overnight) match the broker; broker total 49,423 (dashboard total not yet confirmed; 49,374 expected if this is the only gap).
