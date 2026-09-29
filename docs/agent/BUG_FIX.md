@@ -11,8 +11,10 @@
 ### BUG-088 — 元大 rounds sell fee/tax on the whole position, 玉山 per lot; the dashboard only does per lot
 - **Found**: 2026-09-29. PROD workspace Ron的投資組合 (元大 account): 2303 two lots (1,000 @163.5 + 1,000 @160, cost 323,637), price 153.5, 牌告 basis. 元大 −17,995 = 307,000 − floor(307,000 × 0.1425%) 437 − 921 − 323,637; dashboard −17,993 = per-lot fee 218 + 218, tax 460 + 460.
 - **History**: 0.9.0–0.9.24 floored on the aggregate (would match 元大). e120041 (0.9.25, Task 136, 2026-09-01) switched to per-lot flooring to match 玉山 (0050 four lots: 10,770 per lot vs 10,767 aggregate). 玉山 still matches per lot (2026-09-29: 0050 five lots sum 49,555 = dashboard). One rule cannot match both brokers; the gap is ≤ 1 TWD per open lot per term.
-- **Option**: a per-workspace rounding choice (per lot / whole position) in fee settings, applied in `estimateUnrealized` and `breakEvenPrice`. Not started — needs the user's decision.
-- **Status**: OPEN (awaiting user decision)
+- **Fix (0.10.5-dev.1, 8b56632, DEV only)**: `workspaces.fee_rounding` ('lot' | 'position', NULL = 'lot') set in 手續費設定 「分批買進時，預扣的費用怎麼算」; optional `rounding` param on `estimateUnrealized` / `breakEvenPrice` / `buildHoldingRows`, default 'lot' is the old arithmetic unchanged. Not applied: what-if (single synthetic lot), Edge holdings card (engine copy synced, callers still per lot).
+- **Verified**: PROD data recompute — Ron 2303 list basis −17,995 with 'position' (= 元大); 玉山 stays 'lot', 0050 49,555 (= 玉山; 'position' would give 49,552). DEV browser (session via admin magic link): row detail 牌告 0.1425% −17,995 / −5.56%; panel checked 1440 / 390 (no overflow), light / dark. DDL applied on DEV only; `stock-report` redeployed on DEV (v32, sha `58e94285…`, verify_jwt false) because the engine copy changed.
+- **Before PROD**: apply the `fee_rounding` DDL on PROD, merge to `main`, deploy `stock-report` on PROD, then set Ron的投資組合 to 整筆 in the UI (user's choice).
+- **Status**: FIXED on DEV, awaiting user test and OK for PROD
 
 ---
 
