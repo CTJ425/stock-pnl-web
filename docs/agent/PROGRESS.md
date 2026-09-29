@@ -1,9 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.10.5 released and fully deployed on PROD (`stock-report` + `fee_rounding` DDL)
-- Status: ✅ `main` = `dev` = 0.10.5; PROD `stock-report` v20 (sha `58e94285…` = DEV v32); PROD `fee_rounding` applied, `verify_setup()` 10/10 PASS
-- Timestamp: 2026-09-29 16:36:13 Asia/Taipei
+- Action: Discord holdings card now follows each workspace's fee_rebate / fee_rounding (0.10.6-dev.1, DEV only)
+- Status: 🔄 `dev` = 0.10.6-dev.1 (b339777), DEV `stock-report` v33 (sha `98a86b7a…`); `main` = 0.10.5, PROD `stock-report` v20 (`58e94285…`) still ignores the two settings
+- Timestamp: 2026-09-29 17:42:14 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-29 17:42:14 Asia/Taipei (BUG-088 follow-up: Discord card fee settings, 0.10.6-dev.1)
+- User reported: after changing 分批買進時的預扣算法 or 現折／月退, the dashboard changed but the Discord push did not. Confirmed: `loadHoldingsWorkspaces` selected only `id, fee_rate`, so the card ignored `fee_rebate` / `fee_rounding` (BUG-088 had listed the Edge card as "not applied").
+- Fix (b339777): select both columns; `buildLedgers` derives `rounding` and `basis` (Edge copy of `pnlBasis`); each workspace leg passes `rounding` to `estimateUnrealized` and takes the 牌告 figure as its main unrealized under 月退, then legs are summed (user chose per-workspace-then-sum for merged keys). Break-even unchanged: its synthetic single lot makes lot vs position identical.
+- Verify: new `holdingsCard.test.ts` cases incl. independent oracle Ron 2303 月退+整筆 −17,995 / 月退+每批 −17,993; vitest 2,526 passed, 7 skipped; build, typecheck:edge, lint exit 0. DEV deploy from clean b339777: v32 → v33, sha `58e94285…` → `98a86b7a…`, verify_jwt false, POST `{}` → 400. Not verified: an actual Discord post on DEV (would send to a real webhook) — user can check via 管理 → Discord 預覽.
+- Next: user's OK → release 0.10.6 to `main` and deploy PROD `stock-report`.
 
 ---
 
@@ -16,12 +24,3 @@
 - PROD ops (2026-09-29 16:33:02, user authorized both): `stock-report` deployed from 9167a40 with `--no-verify-jwt` (details in BUG-088 Status). `fee_rounding` DDL via Management API denied by the auto-mode classifier before running (pre-check had confirmed the column is absent); not retried. SQL: `docs/agent/prod-0.10.5-migration.sql`. Re-authorized by the user → applied 2026-09-29 16:36:13; checks in BUG-088 Status.
 
 ---
-
-## 📅 Log: 2026-09-29 16:10:00 Asia/Taipei (BUG-088, 0.10.5-dev.1 on DEV)
-- User asked to test on DEV first and not disturb the core. Added a per-workspace choice 每一批分開算 / 整筆一起算 (`workspaces.fee_rounding`); default per lot keeps every existing figure. Details and verification in BUG-088.
-- Note: during testing the user was also editing DEV (workspaces renamed SNAP-Ivan正式區 / SNAP-RON正式區, RON set to 現折, 空單測試 removed) — the dashboard's net figure on RON follows that setting, not a bug.
-- Verify: vitest 148 files / 2,522 tests, 2,515 passed, 7 skipped; build, typecheck:edge, lint exit 0. Commit 8b56632 on `dev`; `main` / PROD untouched.
-- Follow-up (user): preview fee changes before saving, and an E2E that adds trades and checks the P&L. 58dee12 (0.10.5-dev.2): `onPreview` preview + tag; `verify-pnl-rounding-e2e.cjs` 7/7 pass (listed in docs/UnitTests/E2E.md). vitest 2,524 tests, 2,517 passed, 7 skipped; build, typecheck:edge, lint exit 0; impeccable detect clean; screenshots 1440 light / 390 dark, no overflow. No Supabase change in dev.2.
-
----
-
