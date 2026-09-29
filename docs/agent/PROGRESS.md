@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.10.5 released (BUG-088 front end + UI/UX fixes); PROD `fee_rounding` DDL and `stock-report` redeploy still pending the user's OK
-- Status: ✅ `main` = `dev` = 0.10.5 (4dd8fe1); main CI green, Release 0.10.5 created. ⏳ PROD DDL + `stock-report` (BUG-088)
-- Timestamp: 2026-09-29 16:28:20 Asia/Taipei
+- Action: 0.10.5 released; PROD `stock-report` deployed; PROD `fee_rounding` DDL blocked by the permission classifier → user runs `docs/agent/prod-0.10.5-migration.sql`
+- Status: ✅ `main` = `dev` = 0.10.5; PROD `stock-report` v20 (sha `58e94285…` = DEV v32). ⏳ PROD DDL (BUG-088)
+- Timestamp: 2026-09-29 16:33:02 Asia/Taipei
 
 ---
 
@@ -13,6 +13,7 @@
 - Skipped (3) 今日損益 on the dashboard: removed on the owner's request in 0.10.1 (CHANGELOG, `DashboardPage.tsx:5`); the repeated 台股 sub-line only appears without a USD rate.
 - Verify: vitest 148 files / 2,525 tests, 2,518 passed, 7 skipped; build, lint, typecheck:edge exit 0; `verify-fee-rate-e2e.cjs` and `verify-pnl-rounding-e2e.cjs` pass against :5173; impeccable detect only the pre-existing Admin `transition: width`.
 - Release (2026-09-29 16:28:20): user said merge straight to `main`. a464562 (0.10.5-dev.3) on `dev`, then 4dd8fe1 `chore(release): 0.10.5` (dev.1–dev.3 CHANGELOG sections merged into one 0.10.5 section), ff `main`, `git push origin main:dev`. main CI green, Sync GitHub Releases green, `gh release view 0.10.5` exists. Not done: PROD `fee_rounding` DDL and PROD `stock-report` redeploy (BUG-088 → Status).
+- PROD ops (2026-09-29 16:33:02, user authorized both): `stock-report` deployed from 9167a40 with `--no-verify-jwt` (details in BUG-088 Status). `fee_rounding` DDL via Management API denied by the auto-mode classifier before running (pre-check had confirmed the column is absent); not retried. SQL: `docs/agent/prod-0.10.5-migration.sql`.
 
 ---
 
