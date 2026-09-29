@@ -15,14 +15,20 @@ export function txChipClass(nature?: TxNature | null): string {
   }
 }
 
+/** 買 / 賣 for a buy or sell row, null for dividend rows (they are neither). */
+export function txDirection(tx: Transaction): '買' | '賣' | null {
+  if (tx.tx_type === 'BUY') return '買'
+  if (tx.tx_type === 'SELL') return '賣'
+  return null
+}
+
 /**
- * `tx_nature` is optional and nullable; absent means *unknown*, not 現股 (models.ts). When it is
- * null the chip falls back to the plain BUY/SELL label instead of claiming a nature it does not know.
- * DIVIDEND/STOCK_DIVIDEND rows always write a null nature (TransactionForm), but a `${nature}買/賣`
- * label only makes sense for an actual buy or sell — a dividend row falls back to its own
- * TX_TYPE_LABEL even if a nature value somehow made it through CSV import.
+ * The chip beside the direction mark: the nature (現股 / 當沖 / 融資 / 融券) for a buy or sell, the
+ * type label for a dividend row. `tx_nature` is optional and nullable; absent means *unknown*, not
+ * 現股 (models.ts), so a buy or sell without one gets no chip rather than a nature it does not know.
+ * A dividend row keeps its own TX_TYPE_LABEL even if a nature slipped in through CSV import.
  */
-export function txChipLabel(tx: Transaction): string {
-  if (!tx.tx_nature || (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL')) return TX_TYPE_LABEL[tx.tx_type]
-  return `${TX_NATURE_LABEL[tx.tx_nature]}${tx.tx_type === 'BUY' ? '買' : '賣'}`
+export function txNatureChipLabel(tx: Transaction): string | null {
+  if (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL') return TX_TYPE_LABEL[tx.tx_type]
+  return tx.tx_nature ? TX_NATURE_LABEL[tx.tx_nature] : null
 }

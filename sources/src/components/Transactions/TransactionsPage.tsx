@@ -22,7 +22,7 @@ import { RecalcFeesModal } from './RecalcFeesModal'
 import { StockSplitModal } from './StockSplitModal'
 import { TransactionForm } from './TransactionForm'
 import { filterTransactions } from './txSearch'
-import { txChipClass, txChipLabel } from './txChip'
+import { txChipClass, txDirection, txNatureChipLabel } from './txChip'
 
 /**
  * STOCK_DIVIDEND is a zero-price BUY (engine: `pnlEngine.ts`), so it shares the BUY outflow
@@ -34,6 +34,29 @@ function cashFlow(tx: Transaction): number {
   return tx.tx_type === 'BUY' || tx.tx_type === 'STOCK_DIVIDEND'
     ? -(gross + tx.fee_tax)
     : gross - tx.fee_tax
+}
+
+/**
+ * 類型 cell: the direction mark (買 solid, 賣 outlined) reads before anything else, then the
+ * nature chip. Direction never borrows the market up/down colours (PRODUCT.md).
+ */
+function TxTypeCell({ tx }: { tx: Transaction }) {
+  const dir = txDirection(tx)
+  const chip = txNatureChipLabel(tx)
+  return (
+    <span className="tx-type">
+      {dir && <span className={`tx-dir tx-dir-${dir === '買' ? 'buy' : 'sell'}`}>{dir}</span>}
+      {chip && (
+        <span
+          className={`tx-chip ${txChipClass(
+            tx.tx_type === 'BUY' || tx.tx_type === 'SELL' ? tx.tx_nature : null,
+          )}`}
+        >
+          {chip}
+        </span>
+      )}
+    </span>
+  )
 }
 
 type TxSortKey =
@@ -330,7 +353,7 @@ export function TransactionsPage() {
           </div>
         ) : (
           <div className="glass table-scroll">
-            <table className="data-table">
+            <table className="data-table tx-table">
               <thead>
                 <tr>
                   <th scope="col">
@@ -358,8 +381,8 @@ export function TransactionsPage() {
                   const currency = marketCurrency(tx.market)
                   const flow = cashFlow(tx)
                   return (
-                    <tr key={tx.id}>
-                      <td>
+                    <tr key={tx.id} className="tx-row">
+                      <td data-c="sel">
                         <input
                           type="checkbox"
                           checked={selected.has(tx.id)}
@@ -367,36 +390,36 @@ export function TransactionsPage() {
                           onChange={() => toggleOne(tx.id)}
                         />
                       </td>
-                      <td>{tx.tx_date}</td>
-                      <td className="cell-muted">{MARKET_LABEL[tx.market]}</td>
-                      <td>{tx.ticker}</td>
+                      <td data-c="date">{tx.tx_date}</td>
+                      <td className="cell-muted" data-c="market">{MARKET_LABEL[tx.market]}</td>
+                      <td data-c="ticker">{tx.ticker}</td>
                       <td
+                        data-c="name"
                         className="cell-ellipsis"
                         title={displayStockName(tx.market, tx.ticker, tx.name)}
                       >
                         {displayStockName(tx.market, tx.ticker, tx.name)}
                       </td>
-                      <td>
-                        <span
-                          className={`tx-chip ${txChipClass(
-                            tx.tx_type === 'BUY' || tx.tx_type === 'SELL' ? tx.tx_nature : null,
-                          )}`}
-                        >
-                          {txChipLabel(tx)}
-                        </span>
+                      <td data-c="type">
+                        <TxTypeCell tx={tx} />
                       </td>
-                      <td className="num">{fmtPrice(tx.price, currency)}</td>
-                      <td className="num">{fmtQty(tx.qty)}</td>
-                      <td className="num">
+                      <td className="num" data-c="price">{fmtPrice(tx.price, currency)}</td>
+                      <td className="num" data-c="qty">{fmtQty(tx.qty)}</td>
+                      <td className="num" data-c="fee">
                         {tx.fee_tax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                       </td>
-                      <td className="num">
+                      <td className="num" data-c="flow">
                         {fmtSignedMoney(flow, currency, currency === 'TWD' ? 0 : 2)}
                       </td>
-                      <td className="num">
+                      {/* Phone only (≤720px): the row folds into two lines and this cell carries
+                          date, shares × price and fee under the name. Hidden on wider screens. */}
+                      <td className="tx-m-meta" data-c="meta">
+                        {`${tx.tx_date} · ${fmtQty(tx.qty)} 股 × ${fmtPrice(tx.price, currency)} · 費稅 ${tx.fee_tax.toLocaleString('en-US', { maximumFractionDigits: 2 })}`}
+                      </td>
+                      <td className="num" data-c="act">
                         <div className="row-actions">
                           <button
-                            className="btn btn-sm btn-icon"
+                            className="btn btn-sm btn-icon btn-ghost"
                             title="編輯這筆交易"
                             aria-label="編輯這筆交易"
                             onClick={() => setEditTx(tx)}
@@ -404,7 +427,7 @@ export function TransactionsPage() {
                             <Pencil size={14} />
                           </button>
                           <button
-                            className="btn btn-sm btn-danger btn-icon"
+                            className="btn btn-sm btn-icon btn-ghost btn-ghost-danger"
                             title="刪除這筆交易"
                             aria-label="刪除這筆交易"
                             onClick={() => void handleDelete(tx)}

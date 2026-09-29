@@ -149,6 +149,7 @@ export function YearlyOverview({ ledger }: { ledger: Ledger }) {
             color={CHART_COLORS.line}
             height={200}
             formatValue={fmt}
+            includeZero
             ariaLabel={`${currency === 'TWD' ? '台股' : '美股'}累計已實現損益`}
           />
         </div>

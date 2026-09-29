@@ -8,16 +8,19 @@
 /*
  * The metric switch (買賣超／買進／賣出). Reuses .btn.btn-sm and only adds the pressed state ——
  * the card already has .btn buttons and a second button shape here would read as a second kind of control.
+ * The pressed state is the same solid ink fill as the chart ranges (.m-range) and the 觀察股票 view
+ * toggle, so every "pick one of these" control in the app marks its choice the same way.
  */
 .inst-metric-seg {
   display: inline-flex;
   gap: 4px;
 }
 
-.inst-metric-seg .btn[aria-pressed='true'] {
-  background: var(--surface-strong);
-  border-color: var(--border-strong);
-  color: var(--ink);
+.inst-metric-seg .btn[aria-pressed='true'],
+.inst-metric-seg .btn[aria-pressed='true']:hover {
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  color: var(--cds-background);
 }
 
 /*

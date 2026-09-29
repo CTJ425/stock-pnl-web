@@ -1,10 +1,20 @@
 /* =========================================================
  * Foreign Currency Exchange Rate Page (0.6.7)
- *
- * The mobile version is not within the scope of 0.6.7 (wait until the desktop function is verified), so only the desktop version will be written here.
  * ========================================================= */
 .fx-panel {
   padding: 0;
+}
+
+/* A ruled panel (trend chart, source note) needs room inside its hairline; only the currency
+   list sits flush on the page. */
+.fx-panel.glass {
+  padding: var(--sp-05);
+}
+
+@media (max-width: 720px) {
+  .fx-panel.glass {
+    padding: var(--sp-04);
+  }
 }
 
 /*

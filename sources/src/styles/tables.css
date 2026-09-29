@@ -272,6 +272,164 @@ table.data-table {
   background: var(--steel);
 }
 
+/* ---------- 交易紀錄: direction mark + nature chip ----------
+ * 買 is a solid ink square, 賣 the same square outlined, so the two read apart at a glance
+ * without the market up/down colours. The nature chip sits beside it.
+ */
+.tx-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-02);
+}
+
+.tx-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: var(--type-label-01);
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid var(--cds-text-primary);
+  border-radius: var(--radius);
+}
+
+.tx-dir-buy {
+  background: var(--cds-text-primary);
+  color: var(--cds-background);
+}
+
+.tx-dir-sell {
+  background: transparent;
+  color: var(--cds-text-primary);
+}
+
+/* Phone-only summary cell; the wider layouts already have a column per value. */
+.tx-table .tx-m-meta {
+  display: none;
+}
+
+/* With a pointer, a row's edit / delete appear on hover or keyboard focus only. */
+@media (hover: hover) {
+  .tx-row .row-actions {
+    opacity: 0;
+    transition: opacity var(--cds-dur-fast) var(--cds-ease-productive);
+  }
+
+  .tx-row:hover .row-actions,
+  .tx-row:focus-within .row-actions {
+    opacity: 1;
+  }
+}
+
+/* Phone: each transaction folds into a two-line entry instead of a table that scrolls
+   sideways and hides the type and amount off-screen.
+     [ ] [買] 現股  2303  聯電 ............  -NT$156,066
+         2026-06-15 · 3,000 股 × NT$52.00 · 費稅 66   [edit][delete]
+   Sorting and select-all live in the header, which the entry layout drops; the list stays
+   newest first and rows can still be ticked one by one. */
+@media (max-width: 720px) {
+  .table-scroll:has(> .tx-table) {
+    overflow-x: visible;
+  }
+
+  .tx-table,
+  .tx-table > tbody {
+    display: block;
+  }
+
+  .tx-table > thead {
+    display: none;
+  }
+
+  .tx-table .tx-row {
+    display: grid;
+    grid-template-columns: 28px auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'sel type ticker name flow'
+      'sel meta meta meta act';
+    column-gap: var(--sp-03);
+    row-gap: var(--sp-02);
+    align-items: center;
+    padding: var(--sp-04) var(--sp-04);
+    border-bottom: 1px solid var(--cds-border-subtle);
+  }
+
+  .tx-table tbody tr.tx-row:last-child {
+    border-bottom: none;
+  }
+
+  .tx-table .tx-row > td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    font-size: var(--type-body-01);
+  }
+
+  .tx-table .tx-row > td[data-c='date'],
+  .tx-table .tx-row > td[data-c='market'],
+  .tx-table .tx-row > td[data-c='price'],
+  .tx-table .tx-row > td[data-c='qty'],
+  .tx-table .tx-row > td[data-c='fee'] {
+    display: none;
+  }
+
+  .tx-table td[data-c='sel'] {
+    grid-area: sel;
+    align-self: start;
+    padding-top: 2px;
+  }
+
+  .tx-table td[data-c='type'] {
+    grid-area: type;
+  }
+
+  .tx-table td[data-c='ticker'] {
+    grid-area: ticker;
+    font-weight: 700;
+    color: var(--cds-text-primary);
+  }
+
+  .tx-table td[data-c='name'] {
+    grid-area: name;
+    max-width: none;
+    color: var(--cds-text-secondary);
+  }
+
+  .tx-table td[data-c='flow'] {
+    grid-area: flow;
+    font-weight: 700;
+    color: var(--cds-text-primary);
+  }
+
+  .tx-table .tx-row > td.tx-m-meta {
+    display: block;
+    grid-area: meta;
+    white-space: normal;
+    font-size: var(--type-label-01);
+    color: var(--cds-text-helper);
+  }
+
+  .tx-table td[data-c='act'] {
+    grid-area: act;
+    margin-right: calc(-1 * var(--sp-03));
+  }
+
+  /* Always shown in the entry layout: a narrow window may still have a pointer, and an
+     entry whose actions only appear on hover gives no hint that it has any. */
+  .tx-table .row-actions {
+    gap: 0;
+    opacity: 1;
+  }
+
+  .tx-table .row-actions .btn-icon {
+    width: 40px;
+    min-height: 40px;
+  }
+}
+
 /* ---------- 損益試算: sell ladder + ledger (Task 117) ----------*/
 .whatif-ladder-row {
   cursor: pointer;

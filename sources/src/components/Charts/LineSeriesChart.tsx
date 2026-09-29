@@ -3,6 +3,7 @@
  * The tooltip is attached to the data point (0.6.8).
  *
  * The value range is not forced to contain 0 - the financing balance is often tens of thousands, and the exchange rate is 0.19x. Starting from 0 will suppress the changes into a straight line.
+ * A running P&L total is the exception: there the distance from 0 is the reading, so it passes `includeZero`.
  * There is a big gap in magnitude between financing and securities lending, so draw one for each and do not share the Y-axis.
  * Days with missing data are cut off (not interpolated) to avoid looking like there are real numbers for that day.
  */
@@ -81,6 +82,8 @@ interface LineSeriesChartProps {
   labelIndices?: number[]
   formatValue: (v: number) => string
   ariaLabel: string
+  /** Force 0 into the value range, for a series whose distance from 0 is what it says (running P&L). */
+  includeZero?: boolean
   /** When sharing hover with other charts, it is held externally; if not given, it is self-held (see chartFrame)*/
   hoverIndex?: number | null
   onHover?: (index: number | null) => void
@@ -93,10 +96,11 @@ export function LineSeriesChart({
   labelIndices,
   formatValue,
   ariaLabel,
+  includeZero = false,
   hoverIndex,
   onHover,
 }: LineSeriesChartProps) {
-  const domain = niceDomain(points.map((p) => p.value))
+  const domain = niceDomain(points.map((p) => p.value), { includeZero })
   const showDots = points.length <= DOT_LIMIT
   const values = points.map((p) => p.value)
 

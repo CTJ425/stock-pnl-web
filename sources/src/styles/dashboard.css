@@ -1100,6 +1100,12 @@ table.hl-table {
   margin-top: var(--sp-07);
 }
 
+/* A running total over the whole history reads better across the full width than inside the
+   app-wide 760px chart cap (stock-detail.css), which exists for fat bars, not for one line. */
+.yr-cum .chart-wrap {
+  max-width: none;
+}
+
 @media (max-width: 900px) {
   .yr-grid {
     grid-template-columns: 1fr;

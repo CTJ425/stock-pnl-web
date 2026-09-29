@@ -103,6 +103,27 @@
   padding: 0;
 }
 
+/* Ghost: no box until hovered. For per-row actions, where a ruled box on every row would
+   outweigh the data. The danger variant only turns red on hover or focus. */
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--cds-text-secondary);
+}
+
+.btn-ghost:hover {
+  border-color: var(--cds-border-subtle);
+  background: var(--row-hover);
+  color: var(--cds-text-primary);
+}
+
+.btn-ghost-danger:hover,
+.btn-ghost-danger:focus-visible {
+  border-color: var(--cds-button-danger);
+  background: transparent;
+  color: var(--cds-support-error);
+}
+
 
 /* ---------- Form ----------*/
 /* ---------- Statement form field ----------

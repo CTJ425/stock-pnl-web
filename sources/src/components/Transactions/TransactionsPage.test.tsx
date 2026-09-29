@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import App from '../../App'
 import type { Transaction } from '../../types/models'
-import { txChipClass, txChipLabel } from './txChip'
+import { txChipClass, txDirection, txNatureChipLabel } from './txChip'
 
 // Task 142: the 類型 cell became one colour-coded chip, and the cash-flow column lost its colour.
 describe('TransactionsPage 類型色塊 (Task 142)', () => {
@@ -22,25 +22,34 @@ describe('TransactionsPage 類型色塊 (Task 142)', () => {
     created_at: '2026-09-02T00:00:00Z',
   }
 
-  it('T11: 四種交易性質各自對應一個色塊與一個標籤', () => {
-    expect(txChipLabel({ ...base, tx_nature: 'SPOT' })).toBe('現股買')
+  it('T11: 買賣方向與四種交易性質分開標示', () => {
+    expect(txDirection({ ...base, tx_nature: 'SPOT' })).toBe('買')
+    expect(txNatureChipLabel({ ...base, tx_nature: 'SPOT' })).toBe('現股')
     expect(txChipClass('SPOT')).toBe('tx-chip-spot')
 
-    expect(txChipLabel({ ...base, tx_type: 'SELL', tx_nature: 'DAY_TRADE' })).toBe('當沖賣')
+    expect(txDirection({ ...base, tx_type: 'SELL', tx_nature: 'DAY_TRADE' })).toBe('賣')
+    expect(txNatureChipLabel({ ...base, tx_type: 'SELL', tx_nature: 'DAY_TRADE' })).toBe('當沖')
     expect(txChipClass('DAY_TRADE')).toBe('tx-chip-day')
 
-    expect(txChipLabel({ ...base, tx_nature: 'MARGIN' })).toBe('融資買')
+    expect(txNatureChipLabel({ ...base, tx_nature: 'MARGIN' })).toBe('融資')
     expect(txChipClass('MARGIN')).toBe('tx-chip-margin')
 
-    expect(txChipLabel({ ...base, tx_type: 'SELL', tx_nature: 'SHORT' })).toBe('融券賣')
+    expect(txNatureChipLabel({ ...base, tx_type: 'SELL', tx_nature: 'SHORT' })).toBe('融券')
     expect(txChipClass('SHORT')).toBe('tx-chip-short')
   })
 
   it('T12: tx_nature 為 null 代表未知，不得冒充現股', () => {
-    expect(txChipLabel({ ...base, tx_nature: null })).toBe('買入')
-    expect(txChipLabel({ ...base, tx_type: 'SELL' })).toBe('賣出')
+    expect(txDirection({ ...base, tx_nature: null })).toBe('買')
+    expect(txNatureChipLabel({ ...base, tx_nature: null })).toBeNull()
+    expect(txNatureChipLabel({ ...base, tx_type: 'SELL' })).toBeNull()
     expect(txChipClass(null)).toBe('tx-chip-spot')
     expect(txChipClass(undefined)).toBe('tx-chip-spot')
+  })
+
+  it('T13: 股利列沒有買賣方向，只顯示股利類型', () => {
+    expect(txDirection({ ...base, tx_type: 'DIVIDEND', tx_nature: 'SPOT' })).toBeNull()
+    expect(txNatureChipLabel({ ...base, tx_type: 'DIVIDEND', tx_nature: 'SPOT' })).toBe('現金股利')
+    expect(txNatureChipLabel({ ...base, tx_type: 'STOCK_DIVIDEND' })).toBe('股票股利')
   })
 })
 

@@ -344,15 +344,19 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
               <p className="chart-caption">
                 近 {instDays.length} 個交易日・單位：張・往上是買超、往下是賣超
               </p>
-              <BarSeriesChart
-                labels={instDays.map((d) => shortDate(d.date))}
-                series={instSeries}
-                stacked
-                height={220}
-                formatValue={fmtLotsSigned}
-                ariaLabel={`近 ${instDays.length} 日三大法人買賣超`}
-              />
-              <ChartLegend items={instSeries.map((s) => ({ label: s.name, color: s.color }))} />
+              <div className="chart-with-legend">
+                <BarSeriesChart
+                  labels={instDays.map((d) => shortDate(d.date))}
+                  series={instSeries}
+                  stacked
+                  height={220}
+                  formatValue={fmtLotsSigned}
+                  ariaLabel={`近 ${instDays.length} 日三大法人買賣超`}
+                />
+                <div className="chart-legend-side">
+                  <ChartLegend items={instSeries.map((s) => ({ label: s.name, color: s.color }))} />
+                </div>
+              </div>
             </div>
             <details className="chart-more">
               <summary>看逐日數字</summary>
