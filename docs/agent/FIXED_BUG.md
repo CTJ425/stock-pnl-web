@@ -6,6 +6,16 @@
 
 ---
 
+### Bug ID: BUG-086 — After the close, a TW ticker nobody opened during the session showed the previous trading day's close until ~15:45
+- **Date**: 2026-09-29, fixed in 0.10.4
+- **Symptom**: DEV 2026-09-29 after the close: 0050 showed 112.4 and 2303 showed 154 (the 9/24 close, `price_cache` row fetched 9/28 23:01), while PROD showed 111.3 / 153.5. Same account on both; `price_cache` is site-wide, so the difference was only which rows had been refreshed during the session.
+- **Root Cause**: `twQuoteTtlMs` returned the lock as "time left from **now** to the next 08:25", but both callers (`stock-price/index.ts` `price_cache` read, `priceProxy.ts` `isFresh`) compare it with the row's **age**. The verdict therefore depended on when it was asked: a row fetched after Monday's close passed until age ≥ time-to-Wednesday-08:25 (~15:45 Tuesday); conversely a settled row was refetched in the early morning. Reproduced with the real function: fetched 9/28 23:01 → 14:10/15:00/15:40 "serve stale", 15:50 "refetch". `twMaxTtlMs` (DB coarse filter) had the same now-based assumption.
+- **Fix**: `quoteWindow.ts` — the lock runs to the first 08:25 **after the fetch** (`lockMs`, measured from `fetchedAt`); a 13:30:00 matching time on a row fetched inside 08:25–13:30 (yesterday's close served before trial trading) is no longer treated as settled; `twMaxTtlMs` = time since the latest 08:25 outside the session, 60 s inside. Tests in `quoteWindow.test.ts` (new BUG-086 block) and `priceProxy.test.ts` updated to fetch-based values.
+- **Verify**: vitest 148 files / 2,510 tests, 2,503 passed, 7 skipped; build, typecheck:edge, lint exit 0. `stock-price` deployed DEV v24 and PROD v14, both `ezbr_sha256` `66664c27…` (from `7cd8c403…`). DEV curl at 14:18 returned 0050 111.3 / 2303 153.5 trade date 20260929; a second call hit the cache (same `asOf`).
+- **Status**: ✅ FIXED (0.10.4)
+
+---
+
 ### RISK-013 — `openai-compatible` 的金鑰仍會下發到每個登入者的瀏覽器
 - **Where**: `sources/supabase/schema.sql`（`get_ai_settings()`）、`sources/src/services/aiClient.ts`（`OpenAiCompatibleProviderImpl`）
 - **Failure scenario**: 0.9.51 把 `google` 的金鑰移到 `ai-proxy` 伺服器端，但 `openai-compatible` 維持瀏覽器直連，因此 `get_ai_settings()` 對該供應商照常回傳 `ai_api_key`。本機 Ollama 通常免金鑰，目前無實際影響；一旦管理員把 Base URL 改指向需要金鑰的雲端端點，該金鑰就會被每一個登入帳號讀到。

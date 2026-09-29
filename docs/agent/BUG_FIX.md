@@ -8,6 +8,17 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### BUG-087 — Same-day buy: broker (玉山) unrealized P&L / break-even differ from the dashboard
+- **Found**: 2026-09-29, reported by the user on PROD. 6560 欣普羅 bought 2026-09-29, 32.6 × 1000, fee_tax 46, fee_rate 0.001425 (standard); close 32.40.
+- **Numbers**: dashboard −389 / −1.19% / break-even 32.79; broker −340 / −1.04% / break-even 32.75. 0050 and 2303 (held overnight) match the broker; broker total 49,423 (dashboard total not yet confirmed; 49,374 expected if this is the only gap).
+- **Analysis**: dashboard = 32,400 − 32,646 − fee 46 − tax 97 (0.3%). Only a 0.15% tax (48) reproduces both broker numbers exactly: −340, and 32,646 / (1000 × 0.997075) = 32.742 → tick 32.75. With 0.3% the best case is −343 even at zero sell fee. Hypothesis: the broker estimates a same-day buy at the 現股當沖 rate. `estimateUnrealized` (`pnlEngine.ts:917`) and `breakEvenPrice` have always used `sellTaxRate` (0.3%) since 58a1a42; no commit since changed it. E.SUN publishes no rule for this; not confirmed.
+- **User position**: before, same-day buys always matched the broker 100%; asked for a full review of the P&L core.
+- **Historical recompute (2026-09-29)**: every release tag 0.9.0 (2026-08-19) → 0.10.4 (78 tags), each with its own `computeLedger` / `estimateUnrealized` / `breakEvenPrice` in a detached worktree, gives the identical result for this trade: cost 32,646, unrealized −389, break-even 32.79. No version ever produced −340 / 32.75, so the gap is not a regression in this repo. Script: session scratchpad `hist.sh` (worktree per tag, symlinked `node_modules`, result written to a file because vitest swallows `console.log`).
+- **Next**: check the broker's 6560 break-even on 2026-09-30 (price-independent: 32.80 at 0.3% confirms the hypothesis). Then decide whether same-day lots use 0.15%. Side issue: the dashboard break-even is not rounded up to a valid tick (32.79 vs 32.80).
+- **Status**: OPEN (awaiting user check)
+
+---
+
 ### RISK-021 — Daily and intraday series caches survive an account switch
 - **Where**: `sources/src/services/dailyProxy.ts`, `sources/src/services/intradayProxy.ts`
 - **Risk**: both in-memory caches carry an LRU cap (PR-03) but, unlike `warmStock.ts`, have no `onAuthStateChange` reset. After a sign-out and sign-in as another user on the same tab, cached series can be shown until their TTL expires (dailyProxy 300 s).

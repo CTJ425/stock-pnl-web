@@ -1,9 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.10.3 released (Task 174: 持股明細 現價 coloured against yesterday's close)
-- Status: ✅ `main` = `dev` = 0.10.3 (dbf1c10), Pages live, Release 0.10.3 created; no Supabase change
-- Timestamp: 2026-09-29 13:26:55 Asia/Taipei
+- Action: 0.10.4 released (BUG-086 quote cache lock measured from fetch time); BUG-087 (same-day buy vs broker) opened
+- Status: ✅ `main` = `dev` = 0.10.4 (d75445e), `stock-price` deployed DEV v24 + PROD v14 (sha `66664c27…`); main CI green, Release 0.10.4 created
+- Timestamp: 2026-09-29 14:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-29 14:30:00 Asia/Taipei (BUG-086, 0.10.4 released; BUG-087 opened)
+- User reported 6560 欣普羅 (bought today) at −389 / break-even 32.79 on the dashboard vs −340 / 32.75 at the broker; 0050 / 2303 match. Analysis in BUG-087: only a 0.15% tax reproduces both broker numbers; the P&L core never used it (`sellTaxRate` 0.3% since 58a1a42). User disputes (same-day buys used to match) and asked for a full P&L-core review — code read of `estimateUnrealized` / `holdingRows` / `breakEvenPrice` found no date-dependent path; recompute of this trade with every release tag 0.9.0 → 0.10.4 (78 tags) gives −389 / 32.79 in all of them — no regression.
+- User also saw DEV and PROD closes differ → BUG-086 (see FIXED_BUG.md): `twQuoteTtlMs` lock measured from now but compared with row age. Fixed in `quoteWindow.ts`, tests updated.
+- Verify: vitest 148 files / 2,510 tests, 2,503 passed, 7 skipped; build, typecheck:edge, lint exit 0; dev CI green. DEV/PROD curl smoke returned 9/29 closes.
+- Release: 3fa4075 at 0.10.4-dev.1 on `dev`, d75445e `chore(release): 0.10.4`, ff `main`, `main:dev` synced. User authorized merging to PROD in this session.
 
 ---
 
@@ -15,10 +23,3 @@
 
 ---
 
-## 📅 Log: 2026-09-28 15:22:00 Asia/Taipei (Task 173, 0.10.2 released)
-- User found the 持股明細 sort buttons (市值 / 未實現損益 / 代號) useless — within a market group of a few holdings the order rarely changed — and asked to remove them and merge straight to `main`.
-- `HoldingsLedger.tsx`: `LedgerSort`, sort state, `.hl-sort` group and CSS removed; `sortRows(rows)` fixed to 市值 descending, missing quote last; head reads 「N 檔・依市值排列」. DESIGN.md ledger line updated. DashboardPage test asserts no 排序 group.
-- Verify: vitest 148 files / 2,505 tests, 2,498 passed, 7 skipped; build, typecheck:edge, lint exit 0. No browser pass (removal only).
-- Release: 30158f1 at 0.10.2-dev.1 on `dev` (CI green), b6cd4fe `chore(release): 0.10.2`, ff `main`, `main:dev` synced — all refs at b6cd4fe. `main` CI green, Release 0.10.2 created, Pages bundle carries `0.10.2`. No Supabase change.
-
----
