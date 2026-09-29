@@ -3,7 +3,7 @@
  * Spec: docs/agent/specs/discord-holdings.md §2.3 / §2.4.
  */
 import { computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, type Holding, type Ledger } from '../_shared/engine/pnlEngine.ts'
-import type { Currency, Market, Transaction } from '../_shared/engine/models.ts'
+import type { Currency, FeeRebate, FeeRounding, Market, Transaction } from '../_shared/engine/models.ts'
 import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
 import type { HoldingQuote } from './holdingQuotes.ts'
 
@@ -16,12 +16,21 @@ export const DEFAULT_MIN_FEE_ODD = 1
 export interface WorkspaceInput {
   id: string
   fee_rate: number | null
+  /** NULL / absent = 'instant' (現折), as on the dashboard. */
+  fee_rebate?: FeeRebate | null
+  /** NULL / absent = 'lot' (BUG-088), as on the dashboard. */
+  fee_rounding?: FeeRounding | null
   transactions: Transaction[]
 }
+
+/** 'list' = the TWD unrealized figure withholds the posted 0.1425% (a 月退 broker's app); 'net' = the workspace rate. */
+export type PnlBasis = 'net' | 'list'
 
 export interface WorkspaceLedger {
   id: string
   feeRate: number
+  rounding: FeeRounding
+  basis: PnlBasis
   ledger: Ledger
 }
 
@@ -35,11 +44,21 @@ function isValidFeeRate(v: unknown): v is number {
  * workspace would consume a buy in another.
  */
 export function buildLedgers(workspaces: WorkspaceInput[]): WorkspaceLedger[] {
-  return workspaces.map((w) => ({
-    id: w.id,
-    feeRate: isValidFeeRate(w.fee_rate) ? w.fee_rate : DEFAULT_FEE_RATE,
-    ledger: computeLedger(w.transactions),
-  }))
+  return workspaces.map((w) => {
+    const feeRate = isValidFeeRate(w.fee_rate) ? w.fee_rate : DEFAULT_FEE_RATE
+    return {
+      id: w.id,
+      feeRate,
+      rounding: w.fee_rounding === 'position' ? 'position' : 'lot',
+      basis: pnlBasis(feeRate, w.fee_rebate),
+      ledger: computeLedger(w.transactions),
+    }
+  })
+}
+
+/** Same rule as `pnlBasis` in src/utils/pnlBasis.ts, re-stated because Edge cannot import src/. */
+export function pnlBasis(feeRate: number, rebate: FeeRebate | null | undefined): PnlBasis {
+  return rebate === 'monthly' && feeRate < DEFAULT_FEE_RATE ? 'list' : 'net'
 }
 
 /** Every long or short key across every workspace, deduplicated. `ledger.holdings` is
@@ -332,19 +351,22 @@ export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string
       if (h.qty > 0) {
         const minFee = minFeeFor(h.currency, h.qty)
         const mktVal = close != null ? close * h.qty : null
-        const unrealized = close != null ? estimateUnrealized(h, close, l.feeRate, minFee) : null
+        const net = close != null ? estimateUnrealized(h, close, l.feeRate, minFee, false, l.rounding) : null
         // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden.
         const brokerUnrealized =
-          close != null && h.currency === 'TWD' ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true) : null
+          close != null && h.currency === 'TWD' ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding) : null
+        // Each workspace leg follows its own basis before merging (`rowUnrealized` in src/utils/pnlBasis.ts).
+        const unrealized = l.basis === 'list' && brokerUnrealized != null ? brokerUnrealized : net
         const dayPnl = close != null && prevClose != null ? h.qty * (close - prevClose) : null
         mergeRow(map, h, 'LONG', h.qty, h.cost, close, prevClose, quoteYmd, mktVal, unrealized, brokerUnrealized, dayPnl, l.feeRate)
       }
       if (h.shortQty > 0) {
         const minFee = minFeeFor(h.currency, h.shortQty)
         const mktVal = close != null ? close * h.shortQty : null
-        const unrealized = close != null ? estimateUnrealizedShort(h, close, l.feeRate, minFee) : null
+        const net = close != null ? estimateUnrealizedShort(h, close, l.feeRate, minFee) : null
         const brokerUnrealized =
           close != null && h.currency === 'TWD' ? estimateUnrealizedShort(h, close, DEFAULT_FEE_RATE, minFee) : null
+        const unrealized = l.basis === 'list' && brokerUnrealized != null ? brokerUnrealized : net
         const dayPnl = close != null && prevClose != null ? -h.shortQty * (close - prevClose) : null
         mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, brokerUnrealized, dayPnl, l.feeRate)
       }

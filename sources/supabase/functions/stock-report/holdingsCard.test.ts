@@ -10,6 +10,7 @@ import {
   buildHoldingsTestPayload,
   buildLedgers,
   heldKeys,
+  pnlBasis,
   type CurrencySummary,
   type HoldingRowOut,
   type HoldingsSummary,
@@ -724,5 +725,64 @@ describe('aggregateHoldings — average cost, break-even and realized', () => {
     const r = rowOfSummary(short.twd, 'TPE:2603', 'SHORT')
     expect(r.breakEven).toBeNull()
     expect(r.avgCost).toBeCloseTo(r.basis / r.shares, 9)
+  })
+})
+
+// Follow-up to BUG-088: the card reads fee_rebate / fee_rounding like the dashboard
+// (src/utils/holdingRows.ts + src/utils/pnlBasis.ts), each workspace leg on its own settings.
+describe('workspace fee settings', () => {
+  // PROD Ron的投資組合 (元大, BUG-088): 2303 1,000 @163.5 + 1,000 @160, cost 323,637, price 153.5.
+  // 元大 shows −17,995 = 307,000 − floor(307,000 × 0.1425%) 437 − 921 − 323,637; per lot gives −17,993.
+  const ron = (id: string, fee_rebate: 'instant' | 'monthly' | null, fee_rounding: 'lot' | 'position' | null): WorkspaceInput => ({
+    id,
+    fee_rate: 0.0004275,
+    fee_rebate,
+    fee_rounding,
+    transactions: [
+      tx({ ws: id, date: '2026-08-03', market: 'TPE', ticker: '2303', name: '聯電', type: 'BUY', price: 163.5, qty: 1000, fee: 69 }),
+      tx({ ws: id, date: '2026-08-10', market: 'TPE', ticker: '2303', name: '聯電', type: 'BUY', price: 160, qty: 1000, fee: 68 }),
+    ],
+  })
+  const Q2303 = new Map<string, HoldingQuote | null>([['TPE:2303', { ymd: YMD, close: 153.5, prevClose: 153.5 }]])
+  const rowOf = (ws: WorkspaceInput[]) => {
+    const r = aggregateHoldings(buildLedgers(ws), Q2303, YMD).twd.rows.find((x) => x.key === 'TPE:2303' && x.direction === 'LONG')
+    if (!r) throw new Error('no 2303 row')
+    return r
+  }
+
+  it.each([
+    ['monthly', 0.0004275, 'list'],
+    ['monthly', 0.001425, 'net'],
+    ['instant', 0.0004275, 'net'],
+    [null, 0.0004275, 'net'],
+  ] as const)('pnlBasis(%s, %s) → %s', (rebate, rate, basis) => {
+    expect(pnlBasis(rate, rebate)).toBe(basis)
+  })
+
+  it('defaults to per lot and the discounted rate when both columns are NULL', () => {
+    const [l] = buildLedgers([ron('w', null, null)])
+    expect(l.rounding).toBe('lot')
+    expect(l.basis).toBe('net')
+    const h = holdingOf(l, 'TPE:2303')
+    expect(rowOf([ron('w', null, null)]).unrealized).toBe(estimateUnrealized(h, 153.5, 0.0004275, 20))
+  })
+
+  it('月退 + 整筆一起算 matches the 元大 figure; 月退 + 每一批 stays per lot', () => {
+    expect(rowOf([ron('w', 'monthly', 'position')]).unrealized).toBe(-17_995)
+    expect(rowOf([ron('w', 'monthly', 'lot')]).unrealized).toBe(-17_993)
+  })
+
+  it('現折 + 整筆一起算 floors the discounted fee on the whole position', () => {
+    const [l] = buildLedgers([ron('w', 'instant', 'position')])
+    const h = holdingOf(l, 'TPE:2303')
+    const r = rowOf([ron('w', 'instant', 'position')])
+    expect(r.unrealized).toBe(estimateUnrealized(h, 153.5, 0.0004275, 20, false, 'position'))
+    expect(r.unrealized).not.toBe(estimateUnrealized(h, 153.5, 0.0004275, 20, false, 'lot'))
+  })
+
+  it('sums each workspace leg on its own settings when one key spans workspaces', () => {
+    const r = rowOf([ron('a', 'monthly', 'position'), ron('b', 'instant', 'lot')])
+    const [lb] = buildLedgers([ron('b', 'instant', 'lot')])
+    expect(r.unrealized).toBe(-17_995 + estimateUnrealized(holdingOf(lb, 'TPE:2303'), 153.5, 0.0004275, 20))
   })
 })

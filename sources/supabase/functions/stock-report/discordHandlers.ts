@@ -336,7 +336,7 @@ export const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, n
 export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceInput[]> {
   const { data: workspaces, error } = await db
     .from('workspaces')
-    .select('id, fee_rate')
+    .select('id, fee_rate, fee_rebate, fee_rounding')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
@@ -359,7 +359,7 @@ export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceI
       transactions.push(...page)
       if (page.length < 1000) break
     }
-    out.push({ id: ws.id, fee_rate: ws.fee_rate, transactions })
+    out.push({ id: ws.id, fee_rate: ws.fee_rate, fee_rebate: ws.fee_rebate, fee_rounding: ws.fee_rounding, transactions })
   }
   return out
 }
