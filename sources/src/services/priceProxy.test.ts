@@ -36,10 +36,10 @@ describe('cacheTtlMs', () => {
   })
 
   it('收盤後：帶收盤定案值的台股鎖到隔天 08:25，美股不受影響', () => {
-    // 07:00Z = Taipei 15:00, 90 minutes after the close → 17 hours and 25 minutes until 08:25 the next day
+    // Fetched at Taipei 13:30 → locked for 18h55m, to 08:25 the next day; measured from the fetch (BUG-086)
     vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
     const closed = quote('2026-07-20T05:30:00Z', false, '13:30:00')
-    expect(cacheTtlMs('TPE:2330', closed)).toBe((17 * 60 + 25) * 60 * 1000)
+    expect(cacheTtlMs('TPE:2330', closed)).toBe((18 * 60 + 55) * 60 * 1000)
     expect(cacheTtlMs('US:AAPL')).toBe(10 * 60 * 1000)
   })
 
@@ -122,7 +122,7 @@ describe('isFresh', () => {
   it('沉澱窗結束後（14:00 起）：收盤後才抓到的列鎖到隔天 08:25（BUG-050）', () => {
     vi.setSystemTime(new Date('2026-07-20T08:00:00Z')) // Taipei 16:00
     const late = quote('2026-07-20T07:58:00Z', false, '13:29:58') // 台北 15:58 抓的
-    expect(cacheTtlMs('TPE:2330', late)).toBe((16 * 60 + 25) * 60 * 1000)
+    expect(cacheTtlMs('TPE:2330', late)).toBe((16 * 60 + 27) * 60 * 1000)
     expect(isFresh('TPE:2330', late, Date.parse('2026-07-20T08:09:00Z'))).toBe(true)
   })
 })

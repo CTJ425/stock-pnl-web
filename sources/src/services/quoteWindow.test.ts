@@ -91,12 +91,14 @@ describe('twMaxTtlMs（DB 粗篩的下界）', () => {
     // filter built on that would drop yesterday's settled close.
     const now = taipei('2026-08-05', '20:00:00')
     expect(twQuoteTtlMs(now)).toBe(RETRY)
-    expect(twMaxTtlMs(now)).toBe(12 * HOUR + 25 * MIN)
+    // Back to today's 08:25: a row fetched after it can still be locked, one fetched before it cannot (BUG-086)
+    expect(twMaxTtlMs(now)).toBe(11 * HOUR + 35 * MIN)
   })
 
   it('盤中與盤後一致地回傳該時段的上界', () => {
     expect(twMaxTtlMs(taipei('2026-08-05', '10:00:00'))).toBe(MIN)
-    expect(twMaxTtlMs(taipei('2026-08-06', '03:00:00'))).toBe(5 * HOUR + 25 * MIN)
+    // Before 08:25 the latest resume is yesterday's, so yesterday's settled close is still in range
+    expect(twMaxTtlMs(taipei('2026-08-06', '03:00:00'))).toBe(18 * HOUR + 35 * MIN)
   })
 })
 
@@ -119,13 +121,13 @@ describe('twQuoteTtlMs — 沉澱窗之後抓到的報價鎖定 (BUG-050)', () =
   it('沉澱窗之後抓到的報價鎖到隔天 08:25，即使來源沒有撮合時間', () => {
     expect(
       twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), null, taipei('2026-08-05', '14:30:00')),
-    ).toBe(17 * HOUR + 25 * MIN)
+    ).toBe(17 * HOUR + 55 * MIN)
   })
 
   it('冷門股最後撮合早於 13:30，收盤後抓到一樣鎖定', () => {
     expect(
       twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), '11:30:00', taipei('2026-08-05', '14:05:00')),
-    ).toBe(17 * HOUR + 25 * MIN)
+    ).toBe(18 * HOUR + 20 * MIN)
   })
 
   it('盤中抓到的快照不鎖定 —— 這正是 BUG-011 的原始缺陷', () => {
@@ -140,15 +142,55 @@ describe('twQuoteTtlMs — 沉澱窗之後抓到的報價鎖定 (BUG-050)', () =
     ).toBe(MIN)
   })
 
-  it('午夜之後抓到的報價算到當天早上的 08:25', () => {
+  it('過了午夜，昨天收盤後抓到的報價仍鎖到今天早上的 08:25', () => {
+    // TTL is measured from the fetch (BUG-086): 14:05 → 08:25 is 18h20m, and at 02:00 the row is 11h55m old
     expect(
       twQuoteTtlMs(taipei('2026-08-06', '02:00:00'), null, taipei('2026-08-05', '14:05:00')),
-    ).toBe(6 * HOUR + 25 * MIN)
+    ).toBe(18 * HOUR + 20 * MIN)
   })
 
   it('凌晨（08:25 前）抓到的報價同樣視為收盤後', () => {
     expect(
       twQuoteTtlMs(taipei('2026-08-06', '03:00:00'), null, taipei('2026-08-06', '02:00:00')),
-    ).toBe(5 * HOUR + 25 * MIN)
+    ).toBe(6 * HOUR + 25 * MIN)
+  })
+})
+
+/**
+ * BUG-086: the TTL used to be "time left until the next 08:25, from now", while both callers compare it
+ * with the row's age. A settled row fetched after Monday's close therefore stayed "fresh" on Tuesday
+ * afternoon until about 15:45, and a ticker nobody opened during Tuesday's session showed Monday's close.
+ * Real case, DEV 2026-09-29: 0050 and 2303 kept the 9/24 close (fetched 9/28 23:01) after 9/29's close.
+ */
+describe('twQuoteTtlMs — 鎖定期從抓價時間起算 (BUG-086)', () => {
+  const fresh = (now: Date, tradeTime: string | null, fetchedAt: Date) =>
+    now.getTime() - fetchedAt.getTime() < twQuoteTtlMs(now, tradeTime, fetchedAt)
+
+  it('前一個休市日抓到的收盤價，下一個交易日收盤後就過期', () => {
+    const fetchedAt = taipei('2026-09-28', '23:01:16')
+    for (const hms of ['13:31:00', '14:10:00', '15:00:00', '15:40:00', '20:00:00']) {
+      expect(fresh(taipei('2026-09-29', hms), '13:30:00', fetchedAt)).toBe(false)
+    }
+  })
+
+  it('收盤後抓到的收盤價整夜有效，到隔天 08:25 才過期', () => {
+    const fetchedAt = taipei('2026-09-29', '13:30:30')
+    expect(fresh(taipei('2026-09-29', '20:00:00'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-09-30', '03:00:00'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-09-30', '08:24:59'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-09-30', '08:25:00'), '13:30:00', fetchedAt)).toBe(false)
+  })
+
+  it('盤中抓到的昨日收盤（撮合時間 13:30:00）不算今天定案', () => {
+    // Before 08:30 trial trading MIS still returns yesterday's close with t = 13:30:00
+    const fetchedAt = taipei('2026-09-29', '08:26:00')
+    expect(fresh(taipei('2026-09-29', '15:00:00'), '13:30:00', fetchedAt)).toBe(false)
+  })
+
+  it('DB 粗篩下界涵蓋所有仍有效的列', () => {
+    const now = taipei('2026-09-30', '07:00:00')
+    const fetchedAt = taipei('2026-09-29', '13:30:30')
+    expect(fresh(now, '13:30:00', fetchedAt)).toBe(true)
+    expect(now.getTime() - fetchedAt.getTime()).toBeLessThanOrEqual(twMaxTtlMs(now))
   })
 })

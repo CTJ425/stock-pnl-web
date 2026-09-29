@@ -73,6 +73,27 @@ function msUntilResume(t: number): number {
   return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
 }
 
+/** Is `at` inside 08:25–13:30, where a fetched quote can still be superseded the same day? */
+function twInSession(at: Date): boolean {
+  const t = taipeiMsOfDay(at)
+  return t >= RESUME_MS && t < CLOSE_MS
+}
+
+/**
+ * The lock on a settled quote: it runs to the first 08:25 **after the row was fetched** (BUG-086).
+ *
+ * Both callers (the Edge `price_cache` read and the browser `isFresh`) compare this value with the
+ * row's age, `now − fetchedAt`, so it must be measured from the fetch. Measuring it from `now` (up to
+ * 0.10.3) made the check depend on when it was asked: a row fetched after Monday's close still passed
+ * on Tuesday afternoon until its age caught up with "time left until Wednesday 08:25" (~15:45), so a
+ * ticker nobody opened during Tuesday's session showed Monday's close; and a row fetched after the
+ * close was refetched in the early morning, when it should have been locked.
+ * Without `fetchedAt` the row is taken as fetched now, which is what both callers mean when they omit it.
+ */
+function lockMs(now: Date, fetchedAt?: Date | null): number {
+  return msUntilResume(taipeiMsOfDay(fetchedAt ?? now))
+}
+
 /**
  * The cache validity period of Taiwan stock quotes.
  *
@@ -94,27 +115,35 @@ function msUntilResume(t: number): number {
  *   later price that day, so this is the day's final available quote. It is still not locked just because it
  *   is old — omitting `fetchedAt`, or a `fetchedAt` still inside the session, must keep the 10-minute retry:
  *   such a row can be an intraday snapshot, and locking it is the exact defect BUG-011 was about.
+ *   The same holds for a 13:30:00 matching time on a row fetched inside the session: that is the previous
+ *   day's close, served before today's trial trading starts, so it is not today's settled quote (BUG-086).
+ * @returns A validity period measured from `fetchedAt` (from `now` when it is omitted); see `lockMs`.
  */
 export function twQuoteTtlMs(now: Date, tradeTime?: string | null, fetchedAt?: Date | null): number {
   const t = taipeiMsOfDay(now)
   if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
-  if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) {
+  const settled =
+    tradeTime != null && tradeTime >= CLOSE_TIME_TEXT && (fetchedAt == null || !twInSession(fetchedAt))
+  if (!settled) {
     // 13:30–14:00 的沉澱窗：收盤撮合馬上就會落地，這時退避十分鐘等於把盤中價停在畫面上
     if (t >= CLOSE_MS && t < SETTLE_END_MS) return POLL_MS
-    if (fetchedAt != null && twIsAfterClose(fetchedAt)) return msUntilResume(t)
+    if (fetchedAt != null && twIsAfterClose(fetchedAt)) return lockMs(now, fetchedAt)
     return UNSETTLED_RETRY_MS
   }
-  // After closing, it will be pushed back to 08:25 tomorrow; in the early morning (t < RESUME_MS), it will be 08:25 today
-  return msUntilResume(t)
+  // Locked until the first 08:25 after the fetch; a row fetched in the early morning (before 08:25) unlocks at 08:25 that day
+  return lockMs(now, fetchedAt)
 }
 
 /**
- * At this moment, the "maximum possible validity period" of the Taiwan stock cache is used for the coarse filter lower bound of DB query.
+ * The coarse-filter lower bound for the DB query: the oldest a Taiwan row can be and still be fresh now.
  *
- * The coarse filter does not know the `trade_time` of each column and cannot directly call `twQuoteTtlMs(now)` ——
- * Then the TTL will be shortened (because there is no matching time), and the final price captured at yesterday's closing price will be filtered out, and the captured price will be wasted all night.
- * Here, "finalized" is assumed as the upper bound, and the actual judgment on a column-by-column basis is still the responsibility of `twQuoteTtlMs`.
+ * The coarse filter does not know each row's `trade_time`, so it takes the most generous case. Since a
+ * lock ends at the first 08:25 after the fetch (see `lockMs`), no row fetched before the latest 08:25
+ * can still be fresh outside the session, and nothing older than one poll interval can be fresh inside
+ * it. The actual judgment on a row-by-row basis is still the responsibility of `twQuoteTtlMs`.
  */
 export function twMaxTtlMs(now: Date): number {
-  return twQuoteTtlMs(now, CLOSE_TIME_TEXT)
+  const t = taipeiMsOfDay(now)
+  if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
+  return DAY_MS - msUntilResume(t)
 }
