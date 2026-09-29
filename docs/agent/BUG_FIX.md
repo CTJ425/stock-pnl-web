@@ -15,7 +15,7 @@
 - **Verified**: PROD data recompute — Ron 2303 list basis −17,995 with 'position' (= 元大); 玉山 stays 'lot', 0050 49,555 (= 玉山; 'position' would give 49,552). DEV browser (session via admin magic link): row detail 牌告 0.1425% −17,995 / −5.56%; panel checked 1440 / 390 (no overflow), light / dark. DDL applied on DEV only; `stock-report` redeployed on DEV (v32, sha `58e94285…`, verify_jwt false) because the engine copy changed.
 - **0.10.5-dev.2 (58dee12)**: fee settings preview on the dashboard (`onPreview` → unsaved rate / rebate / rounding recompute every figure, tag 預覽・尚未儲存, 取消 restores); E2E `scripts/verify-pnl-rounding-e2e.cjs` (new buy / sell through the form, oracle written independently of the engine, preview / 取消 / 儲存) — 7/7 pass on 2026-09-29.
 - **Before PROD**: apply the `fee_rounding` DDL on PROD, merge to `main`, deploy `stock-report` on PROD, then set Ron的投資組合 to 整筆 in the UI (user's choice).
-- **Status**: FIXED on DEV, awaiting user test and OK for PROD
+- **Status**: Front end released in 0.10.5 (`main` 4dd8fe1, 2026-09-29 16:28:20 Asia/Taipei); PROD still lacks the `fee_rounding` column (front end falls back to per lot, saving 整筆 would fail) and PROD `stock-report` is not redeployed — both wait for the user's OK
 
 ---
 
