@@ -12,7 +12,7 @@ const { useWorkspace, setWorkspaceFeeRate, setWorkspaceFeeRebate, setWorkspaceFe
 }))
 vi.mock('../context/WorkspaceContext', () => ({ useWorkspace }))
 
-function mount(current: Record<string, unknown>, rate: string | null) {
+function mount(current: Record<string, unknown>, rate: string | null, onPreview?: (d: unknown) => void) {
   if (rate === null) localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
   else localStorage.setItem('stock-pnl-web/fee-rate/ws-1', rate)
   useWorkspace.mockReturnValue({
@@ -23,8 +23,8 @@ function mount(current: Record<string, unknown>, rate: string | null) {
   })
   const onClose = vi.fn()
   const onSaved = vi.fn()
-  render(<WorkspaceFeeSettings onClose={onClose} onSaved={onSaved} />)
-  return { onClose, onSaved }
+  const view = render(<WorkspaceFeeSettings onClose={onClose} onSaved={onSaved} onPreview={onPreview} />)
+  return { onClose, onSaved, unmount: view.unmount }
 }
 
 describe('WorkspaceFeeSettings', () => {
@@ -89,6 +89,28 @@ describe('WorkspaceFeeSettings', () => {
     const whole = screen.getByRole('radio', { name: /整筆一起算/ }) as HTMLInputElement
     expect(whole.checked).toBe(true)
     expect(whole.matches(':disabled')).toBe(false)
+  })
+
+  it('previews every unsaved change and ends the preview on close', async () => {
+    const user = userEvent.setup()
+    const onPreview = vi.fn()
+    const { unmount } = mount({ fee_rebate: 'monthly' }, '0.0004275', onPreview)
+    expect(onPreview).toHaveBeenLastCalledWith({ rate: 0.0004275, rebate: 'monthly', rounding: 'lot' })
+    await user.click(screen.getByRole('radio', { name: /整筆一起算/ }))
+    expect(onPreview).toHaveBeenLastCalledWith({ rate: 0.0004275, rebate: 'monthly', rounding: 'position' })
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.000285')
+    expect(onPreview).toHaveBeenLastCalledWith({ rate: 0.000285, rebate: 'monthly', rounding: 'position' })
+    expect(setWorkspaceFeeRounding).not.toHaveBeenCalled()
+    unmount()
+    expect(onPreview).toHaveBeenLastCalledWith(null)
+  })
+
+  it('an invalid custom rate previews nothing', async () => {
+    const user = userEvent.setup()
+    const onPreview = vi.fn()
+    mount({}, '0.0004', onPreview)
+    await user.clear(screen.getByLabelText('自訂手續費率'))
+    expect(onPreview).toHaveBeenLastCalledWith(null)
   })
 
   it('saving an unchanged form does not write the flooring', async () => {

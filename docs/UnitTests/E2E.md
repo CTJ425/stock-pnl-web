@@ -35,6 +35,7 @@ Real browser against:
 | `sources/scripts/verify-stock-search-e2e.cjs` | TW stock search & fallback lookup verification |
 | `sources/scripts/verify-daytrade-short-e2e.cjs` | Day-trade & short sale P&L verification |
 | `sources/scripts/verify-fee-rate-e2e.cjs` | Brokerage fee discount rate UI verification |
+| `sources/scripts/verify-pnl-rounding-e2e.cjs` | Holdings P&L after new buy / sell vs an independent broker-rule oracle; 逐批／整筆 flooring; fee-settings preview, 取消, 儲存 (BUG-088). Supabase mode, all mocked: `TEST_URL=http://127.0.0.1:5173/ node scripts/verify-pnl-rounding-e2e.cjs` |
 | `sources/scripts/verify-quote-intraday-e2e.cjs` | Intraday quote chart verification |
 | `sources/scripts/verify-macro-turnover.cjs` | US macro series & turnover verification |
 

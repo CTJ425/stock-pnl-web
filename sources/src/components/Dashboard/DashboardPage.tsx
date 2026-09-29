@@ -19,7 +19,7 @@ import { buildHoldingRows } from '../../utils/holdingRows'
 import { basisLabel, pnlBasis } from '../../utils/pnlBasis'
 import { fmtMoney, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getFeeRate } from '../../utils/settings'
-import { WorkspaceFeeSettings } from '../WorkspaceFeeSettings'
+import { WorkspaceFeeSettings, type FeeDraft } from '../WorkspaceFeeSettings'
 import { HoldingsLedger } from './HoldingsLedger'
 import { WatchSection } from './WatchSection'
 import { asOfLabel, combine, marketSums, type Combined, type MarketSums } from './dashboardSums'
@@ -44,6 +44,7 @@ function StatementTotals({
   basisText,
   feeOpen,
   onToggleFee,
+  previewing = false,
 }: {
   tw: MarketSums
   us: MarketSums
@@ -54,6 +55,8 @@ function StatementTotals({
   basisText: string
   feeOpen: boolean
   onToggleFee: () => void
+  /** The figures use unsaved fee settings from the open panel. */
+  previewing?: boolean
 }) {
   const hasTw = tw.rows.length > 0
   const hasUs = us.rows.length > 0
@@ -72,6 +75,7 @@ function StatementTotals({
       <div className="stmt-tot stmt-tot-lead">
         <h2>
           未實現淨損益{scope}
+          {previewing && <span className="stmt-preview">預覽・尚未儲存</span>}
           {asOf && <span className="stmt-asof">{asOf}</span>}
           <button
             type="button"
@@ -173,8 +177,17 @@ export function DashboardPage({
   const [refreshKey, setRefreshKey] = useState(0)
   const [feeOpen, setFeeOpen] = useState(false)
   const [showRecalc, setShowRecalc] = useState(false)
-  const feeRate = getFeeRate(current?.id)
-  const basis = pnlBasis(feeRate, current?.fee_rebate)
+  // Unsaved values from the open fee panel: every figure below is recomputed with them as a preview.
+  const [draft, setDraft] = useState<FeeDraft | null>(null)
+  const savedRate = getFeeRate(current?.id)
+  const savedRebate = current?.fee_rebate ?? 'instant'
+  const savedRounding = current?.fee_rounding ?? 'lot'
+  const feeRate = draft?.rate ?? savedRate
+  const rebate = draft?.rebate ?? savedRebate
+  const rounding = draft?.rounding ?? savedRounding
+  const previewing =
+    draft !== null && (draft.rate !== savedRate || draft.rebate !== savedRebate || draft.rounding !== savedRounding)
+  const basis = pnlBasis(feeRate, rebate)
 
   const handleRefresh = () => {
     refresh()
@@ -182,8 +195,8 @@ export function DashboardPage({
   }
 
   const rows = useMemo(
-    () => buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot'),
-    [holdings, prices, feeRate, current?.id, current?.fee_rounding],
+    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding),
+    [holdings, prices, feeRate, current?.id, rounding],
   )
   const tw = marketSums(rows.filter((r) => r.holding.currency === 'TWD'), 'TWD', basis, loading)
   const us = marketSums(rows.filter((r) => r.holding.currency === 'USD'), 'USD', basis, loading)
@@ -218,12 +231,14 @@ export function DashboardPage({
           basisText={basisText}
           feeOpen={feeOpen}
           onToggleFee={() => setFeeOpen((v) => !v)}
+          previewing={previewing}
         />
       )}
 
       {feeOpen && (
         <div className="stmt-fee-panel" id="stmt-fee-panel">
           <WorkspaceFeeSettings
+            onPreview={setDraft}
             onClose={() => setFeeOpen(false)}
             onSaved={({ rateChanged }) => {
               if (rateChanged) setShowRecalc(true)

@@ -86,6 +86,19 @@
   line-height: 1.5;
 }
 
+/* Printed like a stamp on the statement: the figures use the fee panel's unsaved values. */
+.stmt-preview {
+  display: inline-block;
+  padding: 0 5px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--cds-support-warning);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
 .stmt-asof {
   font-size: 0.8125rem;
   font-weight: 400;

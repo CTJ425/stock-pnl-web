@@ -6,7 +6,7 @@
  * fields (plus the fee/tax flooring, BUG-088), and the dashboard derives its P&L basis from
  * them (utils/pnlBasis), so there is no second "basis" setting that could disagree with the fee rate.
  */
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
 import type { FeeRebate, FeeRounding } from '../types/models'
@@ -16,6 +16,13 @@ import { basisLabel, formatFeeRatePct, pnlBasis } from '../utils/pnlBasis'
 import { getFeeRate } from '../utils/settings'
 
 const CUSTOM = 'custom'
+
+/** The form's unsaved values, handed to the dashboard so its figures can be previewed before saving. */
+export interface FeeDraft {
+  rate: number
+  rebate: FeeRebate
+  rounding: FeeRounding
+}
 
 function discountName(rate: number): string {
   if (rate === DEFAULT_FEE_RATE) return '不打折'
@@ -36,12 +43,18 @@ export function WorkspaceFeeSettings({
   onClose,
   onSaved,
   showTitle = true,
+  onPreview,
 }: {
   onClose: () => void
   /** Called after a save; `rateChanged` lets the caller offer to recalculate recorded fees. */
   onSaved?: (result: { rateChanged: boolean }) => void
   /** The modal already carries a title; the in-page panel needs its own. */
   showTitle?: boolean
+  /**
+   * Called with the current, unsaved values on every change (null while the rate is invalid and on
+   * close), so the dashboard can recompute its figures as a preview. Must be a stable function.
+   */
+  onPreview?: (draft: FeeDraft | null) => void
 }) {
   const { current, setWorkspaceFeeRate, setWorkspaceFeeRebate, setWorkspaceFeeRounding } = useWorkspace()
   const uid = useId()
@@ -58,6 +71,12 @@ export function WorkspaceFeeSettings({
   const rateValid = Number.isFinite(rate) && rate >= 0 && rate < 1
   const noDiscount = rateValid && rate >= DEFAULT_FEE_RATE
   const hint = choice === CUSTOM ? describeTwFeeRate(rate) : null
+
+  useEffect(() => {
+    onPreview?.(rateValid ? { rate, rebate, rounding } : null)
+  }, [onPreview, rate, rateValid, rebate, rounding])
+  // Closing the form (saved or not) ends the preview; the dashboard falls back to the saved values.
+  useEffect(() => () => onPreview?.(null), [onPreview])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -175,6 +194,9 @@ export function WorkspaceFeeSettings({
           <h3>總覽的未實現淨損益會這樣算</h3>
           <p>{rateValid ? explain(rate, rebate) : '請輸入 0 到 1 之間的費率。'}</p>
           <p className="field-hint">這個算法跟著手續費設定走，不需要另外選。不含費用的數字在每檔股票的明細裡都看得到。</p>
+          {onPreview && (
+            <p className="field-hint">總覽的數字會跟著這裡的選擇先預覽；按「儲存」才會生效，按「取消」就回到原本的設定。</p>
+          )}
         </div>
       </div>
       <div className="fee-settings-actions">
