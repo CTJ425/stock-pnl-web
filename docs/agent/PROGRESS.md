@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Discord holdings card now follows each workspace's fee_rebate / fee_rounding (0.10.6-dev.1, DEV only)
-- Status: 🔄 `dev` = 0.10.6-dev.1 (b339777), DEV `stock-report` v33 (sha `98a86b7a…`); `main` = 0.10.5, PROD `stock-report` v20 (`58e94285…`) still ignores the two settings
-- Timestamp: 2026-09-29 17:42:14 Asia/Taipei
+- Action: 0.10.6 released: Discord holdings card follows each workspace's fee_rebate / fee_rounding
+- Status: ✅ `main` = `dev` = 0.10.6 (70cd957); PROD `stock-report` v21 = DEV v33 (sha `98a86b7a…`)
+- Timestamp: 2026-09-29 17:52:30 Asia/Taipei
 
 ---
 
@@ -11,7 +11,7 @@
 - User reported: after changing 分批買進時的預扣算法 or 現折／月退, the dashboard changed but the Discord push did not. Confirmed: `loadHoldingsWorkspaces` selected only `id, fee_rate`, so the card ignored `fee_rebate` / `fee_rounding` (BUG-088 had listed the Edge card as "not applied").
 - Fix (b339777): select both columns; `buildLedgers` derives `rounding` and `basis` (Edge copy of `pnlBasis`); each workspace leg passes `rounding` to `estimateUnrealized` and takes the 牌告 figure as its main unrealized under 月退, then legs are summed (user chose per-workspace-then-sum for merged keys). Break-even unchanged: its synthetic single lot makes lot vs position identical.
 - Verify: new `holdingsCard.test.ts` cases incl. independent oracle Ron 2303 月退+整筆 −17,995 / 月退+每批 −17,993; vitest 2,526 passed, 7 skipped; build, typecheck:edge, lint exit 0. DEV deploy from clean b339777: v32 → v33, sha `58e94285…` → `98a86b7a…`, verify_jwt false, POST `{}` → 400. Not verified: an actual Discord post on DEV (would send to a real webhook) — user can check via 管理 → Discord 預覽.
-- Next: user's OK → release 0.10.6 to `main` and deploy PROD `stock-report`.
+- Release (2026-09-29 17:52:30): user said merge straight to PROD. 70cd957 `chore(release): 0.10.6`, ff `main`, `git push origin main:dev`; CI + Sync GitHub Releases green, `gh release view 0.10.6` exists. PROD `stock-report` deployed from clean `main` 70cd957 with `--no-verify-jwt`: v20 → v21, sha `58e94285…` → `98a86b7a…` (= DEV v33), verify_jwt false, POST `{}` → 400. No DDL. Still unverified: a real Discord post.
 
 ---
 
