@@ -289,6 +289,9 @@ function MarketGroup({
     const roi = rowRoi(row, basis)
     // A cached quote's move must not read with the same emphasis as a live one.
     const moveClass = row.priceStale ? 'pnl-flat' : pnlClass(row.dayChange)
+    // The price itself is coloured against yesterday's close, as broker apps do. Flat, cached or
+    // without a close keeps the normal ink (not pnl-flat's grey): only a real move gets a colour.
+    const pxClass = row.priceStale || !row.dayChange ? '' : pnlClass(row.dayChange)
     const missing = row.price === null
     return (
       <Fragment key={row.rowKey}>
@@ -324,7 +327,9 @@ function MarketGroup({
               loading ? <Skeleton label="現價載入中" /> : '—'
             ) : (
               <>
-                <span title={dayChangeHint(row, currency)}>{fmtPrice(row.price, currency)}</span>
+                <span className={`hl-px ${pxClass}`.trimEnd()} title={dayChangeHint(row, currency)}>
+                  {fmtPrice(row.price, currency)}
+                </span>
                 {row.priceStale && (
                   <span className="badge badge-warn hl-badge" title="暫時抓不到新價格，顯示上一次抓到的">
                     快取

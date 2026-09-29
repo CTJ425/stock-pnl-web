@@ -502,6 +502,29 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     expect(cell(rowLoss, 'chg').className).toContain('pnl-down')
     expect(cell(rowLoss, 'unr').className).toContain('pnl-down')
   })
+
+  it('現價依昨收上色：漲紅、跌綠；平盤、快取、沒有昨收都不上色', () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ price: 1000, prevClose: 980, stale: false }, 'hl-px pnl-up'],
+      [{ price: 1000, prevClose: 1020, stale: false }, 'hl-px pnl-down'],
+      [{ price: 1000, prevClose: 1000, stale: false }, 'hl-px'],
+      [{ price: 1000, prevClose: 980, stale: true }, 'hl-px'],
+      [{ price: 1000, prevClose: null, stale: false }, 'hl-px'],
+    ]
+    for (const [quote, expected] of cases) {
+      cleanup()
+      mockWorkspace()
+      useStockPrices.mockReturnValue({
+        prices: { 'TPE:2330': { asOf: '', source: 'twse', trial: false, ...quote } },
+        loading: false,
+        refreshedAt: new Date('2026-08-25T10:00:00Z'),
+        refresh: vi.fn(),
+      })
+      render(<DashboardPage onSelectTicker={vi.fn()} />)
+      const px = screen.getByTestId('holding-row-2330').querySelector('.hl-px') as HTMLElement
+      expect(px.className).toBe(expected)
+    }
+  })
 })
 
 

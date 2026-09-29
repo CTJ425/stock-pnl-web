@@ -272,7 +272,7 @@ export function DashboardPage({
             />
             {/* Footnotes replace the header "?" icons: every definition is readable without hovering. */}
             <ol className="stmt-notes">
-              <li>現價：台股接近即時，每分鐘更新；美股最多延遲 20 分鐘。收盤後是當天的收盤價。標「快取」代表暫時抓不到新價格。</li>
+              <li>現價：台股接近即時，每分鐘更新；美股最多延遲 20 分鐘。收盤後是當天的收盤價。紅色代表比昨天收盤高、綠色代表比昨天收盤低。標「快取」代表暫時抓不到新價格，不上色。</li>
               <li>
                 未實現淨損益：如果現在全部賣掉，大約會賺賠多少。台股依{basisText}賣出手續費，再扣證交稅；美股只扣買進手續費。
                 算法跟著這個工作區的手續費設定走。點一列可以看三種算法的對照、含費與未含費的成本，以及這檔股票的每一筆交易。

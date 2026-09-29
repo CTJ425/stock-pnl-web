@@ -449,6 +449,20 @@ table.hl-table {
   color: var(--cds-text-secondary);
 }
 
+/* 現價: red above yesterday's close, green below, normal ink when flat — also on phones, where the cell is grey. */
+.hl-px {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.hl-px.pnl-up {
+  color: var(--up);
+}
+
+.hl-px.pnl-down {
+  color: var(--down);
+}
+
 .hl-badge {
   margin-left: 6px;
   vertical-align: 1px;
