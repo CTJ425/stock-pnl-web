@@ -1,5 +1,14 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 174: Colour the 持股明細 current price by the day's move
+- **Status**: ✅ DONE (0.10.3)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-29 13:26:55 Asia/Taipei
+- Owner: price red when up, green when down, black when flat vs yesterday's close/open; merge to `main` directly.
+1. ~~Mockups (ledger emphasis / 今日行情 strip), both rejected; colour mockup approved~~ ✅
+2. ~~`hl-px` colouring vs `prevClose`, no colour when stale / flat / no close, footnote, test~~ ✅ 049976f
+3. ~~Release~~ ✅ dbf1c10, Release 0.10.3, Pages live
+
 ### Task 173: Remove the 持股明細 sort buttons
 - **Status**: ✅ DONE (0.10.2)
 - **Agent**: Claude

@@ -5,6 +5,12 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-28 15:07:22 Asia/Taipei (0.10.1 released, Task 172)
+- User approved the local screenshots and asked to merge straight to `main`. c77f523 `feat(ui)` at 0.10.1-dev.1 pushed to `dev` (CI green), cdcac9d `chore(release): 0.10.1` (CHANGELOG heading finalized), ff `main`, `main:dev` synced — all four refs at cdcac9d.
+- `main` CI green; Sync GitHub Releases created Release 0.10.1 (not draft); Pages serves the new bundle (`appLog-*.js` carries `0.10.1`). No Supabase change in this release.
+
+---
+
 ## 📅 Log: 2026-09-28 14:54:57 Asia/Taipei (Task 172, 0.10.1)
 - User asked where 今日損益 comes from ((現價 − 昨收) × 目前股數, no fees, ignores same-day trades), then asked to delete everything 今日損益 and to split 年度收益's 手續費 / 稅金 column (option C), designed with impeccable. Decisions taken via AskUserQuestion: dashboard hero becomes 未實現淨損益; 漲跌幅 column stays.
 - Dashboard: totals are 未實現淨損益 (hero, as-of + refresh, TW/US split, fee-basis link) + 持倉市值; 今日損益 column, subtotal, sort and footnote removed (footnotes renumbered 1–2); sort default 市值, 未實現損益 replaces the today sort; `rowToday` / `today` / `prevValue` deleted from `dashboardSums.ts`. Phone row: `'stock stock unr' / 'px chg unr'`, return under the P&L. `.stmt-totals` now `grid-auto-flow: column` (lead 1.35fr, rest 1fr) so 年度收益's 3 totals and the dashboard's 2 share it; `.stmt-tot-today` → `.stmt-tot-lead`.
