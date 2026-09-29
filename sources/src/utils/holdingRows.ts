@@ -10,6 +10,7 @@ import { estimateUnrealized, estimateUnrealizedShort } from './pnlEngine'
 import { breakEvenPrice, breakEvenPriceShort, DEFAULT_FEE_RATE } from './fees'
 import { getMinFee } from './settings'
 import { isClosed, tradeDateLabel, type PriceMap } from '../services/priceProxy'
+import type { FeeRounding } from '../types/models'
 
 export interface HoldingRow {
   /** Unique per row: a position with both legs emits two rows. `${holding.key}:${direction}` */
@@ -70,6 +71,8 @@ export function buildHoldingRows(
   prices: PriceMap,
   feeRate: number,
   workspaceId?: string,
+  /** The workspace's fee/tax flooring (BUG-088); omitted means per lot, the pre-existing figure. */
+  rounding: FeeRounding = 'lot',
 ): HoldingRow[] {
   return holdings.flatMap((h) => {
     const quote = prices[h.key]
@@ -88,7 +91,7 @@ export function buildHoldingRows(
       // Taiwan stocks apply the minimum handling fee for whole shares/fractional shares according to the shareholding size; there is no lower limit for US stocks
       const minFee =
         h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
-      const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
+      const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee, false, rounding) : null
       const netMktVal = mktVal !== null && unrealized !== null ? h.cost + unrealized : null
       const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
       // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
@@ -99,11 +102,11 @@ export function buildHoldingRows(
       const standardFeeRate = h.currency === 'TWD' ? DEFAULT_FEE_RATE : feeRate
       const standardUnrealized =
         price !== null && h.currency === 'TWD'
-          ? estimateUnrealized(h, price, standardFeeRate, minFee, true)
+          ? estimateUnrealized(h, price, standardFeeRate, minFee, true, rounding)
           : null
       const brokerRoi =
         standardUnrealized !== null && h.cost > 0 ? standardUnrealized / h.cost : null
-      const breakEven = breakEvenPrice(h, feeRate, minFee)
+      const breakEven = breakEvenPrice(h, feeRate, minFee, false, rounding)
       rows.push({
         rowKey: `${h.key}:LONG`,
         direction: 'LONG',

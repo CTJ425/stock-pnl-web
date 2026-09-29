@@ -4,7 +4,7 @@
  * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
-import type { FeeRebate, Market, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRebate, FeeRounding, Market, NewTransaction, Transaction, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 import { logClient } from './appLog'
@@ -55,6 +55,8 @@ export interface DataProvider {
   setWorkspaceFeeRate(id: string, rate: number): Promise<void>
   /** Persist how the workspace's broker refunds the fee discount (現折 / 月退). */
   setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void>
+  /** Persist how the workspace's broker floors the estimated sell fee and tax (BUG-088). */
+  setWorkspaceFeeRounding(id: string, rounding: FeeRounding): Promise<void>
 }
 
 /* =========================================================
@@ -235,6 +237,15 @@ export class LocalProvider implements DataProvider {
       writeStore(store)
     }
   }
+
+  async setWorkspaceFeeRounding(id: string, rounding: FeeRounding): Promise<void> {
+    const store = readStore()
+    const ws = store.workspaces.find((w) => w.id === id)
+    if (ws) {
+      ws.fee_rounding = rounding
+      writeStore(store)
+    }
+  }
 }
 
 /* =========================================================
@@ -246,7 +257,9 @@ function client() {
   return supabase
 }
 
-const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate, fee_rebate'
+const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate, fee_rebate, fee_rounding'
+/** Without fee_rounding, for a database that has not run that part of schema.sql (BUG-088). */
+const WORKSPACE_COLUMNS_WITHOUT_ROUNDING = 'id, name, created_at, fee_rate, fee_rebate'
 /** Without fee_rebate, for a database that has not run that part of schema.sql. */
 const WORKSPACE_COLUMNS_WITHOUT_REBATE = 'id, name, created_at, fee_rate'
 /** Without fee_rate either, for a database that has not run that part of schema.sql. */
@@ -354,7 +367,12 @@ export class SupabaseProvider implements DataProvider {
     // The database may not have run the fee_rebate or fee_rate part of schema.sql yet. PostgREST
     // rejects the whole query for an unknown column, so step down one column set at a time rather
     // than break login (a frontend deploy can land before the migration).
-    const columnSets = [WORKSPACE_COLUMNS, WORKSPACE_COLUMNS_WITHOUT_REBATE, WORKSPACE_COLUMNS_LEGACY]
+    const columnSets = [
+      WORKSPACE_COLUMNS,
+      WORKSPACE_COLUMNS_WITHOUT_ROUNDING,
+      WORKSPACE_COLUMNS_WITHOUT_REBATE,
+      WORKSPACE_COLUMNS_LEGACY,
+    ]
     let lastError = ''
     for (const columns of columnSets) {
       const { data, error } = await client()
@@ -518,5 +536,10 @@ export class SupabaseProvider implements DataProvider {
   async setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void> {
     const { error } = await client().from('workspaces').update({ fee_rebate: rebate }).eq('id', id)
     if (error) throw new Error(`儲存折扣退還方式失敗：${error.message}`)
+  }
+
+  async setWorkspaceFeeRounding(id: string, rounding: FeeRounding): Promise<void> {
+    const { error } = await client().from('workspaces').update({ fee_rounding: rounding }).eq('id', id)
+    if (error) throw new Error(`儲存手續費計算方式失敗：${error.message}`)
   }
 }

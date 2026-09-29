@@ -510,6 +510,57 @@ describe('estimateUnrealized 逐批計算賣出成本（Task 136）', () => {
   })
 })
 
+/**
+ * BUG-088: 玉山 floors each lot, 元大 floors the whole position once. Real case, PROD 2026-09-29,
+ * 元大 account: 2303 two lots (163.5 + 160, cost 323,637) at 153.5 on the 牌告 0.1425% basis —
+ * 元大 shows −17,995 = 307,000 − 437 − 921 − 323,637; per lot gives 218 + 218 and 460 + 460.
+ */
+describe('estimateUnrealized 整筆捨去（元大，BUG-088）', () => {
+  const twoLots = () =>
+    computeLedger([
+      tx({ date: '2026-09-22', market: 'TPE', ticker: '2303', type: 'BUY', price: 163.5, qty: 1000, fee: 69 }),
+      tx({ date: '2026-09-23', market: 'TPE', ticker: '2303', type: 'BUY', price: 160, qty: 1000, fee: 68 }),
+    ]).holdings[0]
+
+  it('整筆：手續費與證交稅合起來只捨去一次，對上元大 −17,995', () => {
+    const h = twoLots()
+    expect(h.cost).toBe(323637)
+    expect(estimateUnrealized(h, 153.5, 0.001425, 20, true, 'position')).toBe(-17995)
+  })
+
+  it('預設（未指定）與逐批完全相同，數字不因這次改動而變', () => {
+    const h = twoLots()
+    expect(estimateUnrealized(h, 153.5, 0.001425, 20, true)).toBe(-17993)
+    expect(estimateUnrealized(h, 153.5, 0.001425, 20, true, 'lot')).toBe(-17993)
+    // Task 136 的四批 0050 仍是 10,770；整筆則回到 10,767
+    const multi = computeLedger([
+      tx({ date: '2026-06-10', market: 'TPE', ticker: '0050', type: 'BUY', price: 105.0, qty: 2000, fee: 299 }),
+      tx({ date: '2026-07-20', market: 'TPE', ticker: '0050', type: 'BUY', price: 103.5, qty: 1000, fee: 147 }),
+      tx({ date: '2026-07-28', market: 'TPE', ticker: '0050', type: 'BUY', price: 102.8, qty: 1000, fee: 146 }),
+      tx({ date: '2026-08-24', market: 'TPE', ticker: '0050', type: 'BUY', price: 104.0, qty: 2000, fee: 296 }),
+    ]).holdings[0]
+    expect(estimateUnrealized(multi, 106.25, 0.001425, 20)).toBe(10770)
+    expect(estimateUnrealized(multi, 106.25, 0.001425, 20, false, 'position')).toBe(10767)
+  })
+
+  it('單批持股兩種算法相同', () => {
+    const h = computeLedger([
+      tx({ date: '2026-09-29', market: 'TPE', ticker: '6560', type: 'BUY', price: 32.6, qty: 1000, fee: 46 }),
+    ]).holdings[0]
+    expect(estimateUnrealized(h, 32.4, 0.001425, 20, false, 'position')).toBe(-389)
+    expect(estimateUnrealized(h, 32.4, 0.001425, 20, false, 'lot')).toBe(-389)
+  })
+
+  it('整筆仍只補一次最低手續費', () => {
+    const h = computeLedger([
+      tx({ date: '2026-07-01', market: 'TPE', ticker: '00919', type: 'BUY', price: 15.0, qty: 100, fee: 20 }),
+      tx({ date: '2026-07-02', market: 'TPE', ticker: '00919', type: 'BUY', price: 15.0, qty: 100, fee: 20 }),
+    ]).holdings[0]
+    // 整筆手續費 floor(4.275)=4 < 20 → 20；證交稅 floor(3000*0.001)=3
+    expect(estimateUnrealized(h, 15.0, 0.001425, 20, false, 'position')).toBe(3000 - 3040 - 20 - 3)
+  })
+})
+
 
 describe('明確的交易性質優先於推測（Task 137 §C）', () => {
   it('標記為當沖時直接用減半稅，即使金額足以覆蓋一般稅', () => {

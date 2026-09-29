@@ -182,8 +182,8 @@ export function DashboardPage({
   }
 
   const rows = useMemo(
-    () => buildHoldingRows(holdings, prices, feeRate, current?.id),
-    [holdings, prices, feeRate, current?.id],
+    () => buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot'),
+    [holdings, prices, feeRate, current?.id, current?.fee_rounding],
   )
   const tw = marketSums(rows.filter((r) => r.holding.currency === 'TWD'), 'TWD', basis, loading)
   const us = marketSums(rows.filter((r) => r.holding.currency === 'USD'), 'USD', basis, loading)

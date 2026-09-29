@@ -21,12 +21,20 @@ export type Currency = 'TWD' | 'USD'
  */
 export type FeeRebate = 'instant' | 'monthly'
 
+/**
+ * How the broker floors the estimated sell fee and tax on unrealized P&L (BUG-088). `lot`: each
+ * open lot is floored on its own (玉山, the behaviour since Task 136); `position`: the whole
+ * position is floored once (元大). Null / missing reads as `lot`.
+ */
+export type FeeRounding = 'lot' | 'position'
+
 export interface Workspace {
   id: string
   name: string
   created_at: string
   fee_rate?: number | null
   fee_rebate?: FeeRebate | null
+  fee_rounding?: FeeRounding | null
 }
 
 export interface Transaction {

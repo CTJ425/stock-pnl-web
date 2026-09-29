@@ -213,6 +213,13 @@
   margin-top: var(--sp-03);
 }
 
+/* 現折／月退 and the fee/tax flooring share the middle column (BUG-088). */
+.fee-settings-methods {
+  display: grid;
+  gap: var(--sp-05);
+  min-width: 0;
+}
+
 .fee-settings-rebate {
   margin: 0;
   padding: 0;
@@ -246,6 +253,15 @@
 .fee-settings-radio span {
   grid-column: 2;
   font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+/* The flooring group's note sits outside a .field, so it needs the helper style here. */
+.fee-settings-rebate .field-hint {
+  margin-top: var(--sp-02);
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
   color: var(--cds-text-helper);
 }
 

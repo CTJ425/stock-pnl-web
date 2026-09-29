@@ -4,17 +4,23 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { WorkspaceFeeSettings } from './WorkspaceFeeSettings'
 
-const { useWorkspace, setWorkspaceFeeRate, setWorkspaceFeeRebate } = vi.hoisted(() => ({
+const { useWorkspace, setWorkspaceFeeRate, setWorkspaceFeeRebate, setWorkspaceFeeRounding } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   setWorkspaceFeeRate: vi.fn(async () => {}),
   setWorkspaceFeeRebate: vi.fn(async () => {}),
+  setWorkspaceFeeRounding: vi.fn(async () => {}),
 }))
 vi.mock('../context/WorkspaceContext', () => ({ useWorkspace }))
 
 function mount(current: Record<string, unknown>, rate: string | null) {
   if (rate === null) localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
   else localStorage.setItem('stock-pnl-web/fee-rate/ws-1', rate)
-  useWorkspace.mockReturnValue({ current: { id: 'ws-1', name: '玉山證券', ...current }, setWorkspaceFeeRate, setWorkspaceFeeRebate })
+  useWorkspace.mockReturnValue({
+    current: { id: 'ws-1', name: '玉山證券', ...current },
+    setWorkspaceFeeRate,
+    setWorkspaceFeeRebate,
+    setWorkspaceFeeRounding,
+  })
   const onClose = vi.fn()
   const onSaved = vi.fn()
   render(<WorkspaceFeeSettings onClose={onClose} onSaved={onSaved} />)
@@ -65,5 +71,30 @@ describe('WorkspaceFeeSettings', () => {
   it('no discount disables the rebate choice', () => {
     mount({}, '0.001425')
     expect(screen.getByRole('radio', { name: /月退/ }).matches(':disabled')).toBe(true)
+  })
+
+  it('fee/tax flooring defaults to per lot and saves only when changed (BUG-088)', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rebate: 'monthly' }, '0.0004275')
+    expect((screen.getByRole('radio', { name: /每一批分開算/ }) as HTMLInputElement).checked).toBe(true)
+    await user.click(screen.getByRole('radio', { name: /整筆一起算/ }))
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRounding).toHaveBeenCalledWith('ws-1', 'position')
+    expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
+    expect(setWorkspaceFeeRebate).not.toHaveBeenCalled()
+  })
+
+  it('the flooring choice stays available without a discount', () => {
+    mount({ fee_rounding: 'position' }, '0.001425')
+    const whole = screen.getByRole('radio', { name: /整筆一起算/ }) as HTMLInputElement
+    expect(whole.checked).toBe(true)
+    expect(whole.matches(':disabled')).toBe(false)
+  })
+
+  it('saving an unchanged form does not write the flooring', async () => {
+    const user = userEvent.setup()
+    mount({}, null)
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRounding).not.toHaveBeenCalled()
   })
 })

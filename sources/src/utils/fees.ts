@@ -4,7 +4,7 @@
  *   Pay tax on selling additional certificates (also rounded to the nearest dollar)
  * - US stocks: round to two decimal places
  */
-import type { Market, Transaction, TxNature, TxType } from '../types/models'
+import type { FeeRounding, Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
 import {
   BORROW_FEE_RATE,
@@ -217,6 +217,7 @@ export function breakEvenPrice(
   feeRate: number,
   minFee?: number,
   overrideFeeRate?: boolean,
+  rounding: FeeRounding = 'lot',
 ): number | null {
   const { qty, cost, market, ticker, currency } = holding
   // A zero-cost holding (e.g. all-stock-dividend position) is still valid; only reject a
@@ -239,8 +240,13 @@ export function breakEvenPrice(
     for (const lot of lots) {
       const lotVal = p * lot.qty
       const effectiveFeeRate = overrideFeeRate ? feeRate : lot.feeRate ?? feeRate
-      fee += floorSafe(lotVal * effectiveFeeRate)
-      tax += floorSafe(lotVal * taxRate)
+      // Same per-lot / whole-position flooring as `estimateUnrealized` (BUG-088)
+      fee += rounding === 'position' ? lotVal * effectiveFeeRate : floorSafe(lotVal * effectiveFeeRate)
+      tax += rounding === 'position' ? lotVal * taxRate : floorSafe(lotVal * taxRate)
+    }
+    if (rounding === 'position') {
+      fee = floorSafe(fee)
+      tax = floorSafe(tax)
     }
     if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
     return p * qty - cost - fee - tax

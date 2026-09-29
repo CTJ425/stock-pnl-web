@@ -46,22 +46,24 @@ beforeEach(() => {
 })
 
 describe('SupabaseProvider.listWorkspaces', () => {
-  it('D1 asks for fee_rate and fee_rebate and returns the rows in one query', async () => {
+  it('D1 asks for fee_rate, fee_rebate and fee_rounding and returns the rows in one query', async () => {
     setResults([{ data: rows, error: null }])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate'])
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate, fee_rounding'])
     expect(got).toEqual(rows)
   })
 
   it('D2 steps down to the legacy columns when neither new column exists yet', async () => {
     const legacy = [{ id: 'w1', name: '我的投資組合', created_at: '2026-01-01T00:00:00Z' }]
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate does not exist' } },
       { data: legacy, error: null },
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate',
       'id, name, created_at, fee_rate',
       'id, name, created_at',
@@ -71,16 +73,32 @@ describe('SupabaseProvider.listWorkspaces', () => {
 
   it('D5 keeps fee_rate when only fee_rebate is missing (frontend deployed before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } },
       { data: rows, error: null },
     ])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate', 'id, name, created_at, fee_rate'])
+    expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
+      'id, name, created_at, fee_rate, fee_rebate',
+      'id, name, created_at, fee_rate',
+    ])
+    expect(got).toEqual(rows)
+  })
+
+  it('D7 keeps fee_rebate when only fee_rounding is missing (BUG-088, frontend before the migration)', async () => {
+    setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
+      { data: rows, error: null },
+    ])
+    const got = await new SupabaseProvider().listWorkspaces()
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate, fee_rounding', 'id, name, created_at, fee_rate, fee_rebate'])
     expect(got).toEqual(rows)
   })
 
   it('D3 throws when every column set fails', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42501', message: '權限不足' } },
@@ -103,6 +121,15 @@ describe('SupabaseProvider.setWorkspaceFeeRebate', () => {
     setResults([{ data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } }])
     await expect(new SupabaseProvider().setWorkspaceFeeRebate('w1', 'monthly')).rejects.toThrow(
       '儲存折扣退還方式失敗',
+    )
+  })
+})
+
+describe('SupabaseProvider.setWorkspaceFeeRounding', () => {
+  it('D8 throws a named error when the update fails', async () => {
+    setResults([{ data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } }])
+    await expect(new SupabaseProvider().setWorkspaceFeeRounding('w1', 'position')).rejects.toThrow(
+      '儲存手續費計算方式失敗',
     )
   })
 })

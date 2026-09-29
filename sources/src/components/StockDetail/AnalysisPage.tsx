@@ -72,10 +72,10 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
 
   const twRows = useMemo(
     () =>
-      buildHoldingRows(holdings, prices, feeRate, current?.id).filter(
+      buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot').filter(
         (r) => r.holding.currency === 'TWD',
       ),
-    [holdings, prices, feeRate, current?.id],
+    [holdings, prices, feeRate, current?.id, current?.fee_rounding],
   )
 
   type Entry =

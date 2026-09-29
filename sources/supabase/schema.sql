@@ -29,6 +29,13 @@ ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rebate_values;
 ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rebate_values
     CHECK (fee_rebate IS NULL OR fee_rebate IN ('instant', 'monthly'));
 
+-- How the broker floors the estimated sell fee and tax on unrealized P&L (BUG-088): 'lot' floors
+-- each open lot on its own (玉山), 'position' floors the whole position once (元大). NULL reads as 'lot'.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rounding TEXT;
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rounding_values;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rounding_values
+    CHECK (fee_rounding IS NULL OR fee_rounding IN ('lot', 'position'));
+
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can manage their own workspaces" ON workspaces;

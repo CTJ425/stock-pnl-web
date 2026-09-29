@@ -9,7 +9,7 @@
  * Differences from the GAS version: the currency is determined by the market field ('TPE' → TWD, 'US' → USD),
  * No longer relies on the 'TPE:' prefix of ticker.
  */
-import type { Currency, Market, Transaction } from '../types/models'
+import type { Currency, FeeRounding, Market, Transaction } from '../types/models'
 import { marketCurrency, positionKey } from '../types/models'
 
 export interface OpenLot {
@@ -913,6 +913,9 @@ export function computeLedger(transactions: Transaction[]): Ledger {
  * - Taiwan stocks: after deducting the estimated selling fee and securities tax (the floor of each item is rounded to the nearest dollar, the handling fee can be set to a single minimum limit),
  *   The outermost round rounds the floating point mantissa
  * - US stocks: market capitalization - cost, no withholding
+ *
+ * `rounding` (BUG-088): 'lot' floors each open lot's fee and tax on its own (玉山); 'position'
+ * sums the lots' unfloored amounts and floors once (元大). The two differ by at most 1 per lot per term.
  */
 export function estimateUnrealized(
   holding: Holding,
@@ -920,6 +923,7 @@ export function estimateUnrealized(
   feeRate: number,
   minFee?: number,
   overrideFeeRate?: boolean,
+  rounding: FeeRounding = 'lot',
 ): number {
   const mktVal = price * holding.qty
   if (holding.currency === 'TWD') {
@@ -936,8 +940,14 @@ export function estimateUnrealized(
         : lot.feeRate !== undefined && lot.feeRate !== null
           ? lot.feeRate
           : feeRate
-      fee += floorSafe(lotVal * effectiveFeeRate)
-      tax += floorSafe(lotVal * sellTaxRate(holding.ticker))
+      const lotFee = lotVal * effectiveFeeRate
+      const lotTax = lotVal * sellTaxRate(holding.ticker)
+      fee += rounding === 'position' ? lotFee : floorSafe(lotFee)
+      tax += rounding === 'position' ? lotTax : floorSafe(lotTax)
+    }
+    if (rounding === 'position') {
+      fee = floorSafe(fee)
+      tax = floorSafe(tax)
     }
     if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
     return Math.round(mktVal - holding.qty * holding.avgCost - fee - tax)

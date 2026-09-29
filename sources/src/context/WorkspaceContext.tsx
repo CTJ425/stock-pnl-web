@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
-import type { FeeRebate, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRebate, FeeRounding, NewTransaction, Transaction, Workspace } from '../types/models'
 import type { Ledger } from '../utils/pnlEngine'
 import { computeLedger } from '../utils/pnlEngine'
 import type { DataProvider, NewSplitLogEntry, SplitLogEntry, TxUpdate } from '../services/dataProvider'
@@ -52,6 +52,8 @@ export interface WorkspaceState {
   setWorkspaceFeeRate: (id: string, rate: number) => Promise<void>
   /** Persist how the broker refunds the fee discount; it decides the unrealized P&L basis. */
   setWorkspaceFeeRebate: (id: string, rebate: FeeRebate) => Promise<void>
+  /** Persist how the broker floors the estimated sell fee and tax (BUG-088). */
+  setWorkspaceFeeRounding: (id: string, rounding: FeeRounding) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -270,6 +272,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const setWorkspaceFeeRounding = useCallback(
+    async (id: string, rounding: FeeRounding) => {
+      // Same failure handling as the rebate: keep the old value and report through `error`.
+      try {
+        await provider.setWorkspaceFeeRounding(id, rounding)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      }
+      setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, fee_rounding: rounding } : w)))
+    },
+    [provider],
+  )
+
   const value = useMemo<WorkspaceState>(
     () => ({
       workspaces,
@@ -290,6 +306,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteTransactions,
       setWorkspaceFeeRate,
       setWorkspaceFeeRebate,
+      setWorkspaceFeeRounding,
     }),
     [
       workspaces,
@@ -310,6 +327,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteTransactions,
       setWorkspaceFeeRate,
       setWorkspaceFeeRebate,
+      setWorkspaceFeeRounding,
     ],
   )
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
-import { estimateUnrealized } from './pnlEngine'
+import { computeLedger, estimateUnrealized } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
 import { breakEvenPrice, breakEvenPriceShort, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
 
@@ -521,5 +521,26 @@ describe('費用重算不碰股利（Task 166 EN-01）', () => {
       { ...base, id: 'd2', tx_type: 'STOCK_DIVIDEND' as const, price: 0, fee_tax: 0 },
     ]
     expect(proposeFeeCorrections(rows, { feeRate: DEFAULT_FEE_RATE, minFeeWhole: 20, minFeeOdd: 1 })).toEqual([])
+  })
+})
+
+describe('breakEvenPrice 整筆捨去與 estimateUnrealized 一致（BUG-088）', () => {
+  const h = computeLedger([
+    { id: 'a', workspace_id: 'w', tx_date: '2026-09-22', market: 'TPE', ticker: '2303', name: '聯電', tx_type: 'BUY', price: 163.5, qty: 1000, fee_tax: 69, created_at: '2026-09-22T01:00:00Z' },
+    { id: 'b', workspace_id: 'w', tx_date: '2026-09-23', market: 'TPE', ticker: '2303', name: '聯電', tx_type: 'BUY', price: 160, qty: 1000, fee_tax: 68, created_at: '2026-09-23T01:00:00Z' },
+  ] as Transaction[]).holdings[0]
+
+  for (const rounding of ['lot', 'position'] as const) {
+    it(`${rounding}：保本價是淨損益 ≥ 0 的最低一分錢`, () => {
+      const be = breakEvenPrice(h, DEFAULT_FEE_RATE, 20, false, rounding)
+      expect(be).not.toBeNull()
+      const p = be as number
+      expect(estimateUnrealized(h, p, DEFAULT_FEE_RATE, 20, false, rounding)).toBeGreaterThanOrEqual(0)
+      expect(estimateUnrealized(h, Math.round(p * 100 - 1) / 100, DEFAULT_FEE_RATE, 20, false, rounding)).toBeLessThan(0)
+    })
+  }
+
+  it('未指定時與逐批相同', () => {
+    expect(breakEvenPrice(h, DEFAULT_FEE_RATE, 20)).toBe(breakEvenPrice(h, DEFAULT_FEE_RATE, 20, false, 'lot'))
   })
 })
