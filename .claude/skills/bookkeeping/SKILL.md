@@ -15,6 +15,7 @@ not load this file — paste the rules it needs into its brief verbatim.
 | `PROGRESS.md` | Latest status (**read top only**); older → `PROGRESS_ARCHIVE.md` |
 | `TASK.md` | Active tasks; done → `TASK_ARCHIVE.md` |
 | `BUG_FIX.md` / `FIXED_BUG.md` | Open / fixed bugs |
+| `ACCEPTED_RISKS.md` | Accepted / won't-fix / monitored decisions, and standing operational notes. **Not** read at session start |
 | `PLAN.md` / `SPEC.md` | Architecture / requirements (on demand) |
 | `CHANGELOG.md` | Version history |
 | `specs/<id>.md` | Per-task specs if present |
@@ -29,7 +30,14 @@ the work, at the end of every task.
 | ---- | ---- | ---- |
 | `PROGRESS.md` | header + **newest 2 log entries** | `PROGRESS_ARCHIVE.md` (prepend, newest-first) |
 | `TASK.md` | open entries only; a `✅` entry is moved out, and inside a live entry the `~~struck~~ ✅` sub-items collapse to one `- **Done**: items …` line | `TASK_ARCHIVE.md` |
-| `BUG_FIX.md` | open bugs only | `FIXED_BUG.md` |
+| `BUG_FIX.md` | **things that still need doing** only | `FIXED_BUG.md` (fixed) or `ACCEPTED_RISKS.md` (accepted / won't-fix / monitored) |
+
+Sort a `BUG_FIX.md` entry by its `- **Status**:` line, never by its `BUG-` / `RISK-` prefix — the
+prefix says nothing about state. Status holding `ACCEPTED`, `已接受`, `不修`, `low severity`,
+`monitored` or `OPEN (accepted)` means the decision is already taken, so the entry belongs in
+`ACCEPTED_RISKS.md`: it is not a bug someone will fix, and it is not a bug that was fixed. An
+entry whose only remainder is a **user preference** is not open either — move it to
+`FIXED_BUG.md` and leave a one-line `TASK.md` item for the person.
 
 The archives are large **and that is fine** — nothing reads them at session start, so they cost
 nothing until `grep`ped, and `grep`/`git log -S` over local files is the cheapest retrieval this

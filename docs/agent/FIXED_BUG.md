@@ -6,6 +6,20 @@
 
 ---
 
+### Bug ID: BUG-088 — 元大 rounds sell fee/tax on the whole position, 玉山 per lot; the dashboard only does per lot
+- **Found**: 2026-09-29. PROD workspace Ron的投資組合 (元大 account): 2303 two lots (1,000 @163.5 + 1,000 @160, cost 323,637), price 153.5, 牌告 basis. 元大 −17,995 = 307,000 − floor(307,000 × 0.1425%) 437 − 921 − 323,637; dashboard −17,993 = per-lot fee 218 + 218, tax 460 + 460.
+- **History**: 0.9.0–0.9.24 floored on the aggregate (would match 元大). e120041 (0.9.25, Task 136, 2026-09-01) switched to per-lot flooring to match 玉山 (0050 four lots: 10,770 per lot vs 10,767 aggregate). 玉山 still matches per lot (2026-09-29: 0050 five lots sum 49,555 = dashboard). One rule cannot match both brokers; the gap is ≤ 1 TWD per open lot per term.
+- **Fix (0.10.5-dev.1, 8b56632, DEV only)**: `workspaces.fee_rounding` ('lot' | 'position', NULL = 'lot') set in 手續費設定 「分批買進時，預扣的費用怎麼算」; optional `rounding` param on `estimateUnrealized` / `breakEvenPrice` / `buildHoldingRows`, default 'lot' is the old arithmetic unchanged. Not applied: what-if (single synthetic lot), Edge holdings card (engine copy synced, callers still per lot).
+- **Verified**: PROD data recompute — Ron 2303 list basis −17,995 with 'position' (= 元大); 玉山 stays 'lot', 0050 49,555 (= 玉山; 'position' would give 49,552). DEV browser (session via admin magic link): row detail 牌告 0.1425% −17,995 / −5.56%; panel checked 1440 / 390 (no overflow), light / dark. DDL applied on DEV only; `stock-report` redeployed on DEV (v32, sha `58e94285…`, verify_jwt false) because the engine copy changed.
+- **0.10.5-dev.2 (58dee12)**: fee settings preview on the dashboard (`onPreview` → unsaved rate / rebate / rounding recompute every figure, tag 預覽・尚未儲存, 取消 restores); E2E `scripts/verify-pnl-rounding-e2e.cjs` (new buy / sell through the form, oracle written independently of the engine, preview / 取消 / 儲存) — 7/7 pass on 2026-09-29.
+- **Before PROD**: apply the `fee_rounding` DDL on PROD, merge to `main`, deploy `stock-report` on PROD, then set Ron的投資組合 to 整筆 in the UI (user's choice).
+- **Discord card (0.10.6-dev.1, b339777, 2026-09-29 17:42:14)**: the Edge holdings card now reads `fee_rebate` / `fee_rounding` per workspace (main figure = 牌告 under 月退; rounding passed to `estimateUnrealized`), legs summed per workspace. Released 0.10.6 (70cd957); DEV v33 and PROD v21 both `98a86b7a…` (2026-09-29 17:52:30).
+- **Status**: ✅ FIXED (front end 0.10.5, Discord card 0.10.6; PROD DDL applied 2026-09-29, `verify_setup()` 10/10 PASS). Moved out of `BUG_FIX.md` 2026-09-30 — the only thing left is a user preference toggle, tracked in `TASK.md`, not a defect. Original status line: Front end released in 0.10.5 (`main` 4dd8fe1). PROD `stock-report` deployed 2026-09-29 16:33:02 from clean `main` 9167a40: v19 → v20, ezbr `27ef30af…` → `58e94285…` (= DEV v32), verify_jwt false, POST `{}` → 400 Unknown action. PROD `fee_rounding` DDL applied 2026-09-29 16:36:13 after the user re-authorized (Management API, identity guard in the DO block; first attempt had been denied by the permission classifier): check → is_prod true, is_dev false, text, CHECK lot|position, 0 rows set; PROD REST `select=fee_rounding` → 200 (control column → 400); `verify.sql` reinstalled, `verify_setup()` 10/10 PASS. Remaining: user sets Ron的投資組合 to 整筆 in the UI (their choice).
+
+---
+
+---
+
 ### Bug ID: BUG-087 — Same-day buy: the broker's unrealized P&L / break-even disagreed with the dashboard
 - **Date**: 2026-09-29 found, root cause confirmed 2026-09-30, aligned in 0.10.9-dev.1
 - **Symptom**: PROD, 6560 欣普羅 bought 2026-09-29 at 32.6 × 1000, fee_tax 46, close 32.40. Dashboard −389 / −1.19% / break-even 32.79; E.SUN app −340 / −1.04% / 32.75. 0050 and 2303 (held overnight) matched exactly, so only the same-day lot was off — the whole workspace gap (49,374 vs 49,423) was this one row's tax.

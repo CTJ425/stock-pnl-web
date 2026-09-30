@@ -16,6 +16,7 @@ Persist important state here so the next agent does not need chat history.
 | `PROGRESS.md` | Latest status (**read top only**); older → `PROGRESS_ARCHIVE.md` |
 | `TASK.md` | Active tasks; done → `TASK_ARCHIVE.md` |
 | `BUG_FIX.md` / `FIXED_BUG.md` | Open / fixed bugs |
+| `ACCEPTED_RISKS.md` | Accepted / won't-fix decisions — **not** read at session start; `grep` it before opening a bug |
 | `PLAN.md` / `SPEC.md` | Architecture / requirements (on demand) |
 | `CHANGELOG.md` | Version history  |
 | `specs/<id>.md` | Per-task specs if present |

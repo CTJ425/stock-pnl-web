@@ -1,5 +1,16 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-09-30 16:05:30 Asia/Taipei (release tooling — ship/versioning moved out of this repo)
+- User asked for `ship` and `versioning` to become reusable skills for other repos too, hosted in `script-docs` and installed over `curl`. Both are now **global** skills (`~/.claude/skills/`), and this repo's copies under `.claude/skills/` were deleted — `git rm`, so the old text is one `git show` away if the cutover has to be undone.
+- Design: the skills hold the rules, this repo holds the paths. Everything project-specific now lives in **`.claude/release.config.json`** — three sections, each key owned by exactly one of them. `repo` (branches, `appDir`, changelog path, `changelogLang`) is shared; `version` (`syncFiles`, `release`) belongs to `versioning`; `ship` (`gates`, `flow`, `deploy`, `verify`, `record`) belongs to `ship`. Deploy is **not** a command string: `deploy.hookSkill` names `supabase-ops`, because "DEV is cloud not local docker" and `--no-verify-jwt` are paragraphs, not a `cmd`. ship is forbidden from inventing a deploy command and stops to ask instead.
+- Two config facts worth keeping: `syncFiles` no longer lists `package-lock.json` as a JSON key — `sources/package.json` is `type: "npm"`, so `npm version --no-git-tag-version` updates the lockfile's `version` **and** `packages[""].version` together (editing one by hand leaves the other stale and `npm ci` then installs a number the app disagrees with). And `release.publishedBy` is `"ci"` here, because `release.yml` creates the Release on the `main` push; the skill only confirms and repairs it with `gh release edit` rather than racing the workflow.
+- Verified on this repo before switching: `npm version 0.10.8 --no-git-tag-version --allow-same-version` in `sources/` leaves `git diff` empty, and all three `syncFiles` patterns match exactly once (`APP_VERSION = '0.10.8'`, `目前版本：0.10.8`). The config parses. Skills installed and visible to Claude Code as `ship` and `versioning`.
+- `CLAUDE.md` § Release workflow / § Versioning shrank to the two facts a config cannot carry: a `main` push deploys no Edge/DDL, and `release.yml` skips an existing Release so the CHANGELOG must be final *before* the push (0.7.22).
+- **Not yet exercised end to end.** The pipeline runs for real on the next release; if it misbehaves, the deleted project skills are recoverable from git. Nothing is committed yet — both repos are left dirty for review.
+- _Update 2026-09-30 17:20:00_: this repo's side of the cutover was committed with 0.10.9 (see the entry above). `script-docs` is still uncommitted.
+
+---
+
 ## 📅 Log: 2026-09-30 14:30:00 Asia/Taipei (Task 177 判重放寬, 0.10.8-dev.2)
 - User looked at the real import preview — 118 rows, only 8 flagged, 「確認匯入 110 筆」 — and asked for the opposite of what 0.10.8-dev.1 delivered: have the import **recognise** a trade it already holds and skip it, rather than delete and rewrite the period.
 - My earlier objection to a looser key was wrong and the correction matters: `markDuplicateRows` already matched as a **multiset**, so two genuine same-price fills on one day can never collapse into one — k copies in the file against m on the ledger always leave k − m to import. Loosening the key does not drop a real trade.
