@@ -1,5 +1,21 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 177: CSV 匯入判重 —— 重匯券商檔案不再重複計算（判重放寬 + 取代模式）
+- **Status**: ✅ DONE (0.10.8, 2026-09-30)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 13:30:00 Asia/Taipei
+- **Why**: re-importing a broker export into a workspace that already held those trades doubled the ledger — the old key needed all 8 fields, so a fee off by NT$1 read as a new trade. Two answers shipped: the duplicate key now identifies a **trade** (fees out), and 取代 mode replaces the file's own period. Details: `PROGRESS.md` 2026-09-30 13:30:00 and 14:30:00.
+- **Where it lives**: `utils/csv.ts` (`matchImportRows`, `replaceScope`), `Transactions/CsvImportModal.tsx` (mode radios, 狀態 labels, warning notice), `Transactions/TransactionsPage.tsx` (`handleImport`: confirm → write → delete). Tests: `csv.test.ts`, `CsvImportModal.test.tsx`, `TransactionsPage.import.test.tsx`.
+- **Items**:
+  1. ~~`replaceScope` + unit tests (window = the CSV's own dates; BUY/SELL only; markets the CSV carries)~~ ✅
+  2. ~~匯入方式 radio pair, delete/write counts in a warning notice, danger confirm before it runs~~ ✅
+  3. ~~Write-then-delete ordering so a failed delete can never destroy the old rows~~ ✅
+  4. ~~Idempotence pinned end to end through the local provider, plus real-Chromium pass at 1280 / 390~~ ✅
+  5. ~~0.10.8-dev.1 bump + zh-TW CHANGELOG + commit / push `dev`~~ ✅
+  6. ~~Loosen the duplicate key to 「same trade」 (`matchImportRows`) so a differing fee is skipped, not re-imported (0.10.8-dev.2)~~ ✅
+  7. ~~Release to `main` as 0.10.8 (no DDL, no Edge deploy)~~ ✅
+- **Outside this repo**: the user's `esun_to_stockpnl.py` was fixed too — `t_time` out of `fill_key` (it defeated cross-file dedup and put duplicates inside the CSV) and `BUY_SELL` lookup warn-and-skip instead of KeyError.
+
 ### Task 176: 年度收益「區間收益」—— 自選時間區間看哪幾檔落袋多少
 - **Status**: ✅ DONE (0.10.7, 2026-09-30)
 - **Agent**: Claude

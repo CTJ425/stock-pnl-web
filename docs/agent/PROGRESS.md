@@ -1,8 +1,8 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 177 匯入判重 — a re-imported trade is recognised by date/market/ticker/direction/price/qty, so a differing fee no longer duplicates it; 取代 mode added alongside
-- Status: 🔄 `dev` = 0.10.8-dev.2, `main` = 0.10.7; no DDL, no Edge deploy
+- Action: 0.10.8 released: Task 177 匯入判重 — a re-imported trade is recognised by date/market/ticker/direction/price/qty, so a differing fee no longer duplicates it; 取代 mode added alongside
+- Status: ✅ `main` = `dev` = 0.10.8; no DDL, no Edge deploy
 - Timestamp: 2026-09-30 14:30:00 Asia/Taipei
 
 ---
