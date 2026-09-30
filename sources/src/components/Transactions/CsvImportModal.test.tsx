@@ -71,4 +71,70 @@ describe('CsvImportModal 重複列處理', () => {
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
     expect(onImport.mock.calls[0][0]).toHaveLength(2)
   })
+
+  it('合併模式不會要求呼叫端刪除任何東西', async () => {
+    const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+    render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
+    await paste(CSV)
+    await userEvent.click(await screen.findByRole('button', { name: /確認匯入 1 筆/ }))
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+    expect(onImport.mock.calls[0][1]).toEqual([])
+  })
+})
+
+/**
+ * The mode that actually fixes the double-counting: the CSV owns its date range, so the rows it
+ * would have skipped are deleted instead of being guessed at.
+ */
+describe('CsvImportModal 取代模式', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
+  const pickReplace = async () => {
+    await userEvent.click(await screen.findByLabelText(/以這個檔案取代這段期間/))
+  }
+
+  it('整份寫入，並把區間內的既有買賣交給呼叫端刪除', async () => {
+    const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+    const dividend: Transaction = { ...existingTsmc, id: 'd1', tx_date: '2024-01-15', tx_type: 'DIVIDEND' }
+    render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc, dividend]} />)
+    await paste(CSV)
+    await pickReplace()
+    expect(await screen.findByText(/將先刪除 2024-01-10 ～ 2024-02-10 之間現有的 1 筆/)).toBeTruthy()
+    await userEvent.click(await screen.findByRole('button', { name: /取代匯入 2 筆/ }))
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+    expect(onImport.mock.calls[0][0]).toHaveLength(2)
+    expect(onImport.mock.calls[0][1]).toEqual(['x1'])
+  })
+
+  it('不顯示重複提示，重複列也照樣寫入', async () => {
+    const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+    render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
+    await paste(CSV)
+    await pickReplace()
+    expect(screen.queryByText(/其中 1 筆與現有交易相同/)).toBeNull()
+    expect(screen.queryByLabelText(/仍要匯入與現有交易相同/)).toBeNull()
+    await userEvent.click(await screen.findByRole('button', { name: /取代匯入 2 筆/ }))
+    await waitFor(() => expect(onImport.mock.calls[0][0]).toHaveLength(2))
+  })
+
+  it('區間內沒有舊買賣時說明會直接寫入', async () => {
+    const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+    render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[]} />)
+    await paste(CSV)
+    await pickReplace()
+    expect(await screen.findByText(/目前沒有買賣紀錄，會直接寫入 2 筆/)).toBeTruthy()
+  })
+
+  it('呼叫端取消時不關閉視窗', async () => {
+    const onClose = vi.fn()
+    const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => false)
+    render(<CsvImportModal onClose={onClose} onImport={onImport} existing={[existingTsmc]} />)
+    await paste(CSV)
+    await pickReplace()
+    await userEvent.click(await screen.findByRole('button', { name: /取代匯入 2 筆/ }))
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

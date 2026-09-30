@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Transaction } from '../types/models'
-import { markDuplicateRows, parseCsv, parseTransactionsCsv, parseTxDate, transactionsToCsv } from './csv'
+import { markDuplicateRows, parseCsv, parseTransactionsCsv, parseTxDate, replaceScope, transactionsToCsv } from './csv'
 
 describe('parseTxDate', () => {
   it('支援斜線與連字號並補零', () => {
@@ -500,5 +500,59 @@ describe('markDuplicateRows（TX-01）', () => {
 
   it('名稱不同但其餘相同仍視為重複', () => {
     expect(markDuplicateRows([{ ...row, name: 'TSMC' }], [base])).toEqual([true])
+  })
+})
+
+describe('replaceScope（取代匯入的刪除範圍）', () => {
+  const row = {
+    tx_date: '2024-02-01',
+    market: 'TPE' as const,
+    ticker: '2454',
+    name: '聯發科',
+    tx_type: 'BUY' as const,
+    price: 900,
+    qty: 1000,
+    fee_tax: 1282,
+  }
+  const inRange: Transaction = { ...base, id: 'in', tx_date: '2024-01-20' }
+
+  it('沒有有效列時不刪任何東西', () => {
+    expect(replaceScope([], [inRange])).toEqual({ from: '', to: '', ids: [] })
+  })
+
+  it('區間就是檔案自己的第一天到最後一天', () => {
+    const scope = replaceScope([{ ...row, tx_date: '2024-03-05' }, row], [])
+    expect(scope.from).toBe('2024-02-01')
+    expect(scope.to).toBe('2024-03-05')
+  })
+
+  it('刪除區間內的買賣，區間外的不動', () => {
+    const before: Transaction = { ...base, id: 'before', tx_date: '2024-01-09' }
+    const after: Transaction = { ...base, id: 'after', tx_date: '2024-03-06' }
+    const scope = replaceScope([{ ...row, tx_date: '2024-01-10' }, { ...row, tx_date: '2024-03-05' }], [
+      before,
+      inRange,
+      after,
+    ])
+    expect(scope.ids).toEqual(['in'])
+  })
+
+  it('股利與股票股利永遠不刪', () => {
+    const cash: Transaction = { ...base, id: 'cash', tx_date: '2024-02-10', tx_type: 'DIVIDEND' }
+    const stock: Transaction = { ...base, id: 'stock', tx_date: '2024-02-10', tx_type: 'STOCK_DIVIDEND' }
+    const scope = replaceScope([{ ...row, tx_date: '2024-02-01' }, { ...row, tx_date: '2024-02-28' }], [cash, stock])
+    expect(scope.ids).toEqual([])
+  })
+
+  it('只刪檔案帶到的市場：台股檔案不動美股', () => {
+    const us: Transaction = { ...base, id: 'us', market: 'US', ticker: 'AAPL', tx_date: '2024-02-10' }
+    const scope = replaceScope([{ ...row, tx_date: '2024-02-01' }, { ...row, tx_date: '2024-02-28' }], [us, inRange])
+    expect(scope.ids).toEqual([])
+  })
+
+  it('同一份檔案匯第二次的刪除範圍等於第一次寫進去的列', () => {
+    const rows = [row, { ...row, tx_date: '2024-02-05' }]
+    const written: Transaction[] = rows.map((r, i) => ({ ...base, ...r, id: `w${i}` }))
+    expect(replaceScope(rows, written).ids).toEqual(['w0', 'w1'])
   })
 })

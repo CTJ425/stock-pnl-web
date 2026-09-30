@@ -203,6 +203,52 @@ export function markDuplicateRows(rows: NewTransaction[], existing: Transaction[
   })
 }
 
+/** What a 取代 import would delete before writing (`replaceScope`). */
+export interface ReplaceScope {
+  /** Earliest / latest `tx_date` in the CSV; '' when the CSV holds no valid row. */
+  from: string
+  to: string
+  /** Ids of the existing transactions the CSV's range covers. */
+  ids: string[]
+}
+
+/**
+ * 取代 import: the CSV is the single source of truth for the range it covers, so every existing
+ * BUY / SELL in that range is deleted and the whole CSV is written. No tolerance, no fuzzy
+ * matching — re-importing the same file twice therefore lands on the same ledger.
+ *
+ * Deliberately narrow:
+ * - only `tx_date` between the CSV's own first and last row — a partial export (`--since`)
+ *   cannot touch anything outside its window;
+ * - only the markets the CSV actually carries, so a TW-only export leaves US rows alone;
+ * - only BUY / SELL. DIVIDEND and STOCK_DIVIDEND are never in a broker's trade export (they are
+ *   entered by hand), so a range replace must not be able to swallow them.
+ */
+export function replaceScope(rows: NewTransaction[], existing: Transaction[]): ReplaceScope {
+  if (rows.length === 0) return { from: '', to: '', ids: [] }
+
+  let from = rows[0].tx_date
+  let to = rows[0].tx_date
+  const markets = new Set<Market>()
+  for (const r of rows) {
+    if (r.tx_date < from) from = r.tx_date
+    if (r.tx_date > to) to = r.tx_date
+    markets.add(r.market)
+  }
+
+  const ids = existing
+    .filter(
+      (e) =>
+        (e.tx_type === 'BUY' || e.tx_type === 'SELL') &&
+        markets.has(e.market) &&
+        e.tx_date >= from &&
+        e.tx_date <= to,
+    )
+    .map((e) => e.id)
+
+  return { from, to, ids }
+}
+
 export function parseTransactionsCsv(text: string): CsvImportResult {
   const result: CsvImportResult = { rows: [], errors: [], total: 0 }
   const table = parseCsv(text)

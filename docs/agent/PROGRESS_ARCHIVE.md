@@ -1,7 +1,16 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
+
 **Do not load this file on every session** — only when investigating history.
+
+---
+
+## 📅 Log: 2026-09-29 17:42:14 Asia/Taipei (BUG-088 follow-up: Discord card fee settings, 0.10.6-dev.1)
+- User reported: after changing 分批買進時的預扣算法 or 現折／月退, the dashboard changed but the Discord push did not. Confirmed: `loadHoldingsWorkspaces` selected only `id, fee_rate`, so the card ignored `fee_rebate` / `fee_rounding` (BUG-088 had listed the Edge card as "not applied").
+- Fix (b339777): select both columns; `buildLedgers` derives `rounding` and `basis` (Edge copy of `pnlBasis`); each workspace leg passes `rounding` to `estimateUnrealized` and takes the 牌告 figure as its main unrealized under 月退, then legs are summed (user chose per-workspace-then-sum for merged keys). Break-even unchanged: its synthetic single lot makes lot vs position identical.
+- Verify: new `holdingsCard.test.ts` cases incl. independent oracle Ron 2303 月退+整筆 −17,995 / 月退+每批 −17,993; vitest 2,526 passed, 7 skipped; build, typecheck:edge, lint exit 0. DEV deploy from clean b339777: v32 → v33, sha `58e94285…` → `98a86b7a…`, verify_jwt false, POST `{}` → 400. Not verified: an actual Discord post on DEV (would send to a real webhook) — user can check via 管理 → Discord 預覽.
+- Release (2026-09-29 17:52:30): user said merge straight to PROD. 70cd957 `chore(release): 0.10.6`, ff `main`, `git push origin main:dev`; CI + Sync GitHub Releases green, `gh release view 0.10.6` exists. PROD `stock-report` deployed from clean `main` 70cd957 with `--no-verify-jwt`: v20 → v21, sha `58e94285…` → `98a86b7a…` (= DEV v33), verify_jwt false, POST `{}` → 400. No DDL. Still unverified: a real Discord post.
 
 ---
 

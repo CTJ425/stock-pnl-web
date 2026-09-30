@@ -7,15 +7,27 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileUp, Upload } from 'lucide-react'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL } from '../../types/models'
-import { markDuplicateRows, parseTransactionsCsv } from '../../utils/csv'
+import { markDuplicateRows, parseTransactionsCsv, replaceScope } from '../../utils/csv'
 import { Modal } from '../Common/Modal'
 
 interface CsvImportModalProps {
   onClose: () => void
-  onImport: (rows: NewTransaction[]) => Promise<void>
+  /**
+   * `replaceIds` are the existing transactions the caller must delete *after* writing `rows`
+   * (see `handleImport`). Resolving `false` means the caller cancelled, so the modal stays open.
+   */
+  onImport: (rows: NewTransaction[], replaceIds: string[]) => Promise<boolean | void>
   /** Current workspace transactions, used to detect and flag duplicate rows (TX-01)*/
   existing: Transaction[]
 }
+
+/**
+ * 合併 keeps the TX-01 behaviour: skip rows that already exist, judged by an exact field match.
+ * 取代 deletes the CSV's whole date range first, which is the only mode that stays correct when
+ * the broker's figures differ from what is stored (a fee off by NT$1 slips past the duplicate
+ * check and doubles the ledger).
+ */
+type ImportMode = 'merge' | 'replace'
 
 const PREVIEW_LIMIT = 8
 /** Debounce for the paste textarea: parsing a large paste on every keystroke is wasted work*/
@@ -24,6 +36,7 @@ const PARSE_DEBOUNCE_MS = 250
 export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalProps) {
   const [text, setText] = useState('')
   const [debouncedText, setDebouncedText] = useState('')
+  const [mode, setMode] = useState<ImportMode>('merge')
   const [includeDups, setIncludeDups] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,9 +54,20 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
     [parsed, existing],
   )
   const dupCount = duplicateFlags.filter(Boolean).length
+  const replace = useMemo(
+    () => (parsed && mode === 'replace' ? replaceScope(parsed.rows, existing) : null),
+    [parsed, existing, mode],
+  )
+  // 取代 writes the file whole; the duplicate check does not apply because the rows it would
+  // have skipped are exactly the ones being deleted first.
   const importRows = useMemo(
-    () => (parsed ? parsed.rows.filter((_, i) => includeDups || !duplicateFlags[i]) : []),
-    [parsed, duplicateFlags, includeDups],
+    () =>
+      parsed
+        ? mode === 'replace'
+          ? parsed.rows
+          : parsed.rows.filter((_, i) => includeDups || !duplicateFlags[i])
+        : [],
+    [parsed, duplicateFlags, includeDups, mode],
   )
 
   const pickFile = async (file: File | undefined) => {
@@ -56,8 +80,8 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
     setBusy(true)
     setError(null)
     try {
-      await onImport(importRows)
-      onClose()
+      const done = await onImport(importRows, replace?.ids ?? [])
+      if (done !== false) onClose()
     } catch (e) {
       setError(`匯入失敗：${e instanceof Error ? e.message : '請稍後再試'}`)
     } finally {
@@ -102,6 +126,40 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
 
       {error && <div className="notice notice-error">{error}</div>}
 
+      {parsed && parsed.rows.length > 0 && (
+        <fieldset className="field" style={{ border: 0, padding: 0, margin: '4px 0 0' }}>
+          <legend style={{ padding: 0, fontSize: 13, color: 'var(--ink-secondary)' }}>匯入方式</legend>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="csv-import-mode"
+              checked={mode === 'merge'}
+              onChange={() => setMode('merge')}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              只補上新的交易
+              <span style={{ color: 'var(--ink-muted)' }}>（跳過和現有紀錄一模一樣的列）</span>
+            </span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 6, fontSize: 13, cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="csv-import-mode"
+              checked={mode === 'replace'}
+              onChange={() => setMode('replace')}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              以這個檔案取代這段期間
+              <span style={{ color: 'var(--ink-muted)' }}>
+                （先刪掉這段期間的買賣紀錄，再整份寫入；同一個檔案重複匯入結果都一樣）
+              </span>
+            </span>
+          </label>
+        </fieldset>
+      )}
+
       {parsed && (
         <>
           {parsed.errors.length > 0 && (
@@ -118,9 +176,23 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
 
           {parsed.rows.length > 0 && (
             <>
+              {replace && (
+                <div className="notice notice-warn" style={{ marginTop: 10 }}>
+                  {/* `.notice` lays its children out in a row, so both lines go in one child. */}
+                  <div>
+                    {replace.ids.length > 0
+                      ? `將先刪除 ${replace.from} ～ ${replace.to} 之間現有的 ${replace.ids.length} 筆買進 / 賣出，再寫入這份檔案的 ${parsed.rows.length} 筆。`
+                      : `這段期間（${replace.from} ～ ${replace.to}）目前沒有買賣紀錄，會直接寫入 ${parsed.rows.length} 筆。`}
+                    <div style={{ marginTop: 3 }}>
+                      現金股利與股票股利不會被刪除；這段期間以外的紀錄也不會動到。刪除後無法復原。
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ margin: '10px 0 8px', fontSize: 14, color: 'var(--ink-secondary)' }}>
                 預覽（共 {parsed.rows.length} 筆有效交易
-                {dupCount > 0 && `，其中 ${dupCount} 筆與現有交易相同`}
+                {mode === 'merge' && dupCount > 0 && `，其中 ${dupCount} 筆與現有交易相同`}
                 {parsed.rows.length > PREVIEW_LIMIT && `，僅顯示前 ${PREVIEW_LIMIT} 筆`}）：
               </div>
               <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 0 }}>
@@ -140,7 +212,10 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                   </thead>
                   <tbody>
                     {parsed.rows.slice(0, PREVIEW_LIMIT).map((row, i) => (
-                      <tr key={i} style={duplicateFlags[i] ? { color: 'var(--ink-muted)' } : undefined}>
+                      <tr
+                        key={i}
+                        style={mode === 'merge' && duplicateFlags[i] ? { color: 'var(--ink-muted)' } : undefined}
+                      >
                         <td>{row.tx_date}</td>
                         <td>{MARKET_LABEL[row.market]}</td>
                         <td>{row.ticker}</td>
@@ -149,13 +224,13 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                         <td className="num">{row.price}</td>
                         <td className="num">{row.qty}</td>
                         <td className="num">{row.fee_tax}</td>
-                        <td>{duplicateFlags[i] ? '重複' : ''}</td>
+                        <td>{mode === 'merge' && duplicateFlags[i] ? '重複' : ''}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {dupCount > 0 && (
+              {mode === 'merge' && dupCount > 0 && (
                 <label
                   htmlFor="csv-include-dups"
                   style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 13, cursor: 'pointer' }}
@@ -183,7 +258,11 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
               onClick={() => void confirm()}
             >
               <Upload size={15} />
-              {busy ? '匯入中…' : `確認匯入 ${importRows.length} 筆`}
+              {busy
+                ? '匯入中…'
+                : mode === 'replace'
+                  ? `取代匯入 ${importRows.length} 筆`
+                  : `確認匯入 ${importRows.length} 筆`}
             </button>
           </div>
         </>

@@ -1,9 +1,19 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.10.7 released: Task 176 區間收益 — pick any date window on 年度收益 and see which stocks realized money in it
-- Status: ✅ `main` = `dev` = 0.10.7; no DDL, no Edge deploy
-- Timestamp: 2026-09-30 02:55:00 Asia/Taipei
+- Action: Task 177 取代匯入 — a CSV re-import can now replace its own date range instead of relying on an exact-match duplicate check
+- Status: 🔄 `dev` = 0.10.8-dev.1, `main` = 0.10.7; no DDL, no Edge deploy
+- Timestamp: 2026-09-30 13:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-30 13:30:00 Asia/Taipei (Task 177 取代匯入, 0.10.8-dev.1)
+- User re-imported a broker CSV (玉山 API → `esun_to_stockpnl.py`) into a workspace that already held those trades and the ledger double-counted. Reproduced with the real parser: the file itself is clean (118 rows, 0 errors, 交易性質 → `SPOT`, split fee/tax mode on), and re-importing it against rows written by that same pipeline flags 118/118 as duplicates. So the duplication does not come from the file — it comes from `markDuplicateRows` (`utils/csv.ts:185`) needing all 8 fields to match exactly, which hand-entered or old-spreadsheet rows never do (a fee off by NT$1 is enough).
+- Rejected: widening the duplicate key with a fee/price tolerance. It trades a visible error (an extra row you can see and delete) for an invisible one — the file has two genuinely identical fills on 2024-08-07 (2634 漢翔 48.1 × 1000, twice), and any tolerance merges real trades into one and silently drops a transaction.
+- Built instead: 取代匯入. `replaceScope(rows, existing)` (`utils/csv.ts`) returns the CSV's own first/last `tx_date` plus the ids to delete, narrowed three ways — inside that window only, only the markets the CSV carries, and only BUY / SELL, so DIVIDEND / STOCK_DIVIDEND (never in a broker trade export) can't be swallowed. The mode is a radio pair in `CsvImportModal`; `handleImport` (`TransactionsPage.tsx`) asks a danger `confirm()`, then **writes first and deletes after** — a failed delete leaves visible duplicates, a failed write after a delete would destroy the old rows with nothing to replace them.
+- Python fixes in the user's converter (file lives outside this repo): `t_time` dropped from `fill_key` — it is often empty, so one export with it and one without turned a single fill into two and defeated the cross-file dedup, putting duplicates inside the CSV itself; and `BUY_SELL[...]` became a warn-and-skip instead of a KeyError that aborts the whole run. Verified on synthetic exports: the cross-file pair collapses to 1 row, the unknown code is reported and skipped.
+- Verify: vitest 151 files / 2,569 tests, 2,562 passed, 7 skipped — `replaceScope` unit cases in `csv.test.ts`, mode wiring in `CsvImportModal.test.tsx`, and `TransactionsPage.import.test.tsx` which drives the real local-mode provider: importing the same file twice leaves 3 rows, while the 合併 path with a fee 1 元 different produces 4. `npm run build` and `lint` exit 0. Real Chromium at 1280 and 390: the notice, the confirm and the result all read correctly, and after 取代 the workspace holds the CSV's 3 rows plus the untouched 股利 row.
+- Committed to `dev` as 0.10.8-dev.1 (user asked for the commit, not a release). `main` stays on 0.10.7 until the user says merge. No DDL, no Edge deploy: nothing under `sources/supabase/` changed.
 
 ---
 
@@ -17,13 +27,5 @@
 - Browser verification (2026-09-30 02:50, the user asked for it explicitly after the first report): `scripts/verify-range-pnl-e2e.cjs`, a real Chromium in local mode, 69 assertions, all pass — every preset's resolved window, per-ticker figures and legs, totals row, sort order, 僅股利 badge, custom dates, from > to, both empty states, 台股／美股 switch. Expected figures are hand-computed, never read back from the engine, and it asserts 「去年」 equals the yearly table's 2025 row column by column. Interactive passes at 390 / 768, light and dark: horizontal overflow 0 px after clicking presets and expanding a row, date inputs 16px, no console errors. Registered in `docs/UnitTests/E2E.md`.
 - Release (2026-09-30 02:55:00): user said merge to `main` once verification passed. 657ced7 (0.10.7-dev.2) on `dev`, then the release commit strips `-dev.N` → 0.10.7, ff `main`, `git push origin main:dev`.
 - No Supabase change: no DDL, no Edge deploy needed (the Edge engine copy changed but the Discord card does not read `dividendLegs`; redeploy only if a future card uses it).
-
----
-
-## 📅 Log: 2026-09-29 17:42:14 Asia/Taipei (BUG-088 follow-up: Discord card fee settings, 0.10.6-dev.1)
-- User reported: after changing 分批買進時的預扣算法 or 現折／月退, the dashboard changed but the Discord push did not. Confirmed: `loadHoldingsWorkspaces` selected only `id, fee_rate`, so the card ignored `fee_rebate` / `fee_rounding` (BUG-088 had listed the Edge card as "not applied").
-- Fix (b339777): select both columns; `buildLedgers` derives `rounding` and `basis` (Edge copy of `pnlBasis`); each workspace leg passes `rounding` to `estimateUnrealized` and takes the 牌告 figure as its main unrealized under 月退, then legs are summed (user chose per-workspace-then-sum for merged keys). Break-even unchanged: its synthetic single lot makes lot vs position identical.
-- Verify: new `holdingsCard.test.ts` cases incl. independent oracle Ron 2303 月退+整筆 −17,995 / 月退+每批 −17,993; vitest 2,526 passed, 7 skipped; build, typecheck:edge, lint exit 0. DEV deploy from clean b339777: v32 → v33, sha `58e94285…` → `98a86b7a…`, verify_jwt false, POST `{}` → 400. Not verified: an actual Discord post on DEV (would send to a real webhook) — user can check via 管理 → Discord 預覽.
-- Release (2026-09-29 17:52:30): user said merge straight to PROD. 70cd957 `chore(release): 0.10.6`, ff `main`, `git push origin main:dev`; CI + Sync GitHub Releases green, `gh release view 0.10.6` exists. PROD `stock-report` deployed from clean `main` 70cd957 with `--no-verify-jwt`: v20 → v21, sha `58e94285…` → `98a86b7a…` (= DEV v33), verify_jwt false, POST `{}` → 400. No DDL. Still unverified: a real Discord post.
 
 ---

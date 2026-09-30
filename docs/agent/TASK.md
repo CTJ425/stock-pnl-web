@@ -16,20 +16,20 @@
 
 ## 📋 Active Tasks
 
-### Task 176: 年度收益「區間收益」—— 自選時間區間看哪幾檔落袋多少
-- **Status**: ✅ DONE (0.10.7, 2026-09-30)
+### Task 177: CSV 取代匯入 —— 重複匯入券商檔案不再重複計算
+- **Status**: 🔄 IN PROGRESS (0.10.8-dev.1 on `dev`, not yet in `main`)
 - **Agent**: Claude
-- **Timestamp**: 2026-09-30 02:30:00 Asia/Taipei
-- **What it is**: a block between the charts and the yearly tables on 年度收益. Presets 近 1 個月 / 近 3 個月 / 近 1 年 / 今年以來 / 去年 / 全部 / 自訂 (default 近 1 年, both ends inclusive), 台股／美股 toggle, per-ticker rows sorted by total return, expandable to the sell legs inside the window, plus a totals row.
-- **Scope rule the user set**: only money already realized — the window's sells (incl. 融券回補) and cash dividends. Open positions are never counted, so a buy-only ticker does not appear.
-- **Where it lives**: `YearlyReport/rangeRows.ts` (arithmetic), `RangeSection.tsx` (UI), `pnlMath.ts` / `cells.tsx` (shared with the yearly table), `utils/taipeiDate.ts`, `pnlEngine.ts` (`dividendLegs`). Tests: `rangeRows.test.ts`, `RangeSection.test.tsx`. Details in `PROGRESS.md` 2026-09-30 02:30:00.
+- **Timestamp**: 2026-09-30 13:30:00 Asia/Taipei
+- **Why**: re-importing a broker export into a workspace that already held those trades doubled the ledger. The file was fine; `markDuplicateRows` needs all 8 fields to match exactly, so any row not written by that same pipeline (hand-entered, old spreadsheet, a fee off by NT$1) reads as new. Details and the rejected tolerance approach: `PROGRESS.md` 2026-09-30 13:30:00.
+- **Where it lives**: `utils/csv.ts` (`replaceScope`), `Transactions/CsvImportModal.tsx` (mode radios, warning notice), `Transactions/TransactionsPage.tsx` (`handleImport`: confirm → write → delete). Tests: `csv.test.ts`, `CsvImportModal.test.tsx`, `TransactionsPage.import.test.tsx`.
 - **Items**:
-  1. ~~Engine: per-leg cash dividends (`DividendLeg` / `dividendLegs`) + `npm run sync:edge-engine`~~ ✅
-  2. ~~Pure aggregation + tests (anchor: 區間 = 整個年度 equals that year's row)~~ ✅
-  3. ~~UI, CSS, multi-viewport screenshot pass (1440 light/dark, 390 light; overflow 0 px)~~ ✅
-  4. ~~0.10.7-dev.1 bump + zh-TW CHANGELOG + commit `dev`~~ ✅
-  5. ~~Real-browser verification: `scripts/verify-range-pnl-e2e.cjs`, 69 assertions, all pass (0.10.7-dev.2)~~ ✅
-  6. ~~Release to `main` as 0.10.7 (no DDL, no Edge deploy)~~ ✅
+  1. ~~`replaceScope` + unit tests (window = the CSV's own dates; BUY/SELL only; markets the CSV carries)~~ ✅
+  2. ~~匯入方式 radio pair, delete/write counts in a warning notice, danger confirm before it runs~~ ✅
+  3. ~~Write-then-delete ordering so a failed delete can never destroy the old rows~~ ✅
+  4. ~~Idempotence pinned end to end through the local provider, plus real-Chromium pass at 1280 / 390~~ ✅
+  5. ~~0.10.8-dev.1 bump + zh-TW CHANGELOG + commit / push `dev`~~ ✅
+  6. Release to `main` as 0.10.8 —— waiting for the user's OK ⏳
+- **Outside this repo**: the user's `esun_to_stockpnl.py` was fixed too — `t_time` out of `fill_key` (it defeated cross-file dedup and put duplicates inside the CSV) and `BUY_SELL` lookup warn-and-skip instead of KeyError.
 
 ### Task 175: Same-day buy — align unrealized P&L / break-even with the broker (BUG-087)
 - **Status**: ⏸️ ON HOLD (user chose to keep 0.3% for now, 2026-09-29)

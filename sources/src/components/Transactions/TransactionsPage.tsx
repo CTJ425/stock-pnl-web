@@ -180,9 +180,45 @@ export function TransactionsPage() {
     })
   }
 
-  const handleImport = async (rows: NewTransaction[]) => {
+  /**
+   * `replaceIds` (取代 import) are written **before** they are deleted on purpose: if the delete
+   * fails afterwards the workspace holds visible duplicate rows, which the user can see and fix.
+   * Deleting first and failing the write would destroy the old rows with nothing to replace them.
+   */
+  const handleImport = async (rows: NewTransaction[], replaceIds: string[]) => {
+    if (replaceIds.length > 0) {
+      const ok = await confirm({
+        title: '取代匯入',
+        message: `確定要刪除現有的 ${replaceIds.length} 筆買進 / 賣出，改成這份檔案的 ${rows.length} 筆嗎？\n\n股利紀錄不會被刪除，但這個動作無法復原。`,
+        confirmLabel: '取代匯入',
+        danger: true,
+      })
+      if (!ok) return false
+    }
     await addTransactions(rows)
+    if (replaceIds.length > 0) {
+      try {
+        await deleteTransactions(replaceIds)
+      } catch {
+        setNotice(
+          `⚠️ 已寫入 ${rows.length} 筆，但舊紀錄刪除失敗，現在有重複的交易。請勾選舊的那批手動刪除，或重新執行一次取代匯入。`,
+        )
+        return true
+      }
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of replaceIds) {
+          next.delete(id)
+        }
+        return next
+      })
+      setNotice(
+        `✅ 已用 ${rows.length} 筆交易取代原有的 ${replaceIds.length} 筆，Dashboard 與年度收益已同步更新。`,
+      )
+      return true
+    }
     setNotice(`✅ 已匯入 ${rows.length} 筆交易，Dashboard 與年度收益已同步更新。`)
+    return true
   }
 
   const handleExport = () => {
