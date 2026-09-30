@@ -97,16 +97,20 @@ describe('YearlyPage 搜尋', () => {
       tx('2026-01-10', 'BUY', 500, 1000, 712),
       tx('2026-06-01', 'SELL', 600, 1000, 2655),
     ])
+    // Scoped to the yearly table: 區間收益 (Task 176) prints the same ticker above it, and the
+    // search box does not reach into that section.
+    const yearTable = () => screen.getByRole('columnheader', { name: /^年度/ }).closest('table')!
+
     // 預設收合：看不到個股列與賣出腿
-    expect(screen.queryByText(/2330（/)).toBeNull()
-    expect(screen.queryByText(/賣出 1,000 股/)).toBeNull()
+    expect(within(yearTable()).queryByText(/2330（/)).toBeNull()
+    expect(within(yearTable()).queryByText(/賣出 1,000 股/)).toBeNull()
 
     const input = screen.getByLabelText('搜尋年度收益的股票')
     fireEvent.change(input, { target: { value: '2330' } })
-    expect(screen.getByText(/2330（/)).toBeTruthy()
-    expect(screen.getByText(/賣出 1,000 股/)).toBeTruthy()
+    expect(within(yearTable()).getByText(/2330（/)).toBeTruthy()
+    expect(within(yearTable()).getByText(/賣出 1,000 股/)).toBeTruthy()
 
     fireEvent.change(input, { target: { value: '' } })
-    expect(screen.queryByText(/2330（/)).toBeNull()
+    expect(within(yearTable()).queryByText(/2330（/)).toBeNull()
   })
 })

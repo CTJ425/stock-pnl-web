@@ -22,13 +22,9 @@ import { GlobalIndices, type IndexDef } from './GlobalIndices'
 import { IndexDetail } from './IndexDetail'
 import type { ClosedDates } from './sessionHours'
 import type { IndexQuote } from '../../services/indexQuotes'
+import { taipeiDateKey } from '../../utils/taipeiDate'
 
 const TAIPEI_WEEKDAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
-
-/** 'YYYY-MM-DD' in Asia/Taipei for `now` ('en-CA' formats dates in that order). */
-function taipeiDateKey(now: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(now)
-}
 
 /**
  * MA-01: we hold no TW holiday calendar, only the after-hours schedule's own output. If today is

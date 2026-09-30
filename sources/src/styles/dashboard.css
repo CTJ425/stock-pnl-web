@@ -1136,3 +1136,121 @@ table.hl-table {
 .yr-totals .stmt-sub-lines span {
   white-space: normal;
 }
+
+/* ---------- 區間收益 (Task 176): the user-picked window between the charts and the yearly tables ---------- */
+.yr-range-panel {
+  padding: var(--sp-05);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-05);
+}
+
+/* A flex child keeps min-width: auto, so the wide table would push the page sideways
+   instead of scrolling inside its own container. */
+.yr-range-panel > * {
+  min-width: 0;
+}
+
+/* The two date fields read as one control with the preset bar above them. */
+.yr-range-dates {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-02) var(--sp-03);
+}
+
+/* One label + field pair; the row wraps between pairs, never inside one. */
+.yr-range-date {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-02);
+}
+
+.yr-range-dates label {
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.yr-range-dates input[type='date'] {
+  font: inherit;
+  /* 16px on touch: anything smaller makes iOS Safari zoom on focus. */
+  font-size: 1rem;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-03);
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: 0;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+}
+
+.yr-range-dates input[type='date']:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
+.yr-range-dates .hint {
+  margin-left: auto;
+}
+
+/* Summary before detail: the window's four figures, then the per-stock table. */
+.yr-range-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-05);
+  padding-top: var(--sp-04);
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.yr-range-kpi {
+  min-width: 0;
+}
+
+.yr-range-kpi h3 {
+  margin: 0 0 2px;
+  font-size: var(--type-body-01);
+  font-weight: 500;
+  color: var(--cds-text-secondary);
+}
+
+.yr-range-fig {
+  font-size: var(--type-heading-04);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.yr-range-sub {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.yr-range tfoot td {
+  border-top: 1px solid var(--cds-text-primary);
+  background: var(--cds-layer-accent-01);
+}
+
+.yr-range-foot {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--cds-text-helper);
+}
+
+@media (max-width: 720px) {
+  .yr-range-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-04);
+  }
+
+  /* Two figures share a 390px row, so the heading-04 size would run them into each other. */
+  .yr-range-fig {
+    font-size: var(--type-heading-03);
+  }
+
+  .yr-range-dates .hint {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}

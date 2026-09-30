@@ -12,6 +12,7 @@
  * parseAmount / formatAmount) are deleted together - leaving functions without call-side will only be mistaken for being used by others.
  */
 import type { FxPoint } from '../../services/fxProxy'
+import { taipeiDateKey } from '../../utils/taipeiDate'
 
 export type FxRange = '3m' | '6m' | '1y'
 
@@ -148,11 +149,6 @@ export function labelIndicesFor(n: number, want = 6): number[] {
  */
 export const FX_STALE_TRADING_DAYS = 2
 
-/** 'YYYY-MM-DD' in Asia/Taipei for the instant `t` (ms since epoch). */
-function taipeiDateKey(t: number): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(t))
-}
-
 /** Mon–Fri for a 'YYYY-MM-DD' calendar date; weekday-of-date does not depend on time zone. */
 function isWeekdayKey(dateKey: string): boolean {
   const day = new Date(`${dateKey}T00:00:00Z`).getUTCDay()
@@ -162,8 +158,8 @@ function isWeekdayKey(dateKey: string): boolean {
 export function isStale(asOf: string, now: Date, tradingDays = FX_STALE_TRADING_DAYS): boolean {
   const t = Date.parse(asOf)
   if (!Number.isFinite(t)) return false
-  const asOfDate = taipeiDateKey(t)
-  const nowDate = taipeiDateKey(now.getTime())
+  const asOfDate = taipeiDateKey(new Date(t))
+  const nowDate = taipeiDateKey(now)
   if (nowDate <= asOfDate) return false
   let count = 0
   let cursor = new Date(`${asOfDate}T00:00:00Z`)

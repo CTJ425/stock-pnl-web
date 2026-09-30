@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-29 14:50:00 Asia/Taipei
+- Timestamp: 2026-09-30 02:30:00 Asia/Taipei
 
 ---
 
@@ -15,6 +15,20 @@
 - Front end deploys from `main` via Cloudflare Pages; Edge Functions and DDL never travel with a push (see CLAUDE.md § Release workflow).
 
 ## 📋 Active Tasks
+
+### Task 176: 年度收益「區間收益」—— 自選時間區間看哪幾檔落袋多少
+- **Status**: 🔄 IN PROGRESS (code done and on `dev`; only the `main` release is left)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 02:30:00 Asia/Taipei
+- **What it is**: a block between the charts and the yearly tables on 年度收益. Presets 近 1 個月 / 近 3 個月 / 近 1 年 / 今年以來 / 去年 / 全部 / 自訂 (default 近 1 年, both ends inclusive), 台股／美股 toggle, per-ticker rows sorted by total return, expandable to the sell legs inside the window, plus a totals row.
+- **Scope rule the user set**: only money already realized — the window's sells (incl. 融券回補) and cash dividends. Open positions are never counted, so a buy-only ticker does not appear.
+- **Where it lives**: `YearlyReport/rangeRows.ts` (arithmetic), `RangeSection.tsx` (UI), `pnlMath.ts` / `cells.tsx` (shared with the yearly table), `utils/taipeiDate.ts`, `pnlEngine.ts` (`dividendLegs`). Tests: `rangeRows.test.ts`, `RangeSection.test.tsx`. Details in `PROGRESS.md` 2026-09-30 02:30:00.
+- **Items**:
+  1. ~~Engine: per-leg cash dividends (`DividendLeg` / `dividendLegs`) + `npm run sync:edge-engine`~~ ✅
+  2. ~~Pure aggregation + tests (anchor: 區間 = 整個年度 equals that year's row)~~ ✅
+  3. ~~UI, CSS, multi-viewport screenshot pass (1440 light/dark, 390 light; overflow 0 px)~~ ✅
+  4. ~~0.10.7-dev.1 bump + zh-TW CHANGELOG + commit `dev`~~ ✅
+  5. **Release to `main`** —— ⏳ needs the user's OK (CLAUDE.md § Release workflow step 4). No DDL and no Edge deploy required.
 
 ### Task 175: Same-day buy — align unrealized P&L / break-even with the broker (BUG-087)
 - **Status**: ⏸️ ON HOLD (user chose to keep 0.3% for now, 2026-09-29)

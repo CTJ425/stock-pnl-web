@@ -18,8 +18,18 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
 import type { SellDetail, YearTickerDetail } from '../../utils/pnlEngine'
 import { displayStockName } from '../../services/usStockNames'
-import { fmtMoney, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
+import { fmtMoney, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
+import {
+  AmountCell,
+  DividendCell,
+  FeeCells,
+  MutedDashCell,
+  RoiCell,
+  TotalReturnCell,
+} from './cells'
 import { YEAR_HELP } from './columnHelp'
+import { rawRealized, roiBasis } from './pnlMath'
+import { RangeSection } from './RangeSection'
 import { YearlyOverview } from './YearlyOverview'
 
 // Task 166 EN-01: kept local rather than added to columnHelp.ts — that file is column-help text
@@ -42,33 +52,6 @@ interface YearRow {
   /** Every sell leg aggregated into this row, kept only to feed `roiBasis` (DA-07) */
   sells: SellDetail[]
   details: YearTickerDetail[]
-}
-
-/** Price difference without any fees: Transaction price − Cost without fees, for comparison by the deputy bank*/
-function rawRealized(d: { sellGross: number; rawCostBasis: number }): number {
-  return d.sellGross - d.rawCostBasis
-}
-
-/**
- * DA-07: a year's (or a ticker's) ROI must skip oversold sell legs (`SellDetail.oversold`)
- * entirely, in both the numerator and the denominator — an oversold leg's cost basis is already
- * 0 (nothing was actually held for the excess shares), so folding its full sale proceeds into
- * `realized` without a matching `costBasis` would inflate the percentage. When every leg is
- * oversold this sums to 0 realized / 0 cost, which `RoiCell` already renders as "—".
- */
-function roiBasis(sells: SellDetail[]): { realized: number; costBasis: number; raw: number; rawCostBasis: number } {
-  let realized = 0
-  let costBasis = 0
-  let raw = 0
-  let rawCostBasis = 0
-  for (const s of sells) {
-    if (s.oversold) continue
-    realized += s.realized
-    costBasis += s.costBasis
-    raw += rawRealized(s)
-    rawCostBasis += s.rawCostBasis
-  }
-  return { realized, costBasis, raw, rawCostBasis }
 }
 
 /**
@@ -137,116 +120,6 @@ function useSectionRows(currency: Currency, query: string): YearRow[] {
     }
     return rows
   }, [ledger, currency, query])
-}
-
-/** Amount cell: main number (including fees and taxes) + side row (excluding fees), isomorphic to the average cost of the inventory overview*/
-function AmountCell({
-  value,
-  raw,
-  currency,
-  signed,
-  rawLabel = '未含費',
-  showRaw = false,
-}: {
-  value: number
-  raw: number
-  currency: Currency
-  signed?: boolean
-  rawLabel?: string
-  /** Only the sell rows print the fee-exclusive line (see the file header). */
-  showRaw?: boolean
-}) {
-  // When there is no corresponding entry or exit in the year (such as the three sell columns of "Buy Only" stocks), the whole box displays "—":
-  // This is true only if both the fee-inclusive and the non-inclusive fees are 0 at the same time. A truly even sale will still have an uninclusive amount due to the fee difference, so there will be no misjudgment.
-  const hasActivity = value !== 0 || raw !== 0
-  if (!hasActivity) {
-    return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
-  }
-  return (
-    <td className={signed ? `num ${pnlClass(value)}` : 'num'}>
-      <div style={{ fontWeight: signed ? 600 : undefined }}>
-        {signed ? fmtSignedMoney(value, currency) : fmtMoney(value, currency)}
-      </div>
-      {showRaw && (
-        <div className="cell-sub">
-          {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
-        </div>
-      )}
-    </td>
-  )
-}
-
-/**
- * Return rate cell: realized profit and loss ÷ selling cost, the main row includes fees and the sub-row does not include fees (the same format as the three columns on the left).
- *
- * When the denominator is 0, give null instead of counting: the cost and profit and loss of "only buy" stocks are both 0 (0/0 = NaN),
- * "Oversold" means the cost is calculated at 0 but there is profit and loss (x/0 = Infinity) - neither of which is a percentage that can be displayed.
- */
-function RoiCell({
-  realized,
-  costBasis,
-  raw,
-  rawCostBasis,
-  showRaw = false,
-}: {
-  realized: number
-  costBasis: number
-  raw: number
-  rawCostBasis: number
-  showRaw?: boolean
-}) {
-  const roi = costBasis !== 0 ? realized / costBasis : null
-  const rawRoi = rawCostBasis !== 0 ? raw / rawCostBasis : null
-  if (roi === null && rawRoi === null) {
-    return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
-  }
-  return (
-    <td className={`num ${pnlClass(roi)}`}>
-      <div style={{ fontWeight: 600 }}>{roi === null ? '—' : fmtSignedPercent(roi)}</div>
-      {showRaw && <div className="cell-sub">未含費 {rawRoi === null ? '—' : fmtSignedPercent(rawRoi)}</div>}
-    </td>
-  )
-}
-
-/**
- * 手續費 and 交易稅 as two columns (2026-09-28, at the owner's request): the tax is the part of
- * `fees` backed out from the statutory rate, the brokerage fee is the rest. A zero prints the muted
- * dash (US stocks and buy-only rows pay no tax). TW figures print as whole dollars, USD with cents.
- */
-function FeeCells({ fees, feesTax, currency }: { fees: number; feesTax: number; currency: Currency }) {
-  const brokerage = fees - feesTax
-  return (
-    <>
-      {brokerage === 0 ? <MutedDashCell /> : <td className="num">{fmtMoney(brokerage, currency)}</td>}
-      {feesTax === 0 ? <MutedDashCell /> : <td className="num">{fmtMoney(feesTax, currency)}</td>}
-    </>
-  )
-}
-
-/** Muted "—" placeholder, isomorphic to the empty-activity cells above (Task 166 EN-01 / DA-07). */
-function MutedDashCell() {
-  return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
-}
-
-/** Net dividend cell: a plain amount, already net of the withholding fee (price*qty − fee_tax); "—" when this row received none. */
-function DividendCell({ value, currency }: { value: number; currency: Currency }) {
-  if (value === 0) return <MutedDashCell />
-  return <td className="num">{fmtMoney(value, currency)}</td>
-}
-
-/**
- * Total return cell: 已實現損益 + 股利, year-row only (EN-01). Ticker and sell-leg rows render "—" —
- * dividends are booked per ticker per year, not per sell leg, so summing them onto a leg row would
- * either double-count across every leg of the same ticker or attribute them to the wrong sale.
- */
-function TotalReturnCell({ realized, dividends, currency }: { realized: number; dividends: number; currency: Currency }) {
-  if (realized === 0 && dividends === 0) return <MutedDashCell />
-  const total = realized + dividends
-  return (
-    <td className={`num ${pnlClass(total)}`} style={{ fontWeight: 600 }}>
-      {fmtSignedMoney(total, currency)}
-    </td>
-  )
 }
 
 function YearlySection({ title, currency, query }: { title: string; currency: Currency; query: string }) {
@@ -568,6 +441,9 @@ export function YearlyPage() {
       </section>
 
       <YearlyOverview ledger={ledger} />
+
+      {/* Between the year-by-year picture and the year-by-year ledger: a window the user picks. */}
+      <RangeSection ledger={ledger} />
 
       {/*
         The box sits below the KPIs on purpose: the KPIs are lifetime totals over every trade and are

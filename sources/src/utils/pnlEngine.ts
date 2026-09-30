@@ -102,6 +102,17 @@ export interface SellDetail {
 }
 
 /**
+ * One cash-dividend row, kept per ticker-year alongside `sells` so a caller can slice dividends by
+ * date. `YearTickerDetail.dividends` stays the authoritative total; these legs sum to it exactly.
+ */
+export interface DividendLeg {
+  txId: string
+  date: string        // tx_date YYYY-MM-DD
+  /** price * qty − fee_tax, the same net figure that feeds `YearTickerDetail.dividends` */
+  net: number
+}
+
+/**
  * A summary of the entry and exit of a certain stock during the year. The amount field has two calibers: "fee included" and "fee not included":
  * - Including fees (buyAmt / sellAmt / costBasis): The actual money paid and received has been included in the handling fee and certification tax
  * - Not including fees (buyGross / sellGross / rawCostBasis): pure transaction price, for comparison with broker transaction returns
@@ -133,6 +144,8 @@ export interface YearTickerDetail {
   feesTax: number
   count: number
   sells: SellDetail[]
+  /** The DIVIDEND rows behind `dividends`, each with its own date (Task 176) */
+  dividendLegs: DividendLeg[]
 }
 
 export interface YearSummary {
@@ -458,6 +471,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           feesTax: 0,
           count: 0,
           sells: [],
+          dividendLegs: [],
         }
       }
       const yt = y.tickers[key]
@@ -607,6 +621,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           const net = tx.price * effQty - effFeeTax
           pos.dividends += net
           yt.dividends += net
+          yt.dividendLegs.push({ txId: tx.id, date: tx.tx_date, net })
           if (currency === 'TWD') {
             y.dividendsTw += net
             ledger.summary.dividendsTw += net
