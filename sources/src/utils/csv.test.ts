@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Transaction } from '../types/models'
-import { markDuplicateRows, parseCsv, parseTransactionsCsv, parseTxDate, replaceScope, transactionsToCsv } from './csv'
+import { matchImportRows, parseCsv, parseTransactionsCsv, parseTxDate, replaceScope, transactionsToCsv } from './csv'
 
 describe('parseTxDate', () => {
   it('支援斜線與連字號並補零', () => {
@@ -470,7 +470,7 @@ describe('parseTxDate 民國年（TX-06）', () => {
   })
 })
 
-describe('markDuplicateRows（TX-01）', () => {
+describe('matchImportRows（TX-01 判重）', () => {
   const row = {
     tx_date: base.tx_date,
     market: base.market,
@@ -483,23 +483,51 @@ describe('markDuplicateRows（TX-01）', () => {
   }
 
   it('檔案有 2 筆、帳上已有 1 筆相同交易：只標記第一筆', () => {
-    expect(markDuplicateRows([row, row], [base])).toEqual([true, false])
+    expect(matchImportRows([row, row], [base])).toEqual(['exact', 'new'])
   })
 
   it('帳上沒有相同交易時，檔案內兩筆相同成交都不算重複', () => {
-    expect(markDuplicateRows([row, row], [])).toEqual([false, false])
+    expect(matchImportRows([row, row], [])).toEqual(['new', 'new'])
   })
 
-  it('費稅不同就不是重複', () => {
-    expect(markDuplicateRows([{ ...row, fee_tax: 713 }], [base])).toEqual([false])
+  it('名稱不同但其餘相同仍視為完全相同', () => {
+    expect(matchImportRows([{ ...row, name: 'TSMC' }], [base])).toEqual(['exact'])
   })
 
-  it('交易性質不同就不是重複', () => {
-    expect(markDuplicateRows([{ ...row, tx_nature: 'DAY_TRADE' }], [base])).toEqual([false])
+  it('只有費稅不同：算同一筆交易（similar），預設跳過', () => {
+    expect(matchImportRows([{ ...row, fee_tax: 713 }], [base])).toEqual(['similar'])
   })
 
-  it('名稱不同但其餘相同仍視為重複', () => {
-    expect(markDuplicateRows([{ ...row, name: 'TSMC' }], [base])).toEqual([true])
+  it('只有交易性質不同：也算同一筆交易', () => {
+    expect(matchImportRows([{ ...row, tx_nature: 'DAY_TRADE' }], [base])).toEqual(['similar'])
+  })
+
+  it('股數或單價不同就是另一筆交易', () => {
+    expect(matchImportRows([{ ...row, qty: 2000 }], [base])).toEqual(['new'])
+    expect(matchImportRows([{ ...row, price: 501 }], [base])).toEqual(['new'])
+  })
+
+  it('日期、代號、類型不同也是另一筆交易', () => {
+    expect(matchImportRows([{ ...row, tx_date: '2024-01-11' }], [base])).toEqual(['new'])
+    expect(matchImportRows([{ ...row, ticker: '2454' }], [base])).toEqual(['new'])
+    expect(matchImportRows([{ ...row, tx_type: 'SELL' }], [base])).toEqual(['new'])
+  })
+
+  it('完全相同的列先配對，不會被費用不同的列搶走帳上那筆', () => {
+    expect(matchImportRows([row, { ...row, fee_tax: 713 }], [base])).toEqual(['exact', 'new'])
+    expect(matchImportRows([{ ...row, fee_tax: 713 }, row], [base])).toEqual(['new', 'exact'])
+  })
+
+  it('帳上一筆只能被認領一次：同價同量的兩筆成交，帳上只有一筆時另一筆仍要匯入', () => {
+    expect(matchImportRows([{ ...row, fee_tax: 713 }, { ...row, fee_tax: 714 }], [base])).toEqual([
+      'similar',
+      'new',
+    ])
+  })
+
+  it('帳上兩筆、檔案兩筆：兩筆都跳過', () => {
+    const second: Transaction = { ...base, id: 'b2' }
+    expect(matchImportRows([row, row], [base, second])).toEqual(['exact', 'exact'])
   })
 })
 

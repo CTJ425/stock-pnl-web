@@ -1,9 +1,20 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 177 取代匯入 — a CSV re-import can now replace its own date range instead of relying on an exact-match duplicate check
-- Status: 🔄 `dev` = 0.10.8-dev.1, `main` = 0.10.7; no DDL, no Edge deploy
-- Timestamp: 2026-09-30 13:30:00 Asia/Taipei
+- Action: Task 177 匯入判重 — a re-imported trade is recognised by date/market/ticker/direction/price/qty, so a differing fee no longer duplicates it; 取代 mode added alongside
+- Status: 🔄 `dev` = 0.10.8-dev.2, `main` = 0.10.7; no DDL, no Edge deploy
+- Timestamp: 2026-09-30 14:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-30 14:30:00 Asia/Taipei (Task 177 判重放寬, 0.10.8-dev.2)
+- User looked at the real import preview — 118 rows, only 8 flagged, 「確認匯入 110 筆」 — and asked for the opposite of what 0.10.8-dev.1 delivered: have the import **recognise** a trade it already holds and skip it, rather than delete and rewrite the period.
+- My earlier objection to a looser key was wrong and the correction matters: `markDuplicateRows` already matched as a **multiset**, so two genuine same-price fills on one day can never collapse into one — k copies in the file against m on the ledger always leave k − m to import. Loosening the key does not drop a real trade.
+- `markDuplicateRows` → `matchImportRows` (`utils/csv.ts`), returning `'new' | 'exact' | 'similar'` per row. `exactKey` is unchanged; `tradeKey` is 日期|市場|代號|買賣別|單價|股數 — fee/tax and 交易性質 are out, because 玉山 charges the full statutory rate and refunds monthly, so its export always disagrees with a row typed at the discounted rate. Two passes over per-key buckets with a `used[]` flag per existing row: exact first, so an exact row never loses its ledger match to a looser one (`[712]` on the ledger, `[712, 713]` in the file ⇒ exact, new — not similar, exact).
+- UI: 狀態 column now reads 重複 / 帳上已有（費用不同）, the header counts both kinds separately, and the checkbox became 「仍要匯入帳上已經有的 N 筆」. 取代 mode is untouched and still the answer when the file should simply be the truth for its period.
+- Verify against the user's own 118-row export: ledger written by the same pipeline ⇒ 118 exact; the same trades with fees at 60% (a discounted hand-typed ledger) ⇒ 118 similar, 0 new — that is the case that used to import 110 duplicates; only the last 20 on the ledger ⇒ 20 exact, 98 new. Real Chromium with 3 seeded rows (1 identical, 2 with different fees): 「其中 1 筆完全相同、2 筆帳上已有但費用或性質不同」, 確認匯入 115 筆.
+- `TransactionsPage.import.test.tsx` flipped: the case that asserted 合併 produces a 4th row now asserts it produces none (button disabled at 0 筆). `txRowCount()` had to be scoped to `.tx-table` — the modal renders a preview table of its own.
+- Verify: vitest 151 files / 2,575 tests, 2,568 passed, 7 skipped; `npm run build`, `typecheck:edge`, `lint` exit 0.
 
 ---
 
@@ -14,18 +25,5 @@
 - Python fixes in the user's converter (file lives outside this repo): `t_time` dropped from `fill_key` — it is often empty, so one export with it and one without turned a single fill into two and defeated the cross-file dedup, putting duplicates inside the CSV itself; and `BUY_SELL[...]` became a warn-and-skip instead of a KeyError that aborts the whole run. Verified on synthetic exports: the cross-file pair collapses to 1 row, the unknown code is reported and skipped.
 - Verify: vitest 151 files / 2,569 tests, 2,562 passed, 7 skipped — `replaceScope` unit cases in `csv.test.ts`, mode wiring in `CsvImportModal.test.tsx`, and `TransactionsPage.import.test.tsx` which drives the real local-mode provider: importing the same file twice leaves 3 rows, while the 合併 path with a fee 1 元 different produces 4. `npm run build` and `lint` exit 0. Real Chromium at 1280 and 390: the notice, the confirm and the result all read correctly, and after 取代 the workspace holds the CSV's 3 rows plus the untouched 股利 row.
 - Committed to `dev` as 0.10.8-dev.1 (user asked for the commit, not a release). `main` stays on 0.10.7 until the user says merge. No DDL, no Edge deploy: nothing under `sources/supabase/` changed.
-
----
-
-## 📅 Log: 2026-09-30 02:30:00 Asia/Taipei (Task 176 區間收益, 0.10.7-dev.1)
-- User asked for a date-range view on 年度收益 ("which stocks, how much did I make"), discussed first as an HTML proposal, then approved: dividends included, 台股／美股 as a toggle, real Taipei "today", presets 近 1 個月 / 近 3 個月 / 近 1 年 / 今年以來 / 去年 / 全部 / 自訂, and **only money already realized** — open positions never counted.
-- Why no engine recomputation: `SellDetail` (`pnlEngine.ts:84`) already carries `date` plus the moving-average cost **as of that sell**, so a leg's realized P&L is final and slicing by date is a filter, not a recalculation. The test that pins this down is 區間 = 整個年度 ⇒ every figure equals that year's row in the yearly table.
-- Engine change (the only one needed): `DividendLeg` + `YearTickerDetail.dividendLegs`, pushed where `yt.dividends += net` already ran. `dividends` (the number) is untouched, so Dashboard / Discord card / yearly table are unaffected. `npm run sync:edge-engine` re-rendered the Edge copy (`_shared/engine/pnlEngine.ts`) — `edgeEngine.test.mjs` compares the two and failed until it was run.
-- New files: `YearlyReport/rangeRows.ts` (all the arithmetic: presets → window, per-ticker aggregation merged across years, totals, oversold rule), `RangeSection.tsx` (UI), `pnlMath.ts` + `cells.tsx` (moved verbatim out of `YearlyPage.tsx` so both tables share the DA-07 oversold rule and one way of printing money), `src/utils/taipeiDate.ts` (`taipeiDateKey` extracted from its two copies in `MacroPage.tsx` / `Fx/fxConvert.ts`, plus `addMonthsKey`, which clamps 03-31 −1 month to 02-28 instead of rolling into March).
-- `YearlyPage.test.tsx` 搜尋 case had to be scoped to the yearly table (`columnheader /^年度/` → `closest('table')`): 區間收益 prints the same ticker above it and the search box does not reach into that section.
-- Verify: vitest 150 files / 2,556 tests, 2,549 passed, 7 skipped (24 new across `rangeRows.test.ts` + `RangeSection.test.tsx`); `npm run build`, `typecheck:edge`, `lint` exit 0. Numbers re-derived by hand against the browser: 2330 realized +600,397 on cost 500,713 = +119.91%, 2303 −30,919 = −17.15%, totals +569,478 realized / +6,000 dividend / +575,478. Screenshots 1440 light+dark and 390 light, horizontal overflow 0 px, no console errors. Fixed from those shots: flex `min-width: 0` (the table pushed the phone page 14 px wide), phone KPI figure size (two figures collided), date label+field pairs glued, 股利 KPI switched to `fmtMoney` (no `+` sign), `.yr-head` instead of `.section-title` so the note wraps.
-- Browser verification (2026-09-30 02:50, the user asked for it explicitly after the first report): `scripts/verify-range-pnl-e2e.cjs`, a real Chromium in local mode, 69 assertions, all pass — every preset's resolved window, per-ticker figures and legs, totals row, sort order, 僅股利 badge, custom dates, from > to, both empty states, 台股／美股 switch. Expected figures are hand-computed, never read back from the engine, and it asserts 「去年」 equals the yearly table's 2025 row column by column. Interactive passes at 390 / 768, light and dark: horizontal overflow 0 px after clicking presets and expanding a row, date inputs 16px, no console errors. Registered in `docs/UnitTests/E2E.md`.
-- Release (2026-09-30 02:55:00): user said merge to `main` once verification passed. 657ced7 (0.10.7-dev.2) on `dev`, then the release commit strips `-dev.N` → 0.10.7, ff `main`, `git push origin main:dev`.
-- No Supabase change: no DDL, no Edge deploy needed (the Edge engine copy changed but the Discord card does not read `dividendLegs`; redeploy only if a future card uses it).
 
 ---

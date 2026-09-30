@@ -54,7 +54,7 @@ describe('CsvImportModal 重複列處理', () => {
     const onImport = vi.fn(async (_rows: NewTransaction[]) => {})
     render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
     await paste(CSV)
-    expect(await screen.findByText(/其中 1 筆與現有交易相同/)).toBeTruthy()
+    expect(await screen.findByText(/其中 1 筆完全相同/)).toBeTruthy()
     await userEvent.click(await screen.findByRole('button', { name: /確認匯入 1 筆/ }))
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
     const rows = onImport.mock.calls[0][0]
@@ -66,10 +66,22 @@ describe('CsvImportModal 重複列處理', () => {
     const onImport = vi.fn(async (_rows: NewTransaction[]) => {})
     render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
     await paste(CSV)
-    await userEvent.click(await screen.findByLabelText(/仍要匯入與現有交易相同的 1 筆/))
+    await userEvent.click(await screen.findByLabelText(/仍要匯入帳上已經有的 1 筆/))
     await userEvent.click(await screen.findByRole('button', { name: /確認匯入 2 筆/ }))
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
     expect(onImport.mock.calls[0][0]).toHaveLength(2)
+  })
+
+  it('只有手續費不同也認得出是同一筆，預設跳過', async () => {
+    const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+    render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
+    await paste(CSV.replace('500,1000,712', '500,1000,713'))
+    expect(await screen.findByText(/1 筆帳上已有但費用或性質不同/)).toBeTruthy()
+    await userEvent.click(await screen.findByRole('button', { name: /確認匯入 1 筆/ }))
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+    const rows = onImport.mock.calls[0][0]
+    expect(rows).toHaveLength(1)
+    expect(rows[0].ticker).toBe('2454')
   })
 
   it('合併模式不會要求呼叫端刪除任何東西', async () => {
@@ -113,8 +125,8 @@ describe('CsvImportModal 取代模式', () => {
     render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
     await paste(CSV)
     await pickReplace()
-    expect(screen.queryByText(/其中 1 筆與現有交易相同/)).toBeNull()
-    expect(screen.queryByLabelText(/仍要匯入與現有交易相同/)).toBeNull()
+    expect(screen.queryByText(/完全相同/)).toBeNull()
+    expect(screen.queryByLabelText(/仍要匯入帳上已經有的/)).toBeNull()
     await userEvent.click(await screen.findByRole('button', { name: /取代匯入 2 筆/ }))
     await waitFor(() => expect(onImport.mock.calls[0][0]).toHaveLength(2))
   })

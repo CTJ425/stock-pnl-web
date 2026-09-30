@@ -41,10 +41,14 @@ async function replaceImport(
   await user.click(within(confirmDialog).getByRole('button', { name: '取代匯入' }))
 }
 
-/** Data rows in the transactions table (the header row does not count). */
+/**
+ * Data rows in the transactions table (the header row does not count). Scoped to `.tx-table`
+ * because the import modal renders a preview table of its own while it is open.
+ */
 function txRowCount() {
-  const table = screen.getByRole('table')
-  return within(table).getAllByRole('row').length - 1
+  const table = document.querySelector('.tx-table')
+  if (!table) throw new Error('交易表格不存在')
+  return within(table as HTMLElement).getAllByRole('row').length - 1
 }
 
 describe('取代匯入（本機模式，走真正的 provider）', () => {
@@ -64,11 +68,11 @@ describe('取代匯入（本機模式，走真正的 provider）', () => {
 
     // Second pass with the broker's own figures: the differing fee must not add a fourth row.
     await replaceImport(user, CSV_REFETCHED, true)
-    await waitFor(() => expect(screen.getByRole('table').textContent).toContain('713'))
+    await waitFor(() => expect(document.querySelector('.tx-table')?.textContent).toContain('713'))
     expect(txRowCount()).toBe(3)
   })
 
-  it('合併模式遇到費用差 1 元就會多一筆（這就是取代模式存在的原因）', async () => {
+  it('合併模式：費用差 1 元仍認得出是同一筆，不會重複匯入', async () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByText('本機模式')
@@ -80,7 +84,10 @@ describe('取代匯入（本機模式，走真正的 provider）', () => {
     const modal = await openImport(user)
     await user.click(within(modal).getByLabelText('貼上 CSV 內容'))
     await user.paste(CSV_REFETCHED)
-    await user.click(await within(modal).findByRole('button', { name: /確認匯入 1 筆/ }))
-    await waitFor(() => expect(txRowCount()).toBe(4))
+    expect(await within(modal).findByText(/1 筆帳上已有但費用或性質不同/)).toBeTruthy()
+    // Nothing is left to import, so the confirm button is disabled at 0 筆.
+    const btn = await within(modal).findByRole('button', { name: /確認匯入 0 筆/ })
+    expect(btn.hasAttribute('disabled')).toBe(true)
+    expect(txRowCount()).toBe(3)
   })
 })

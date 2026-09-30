@@ -176,31 +176,84 @@ function escapeFormulaPrefix(value: string): string {
   return value
 }
 
+/** How an imported row relates to what the workspace already holds (`matchImportRows`). */
+export type ImportMatch =
+  /** Nothing on the ledger answers to this trade. */
+  | 'new'
+  /** Every field matches, fees included. */
+  | 'exact'
+  /** Same trade — date, market, ticker, direction, price and quantity — but the fee / tax or the
+   * 交易性質 differs, which is what a broker re-export looks like next to a hand-typed row. */
+  | 'similar'
+
+type TradeFields = {
+  tx_date: string
+  market: Market
+  ticker: string
+  tx_type: TxType
+  price: number
+  qty: number
+  fee_tax: number
+  tx_nature?: TxNature | null
+}
+
+/** Full identity, fees included. `name` is left out so a renamed re-import still matches. */
+const exactKey = (r: TradeFields) =>
+  `${r.tx_date}|${r.market}|${r.ticker}|${r.tx_type}|${r.price}|${r.qty}|${r.fee_tax}|${r.tx_nature ?? ''}`
+
 /**
- * Duplicate detection for CSV import (TX-01): key excludes `name` so a renamed re-import of the
- * same fill still counts as a duplicate. Matching is a multiset — when the file has k copies of a
- * key and the ledger already has m, only the first min(k, m) file rows are marked, so two identical
- * fills inside one file are never duplicates of each other.
+ * What makes two rows the same trade. Fees are excluded on purpose: the broker charges the full
+ * statutory rate and refunds monthly, so its export disagrees by a few NT$ with a row typed in at
+ * the discounted rate — and that difference used to make a trade already on the ledger read as new.
  */
-export function markDuplicateRows(rows: NewTransaction[], existing: Transaction[]): boolean[] {
-  const keyOf = (r: { tx_date: string; market: Market; ticker: string; tx_type: TxType; price: number; qty: number; fee_tax: number; tx_nature?: TxNature | null }) =>
-    `${r.tx_date}|${r.market}|${r.ticker}|${r.tx_type}|${r.price}|${r.qty}|${r.fee_tax}|${r.tx_nature ?? ''}`
+const tradeKey = (r: TradeFields) =>
+  `${r.tx_date}|${r.market}|${r.ticker}|${r.tx_type}|${r.price}|${r.qty}`
 
-  const remaining = new Map<string, number>()
-  for (const e of existing) {
-    const k = keyOf(e)
-    remaining.set(k, (remaining.get(k) ?? 0) + 1)
+/**
+ * Duplicate detection for CSV import (TX-01). Matching is a multiset and each existing row is
+ * consumed at most once, so k copies in the file against m on the ledger leave k − m rows to
+ * import: two identical fills in one file are never duplicates of each other, and a day with two
+ * genuine same-price fills cannot collapse into one.
+ *
+ * Exact matches are taken first so they never lose their row to a looser one: with `[fee 712]` on
+ * the ledger and `[fee 712, fee 713]` in the file, the first row is the duplicate and the second
+ * is new, not the other way round.
+ */
+export function matchImportRows(rows: NewTransaction[], existing: Transaction[]): ImportMatch[] {
+  const used: boolean[] = existing.map(() => false)
+  const index = (keyOf: (r: TradeFields) => string) => {
+    const m = new Map<string, number[]>()
+    existing.forEach((e, i) => {
+      const k = keyOf(e)
+      const bucket = m.get(k)
+      if (bucket) bucket.push(i)
+      else m.set(k, [i])
+    })
+    return m
   }
+  const byExact = index(exactKey)
+  const byTrade = index(tradeKey)
 
-  return rows.map((r) => {
-    const k = keyOf(r)
-    const count = remaining.get(k) ?? 0
-    if (count > 0) {
-      remaining.set(k, count - 1)
-      return true
+  /** First existing row in the bucket that no earlier import row has claimed. */
+  const claim = (bucket: number[] | undefined) => {
+    if (!bucket) return false
+    for (const i of bucket) {
+      if (!used[i]) {
+        used[i] = true
+        return true
+      }
     }
     return false
+  }
+
+  const result: ImportMatch[] = rows.map(() => 'new')
+  rows.forEach((r, i) => {
+    if (claim(byExact.get(exactKey(r)))) result[i] = 'exact'
   })
+  rows.forEach((r, i) => {
+    if (result[i] === 'new' && claim(byTrade.get(tradeKey(r)))) result[i] = 'similar'
+  })
+  return result
 }
 
 /** What a 取代 import would delete before writing (`replaceScope`). */

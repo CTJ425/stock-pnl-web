@@ -6,8 +6,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileUp, Upload } from 'lucide-react'
 import type { NewTransaction, Transaction } from '../../types/models'
+import type { ImportMatch } from '../../utils/csv'
 import { MARKET_LABEL, TX_TYPE_LABEL } from '../../types/models'
-import { markDuplicateRows, parseTransactionsCsv, replaceScope } from '../../utils/csv'
+import { matchImportRows, parseTransactionsCsv, replaceScope } from '../../utils/csv'
 import { Modal } from '../Common/Modal'
 
 interface CsvImportModalProps {
@@ -22,12 +23,18 @@ interface CsvImportModalProps {
 }
 
 /**
- * 合併 keeps the TX-01 behaviour: skip rows that already exist, judged by an exact field match.
- * 取代 deletes the CSV's whole date range first, which is the only mode that stays correct when
- * the broker's figures differ from what is stored (a fee off by NT$1 slips past the duplicate
- * check and doubles the ledger).
+ * 合併 skips what the ledger already holds, judged trade by trade (`matchImportRows`): a fee that
+ * differs by a few NT$ no longer reads as a new transaction. 取代 deletes the CSV's whole date
+ * range first, for when the file should simply be the truth for the period it covers.
  */
 type ImportMode = 'merge' | 'replace'
+
+/** 狀態 column. A 'new' row says nothing — the blank is the normal case. */
+const MATCH_LABEL: Record<ImportMatch, string> = {
+  new: '',
+  exact: '重複',
+  similar: '帳上已有（費用不同）',
+}
 
 const PREVIEW_LIMIT = 8
 /** Debounce for the paste textarea: parsing a large paste on every keystroke is wasted work*/
@@ -49,11 +56,13 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
 
   const parsed = useMemo(() => (debouncedText.trim() ? parseTransactionsCsv(debouncedText) : null), [debouncedText])
 
-  const duplicateFlags = useMemo(
-    () => (parsed ? markDuplicateRows(parsed.rows, existing) : []),
+  const matches = useMemo(
+    () => (parsed ? matchImportRows(parsed.rows, existing) : []),
     [parsed, existing],
   )
-  const dupCount = duplicateFlags.filter(Boolean).length
+  const exactCount = matches.filter((m) => m === 'exact').length
+  const similarCount = matches.filter((m) => m === 'similar').length
+  const knownCount = exactCount + similarCount
   const replace = useMemo(
     () => (parsed && mode === 'replace' ? replaceScope(parsed.rows, existing) : null),
     [parsed, existing, mode],
@@ -65,9 +74,9 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
       parsed
         ? mode === 'replace'
           ? parsed.rows
-          : parsed.rows.filter((_, i) => includeDups || !duplicateFlags[i])
+          : parsed.rows.filter((_, i) => includeDups || matches[i] === 'new')
         : [],
-    [parsed, duplicateFlags, includeDups, mode],
+    [parsed, matches, includeDups, mode],
   )
 
   const pickFile = async (file: File | undefined) => {
@@ -192,7 +201,10 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
 
               <div style={{ margin: '10px 0 8px', fontSize: 14, color: 'var(--ink-secondary)' }}>
                 預覽（共 {parsed.rows.length} 筆有效交易
-                {mode === 'merge' && dupCount > 0 && `，其中 ${dupCount} 筆與現有交易相同`}
+                {mode === 'merge' && exactCount > 0 && `，其中 ${exactCount} 筆完全相同`}
+                {mode === 'merge' &&
+                  similarCount > 0 &&
+                  `${exactCount > 0 ? '、' : '，其中 '}${similarCount} 筆帳上已有但費用或性質不同`}
                 {parsed.rows.length > PREVIEW_LIMIT && `，僅顯示前 ${PREVIEW_LIMIT} 筆`}）：
               </div>
               <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 0 }}>
@@ -214,7 +226,7 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                     {parsed.rows.slice(0, PREVIEW_LIMIT).map((row, i) => (
                       <tr
                         key={i}
-                        style={mode === 'merge' && duplicateFlags[i] ? { color: 'var(--ink-muted)' } : undefined}
+                        style={mode === 'merge' && matches[i] !== 'new' ? { color: 'var(--ink-muted)' } : undefined}
                       >
                         <td>{row.tx_date}</td>
                         <td>{MARKET_LABEL[row.market]}</td>
@@ -224,13 +236,13 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                         <td className="num">{row.price}</td>
                         <td className="num">{row.qty}</td>
                         <td className="num">{row.fee_tax}</td>
-                        <td>{mode === 'merge' && duplicateFlags[i] ? '重複' : ''}</td>
+                        <td>{mode === 'merge' ? MATCH_LABEL[matches[i]] : ''}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {mode === 'merge' && dupCount > 0 && (
+              {mode === 'merge' && knownCount > 0 && (
                 <label
                   htmlFor="csv-include-dups"
                   style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 13, cursor: 'pointer' }}
@@ -241,7 +253,7 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                     checked={includeDups}
                     onChange={(e) => setIncludeDups(e.target.checked)}
                   />
-                  仍要匯入與現有交易相同的 {dupCount} 筆
+                  仍要匯入帳上已經有的 {knownCount} 筆
                 </label>
               )}
             </>
