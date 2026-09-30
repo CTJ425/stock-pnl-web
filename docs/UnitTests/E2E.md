@@ -36,6 +36,7 @@ Real browser against:
 | `sources/scripts/verify-daytrade-short-e2e.cjs` | Day-trade & short sale P&L verification |
 | `sources/scripts/verify-fee-rate-e2e.cjs` | Brokerage fee discount rate UI verification |
 | `sources/scripts/verify-pnl-rounding-e2e.cjs` | Holdings P&L after new buy / sell vs an independent broker-rule oracle; 逐批／整筆 flooring; fee-settings preview, 取消, 儲存 (BUG-088). Supabase mode, all mocked: `TEST_URL=http://127.0.0.1:5173/ node scripts/verify-pnl-rounding-e2e.cjs` |
+| `sources/scripts/verify-range-pnl-e2e.cjs` | 年度收益 → 區間收益 (Task 176): every preset's window, custom dates, per-ticker figures and legs, 台股／美股 switch, the two empty states, and the invariant 「去年」 = the yearly table's 2025 row. Expected figures are hand-computed, not read from the engine. Local mode, no mocks: `TEST_URL=http://localhost:5199/ node scripts/verify-range-pnl-e2e.cjs` |
 | `sources/scripts/verify-quote-intraday-e2e.cjs` | Intraday quote chart verification |
 | `sources/scripts/verify-macro-turnover.cjs` | US macro series & turnover verification |
 
