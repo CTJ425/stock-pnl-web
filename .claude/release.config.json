@@ -1,0 +1,29 @@
+{
+  "repo": {
+    "tagPrefix": "",
+    "releaseBranch": "main",
+    "devBranch": "dev",
+    "changelog": "docs/agent/CHANGELOG.md",
+    "changelogLang": "zh-TW",
+    "appDir": "sources"
+  },
+  "version": {
+    "syncFiles": [
+      { "path": "sources/package.json", "type": "npm" },
+      { "path": "sources/src/version.ts", "type": "regex", "pattern": "APP_VERSION = '<version>'" },
+      { "path": "README.md", "type": "regex", "pattern": "目前版本：<version>" }
+    ],
+    "release": { "enabled": true, "publishedBy": "ci", "draft": false, "latest": true }
+  },
+  "ship": {
+    "gates": [
+      { "name": "test", "cmd": "npm test" },
+      { "name": "build", "cmd": "npm run build" },
+      { "name": "typecheck:edge", "cmd": "npm run typecheck:edge" }
+    ],
+    "flow": { "devFirst": true, "askBeforeRelease": true },
+    "deploy": { "hookSkill": "supabase-ops", "triggerPaths": ["sources/supabase/**"] },
+    "verify": { "hookSkill": "verify" },
+    "record": { "hookSkill": "bookkeeping" }
+  }
+}

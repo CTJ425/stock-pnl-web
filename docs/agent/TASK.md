@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-30 02:30:00 Asia/Taipei
+- Timestamp: 2026-09-30 17:20:00 Asia/Taipei
 
 ---
 
@@ -16,15 +16,16 @@
 
 ## 📋 Active Tasks
 
-### Task 175: Same-day buy — align unrealized P&L / break-even with the broker (BUG-087)
-- **Status**: ⏸️ ON HOLD (user chose to keep 0.3% for now, 2026-09-29)
+### Task 178: Prove the shared ship/versioning skills on a real release
+- **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
-- **Timestamp**: 2026-09-29 14:50:00 Asia/Taipei
-- **Background**: BUG-087 in `BUG_FIX.md`. PROD workspace 玉山證卷 recomputed with the current engine: 0050 +49,555, 2303 +208, 6560 −389, total **49,374** vs broker **49,423** — the whole gap is 6560's tax (97 at 0.3% vs 48 at 0.15%). All 78 release tags 0.9.0 → 0.10.4 give −389 / 32.79 for 6560, so it is not a regression.
+- **Timestamp**: 2026-09-30 16:05:30 Asia/Taipei
+- **Background**: `ship` and `versioning` now live in `script-docs/AI/skill/`, are installed globally (`~/.claude/skills/`), and read this repo's paths from `.claude/release.config.json`. The project copies under `.claude/skills/` were `git rm`'d — recover from git if the cutover has to be undone. See `PROGRESS.md` 2026-09-30 16:05:30.
 - **Items**:
-  1. ~~Confirm the broker's tax on the same-day lot~~ ✅ 2026-09-29: broker screenshots show 6560 預估收入 32,306 = 32,400 − 46 − 48 (0.15%), 2303 on the same screen at 0.3%. Original plan was: on 2026-09-30 read the broker's 6560 break-even (price-independent). 32.79 (same as the dashboard) → broker estimates same-day buys at the 現股當沖 rate; still 32.75 → something else, collect the broker's cost / fee / tax breakdown.
-  2. User decided 2026-09-29: not now (keep 0.3%). If revisited: open lots bought today use 0.15% (`estimateUnrealized`, `breakEvenPrice`; only while the lot's `date` is the current Taipei trading day and `tx_nature` is not SHORT). ⏳
-  3. ~~Round break-even up to a valid tick~~ ✅ dropped 2026-09-29: the broker also shows cent-level break-even (user: 0050 105.1, 2303 153.4, both equal to the dashboard). Both search the lowest cent price whose floored fee/tax still covers cost; 6560 at 0.15% → 32.75, at 0.3% → 32.79.
+  1. Commit both repos: ~~`stock-pnl-web` (config in, project skills out, `CLAUDE.md` trimmed) — done 2026-09-30 in the 0.10.9 bookkeeping commit~~ · `script-docs` (new `AI/skill/` subproject, installer, manifest, CI job, renamed `.claude/release.config.json`) —— ⏳
+  2. Run the next release of this repo through the global `ship` skill end to end and record where it needed a human that the skill should have handled. ⏳
+  3. Check the pieces the config expresses for the first time for real: ~~`type: "npm"` writing both `sources/package.json` and the lockfile — confirmed on 0.10.9, `npm version` wrote `version` and `packages[""].version` together~~ · `release.publishedBy: "ci"` — the skill must **confirm** the Release `release.yml` created, not try to create it —— ⏳ (0.10.9 is the first push to test it)
+  4. Pre-existing and unrelated: `script-docs` CI runs `shellcheck` with `|| fail=1`, and `script/setup-en-cli-zh-tw-desktop/setup-en-cli-zh-tw-desktop.sh:60` emits SC2016 (info) on shellcheck 0.10.0. Decide there whether to silence it or pin severity — it can turn the new CI job red for reasons that have nothing to do with the skills. ⏳
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**

@@ -1,5 +1,30 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 175: Same-day buy — align the broker caliber with the broker app (BUG-087)
+- **Status**: ✅ DONE (0.10.9, 2026-09-30)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 17:20:00 Asia/Taipei
+- **Outcome**: the engine was never wrong. The broker withholds the halved 現股當沖 tax (0.15%, ETF 0.05%) on a lot bought **today** and goes back to 0.3% overnight, by calendar day rather than at the 13:30 close (the 2026-09-29 E.SUN screenshot was taken at 14:46, after the close, and was still halved). Confirmed on 2026-09-30: with the lot no longer same-day the broker showed −587 / −1.8% at price 32.2, bit-for-bit the engine's own output. Shipped the **narrow** alignment — only the 券商 / 牌告 figure halves; the app's own net figure and break-even stay at 0.3%, because the halving is conditional on actually day-trading and on eligibility this app cannot see (處置股 / 警示股 / 全額交割股, 當沖同意書), and break-even answers "what covers cost if I *don't* sell today".
+- **Done**: items 1 and 3 were already struck before this task closed (broker tax confirmed; tick rounding dropped). Item 2's "if revisited" branch is what 0.10.9 implemented, narrowed to the broker caliber.
+- **Where it lives**: `lotSellTaxRate` / `DAY_TRADE_TAX_SUNSET` / `estimateUnrealized`'s 7th `dayTradeDate` (`sources/src/utils/pnlEngine.ts`), `buildHoldingRows(…, today)` + `HoldingRow.brokerDayTradeTax` (`holdingRows.ts`), `aggregateHoldings(…, today)` (Edge `holdingsCard.ts`). Full record: `PROGRESS.md` 2026-09-30 17:20:00, `FIXED_BUG.md` BUG-087, `CHANGELOG.md` 0.10.9.
+- **Left open elsewhere**: whether the broker halves per lot **within one ticker** is still unverified (the 2303-vs-6560 evidence is cross-ticker); buying more of an already-held position would settle it. The implementation is per lot. Edge `stock-report` still needs deploying on DEV and PROD for the Discord card to follow the rule.
+
+---
+
+### Task 175 — original TASK.md entry as it stood when it closed (rolled from TASK.md 2026-09-30 17:20:00)
+
+### Task 175: Same-day buy — align unrealized P&L / break-even with the broker (BUG-087)
+- **Status**: ⏸️ ON HOLD (user chose to keep 0.3% for now, 2026-09-29)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-29 14:50:00 Asia/Taipei
+- **Background**: BUG-087 in `BUG_FIX.md`. PROD workspace 玉山證卷 recomputed with the current engine: 0050 +49,555, 2303 +208, 6560 −389, total **49,374** vs broker **49,423** — the whole gap is 6560's tax (97 at 0.3% vs 48 at 0.15%). All 78 release tags 0.9.0 → 0.10.4 give −389 / 32.79 for 6560, so it is not a regression.
+- **Items**:
+  1. ~~Confirm the broker's tax on the same-day lot~~ ✅ 2026-09-29: broker screenshots show 6560 預估收入 32,306 = 32,400 − 46 − 48 (0.15%), 2303 on the same screen at 0.3%. Original plan was: on 2026-09-30 read the broker's 6560 break-even (price-independent). 32.79 (same as the dashboard) → broker estimates same-day buys at the 現股當沖 rate; still 32.75 → something else, collect the broker's cost / fee / tax breakdown.
+  2. User decided 2026-09-29: not now (keep 0.3%). If revisited: open lots bought today use 0.15% (`estimateUnrealized`, `breakEvenPrice`; only while the lot's `date` is the current Taipei trading day and `tx_nature` is not SHORT). ⏳
+  3. ~~Round break-even up to a valid tick~~ ✅ dropped 2026-09-29: the broker also shows cent-level break-even (user: 0050 105.1, 2303 153.4, both equal to the dashboard). Both search the lowest cent price whose floored fee/tax still covers cost; 6560 at 0.15% → 32.75, at 0.3% → 32.79.
+
+---
+
 ### Task 177: CSV 匯入判重 —— 重匯券商檔案不再重複計算（判重放寬 + 取代模式）
 - **Status**: ✅ DONE (0.10.8, 2026-09-30)
 - **Agent**: Claude
