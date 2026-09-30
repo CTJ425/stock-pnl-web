@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 176 區間收益 — pick any date window on 年度收益 and see which stocks realized money in it (0.10.7-dev.1)
-- Status: 🔄 committed on `dev`; `main` untouched, waiting for the user's OK to release
-- Timestamp: 2026-09-30 02:30:00 Asia/Taipei
+- Action: 0.10.7 released: Task 176 區間收益 — pick any date window on 年度收益 and see which stocks realized money in it
+- Status: ✅ `main` = `dev` = 0.10.7; no DDL, no Edge deploy
+- Timestamp: 2026-09-30 02:55:00 Asia/Taipei
 
 ---
 
@@ -14,6 +14,8 @@
 - New files: `YearlyReport/rangeRows.ts` (all the arithmetic: presets → window, per-ticker aggregation merged across years, totals, oversold rule), `RangeSection.tsx` (UI), `pnlMath.ts` + `cells.tsx` (moved verbatim out of `YearlyPage.tsx` so both tables share the DA-07 oversold rule and one way of printing money), `src/utils/taipeiDate.ts` (`taipeiDateKey` extracted from its two copies in `MacroPage.tsx` / `Fx/fxConvert.ts`, plus `addMonthsKey`, which clamps 03-31 −1 month to 02-28 instead of rolling into March).
 - `YearlyPage.test.tsx` 搜尋 case had to be scoped to the yearly table (`columnheader /^年度/` → `closest('table')`): 區間收益 prints the same ticker above it and the search box does not reach into that section.
 - Verify: vitest 150 files / 2,556 tests, 2,549 passed, 7 skipped (24 new across `rangeRows.test.ts` + `RangeSection.test.tsx`); `npm run build`, `typecheck:edge`, `lint` exit 0. Numbers re-derived by hand against the browser: 2330 realized +600,397 on cost 500,713 = +119.91%, 2303 −30,919 = −17.15%, totals +569,478 realized / +6,000 dividend / +575,478. Screenshots 1440 light+dark and 390 light, horizontal overflow 0 px, no console errors. Fixed from those shots: flex `min-width: 0` (the table pushed the phone page 14 px wide), phone KPI figure size (two figures collided), date label+field pairs glued, 股利 KPI switched to `fmtMoney` (no `+` sign), `.yr-head` instead of `.section-title` so the note wraps.
+- Browser verification (2026-09-30 02:50, the user asked for it explicitly after the first report): `scripts/verify-range-pnl-e2e.cjs`, a real Chromium in local mode, 69 assertions, all pass — every preset's resolved window, per-ticker figures and legs, totals row, sort order, 僅股利 badge, custom dates, from > to, both empty states, 台股／美股 switch. Expected figures are hand-computed, never read back from the engine, and it asserts 「去年」 equals the yearly table's 2025 row column by column. Interactive passes at 390 / 768, light and dark: horizontal overflow 0 px after clicking presets and expanding a row, date inputs 16px, no console errors. Registered in `docs/UnitTests/E2E.md`.
+- Release (2026-09-30 02:55:00): user said merge to `main` once verification passed. 657ced7 (0.10.7-dev.2) on `dev`, then the release commit strips `-dev.N` → 0.10.7, ff `main`, `git push origin main:dev`.
 - No Supabase change: no DDL, no Edge deploy needed (the Edge engine copy changed but the Discord card does not read `dividendLegs`; redeploy only if a future card uses it).
 
 ---

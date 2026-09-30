@@ -17,7 +17,7 @@
 ## 📋 Active Tasks
 
 ### Task 176: 年度收益「區間收益」—— 自選時間區間看哪幾檔落袋多少
-- **Status**: 🔄 IN PROGRESS (code done and on `dev`; only the `main` release is left)
+- **Status**: ✅ DONE (0.10.7, 2026-09-30)
 - **Agent**: Claude
 - **Timestamp**: 2026-09-30 02:30:00 Asia/Taipei
 - **What it is**: a block between the charts and the yearly tables on 年度收益. Presets 近 1 個月 / 近 3 個月 / 近 1 年 / 今年以來 / 去年 / 全部 / 自訂 (default 近 1 年, both ends inclusive), 台股／美股 toggle, per-ticker rows sorted by total return, expandable to the sell legs inside the window, plus a totals row.
@@ -28,7 +28,8 @@
   2. ~~Pure aggregation + tests (anchor: 區間 = 整個年度 equals that year's row)~~ ✅
   3. ~~UI, CSS, multi-viewport screenshot pass (1440 light/dark, 390 light; overflow 0 px)~~ ✅
   4. ~~0.10.7-dev.1 bump + zh-TW CHANGELOG + commit `dev`~~ ✅
-  5. **Release to `main`** —— ⏳ needs the user's OK (CLAUDE.md § Release workflow step 4). No DDL and no Edge deploy required.
+  5. ~~Real-browser verification: `scripts/verify-range-pnl-e2e.cjs`, 69 assertions, all pass (0.10.7-dev.2)~~ ✅
+  6. ~~Release to `main` as 0.10.7 (no DDL, no Edge deploy)~~ ✅
 
 ### Task 175: Same-day buy — align unrealized P&L / break-even with the broker (BUG-087)
 - **Status**: ⏸️ ON HOLD (user chose to keep 0.3% for now, 2026-09-29)
