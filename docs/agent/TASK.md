@@ -33,12 +33,13 @@
 - **Timestamp**: 2026-09-30 17:40:00 Asia/Taipei
 - **What**: BUG-088's code is fully released (front end 0.10.5, Discord card 0.10.6) and the PROD `fee_rounding` DDL is applied and verified (`verify_setup()` 10/10 PASS). The only thing left is a preference: open 手續費設定 → 「分批買進時，預扣的費用怎麼算」 for that workspace and pick 整筆, which makes its figures match 元大 instead of 玉山. Nothing to build. Full history: `FIXED_BUG.md` BUG-088.
 
-### Task 180: Deploy `stock-report` for the BUG-087 day-trade tax rule
-- **Status**: ⏸️ WAITING ON USER (needs an explicit OK per CLAUDE.md)
+### Task 181: Check whether the broker halves the day-trade tax per lot within one ticker
+- **Status**: ⏸️ WAITING ON EVIDENCE (needs a real trade, no code change until then)
 - **Agent**: Claude
-- **Timestamp**: 2026-09-30 17:40:00 Asia/Taipei
-- **What**: 0.10.9 changed `sources/supabase/functions/` (`holdingsCard.ts`, `holdingsRun.ts`, `_shared/engine/pnlEngine.ts`), and a `main` push never deploys Edge. Until `stock-report` is deployed the Discord holdings card still withholds the full 0.3% on a same-day lot while the web app does not. Deploy on **DEV** first and verify, then **PROD** (`supabase-ops`).
-- **Also worth one check**: whether the broker halves the tax **per lot within one ticker**. The 2303-vs-6560 evidence is cross-ticker; buying more of an already-held position would settle it. The implementation is per lot.
+- **Timestamp**: 2026-09-30 18:05:00 Asia/Taipei
+- **What**: 0.10.9 halves the securities tax **per open lot** whose buy date is today (`lotSellTaxRate`). The evidence behind that choice is cross-ticker — 6560 bought that day at 0.15% next to 2303 held overnight at 0.3% — so it does not prove the broker looks at lots rather than at whole positions.
+- **How to settle it**: buy more of a position you already hold, then read the broker's 預估收入 for that ticker the same day. Per lot ⇒ only the new shares get 0.15%. Whole position ⇒ every share does, and `estimateUnrealized` would need the halving applied to the position, not the lot loop.
+- **Why it can wait**: the two answers differ by at most 0.15% of the older lots' market value, and only on a day you add to a holding.
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**

@@ -1,5 +1,23 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 180: Deploy `stock-report` for the BUG-087 day-trade tax rule
+- **Status**: ✅ DONE (2026-09-30)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 18:05:00 Asia/Taipei
+- **Result**: DEV v33 → v34 (from `dev` `dd3f83d`), PROD v21 → v22 (from clean `main` `4a6c171` = 0.10.9), both `--no-verify-jwt`, both ending on ezbr `31cac8de13efd3ff…`, `verify_jwt` false. Audited by `functions download` from PROD and a file-by-file diff against `main` — identical apart from CLI temp state — so the Discord holdings card now follows the same day-trade rule as the web app. Detail: `PROGRESS.md` 2026-09-30 18:05:00.
+- **Still open, moved to Task 181**: whether the broker halves the tax per lot **within one ticker**.
+
+---
+
+### Task 180: Deploy `stock-report` for the BUG-087 day-trade tax rule
+- **Status**: ⏸️ WAITING ON USER (needs an explicit OK per CLAUDE.md)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 17:40:00 Asia/Taipei
+- **What**: 0.10.9 changed `sources/supabase/functions/` (`holdingsCard.ts`, `holdingsRun.ts`, `_shared/engine/pnlEngine.ts`), and a `main` push never deploys Edge. Until `stock-report` is deployed the Discord holdings card still withholds the full 0.3% on a same-day lot while the web app does not. Deploy on **DEV** first and verify, then **PROD** (`supabase-ops`).
+- **Also worth one check**: whether the broker halves the tax **per lot within one ticker**. The 2303-vs-6560 evidence is cross-ticker; buying more of an already-held position would settle it. The implementation is per lot.
+
+---
+
 ### Task 175: Same-day buy — align the broker caliber with the broker app (BUG-087)
 - **Status**: ✅ DONE (0.10.9, 2026-09-30)
 - **Agent**: Claude
