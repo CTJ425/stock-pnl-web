@@ -636,6 +636,17 @@ table.hl-table {
   color: var(--cds-text-primary);
 }
 
+/* BUG-087: why the 牌告 figure withheld a halved securities tax today. Its own line, so a long
+   sentence wraps under the label instead of pushing the amount columns around. */
+.hl-methods .hl-method-note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--cds-text-helper);
+}
+
 .hl-na {
   color: var(--cds-text-helper);
 }

@@ -395,6 +395,14 @@ export function QuoteTab({
                           `（${fmtSignedPercent(holding.brokerRoi)}）`}
                       </span>
                     )}
+                  {holding.brokerDayTradeTax && (
+                    <span
+                      className="holding-daytrade-note"
+                      title="裡面有今天買進的股票。券商 APP 對當天買進的部位改用現股當沖減半後的證交稅（0.15%）估算，這裡的券商金額跟著同一個算法；如果今天沒有賣掉，明天起會回到 0.3%。"
+                    >
+                      ・券商以當沖稅率估
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

@@ -786,3 +786,49 @@ describe('workspace fee settings', () => {
     expect(r.unrealized).toBe(-17_995 + estimateUnrealized(holdingOf(lb, 'TPE:2303'), 153.5, 0.0004275, 20))
   })
 })
+
+/**
+ * BUG-087: the 券商 figure on the card follows the broker app and withholds the halved 現股當沖 tax
+ * on a lot bought on the run's Taipei calendar date. Real case: 6560 欣普羅, bought 32.6 × 1000 with
+ * fee 46, close 32.40 — the broker showed −340, the full rate gives −389.
+ */
+describe('aggregateHoldings — 當日買進的券商口徑用當沖稅率（BUG-087）', () => {
+  const ws = (): WorkspaceInput => ({
+    id: 'ws-dt',
+    fee_rate: 0.001425,
+    transactions: [
+      tx({ ws: 'ws-dt', date: '2026-09-29', market: 'TPE', ticker: '6560', name: '欣普羅', type: 'BUY', price: 32.6, qty: 1000, fee: 46 }),
+    ],
+  })
+  const q = new Map<string, HoldingQuote | null>([['TPE:6560', { ymd: '2026-09-29', close: 32.4, prevClose: 32.6 }]])
+
+  it('today = 買進日：brokerUnrealized 減半稅', () => {
+    const r = rowOfSummary(aggregateHoldings(buildLedgers([ws()]), q, '2026-09-29', '2026-09-29').twd, 'TPE:6560')
+    expect(r.brokerUnrealized).toBe(-340)
+  })
+
+  it('today 是隔天、或完全不傳：回到全額 0.3%', () => {
+    const next = rowOfSummary(aggregateHoldings(buildLedgers([ws()]), q, '2026-09-29', '2026-09-30').twd, 'TPE:6560')
+    expect(next.brokerUnrealized).toBe(-389)
+    const none = rowOfSummary(aggregateHoldings(buildLedgers([ws()]), q, '2026-09-29').twd, 'TPE:6560')
+    expect(none.brokerUnrealized).toBe(-389)
+  })
+
+  it('月退 workspace 的主數字（牌告口徑）跟著減半，現折的主數字不動', () => {
+    const monthly = rowOfSummary(
+      aggregateHoldings(buildLedgers([{ ...ws(), fee_rate: 0.0004275, fee_rebate: 'monthly' }]), q, '2026-09-29', '2026-09-29').twd,
+      'TPE:6560',
+    )
+    expect(monthly.unrealized).toBe(monthly.brokerUnrealized)
+    expect(monthly.unrealized).toBe(-340)
+
+    const instant = rowOfSummary(
+      aggregateHoldings(buildLedgers([{ ...ws(), fee_rate: 0.0004275, fee_rebate: 'instant' }]), q, '2026-09-29', '2026-09-29').twd,
+      'TPE:6560',
+    )
+    // 現折的主數字用「該批次自己的歷史費率」（買進時 46 元 ⇒ 0.1425%）和全額稅：
+    // 32,400 − 32,646 − fee 46 − tax 97 = −389，完全沒有被當沖稅率影響
+    expect(instant.unrealized).toBe(-389)
+    expect(instant.brokerUnrealized).toBe(-340)
+  })
+})

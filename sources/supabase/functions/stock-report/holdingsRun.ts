@@ -126,7 +126,9 @@ export async function runOneUser(
     const ledgers = buildLedgers(workspaces)
     const keys = heldKeys(ledgers)
     const quotes = await quotesFor(quoteCache, keys)
-    const summary = aggregateHoldings(ledgers, quotes, ymd)
+    // `ymd` is already the run's Taipei calendar date (`dashDate(taipeiYmd(now))` at both call
+    // sites), so it serves as both the card's market day and the day-trade date (BUG-087).
+    const summary = aggregateHoldings(ledgers, quotes, ymd, ymd)
     const missing = summary.twd.missingCount + summary.usd.missingCount
     if (missing > 0) {
       const rows = summary.twd.rows.length + summary.usd.rows.length
@@ -285,7 +287,9 @@ export async function runHoldingsSettingsOp(
     const keys = heldKeys(ledgers)
     const quoteCache = createQuoteCache(deps.fetchChart, Math.floor(deps.now().getTime() / 1000))
     const quotes = await quotesFor(quoteCache, keys)
-    const summary = aggregateHoldings(ledgers, quotes, market.date)
+    // Two different dates on purpose: `market.date` is the market day the card reports on (it can
+    // be an earlier day), `ymd` is today in Taipei, which is what the day-trade rule keys off.
+    const summary = aggregateHoldings(ledgers, quotes, market.date, ymd)
     const missingQuotes = summary.twd.missingCount + summary.usd.missingCount
     const payload = buildHoldingsPayload(summary, { generatedAt: deps.now().toISOString(), preview: true })
 

@@ -203,3 +203,74 @@ describe('buildHoldingRows — 融券空單（Task 141 Stage B）', () => {
     expect(rows[0].rowQty).toBe(1000)
   })
 })
+
+/**
+ * BUG-087. The broker app estimates a lot bought **today** at the halved 現股當沖 securities tax;
+ * the numbers below are the real PROD case that found it (6560 欣普羅, bought 2026-09-29 at
+ * 32.6 × 1000 with fee 46, close 32.40) plus the 2026-09-30 follow-up at 32.2 that confirmed the
+ * broker goes back to 0.3% overnight.
+ */
+describe('buildHoldingRows — 當日買進的券商口徑用當沖稅率（BUG-087）', () => {
+  const sameDay = () =>
+    holdingsOf([tx({ tx_date: '2026-09-29', ticker: '6560', name: '欣普羅', price: 32.6, qty: 1000, fee_tax: 46 })])
+
+  it('買進當天：券商口徑減半稅（−340），自己的淨損益與損益兩平不動（−389 / 32.79）', () => {
+    const [row] = buildHoldingRows(sameDay(), { 'TPE:6560': quote(32.4) }, 0.001425, undefined, 'lot', '2026-09-29')
+    // 32,400 − 32,646 − fee 46 − tax 48 (0.15%)，正是券商 APP 顯示的數字
+    expect(row.brokerUnrealized).toBe(-340)
+    expect(row.brokerDayTradeTax).toBe(true)
+    // 自己的口徑維持 0.3%：32,400 − 32,646 − 46 − 97
+    expect(row.unrealized).toBe(-389)
+    // 損益兩平是「不賣就要這個價才保本」，不能用有條件的當沖稅率
+    expect(row.breakEven).toBe(32.79)
+  })
+
+  it('隔天同一批未賣出：券商口徑回到 0.3%，和自己的口徑一致', () => {
+    const [row] = buildHoldingRows(sameDay(), { 'TPE:6560': quote(32.2) }, 0.001425, undefined, 'lot', '2026-09-30')
+    // 32,200 − 32,646 − fee 45 − tax 96 = −587，= 2026-09-30 券商 APP 的 −587 / −1.8%
+    expect(row.brokerUnrealized).toBe(-587)
+    expect(row.unrealized).toBe(-587)
+    expect(row.brokerDayTradeTax).toBe(false)
+    expect(row.roi).toBeCloseTo(-587 / 32646, 10)
+  })
+
+  it('不傳 today 時完全沿用舊行為（全部 0.3%）', () => {
+    const [row] = buildHoldingRows(sameDay(), { 'TPE:6560': quote(32.4) }, 0.001425)
+    expect(row.brokerUnrealized).toBe(-389)
+    expect(row.brokerDayTradeTax).toBe(false)
+  })
+
+  it('只有今天買的那一批減半：舊批次仍是 0.3%', () => {
+    const holdings = holdingsOf([
+      tx({ tx_date: '2026-09-01', ticker: '6560', price: 32.6, qty: 1000, fee_tax: 46 }),
+      tx({ tx_date: '2026-09-29', ticker: '6560', price: 32.6, qty: 1000, fee_tax: 46 }),
+    ])
+    const [row] = buildHoldingRows(holdings, { 'TPE:6560': quote(32.4) }, 0.001425, undefined, 'lot', '2026-09-29')
+    // 兩批共 2000 股：舊批 tax 97、今日批 tax 48（每批各自 floor）
+    // 32,400×2 − 32,646×2 − (46+46) − (97+48)
+    expect(row.brokerUnrealized).toBe(-729)
+    expect(row.brokerDayTradeTax).toBe(true)
+  })
+
+  it('落日之後（2028 起）不再減半', () => {
+    const holdings = holdingsOf([
+      tx({ tx_date: '2028-01-03', ticker: '6560', price: 32.6, qty: 1000, fee_tax: 46 }),
+    ])
+    const [row] = buildHoldingRows(holdings, { 'TPE:6560': quote(32.4) }, 0.001425, undefined, 'lot', '2028-01-03')
+    expect(row.brokerUnrealized).toBe(-389)
+    expect(row.brokerDayTradeTax).toBe(false)
+  })
+
+  it('ETF 的 0.1% 也一起減半，債券 ETF 的 0 還是 0', () => {
+    const etf = holdingsOf([tx({ tx_date: '2026-09-29', ticker: '0050', price: 100, qty: 1000, fee_tax: 142 })])
+    const [etfRow] = buildHoldingRows(etf, { 'TPE:0050': quote(100) }, 0.001425, undefined, 'lot', '2026-09-29')
+    // 100,000 − 100,142 − fee 142 − tax 50 (0.05%, half of the ETF 0.1%); full rate would be −384
+    expect(etfRow.brokerUnrealized).toBe(-334)
+    expect(etfRow.unrealized).toBe(-384)
+    expect(etfRow.brokerDayTradeTax).toBe(true)
+
+    const bond = holdingsOf([tx({ tx_date: '2026-09-29', ticker: '00679B', price: 30, qty: 1000, fee_tax: 42 })])
+    const [bondRow] = buildHoldingRows(bond, { 'TPE:00679B': quote(30) }, 0.001425, undefined, 'lot', '2026-09-29')
+    expect(bondRow.brokerDayTradeTax).toBe(false)
+  })
+})

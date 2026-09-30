@@ -6,7 +6,7 @@
  * Writing one on each side is bound to run out of time, here is a single source.
  */
 import type { Holding } from './pnlEngine'
-import { estimateUnrealized, estimateUnrealizedShort } from './pnlEngine'
+import { estimateUnrealized, estimateUnrealizedShort, lotSellTaxRate, sellTaxRate } from './pnlEngine'
 import { breakEvenPrice, breakEvenPriceShort, DEFAULT_FEE_RATE } from './fees'
 import { getMinFee } from './settings'
 import { isClosed, tradeDateLabel, type PriceMap } from '../services/priceProxy'
@@ -48,6 +48,12 @@ export interface HoldingRow {
   /** Standard broker app unrealized P&L using official undiscounted fee rate (0.001425 for TWD), aligning with monthly rebate mode (月退制) */
   brokerUnrealized: number | null
   /**
+   * BUG-087: true when `brokerUnrealized` withheld the halved 現股當沖 tax on at least one lot,
+   * because that lot was bought today. The UI has to say so — the figure moves by itself overnight
+   * with no trade behind it, and that is unreadable without a label.
+   */
+  brokerDayTradeTax: boolean
+  /**
    * EN-09: true for a USD row — the app has no US fee-rate setting, so 券商口徑 is not merely
    * "no quote yet" (which is what `brokerUnrealized === null` alone would otherwise mean), it is
    * "not applicable". The UI renders 不適用 instead of the missing-quote placeholder.
@@ -73,6 +79,12 @@ export function buildHoldingRows(
   workspaceId?: string,
   /** The workspace's fee/tax flooring (BUG-088); omitted means per lot, the pre-existing figure. */
   rounding: FeeRounding = 'lot',
+  /**
+   * Today's Asia/Taipei calendar date (BUG-087). Only the 券商 figure uses it, to withhold the
+   * halved 現股當沖 tax on a lot bought today the way the broker app does. Omitted keeps every
+   * figure at the full rate.
+   */
+  today?: string,
 ): HoldingRow[] {
   return holdings.flatMap((h) => {
     const quote = prices[h.key]
@@ -102,10 +114,16 @@ export function buildHoldingRows(
       const standardFeeRate = h.currency === 'TWD' ? DEFAULT_FEE_RATE : feeRate
       const standardUnrealized =
         price !== null && h.currency === 'TWD'
-          ? estimateUnrealized(h, price, standardFeeRate, minFee, true, rounding)
+          ? estimateUnrealized(h, price, standardFeeRate, minFee, true, rounding, today)
           : null
       const brokerRoi =
         standardUnrealized !== null && h.cost > 0 ? standardUnrealized / h.cost : null
+      // Asked of the same predicate `lotSellTaxRate` uses, so the label can never claim a halved
+      // rate the figure did not actually get.
+      const brokerDayTradeTax =
+        h.currency === 'TWD' &&
+        standardUnrealized !== null &&
+        h.openLots.some((lot) => lotSellTaxRate(h.ticker, lot.date, today) < sellTaxRate(h.ticker))
       const breakEven = breakEvenPrice(h, feeRate, minFee, false, rounding)
       rows.push({
         rowKey: `${h.key}:LONG`,
@@ -122,6 +140,7 @@ export function buildHoldingRows(
         netMktVal,
         unrealized,
         brokerUnrealized: standardUnrealized,
+        brokerDayTradeTax,
         brokerNotApplicable: h.currency !== 'TWD',
         rawUnrealized,
         roi,
@@ -164,6 +183,8 @@ export function buildHoldingRows(
         netMktVal: null,
         unrealized,
         brokerUnrealized: standardUnrealized,
+        // A cover pays no securities tax at all, so there is no halving to report here.
+        brokerDayTradeTax: false,
         brokerNotApplicable: h.currency !== 'TWD',
         rawUnrealized,
         roi,

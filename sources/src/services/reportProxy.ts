@@ -29,6 +29,8 @@ export interface ReportHolding {
   price: number | null
   unrealized: number | null
   brokerUnrealized?: number | null
+  /** BUG-087: the 券商 figure withheld the halved 現股當沖 tax, because a lot was bought today. */
+  brokerDayTradeTax?: boolean
   roi: number | null
   brokerRoi?: number | null
 }

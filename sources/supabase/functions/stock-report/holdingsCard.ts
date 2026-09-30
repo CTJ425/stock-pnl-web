@@ -331,7 +331,18 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
  * Merges every workspace's holdings by position key + direction, quotes and all. No
  * currency conversion: TWD and USD are separate summaries.
  */
-export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string, HoldingQuote | null>, ymd: string): HoldingsSummary {
+export function aggregateHoldings(
+  ledgers: WorkspaceLedger[],
+  quotes: Map<string, HoldingQuote | null>,
+  ymd: string,
+  /**
+   * BUG-087: the run's Asia/Taipei **calendar** date, which is not always `ymd` — that one is the
+   * market day, and on a weekend it points back at Friday. Only the 券商 figure uses it, to
+   * withhold the halved 現股當沖 tax on a lot bought today the way the broker app does. Omitted
+   * keeps every figure at the full rate.
+   */
+  today?: string,
+): HoldingsSummary {
   const twdAcc = new Map<string, RowAcc>()
   const usdAcc = new Map<string, RowAcc>()
   // Position.realized is cumulative per key, not per leg, so it is summed here and attached
@@ -354,7 +365,9 @@ export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string
         const net = close != null ? estimateUnrealized(h, close, l.feeRate, minFee, false, l.rounding) : null
         // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden.
         const brokerUnrealized =
-          close != null && h.currency === 'TWD' ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding) : null
+          close != null && h.currency === 'TWD'
+            ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding, today)
+            : null
         // Each workspace leg follows its own basis before merging (`rowUnrealized` in src/utils/pnlBasis.ts).
         const unrealized = l.basis === 'list' && brokerUnrealized != null ? brokerUnrealized : net
         const dayPnl = close != null && prevClose != null ? h.qty * (close - prevClose) : null

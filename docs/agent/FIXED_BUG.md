@@ -6,6 +6,17 @@
 
 ---
 
+### Bug ID: BUG-087 — Same-day buy: the broker's unrealized P&L / break-even disagreed with the dashboard
+- **Date**: 2026-09-29 found, root cause confirmed 2026-09-30, aligned in 0.10.9-dev.1
+- **Symptom**: PROD, 6560 欣普羅 bought 2026-09-29 at 32.6 × 1000, fee_tax 46, close 32.40. Dashboard −389 / −1.19% / break-even 32.79; E.SUN app −340 / −1.04% / 32.75. 0050 and 2303 (held overnight) matched exactly, so only the same-day lot was off — the whole workspace gap (49,374 vs 49,423) was this one row's tax.
+- **Root Cause**: **not a defect in this repo.** The broker estimates a lot bought *today* at the halved 現股當沖 securities tax (0.15%, ETF 0.05%); the engine has always withheld the full 0.3% (`estimateUnrealized` / `breakEvenPrice`, unchanged since 58a1a42). Three pieces of evidence: (a) E.SUN 庫存損益 on 2026-09-29 14:46 showed 6560 預估收入 32,306 = 32,400 − 46 − **48** (0.15%) while 2303 on the same screen used 0.3%; (b) every release tag 0.9.0 → 0.10.4 (78 tags, each recomputed in its own worktree with its own engine) gives −389 / 32.79 for this trade, so no version ever produced −340; (c) on 2026-09-30 the lot was no longer same-day and the broker showed **−587 / −1.8%** at price 32.2 — bit-for-bit the engine's own output (32,200 − 32,646 − fee 45 − tax 96), so the broker had gone back to 0.3% overnight. The switch is by **calendar day, not by the 13:30 close**: the 14:46 screenshot was already after the close and still halved.
+- **Fix (0.10.9-dev.1)**: `lotSellTaxRate(ticker, lotDate, today)` (`sources/src/utils/pnlEngine.ts`) halves a lot's sell tax while its buy date equals the Taipei calendar date, with a hard sunset at `DAY_TRADE_TAX_SUNSET = '2027-12-31'` (the statute's own expiry). `estimateUnrealized` takes a 7th `dayTradeDate` argument — passed in, never read from the clock, so a historical recompute stays reproducible. **Only the 券商 / 牌告 figure asks for it**: `buildHoldingRows(…, today)` feeds it to the posted-rate call alone, so `unrealized` and `breakEven` keep the full rate. `HoldingRow.brokerDayTradeTax` drives the labels (「含今天買進的股票，證交稅以當沖 0.15% 估算」in the 牌告 row, 「券商以當沖稅率估」in 個股分析), without which the figure would move overnight with no trade to explain it. Edge: `aggregateHoldings(…, today)` gets the run's Taipei calendar date (not `ymd`, which is the market day and points back at Friday on a weekend).
+- **Deliberately not done**: the app's own net figure and break-even stay at 0.3%. The halved rate is conditional on the position actually being day-traded, and on eligibility this app cannot see — 處置股 / 警示股 / 全額交割股 cannot be day-traded, and the account needs a 當沖同意書. Break-even answers "what price covers cost if I *don't* sell today", so a conditional rate would understate it.
+- **Unverified**: whether the broker applies this per lot within one ticker. The 2303-vs-6560 evidence is cross-ticker; buying more of an already-held position would settle it. The implementation is per lot.
+- **Status**: ✅ FIXED (0.10.9-dev.1) — broker caliber aligned; engine arithmetic was correct all along
+
+---
+
 ### Bug ID: BUG-086 — After the close, a TW ticker nobody opened during the session showed the previous trading day's close until ~15:45
 - **Date**: 2026-09-29, fixed in 0.10.4
 - **Symptom**: DEV 2026-09-29 after the close: 0050 showed 112.4 and 2303 showed 154 (the 9/24 close, `price_cache` row fetched 9/28 23:01), while PROD showed 111.3 / 153.5. Same account on both; `price_cache` is site-wide, so the difference was only which rows had been refreshed during the session.

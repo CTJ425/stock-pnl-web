@@ -786,6 +786,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* BUG-087: sits after the 券商 figure in the same helper line, one step quieter — it qualifies
+   that number, it is not a number itself. `cursor: help` advertises the title. */
+.holding-daytrade-note {
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+  cursor: help;
+}
+
 .holding-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -222,6 +222,35 @@ export function sellTaxRate(ticker: string): number {
   return 0.003
 }
 
+/**
+ * Last calendar day the 現股當沖 securities-tax halving is legislated for. A same-day lot pays the
+ * full rate again from 2028-01-01, so the rule below must not outlive the statute.
+ */
+export const DAY_TRADE_TAX_SUNSET = '2027-12-31'
+
+/**
+ * The sell tax rate to withhold on one open lot, halved while the lot could still be closed as a
+ * 現股當沖 — i.e. while its buy date is still the current Taipei calendar day (BUG-087).
+ *
+ * Evidence for the calendar-day boundary: E.SUN's 庫存損益 on 2026-09-29 **14:46**, an hour after
+ * the 13:30 close, showed 6560 (bought that day) at 32,400 − 46 − **48** = 0.15% while 2303 (held
+ * overnight) showed 0.3% on the same screen. So the broker switches back overnight, not at the
+ * close.
+ *
+ * `today` is passed in rather than read from the clock: an engine that looks at `new Date()` makes
+ * every figure that depends on it unreproducible in a test or a historical recompute.
+ *
+ * What this does **not** check: whether the lot is actually day-tradable (處置股 / 警示股 /
+ * 全額交割股 are not, and the account needs a 當沖同意書). The app carries none of those lists, so
+ * the halved figure is the broker's optimistic estimate — which is why only the 券商 (posted-rate)
+ * column asks for it, and the app's own net figure and break-even stay at the full rate.
+ */
+export function lotSellTaxRate(ticker: string, lotDate: string, today?: string | null): number {
+  const rate = sellTaxRate(ticker)
+  if (!today || lotDate !== today || today > DAY_TRADE_TAX_SUNSET) return rate
+  return rate / 2
+}
+
 /** First correct the binary floating point error (for example, 114 is mistakenly stored as 113.99999999999999) and then round it to the nearest dollar.*/
 export function floorSafe(value: number): number {
   return Math.floor(Math.round(value * 1e6) / 1e6)
@@ -933,6 +962,11 @@ export function computeLedger(transactions: Transaction[]): Ledger {
  *
  * `rounding` (BUG-088): 'lot' floors each open lot's fee and tax on its own (玉山); 'position'
  * sums the lots' unfloored amounts and floors once (元大). The two differ by at most 1 per lot per term.
+ *
+ * `dayTradeDate` (BUG-087): the current Taipei calendar date. Any open lot bought on it withholds
+ * half the securities tax, the way the broker app estimates a 現股當沖 (see `lotSellTaxRate` for the
+ * evidence and the caveats). Omitted — the default — keeps the full rate for every lot, which is
+ * what the app's own net figure and break-even use.
  */
 export function estimateUnrealized(
   holding: Holding,
@@ -941,13 +975,16 @@ export function estimateUnrealized(
   minFee?: number,
   overrideFeeRate?: boolean,
   rounding: FeeRounding = 'lot',
+  dayTradeDate?: string | null,
 ): number {
   const mktVal = price * holding.qty
   if (holding.currency === 'TWD') {
-    // A hand-built Holding may not carry openLots; fall back to treating it as one lot.
+    // A hand-built Holding may not carry openLots; fall back to treating it as one lot. Its empty
+    // `date` can never equal a calendar date, so such a position never gets the day-trade rate —
+    // nothing here knows when it was bought.
     const lots = Array.isArray(holding.openLots) && holding.openLots.length > 0
       ? holding.openLots
-      : [{ qty: holding.qty, feeRate }]
+      : [{ qty: holding.qty, feeRate, date: '' }]
     let fee = 0
     let tax = 0
     for (const lot of lots) {
@@ -958,7 +995,7 @@ export function estimateUnrealized(
           ? lot.feeRate
           : feeRate
       const lotFee = lotVal * effectiveFeeRate
-      const lotTax = lotVal * sellTaxRate(holding.ticker)
+      const lotTax = lotVal * lotSellTaxRate(holding.ticker, lot.date, dayTradeDate)
       fee += rounding === 'position' ? lotFee : floorSafe(lotFee)
       tax += rounding === 'position' ? lotTax : floorSafe(lotTax)
     }

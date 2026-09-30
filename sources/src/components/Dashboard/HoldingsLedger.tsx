@@ -105,14 +105,17 @@ function RowDetail({
   const netLabel = currency === 'USD' ? '實際手續費' : feeRate >= DEFAULT_FEE_RATE ? `你的費率 ${formatFeeRatePct(feeRate)}` : `折扣後 ${formatFeeRatePct(feeRate)}`
   const rawRoi = row.rawUnrealized === null ? null : row.rawUnrealized / (isShort ? h.shortRawProceeds : h.rawCost)
   const methods = [
-    { key: 'net' as const, label: netLabel, value: row.unrealized, roi: row.roi },
+    { key: 'net' as const, label: netLabel, note: null, value: row.unrealized, roi: row.roi },
     {
       key: 'list' as const,
       label: `牌告 ${formatFeeRatePct(DEFAULT_FEE_RATE)}`,
+      // BUG-087: this row's tax was halved because a lot was bought today. Without the note the
+      // figure would change by itself tomorrow morning with no trade to explain it.
+      note: row.brokerDayTradeTax ? '含今天買進的股票，證交稅以當沖 0.15% 估算' : null,
       value: row.brokerNotApplicable ? undefined : row.brokerUnrealized,
       roi: row.brokerNotApplicable ? undefined : row.brokerRoi,
     },
-    { key: 'raw' as const, label: '不含費用', value: row.rawUnrealized, roi: rawRoi },
+    { key: 'raw' as const, label: '不含費用', note: null, value: row.rawUnrealized, roi: rawRoi },
   ]
   const shown = trades.slice(-STOPS_SHOWN)
 
@@ -184,6 +187,7 @@ function RowDetail({
                 <th scope="row">
                   {m.label}
                   {m.key === used && <span className="hl-tag">目前採用</span>}
+                  {m.note && <small className="hl-method-note">{m.note}</small>}
                 </th>
                 {m.value === undefined ? (
                   <>

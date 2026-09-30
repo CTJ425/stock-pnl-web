@@ -19,6 +19,7 @@ import { buildHoldingRows } from '../../utils/holdingRows'
 import { basisLabel, pnlBasis } from '../../utils/pnlBasis'
 import { fmtMoney, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getFeeRate } from '../../utils/settings'
+import { taipeiDateKey } from '../../utils/taipeiDate'
 import { WorkspaceFeeSettings, type FeeDraft } from '../WorkspaceFeeSettings'
 import { HoldingsLedger } from './HoldingsLedger'
 import { WatchSection } from './WatchSection'
@@ -194,9 +195,12 @@ export function DashboardPage({
     setRefreshKey((k) => k + 1)
   }
 
+  // BUG-087: the 券商 figure withholds the halved 現股當沖 tax on a lot bought today. A plain
+  // string, so the memo below compares by value and only re-runs when the Taipei date turns over.
+  const today = taipeiDateKey(new Date())
   const rows = useMemo(
-    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding),
-    [holdings, prices, feeRate, current?.id, rounding],
+    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding, today),
+    [holdings, prices, feeRate, current?.id, rounding, today],
   )
   const tw = marketSums(rows.filter((r) => r.holding.currency === 'TWD'), 'TWD', basis, loading)
   const us = marketSums(rows.filter((r) => r.holding.currency === 'USD'), 'USD', basis, loading)

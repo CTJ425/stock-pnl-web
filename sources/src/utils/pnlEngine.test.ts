@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { compareTxOrder, computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, splitFeeTax } from './pnlEngine'
+import { DAY_TRADE_TAX_SUNSET, compareTxOrder, computeLedger, estimateUnrealized, estimateUnrealizedShort, lotSellTaxRate, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 let seq = 0
 function tx(input: {
@@ -1152,5 +1152,51 @@ describe('股票股利是開倉腿（Task 166 排序）', () => {
     const sell = row('a-sell', 'SELL', 70, 1100, 320)
     const stock = row('z-stock-dividend', 'STOCK_DIVIDEND', 0, 100, 0)
     expect(compareTxOrder(stock, sell)).toBeLessThan(0)
+  })
+})
+
+describe('lotSellTaxRate — 當日買進的批次減半（BUG-087）', () => {
+  it('買進日等於今天才減半', () => {
+    expect(lotSellTaxRate('2330', '2026-09-29', '2026-09-29')).toBe(0.0015)
+    expect(lotSellTaxRate('2330', '2026-09-28', '2026-09-29')).toBe(0.003)
+  })
+
+  it('沒有傳 today、或批次沒有日期時一律全額', () => {
+    expect(lotSellTaxRate('2330', '2026-09-29')).toBe(0.003)
+    expect(lotSellTaxRate('2330', '2026-09-29', null)).toBe(0.003)
+    expect(lotSellTaxRate('2330', '', '2026-09-29')).toBe(0.003)
+  })
+
+  it('ETF / TDR / REITs 的 0.1% 減半成 0.05%，免稅的債券 ETF 還是 0', () => {
+    expect(lotSellTaxRate('0050', '2026-09-29', '2026-09-29')).toBe(0.0005)
+    expect(lotSellTaxRate('9105', '2026-09-29', '2026-09-29')).toBe(0.0005)
+    expect(lotSellTaxRate('00679B', '2026-09-29', '2026-09-29')).toBe(0)
+  })
+
+  it('減半立法到 2027-12-31，之後回到全額', () => {
+    expect(DAY_TRADE_TAX_SUNSET).toBe('2027-12-31')
+    expect(lotSellTaxRate('2330', DAY_TRADE_TAX_SUNSET, DAY_TRADE_TAX_SUNSET)).toBe(0.0015)
+    expect(lotSellTaxRate('2330', '2028-01-03', '2028-01-03')).toBe(0.003)
+  })
+})
+
+describe('estimateUnrealized — dayTradeDate 只影響當天買進的批次（BUG-087）', () => {
+  // 6560 欣普羅：2026-09-29 買 32.6 × 1000，手續費 46，收盤 32.40（BUG-087 的實際案例）
+  const h = (): Holding => computeLedger([
+    tx({ date: '2026-09-29', market: 'TPE', ticker: '6560', type: 'BUY', price: 32.6, qty: 1000, fee: 46 }),
+  ]).holdings[0]
+
+  it('當天：−340（= 券商 APP），不傳日期：−389', () => {
+    expect(estimateUnrealized(h(), 32.4, 0.001425, undefined, true, 'lot', '2026-09-29')).toBe(-340)
+    expect(estimateUnrealized(h(), 32.4, 0.001425, undefined, true, 'lot')).toBe(-389)
+  })
+
+  it('隔天未賣出：回到 −389，和不傳日期一樣', () => {
+    expect(estimateUnrealized(h(), 32.4, 0.001425, undefined, true, 'lot', '2026-09-30')).toBe(-389)
+  })
+
+  it('沒有 openLots 的合成部位不會被誤判成今天買的', () => {
+    const synthetic: Holding = { ...h(), openLots: [] }
+    expect(estimateUnrealized(synthetic, 32.4, 0.001425, undefined, true, 'lot', '2026-09-29')).toBe(-389)
   })
 })

@@ -12,6 +12,7 @@ import { Check, ChevronDown, Inbox, Plus } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { buildHoldingRows } from '../../utils/holdingRows'
+import { taipeiDateKey } from '../../utils/taipeiDate'
 import { getFeeRate } from '../../utils/settings'
 import { pnlBasis, rowRoi, rowUnrealized } from '../../utils/pnlBasis'
 import { displayStockName } from '../../services/usStockNames'
@@ -70,12 +71,14 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
     }
   }, [initialTicker])
 
+  // BUG-087, same as the dashboard: only the 券商 figure uses it.
+  const today = taipeiDateKey(new Date())
   const twRows = useMemo(
     () =>
-      buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot').filter(
+      buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot', today).filter(
         (r) => r.holding.currency === 'TWD',
       ),
-    [holdings, prices, feeRate, current?.id, current?.fee_rounding],
+    [holdings, prices, feeRate, current?.id, current?.fee_rounding, today],
   )
 
   type Entry =
@@ -277,6 +280,9 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
                 unrealized: rowUnrealized(selected.row, basis),
                 // The 券商 note only adds information when the headline is the discounted figure.
                 brokerUnrealized: basis === 'net' ? selected.row.brokerUnrealized : null,
+                // Not gated by basis: under 牌告 the headline *is* the halved figure, which is
+                // exactly when the reader most needs to be told (BUG-087).
+                brokerDayTradeTax: selected.row.brokerDayTradeTax,
                 roi: rowRoi(selected.row, basis),
                 brokerRoi: basis === 'net' ? selected.row.brokerRoi : null,
               }

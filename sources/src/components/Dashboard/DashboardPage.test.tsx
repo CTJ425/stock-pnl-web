@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Transaction } from '../../types/models'
@@ -605,5 +605,77 @@ describe('DashboardPage — structure, empty account, missing quotes', () => {
 
     expect(container.querySelector('.skeleton')).not.toBeNull()
     expect(screen.queryByText('目前取不到美股報價')).toBeNull()
+  })
+})
+
+/**
+ * BUG-087. The 牌告 row withholds the halved 現股當沖 tax on a lot bought today, and has to say so:
+ * with no trade at all the figure moves back overnight, which is unreadable without a label.
+ * The clock is pinned because the component reads today's Taipei date itself.
+ */
+describe('DashboardPage — 當日買進的牌告口徑標註當沖稅率（BUG-087）', () => {
+  // 2026-09-29 13:00 Taipei = 05:00 UTC
+  const NOW = new Date('2026-09-29T05:00:00Z')
+
+  const SAME_DAY_TX: Transaction = {
+    id: 'tx-6560',
+    workspace_id: 'ws-1',
+    tx_date: '2026-09-29',
+    market: 'TPE',
+    ticker: '6560',
+    name: '欣普羅',
+    tx_type: 'BUY',
+    price: 32.6,
+    qty: 1000,
+    fee_tax: 46,
+    created_at: '2026-09-29T01:00:00Z',
+  }
+
+  function mount(tx: Transaction) {
+    useWorkspace.mockReturnValue({
+      ledger: computeLedger([tx]),
+      transactions: [tx],
+      current: { id: 'ws-1', name: '主要工作區' },
+      loading: false,
+      error: null,
+    })
+    useStockPrices.mockReturnValue({
+      prices: { 'TPE:6560': { price: 32.4, prevClose: 32.6, asOf: '', source: 'twse', stale: false, trial: false } },
+      loading: false,
+      refreshedAt: NOW,
+      refresh: vi.fn(),
+    })
+    useUsdTwdRate.mockReturnValue({ rate: null, asOf: null, loading: false, error: null })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('買進當天：牌告列顯示 −NT$340 並附上當沖稅率說明', async () => {
+    mount(SAME_DAY_TX)
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    await user.click(screen.getByTestId('holding-row-6560'))
+    const list = screen.getByTestId('method-list')
+    expect(list.textContent).toContain('-NT$340')
+    expect(list.textContent).toContain('當沖 0.15%')
+    // 自己的口徑不受影響
+    expect(screen.getByTestId('method-net').textContent).toContain('-NT$389')
+  })
+
+  it('前一天買進的批次：牌告列是 −NT$389，沒有當沖說明', async () => {
+    mount({ ...SAME_DAY_TX, tx_date: '2026-09-26', created_at: '2026-09-26T01:00:00Z' })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    await user.click(screen.getByTestId('holding-row-6560'))
+    const list = screen.getByTestId('method-list')
+    expect(list.textContent).toContain('-NT$389')
+    expect(list.textContent).not.toContain('當沖')
   })
 })
