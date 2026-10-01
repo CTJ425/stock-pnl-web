@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
-import { computeLedger, estimateUnrealized } from './pnlEngine'
+import { computeLedger, estimateUnrealized, estimateUnrealizedShort } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
 import { breakEvenPrice, breakEvenPriceShort, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
 import { rateOn } from './feeRateHistory'
@@ -131,11 +131,14 @@ describe('breakEvenPrice（保本賣出價）', () => {
     expect(breakEvenPrice(bond, DEFAULT_FEE_RATE)!).toBeLessThan(breakEvenPrice(etf, DEFAULT_FEE_RATE)!)
   })
 
-  it('美股：無證交稅、費率兩位小數', () => {
+  it('美股：不扣手續費，保本價就是平均成本（BUG-079）', () => {
+    // EN-02: 這個 App 沒有美股費率設定，唯一拿得到的 feeRate 是「台股」工作區折扣。
+    // 以前這裡會把那個台股費率扣在美股上，於是保本價高過同一列未實現淨損益顯示 0 的價位。
     const h = holdingOf({ market: 'US', ticker: 'AAPL', qty: 10, cost: 1000 })
-    const p = breakEvenPrice(h, DEFAULT_FEE_RATE)!
-    const fee = calculateFee({ market: 'US', txType: 'SELL', price: p, qty: 10, feeRate: DEFAULT_FEE_RATE })
-    expect(p * 10 - fee).toBeGreaterThanOrEqual(1000)
+    expect(breakEvenPrice(h, DEFAULT_FEE_RATE)!).toBe(100)
+    // 台股費率怎麼變都不影響美股的保本價
+    expect(breakEvenPrice(h, 0.0004275)!).toBe(100)
+    expect(breakEvenPrice(h, 0)!).toBe(100)
   })
 
   it('空部位回傳 0', () => {
@@ -537,6 +540,39 @@ describe('breakEvenPrice 與 estimateUnrealized 的費用口徑一致（BUG-079�
   it('overrideFeeRate 時兩邊都改用傳入的費率', () => {
     const p = breakEvenPrice(h, 0.001, undefined, true)!
     expect(estimateUnrealized(h, p, 0.001, undefined, true)).toBeGreaterThanOrEqual(0)
+  })
+
+  /**
+   * 0.10.14。台股那一半 Task 166 就對齊了，美股沒有：estimateUnrealized 對美股是「不扣費」，
+   * breakEvenPrice 卻扣了台股費率。實測 1% 費率、10 股 / $5,000 的部位，保本價 $505.06，
+   * 而同一列的未實現淨損益在 $500.00 就已經顯示 0 —— 兩個數字差了約 $50。
+   */
+  describe('美股兩邊都不扣費', () => {
+    const usd = holdingOf({ market: 'US', ticker: 'AAPL', qty: 10, cost: 5000 })
+
+    it('保本價就是未實現淨損益首次為 0 的價位', () => {
+      for (const rate of [0, 0.001425, 0.0004275, 0.01]) {
+        const p = breakEvenPrice(usd, rate)!
+        expect(p).toBe(500)
+        expect(estimateUnrealized(usd, p, rate)).toBe(0)
+        // 再低一分錢就必須是負的，證明保本價真的是「最低不賠的價格」
+        expect(estimateUnrealized(usd, 499.99, rate)).toBeLessThan(0)
+      }
+    })
+
+    it('空單同樣兩邊一致', () => {
+      const short = holdingOf({
+        market: 'US', ticker: 'AAPL', qty: 0, cost: 0,
+        shortQty: 10, shortProceeds: 5000, shortRawProceeds: 5000,
+        shortLots: [{ txId: 's1', date: '2026-01-02', qty: 10, price: 500, proceeds: 5000, rawProceeds: 5000 }],
+      })
+      for (const rate of [0, 0.001425, 0.01]) {
+        const p = breakEvenPriceShort(short, rate)!
+        expect(p).toBe(500)
+        expect(estimateUnrealizedShort(short, p, rate)).toBe(0)
+        expect(estimateUnrealizedShort(short, 500.01, rate)).toBeLessThan(0)
+      }
+    })
   })
 })
 

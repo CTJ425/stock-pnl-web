@@ -221,10 +221,16 @@ export function proposeFeeCorrections(
  * `sellTaxRate`, same single minFee clamp, same `overrideFeeRate` override — computed inline
  * (`netAt` below) rather than through `estimateUnrealized` itself, because that function's
  * outer `Math.round` is a display rounding: it can round an actually-negative net (e.g. -0.5)
- * to a "break-even" 0, which is too coarse for this search's cent-level boundary. US holdings
- * keep the pre-existing fee-inclusive calculation here: EN-02's gross-unrealized rule is a
- * display choice for the P&L card, not a claim that a US broker charges no commission, and this
- * function answers "what price actually recovers the cost after the real trade fee".
+ * to a "break-even" 0, which is too coarse for this search's cent-level boundary.
+ *
+ * **US holdings are gross, like `estimateUnrealized` (BUG-079, 0.10.14).** This used to deduct a
+ * fee here, which sounded more honest but was not: **the app has no US fee-rate setting** (EN-02),
+ * so the only rate available is the *Taiwan* workspace discount, and `minFee` is not even passed
+ * for USD. A 3 折 Taiwan rate has nothing to do with a US broker, so the figure was a fee this
+ * app cannot know, applied to the wrong market — and it put 保本價 above the price at which the
+ * row's own 未實現淨損益 already reads 0. Measured at a 1% rate on a 10-share / $5,000 position:
+ * 保本價 $505.06 against a P&L card showing $0 at $500.00, a $50 gap. Both numbers now answer the
+ * same question. If a US fee rate is ever added, deduct it in **both** places in the same change.
  */
 export function breakEvenPrice(
   holding: Holding,
@@ -247,7 +253,8 @@ export function breakEvenPrice(
   // (see the function comment above), without its outer rounding.
   const netAt = (p: number): number => {
     if (currency !== 'TWD') {
-      return p * qty - calculateFee({ market, txType: 'SELL', price: p, qty, feeRate, taxRate }) - cost
+      // Gross, matching `estimateUnrealized`'s US branch — see the note above.
+      return p * qty - cost
     }
     let fee = 0
     let tax = 0
@@ -278,13 +285,16 @@ export function breakEvenPrice(
     return sum + lot.qty * r
   }, 0) / lotQty
 
-  const byRate = cost / (qty * (1 - effRate - taxRate))
+  // US seeds at the gross break-even, because `netAt` deducts nothing there.
+  const byRate = currency !== 'TWD' ? cost / qty : cost / (qty * (1 - effRate - taxRate))
   // When feeRate is 0 (no commission), calculateFee does not include the minimum handling fee, and closed synchronization is skipped.
   // Gate on the workspace `feeRate`, not the lot-weighted `effRate`: that is what `netAt` (above)
   // actually checks, so seed and predicate must agree — otherwise a holding whose lots carry
   // `feeRate: 0` under a workspace rate > 0 seeds below the true root, and the bounded ±$10
   // refinement can run out of steps for a small odd lot with a large custom minimum fee.
-  const byMinFee = (cost + (feeRate > 0 ? minFee ?? 0 : 0)) / (qty * (1 - taxRate))
+  const byMinFee = currency !== 'TWD'
+    ? byRate
+    : (cost + (feeRate > 0 ? minFee ?? 0 : 0)) / (qty * (1 - taxRate))
   let price = Math.floor(Math.max(byRate, byMinFee) * 100) / 100
 
   for (let i = 0; i < 1000 && !isBreakEven(price); i++) {
@@ -308,13 +318,14 @@ export function breakEvenPrice(
  *
  * BUG-079: the TWD predicate reuses `estimateUnrealizedShort` (same floor/minFee clamp the
  * displayed unrealized P&L uses). `ShortLot` carries no per-lot fee rate, so there is no
- * lot-weighted seed to build here, unlike `breakEvenPrice`. US holdings keep the pre-existing
- * fee-inclusive calculation for the same reason `breakEvenPrice` does.
+ * lot-weighted seed to build here, unlike `breakEvenPrice`. US holdings are gross, for the same
+ * reason as `breakEvenPrice` (0.10.14): the app has no US fee rate, and `estimateUnrealizedShort`
+ * does not deduct one either.
  */
 export function breakEvenPriceShort(
   holding: Holding, feeRate: number, minFee?: number,
 ): number | null {
-  const { market, currency } = holding
+  const { currency } = holding
   const shortQty = holding.shortQty ?? 0
   const shortProceeds = holding.shortProceeds ?? 0
   if (!(shortQty > 0)) return 0
@@ -322,12 +333,12 @@ export function breakEvenPriceShort(
   const isProfitable = (p: number) =>
     currency === 'TWD'
       ? estimateUnrealizedShort(holding, p, feeRate, minFee) >= 0
-      : shortProceeds -
-          (p * shortQty + calculateFee({ market, txType: 'BUY', price: p, qty: shortQty, feeRate })) >=
-        0
+      : shortProceeds - p * shortQty >= 0
 
-  const byRate = shortProceeds / (shortQty * (1 + feeRate))
-  const byMinFee = feeRate > 0 && minFee !== undefined ? (shortProceeds - minFee) / shortQty : byRate
+  const byRate = currency === 'TWD' ? shortProceeds / (shortQty * (1 + feeRate)) : shortProceeds / shortQty
+  const byMinFee = currency === 'TWD' && feeRate > 0 && minFee !== undefined
+    ? (shortProceeds - minFee) / shortQty
+    : byRate
   let price = Math.ceil(Math.min(byRate, byMinFee) * 100) / 100
 
   for (let i = 0; i < 1000 && price > 0 && !isProfitable(price); i++) {

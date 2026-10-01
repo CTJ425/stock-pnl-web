@@ -6,6 +6,15 @@
 
 ---
 
+### Bug ID: BUG-079 — 保本賣出價 and 未實現淨損益 read the same fee rate differently
+- **Date**: 2026-10-01, fixed in 0.10.14 (the Taiwan half was already fixed in 0.9.64 / Task 166)
+- **Root Cause**: two halves, found a year apart.
+  1. *Taiwan (fixed 0.9.64, Task 166 BUG-079 + EN-07)*: `breakEvenPrice` took the workspace fee rate and ignored `openLots`, while `estimateUnrealized` used each lot's own rate. A `0.6` typed as "6 折" inflated 保本價 to ~2.5× cost. Both now share one per-lot model.
+  2. *US (fixed 0.10.14)*: `estimateUnrealized` leaves US unrealized **gross** by decision (EN-02 — the app has no US fee-rate setting), but `breakEvenPrice` still deducted a fee. The only rate available to it is the **Taiwan** workspace discount, and `minFee` is not even passed for USD, so it applied a fee this app cannot know, from the wrong market. Measured at a 1% rate on a 10-share / $5,000 position: 保本價 $505.06 while the same row's P&L card already read $0 at $500.00 — a ~$50 gap.
+- **Fix**: `breakEvenPrice` and `breakEvenPriceShort` are gross for non-TWD holdings, matching `estimateUnrealized` / `estimateUnrealizedShort`; their closed-form seeds too. Pinned by tests that assert 保本價 equals the first price at which the displayed net reaches 0, and that one cent the other way is negative, across four fee rates, long and short.
+- **Evidence it is closed**: swept 2,160 TWD combinations (5 rates × 3 tickers × 8 quantities × 6 unit costs × 3 minimum fees) — the displayed net at 保本價 was **never negative**. The only residue is the whole-dollar `Math.round` in `estimateUnrealized`: one cent below 保本價 the card can still read 0, worth at most **NT$0.50**, which is display granularity, not a fee-model disagreement.
+- **Status**: ✅ FIXED (0.10.14)
+
 ### Bug ID: BUG-088 — 元大 rounds sell fee/tax on the whole position, 玉山 per lot; the dashboard only does per lot
 - **Found**: 2026-09-29. PROD workspace Ron的投資組合 (元大 account): 2303 two lots (1,000 @163.5 + 1,000 @160, cost 323,637), price 153.5, 牌告 basis. 元大 −17,995 = 307,000 − floor(307,000 × 0.1425%) 437 − 921 − 323,637; dashboard −17,993 = per-lot fee 218 + 218, tax 460 + 460.
 - **History**: 0.9.0–0.9.24 floored on the aggregate (would match 元大). e120041 (0.9.25, Task 136, 2026-09-01) switched to per-lot flooring to match 玉山 (0050 four lots: 10,770 per lot vs 10,767 aggregate). 玉山 still matches per lot (2026-09-29: 0050 five lots sum 49,555 = dashboard). One rule cannot match both brokers; the gap is ≤ 1 TWD per open lot per term.
