@@ -11,8 +11,6 @@
 - **Not mine, noticed on the way**: Task 182's DDL is still unapplied in both environments; this work does not depend on it (no schema change at all).
 
 ---
-
----
 ## 📅 Log: 2026-09-30 18:40:00 Asia/Taipei (Task 182 — 費率生效日)
 - **Problem, measured first.** On a seeded local-mode store (玉山, 6.5 折, three September trades) changing the discount to 3.8 折 made 批次重算 list every September row, pre-checked. Applying it rewrote history: 投入成本 450,417 → 450,244, 保本賣出價 904.39 → 903.69, 已實現 +22,720 → +23,075, and every row's `fee_rate` became 0.0005415. A second finding fell out of the same run: after a rate change the detail panel printed 「折扣後 0.0541% 目前採用」 beside a figure still computed at 0.0926% — the label read the workspace rate (`HoldingsLedger.tsx:105`), the figure read each lot's own (`pnlEngine.ts:991`). They only ever agreed because the rate had never changed.
 - **Shape.** `workspaces.fee_rate_history` JSONB, ascending `[{from, rate}]`; `fee_rate` keeps its meaning as the rate **before** the first segment, so a client or an Edge Function without the column still reads a real rate. One lookup — `utils/feeRateHistory.ts` `rateOn(history, base, date, fallback)` — with two callers that differ only in the date they pass. No new table: the data is read whole, written whole and never queried on its own, so a table would have cost an RLS policy and a join for nothing.
@@ -22,14 +20,10 @@
 - **Not mine, noticed on the way**: at 390px the dashboard's `SPAN.stmt-pct` overflows (426 > 390) with the synthetic +173% seed figure — pre-existing and unrelated.
 
 ---
-
----
 ## 📅 Log: 2026-09-30 18:05:00 Asia/Taipei (Task 180 — stock-report deployed, DEV + PROD)
 - User authorised both environments. DEV deployed from `dev` `dd3f83d`, PROD from a clean `main` `4a6c171` (= 0.10.9), both `--no-verify-jwt`. DEV v33 → **v34**, PROD v21 → **v22**; ezbr `98a86b7a…` → **`31cac8de13efd3ff…` on both** — expected, since `dev` is only `main` plus docs, and an identical bundle in both environments is itself evidence. `verify_jwt` stayed `false`, so the pg_cron caller will not start getting 401s.
 - Audited rather than inferred, per `supabase-ops`: `functions download` from **PROD** into a scratch dir, then every file diffed against `main`'s tree — all identical except `supabase/.temp/linked-project.json`, which is CLI state, not function code. The rule is visibly in the deployed bundle: `DAY_TRADE_TAX_SUNSET` at `_shared/engine/pnlEngine.ts:229`, `lotSellTaxRate` at `:248`, and `holdingsCard.ts:344` `today?: string` reaching `:369`'s posted-rate `estimateUnrealized` call. A bumped version number alone would have proved only that *something* uploaded.
 - Smoke: `POST {}` → `400 Unknown action` on both hosts — the expected reply for an unrouted body, so the function boots. `cron http (recent)` deliberately not checked: `CRON_SECRET` was untouched, so there is no new 401 to look for.
-
----
 
 ---
 ## 📅 Log: 2026-09-30 17:20:00 Asia/Taipei (Task 175 / BUG-087 當沖稅率對齊, 0.10.9)
@@ -65,8 +59,6 @@
 
 ---
 
----
-
 ## 📅 Log: 2026-09-30 13:30:00 Asia/Taipei (Task 177 取代匯入, 0.10.8-dev.1)
 - User re-imported a broker CSV (玉山 API → `esun_to_stockpnl.py`) into a workspace that already held those trades and the ledger double-counted. Reproduced with the real parser: the file itself is clean (118 rows, 0 errors, 交易性質 → `SPOT`, split fee/tax mode on), and re-importing it against rows written by that same pipeline flags 118/118 as duplicates. So the duplication does not come from the file — it comes from `markDuplicateRows` (`utils/csv.ts:185`) needing all 8 fields to match exactly, which hand-entered or old-spreadsheet rows never do (a fee off by NT$1 is enough).
 - Rejected: widening the duplicate key with a fee/price tolerance. It trades a visible error (an extra row you can see and delete) for an invisible one — the file has two genuinely identical fills on 2024-08-07 (2634 漢翔 48.1 × 1000, twice), and any tolerance merges real trades into one and silently drops a transaction.
@@ -74,8 +66,6 @@
 - Python fixes in the user's converter (file lives outside this repo): `t_time` dropped from `fill_key` — it is often empty, so one export with it and one without turned a single fill into two and defeated the cross-file dedup, putting duplicates inside the CSV itself; and `BUY_SELL[...]` became a warn-and-skip instead of a KeyError that aborts the whole run. Verified on synthetic exports: the cross-file pair collapses to 1 row, the unknown code is reported and skipped.
 - Verify: vitest 151 files / 2,569 tests, 2,562 passed, 7 skipped — `replaceScope` unit cases in `csv.test.ts`, mode wiring in `CsvImportModal.test.tsx`, and `TransactionsPage.import.test.tsx` which drives the real local-mode provider: importing the same file twice leaves 3 rows, while the 合併 path with a fee 1 元 different produces 4. `npm run build` and `lint` exit 0. Real Chromium at 1280 and 390: the notice, the confirm and the result all read correctly, and after 取代 the workspace holds the CSV's 3 rows plus the untouched 股利 row.
 - Committed to `dev` as 0.10.8-dev.1 (user asked for the commit, not a release). `main` stays on 0.10.7 until the user says merge. No DDL, no Edge deploy: nothing under `sources/supabase/` changed.
-
----
 
 ---
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
@@ -138,15 +128,11 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
----
-
 ## 📅 Log: 2026-09-29 13:26:55 Asia/Taipei (Task 174, 0.10.3 released)
 - User wanted each holding's current price readable at a glance. Two mockups (stronger price in the ledger / a 今日行情 strip) were rejected; the owner chose colouring the price itself: red above, green below, normal ink when flat. Baseline is yesterday's close (`prevClose`) — the holdings quote carries no open price, and broker apps use 平盤價 too.
 - `HoldingsLedger.tsx`: price span gets `hl-px` + `pnl-up`/`pnl-down`; no colour when `priceStale`, `dayChange` null or 0. `dashboard.css`: `.hl-px` bold in `--ink` (also overrides the grey phone cell). Footnote 1 explains the colours. New DashboardPage test covers up / down / flat / stale / no prevClose.
 - Verify: vitest 148 files / 2,506 tests, 2,499 passed, 7 skipped; build, typecheck:edge, lint exit 0. No browser pass.
 - Release: 049976f at 0.10.3-dev.1 on `dev`, dbf1c10 `chore(release): 0.10.3`, ff `main`, `main:dev` synced — all refs at dbf1c10. `main` CI green, Release 0.10.3 created, Pages CSS carries `.hl-px`. No Supabase change.
-
----
 
 ---
 
@@ -174,14 +160,10 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
----
-
 ## 📅 Log: 2026-09-28 07:16:51 Asia/Taipei (0.10.0 released)
 - User approved DEV and asked to merge with version 0.10.0 and handle PROD Supabase. f010f7d `chore(release): 0.10.0` (0.9.72-dev.1 entry renamed 0.10.0 in CHANGELOG), ff `main`, `main:dev` synced; CI + Sync GitHub Releases success, Release 0.10.0 exists; Pages serves the new CSS.
 - PROD DDL (authorized this time): Management API `database/query` with the PROD identity guard in the same DO block; check query → is_prod true, is_dev false, `fee_rebate` text, CHECK instant|monthly, 0 rows set; PROD REST `select=fee_rebate` → 200.
 - PROD `stock-report`: deployed from clean `main` f010f7d with `--no-verify-jwt`; v18 → v19, ezbr `08606770…` → `27ef30af…` (same as DEV v31); POST `{}` → 400 Unknown action.
-
----
 
 ---
 
@@ -272,8 +254,6 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
----
-
 ## 📅 Log: 2026-09-24 02:06:00 Asia/Taipei (Task 167, 0.9.68-dev.1)
 - Committed and pushed `dev` a3d1554 (0.9.68-dev.1): AI removed end to end (frontend, `ai-proxy` source, `schema.sql` now DROPs `app_settings` + `get_ai_settings()`; RISK-013 closed); 新增交易 moved into the header; Discord holdings card shows the 券商 figure (spec discord-holdings.md Revision 9); CLAUDE.md gained § Release workflow.
 - **Verify**: `npm test` 2,459 passed / 7 skipped / 0 failed; `npm run build`, `npm run lint`, `npm run typecheck:edge` exit 0.
@@ -284,13 +264,9 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - 0.9.68-dev.3: on ≤ 720 px `.header-add` gets `order: 1` (after the workspace menu, before `.header-meta`); verified at 1440 / 1024 / 375 / 320 px — no header overflow, no horizontal scroll, version 31 px above the bottom nav, modal opens.
 ---
 
----
-
 ## 📅 Log: 2026-09-23 10:40:00 Asia/Taipei (BUG-085, 0.9.67)
 - Fixed BUG-085: watchlist industry group flipped between 半導體業 and 其他 for 8150 (南茂), because `price_cache` did not store `industry`. See `FIXED_BUG.md` BUG-085 and `docs/agent/specs/BUG-085.md`.
 - Released 0.9.67: `main` and `dev` both at 8ee2065. DEV and PROD: DDL applied, `stock-price` redeployed and verified.
-
----
 
 ---
 
@@ -3634,8 +3610,6 @@ reproduces the cost structure (cache_read 67.9%, output 16.2%, matching measured
 
 ---
 
----
-
 ## 📅 Log: 2026-08-12 13:40:45 Asia/Taipei (Task 89: Redirect built-in discovery agents to `scout`, fix routing telemetry tracking)
 
 Implemented routing policy to block main session from spawning expensive built-in discovery agents
@@ -4044,8 +4018,6 @@ Verification: 990/990 vitest, app tsc, **edge tsc**, oxlint —— all clean.
 
 Four sources exercised the full chain on DEV tonight: `bwibbu` (landed), `margin` (landed, unattended),
 `mops_profit` (landed), and `mops_revenue` correctly **not** hitting (出表日 1150717 ≠ 今日).
-
----
 
 ---
 
