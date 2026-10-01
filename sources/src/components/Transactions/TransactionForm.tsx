@@ -170,8 +170,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // anyway. Comparing the inputs against their initial values gives the same answer
   // however many times the effect runs. Cleared for good on the first real change, so
   // typing a value back to its original still recalculates.
+  // The list here and the one in the fee effect below MUST stay identical: if they drift, the
+  // signatures never match, the guard releases immediately, and opening any record for edit
+  // silently recalculates its fee. `date` is part of it only for a cash dividend, whose premium
+  // rule is dated — adding it unconditionally would make editing a trade's date move its
+  // commission, which it has never done. Pinned by TransactionForm.dividend.test.tsx D8.
   const untouchedFeeSig = useRef<string | null>(
-    initial ? [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature].join('|') : null,
+    initial
+      ? [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, txType === 'DIVIDEND' ? date : ''].join('|')
+      : null,
   )
   // Per-unit record of user-typed 最低手續費, so a value typed under one unit survives switching to the other and back.
   const minFeeTyped = useRef<Partial<Record<'whole' | 'odd', string>>>({})
@@ -214,16 +221,27 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // and recalculation only kicks in once the user actually changes a core input below.
   // "Restore original record" is provided below the field to change it back to the original value.
   useEffect(() => {
-    const sig = [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature].join('|')
+    // Same list as `untouchedFeeSig` above — see the comment there before changing either.
+    const sig = [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, isCashDividend ? date : ''].join('|')
     if (untouchedFeeSig.current !== null) {
       if (untouchedFeeSig.current === sig) return
       untouchedFeeSig.current = null
     }
-    // A dividend's fee/tax is a real-world figure (代扣費用、相關費用) typed by hand, not a
-    // brokerage commission calculateFee() knows how to estimate — leave it to the user.
-    if (isCashDividend || isStockDividend) return
+    // 股票股利 moves shares and cost but no cash, so its 相關費用 is whatever the user says.
+    if (isStockDividend) return
     const p = parseFloat(price) || 0
     const shares = getActualShares()
+    // Task 183: a TW cash dividend's 代扣費用 is filled and kept in step exactly like a
+    // commission — change 每股股利 or 配發股數 and the estimate follows until you save. The
+    // saved number is still whatever stands in the field, and nothing recomputes it on read.
+    // A US dividend is withheld at source under a rule this app does not model, so it is left
+    // to the user; `date` joins the signature because the premium rule is dated.
+    if (isCashDividend) {
+      if (market !== 'TPE') return
+      const gross = p * shares
+      if (gross > 0) setFee(String(estimateWithholding(gross, date, DEFAULT_WIRE_FEE).total))
+      return
+    }
     const rate = parseFloat(feeRate) || 0
     if (p > 0 && shares > 0) {
       const calculated = calculateFee({
@@ -238,12 +256,12 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       })
       setFee(String(calculated))
     }
-  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, getActualShares, isCashDividend, isStockDividend])
+  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, date, getActualShares, isCashDividend, isStockDividend])
 
   /**
-   * Task 183: what a TW cash dividend of this size would have withheld — an input hint only.
-   * It is offered beside the field and, once applied, is just the number the user saved; nothing
-   * recomputes it on read. US dividends are withheld at source under a different rule, so no hint.
+   * Task 183: the breakdown behind the 代扣費用 the effect above just filled in, so the user can
+   * see *why* it says 601 and correct it against their own notice. The figure itself is written by
+   * the effect, not here. US dividends are withheld at source under a different rule, so no line.
    */
   const dividendWithholding = useMemo(() => {
     if (!isCashDividend || market !== 'TPE') return null
@@ -903,25 +921,18 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             {dividendWithholding.belowThreshold ? (
               <>
                 配息總額 {dividendWithholding.gross.toLocaleString('en-US')} 未達{' '}
-                {dividendWithholding.threshold.toLocaleString('en-US')} 元起扣點，不用扣二代健保，通常只有匯費{' '}
+                {dividendWithholding.threshold.toLocaleString('en-US')} 元起扣點，不用扣二代健保，上面是匯費{' '}
                 {dividendWithholding.wire}
               </>
             ) : (
               <>
-                配息總額 {dividendWithholding.gross.toLocaleString('en-US')}，估二代健保{' '}
+                配息總額 {dividendWithholding.gross.toLocaleString('en-US')}，上面是估二代健保{' '}
                 {dividendWithholding.nhi.toLocaleString('en-US')} ＋ 匯費 {dividendWithholding.wire} ＝{' '}
                 {dividendWithholding.total.toLocaleString('en-US')}
               </>
-            )}{' '}
-            <button
-              type="button"
-              className="link-btn"
-              onClick={() => setFee(String(dividendWithholding.total))}
-            >
-              帶入 {dividendWithholding.total.toLocaleString('en-US')}
-            </button>
+            )}
             <br />
-            這只是估算值，請以券商的股利通知書為準。
+            這是估算值，和券商的股利通知書不同時直接改上面的數字；改每股股利或股數會重新估算。
           </div>
         )}
       </div>
