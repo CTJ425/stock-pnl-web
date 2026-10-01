@@ -17,10 +17,16 @@
 ## 📋 Active Tasks
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
-- **Status**: ✅ DONE — released as **0.10.11** (`d0077ec`), on `main` and `dev` (identical),
-  Release published by CI, CI green on both branches. vitest 2,697 pass / 7 skipped (+14),
-  `npm run build` and `typecheck:edge` exit 0. **No browser check** — the user asked to ship fast
-  and the change is covered by App-level tests that render the real form.
+- **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`c320006`), on `main` and `dev`
+  (identical), both Releases published by CI, CI green. vitest 2,697 pass / 7 skipped,
+  `npm run build` and `typecheck:edge` exit 0. **Neither release was checked in a browser** — the
+  user asked to ship fast; the change is covered by App-level tests that render the real form.
+- **Reversed in 0.10.12, on the user's decision after seeing it**: 月退 no longer writes the
+  statutory rate into a transaction. A recorded fee is what the trade finally costs you, and
+  nothing here records the monthly refund, so the list price would leave that money outside the
+  ledger (~1,112 元 on their 1,258,800 position). The rebate still decides the dashboard headline,
+  and the 券商 column stays on 牌告 for every TWD row (`holdingRows.ts:111`), so both numbers remain
+  visible. `chargedFeeRate` is gone; see RISK-022 for the cost of this choice.
 - **Agent**: Claude
 - **Timestamp**: 2026-10-01 14:36:00 Asia/Taipei
 - **Why**: the dashboard read 79,523 against 玉山 App's 78,276. The 1,247 is entirely the sell-fee
@@ -41,17 +47,25 @@
      the old default does not count as a choice, so a workspace is never pinned to 現折. Persisted
      on save because the Edge holdings card reads `fee_rebate` from the row.
 - **Items**:
-  5. ~~Commit to `dev`, run the gates, release~~ ✅ 0.10.11, 2026-10-01 14:45. No deploy was
-     needed: the diff touches no `sources/supabase/**`, so Edge and DDL are untouched and
-     Cloudflare Pages serves the new frontend from `main` on its own.
+  5. ~~Commit to `dev`, run the gates, release~~ ✅ 0.10.11 (14:45) and 0.10.12 (15:38). No deploy
+     was needed for either: neither diff touches `sources/supabase/**`, so Edge and DDL are
+     untouched and Cloudflare Pages serves the new frontend from `main` on its own.
+  7. **Confirm 現折 vs 月退 from a settlement statement** ⏳ — the whole 月退 reading came from 玉山
+     App's *estimate* screen, never from an actual deduction. One buy's 交割金額 (0.1425% or
+     0.0541%?), or a 折讓金 credit on last month's statement, settles it. Since 0.10.12 a wrong
+     guess only mislabels the dashboard headline, so this is no longer urgent — but it is still
+     unproven, and the setting is one click either way.
   6. User's own save ⏳: PROD 玉山證卷 → 「改」 on 「一直以來 3.8 折」 → 不打折, then 3.8 折 from
      2026-10-01. Under 月退 the recalculation uses 0.1425% for every date anyway, so this is about the
      record being true, not about today's numbers.
 - **Not done, named on purpose**: 最低手續費 still has no date dimension (`settings.ts:152`, global,
   BUG-084), so a recalculation applies today's 20 元 / 1 元 to every date. Narrow (small odd lots
-  only) and only wrong if the broker's minimum changed with the agreement. `WhatIfTab` /
-  `AnalysisPage` estimates still use the discounted rate under 月退 — they are estimates, so they
-  follow `pnlBasis`, but worth a look if the user reports a mismatch there.
+  only) and only wrong if the broker's minimum changed with the agreement. **Nowhere records a
+  月退 折讓金** — 0.10.12 side-steps it by folding the discount into every trade, which assumes the
+  refund always arrives; a 現金收入 entry like 現金股利 would close it properly (RISK-022).
+- **Warn before any 批次重算 on a ledger built from broker statements**: since 0.10.12 the wizard
+  re-prices rows at the discounted rate, so rows entered or imported at the real (full) deduction
+  get overwritten with an estimate, moving 投入成本 and 已實現損益. The list is pre-checked.
 
 ### Task 182: Fee rate as a fact with a validity period (玉山 3.8 折 from 2026-10-01)
 - **Status**: 🔄 IN PROGRESS — infrastructure complete (2026-10-01). DDL on DEV **and** PROD,

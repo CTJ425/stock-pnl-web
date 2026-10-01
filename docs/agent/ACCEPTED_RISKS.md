@@ -20,6 +20,25 @@ Newest first, in the order they stood in `BUG_FIX.md`.
 
 ## 🧾 Accepted risks
 
+### RISK-022 — A 月退 broker's 折讓金 is folded into each trade, never recorded as income
+- **Decision**: ACCEPTED (Task 184, 0.10.12, user's call 2026-10-01)
+- **What**: under 月退 the broker deducts the statutory 0.1425% at settlement and refunds the
+  discount later. This app has no 現金收入 entry for that refund, so 0.10.12 records every trade at
+  the **discounted** rate instead — the money is assumed to come back and is folded into the trade
+  rather than tracked.
+- **Cost, measured**: a ledger on a genuinely 月退 broker differs from the settlement statement by
+  0.0884% (0.1425% − 0.0541% at 3.8 折) on every row. Total P&L is right; line-by-line
+  reconciliation against the statement is not. On the user's 1,258,800 position that is ~1,112 元
+  of fees that the statement shows and the ledger does not.
+- **Why accepted**: the alternative (0.10.11's behaviour) recorded the statutory rate and left the
+  refund outside the ledger entirely, so 已實現損益 stayed low by the same amount **forever**. Both
+  are wrong by 0.0884%; only this one is wrong in a direction that self-corrects when the refund
+  lands in the account.
+- **What would close it**: a 折讓金 income entry, shaped like the 現金股利 one (Task 183). Not
+  opened — it needs a place in the yearly report too, and the user has not asked for it.
+- **Status**: ACCEPTED — revisit only if the user starts reconciling this ledger against statements.
+
+
 ### RISK-021 — Daily and intraday series caches survive an account switch
 - **Where**: `sources/src/services/dailyProxy.ts`, `sources/src/services/intradayProxy.ts`
 - **Risk**: both in-memory caches carry an LRU cap (PR-03) but, unlike `warmStock.ts`, have no `onAuthStateChange` reset. After a sign-out and sign-in as another user on the same tab, cached series can be shown until their TTL expires (dailyProxy 300 s).
