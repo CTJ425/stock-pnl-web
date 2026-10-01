@@ -29,6 +29,7 @@ import {
 } from './cells'
 import { YEAR_HELP } from './columnHelp'
 import { rawRealized, roiBasis } from './pnlMath'
+import { DividendSection } from './DividendSection'
 import { RangeSection } from './RangeSection'
 import { YearlyOverview } from './YearlyOverview'
 
@@ -444,6 +445,13 @@ export function YearlyPage() {
 
       {/* Between the year-by-year picture and the year-by-year ledger: a window the user picks. */}
       <RangeSection ledger={ledger} />
+
+      {/*
+        股利 (Task 183). Above the search for the same reason as the KPIs: it is a whole year's
+        dividends, not a filtered slice. One section per market — no FX rate is known here.
+      */}
+      <DividendSection title="台股 (TWD)" currency="TWD" />
+      <DividendSection title="美股 (USD)" currency="USD" />
 
       {/*
         The box sits below the KPIs on purpose: the KPIs are lifetime totals over every trade and are

@@ -2,12 +2,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 
-const { getFeeRate, getMinFee, useWorkspace } = vi.hoisted(() => ({
-  getFeeRate: vi.fn(() => 0.001425),
+const { getFeeRateOn, getMinFee, useWorkspace } = vi.hoisted(() => ({
+  getFeeRateOn: vi.fn(() => 0.001425),
   getMinFee: vi.fn(() => 20),
   useWorkspace: vi.fn(),
 }))
-vi.mock('../../utils/settings', () => ({ getFeeRate, getMinFee }))
+vi.mock('../../utils/settings', () => ({ getFeeRateOn, getMinFee }))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 
 import { WhatIfTab } from './WhatIfTab'
@@ -28,7 +28,8 @@ describe('WhatIfTab 費率取用', () => {
   it('費率與最低手續費都按目前工作區取用', () => {
     render(<WhatIfTab ticker="2330" currentPrice={100} {...watched} />)
 
-    expect(getFeeRate).toHaveBeenCalledWith('ws-1')
+    // Task 182: a date too — the what-if asks what a trade made today would cost.
+    expect(getFeeRateOn).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), 'ws-1')
     expect(getMinFee).toHaveBeenCalledWith(expect.any(String), 'ws-1')
   })
 

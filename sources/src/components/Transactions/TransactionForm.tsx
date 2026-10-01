@@ -16,9 +16,10 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
+import { DEFAULT_WIRE_FEE, estimateWithholding } from '../../utils/nhiSupplement'
 import type { Holding } from '../../utils/pnlEngine'
 import { sellTaxRate } from '../../utils/pnlEngine'
-import { getFeeRate, getMinFee } from '../../utils/settings'
+import { getFeeRateOn, getMinFee } from '../../utils/settings'
 import { describeTwFeeRate } from '../../utils/feeRateHint'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
@@ -60,21 +61,24 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     if (initial?.fee_rate !== undefined && initial.fee_rate !== null) {
       return String(initial.fee_rate)
     }
-    const defaultRate = getFeeRate(workspaceId)
+    const defaultRate = getFeeRateOn(initial?.tx_date ?? todayStr(), workspaceId)
     if (initial) {
       const minFees = { whole: getMinFee('whole', workspaceId), odd: getMinFee('odd', workspaceId) }
       return String(inferFeeRate(initial, defaultRate, minFees))
     }
     return String(defaultRate)
   })
+  // Task 182: the workspace's rate can change from a date, so the default follows the transaction's
+  // own date — until the user types a rate for this one trade, after which the field is theirs.
+  const feeRateManual = useRef(false)
   const minFeeUnit = unit === '張' ? 'whole' : 'odd'
   const [minFee, setMinFee] = useState(() => String(getMinFee(minFeeUnit, workspaceId)))
 
   // When switching workspaces/whole shares or odd units, the corresponding memorized rates and minimum handling fees are brought in
   useEffect(() => {
-    if (isEdit) return
-    setFeeRate(String(getFeeRate(workspaceId)))
-  }, [workspaceId, isEdit])
+    if (isEdit || feeRateManual.current) return
+    setFeeRate(String(getFeeRateOn(date, workspaceId)))
+  }, [workspaceId, isEdit, date])
   useEffect(() => {
     // A different workspace has different defaults, so drop any values typed under the previous one.
     if (minFeeWorkspaceRef.current !== workspaceId) {
@@ -235,6 +239,18 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       setFee(String(calculated))
     }
   }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, getActualShares, isCashDividend, isStockDividend])
+
+  /**
+   * Task 183: what a TW cash dividend of this size would have withheld — an input hint only.
+   * It is offered beside the field and, once applied, is just the number the user saved; nothing
+   * recomputes it on read. US dividends are withheld at source under a different rule, so no hint.
+   */
+  const dividendWithholding = useMemo(() => {
+    if (!isCashDividend || market !== 'TPE') return null
+    const gross = (parseFloat(price) || 0) * getActualShares()
+    if (!(gross > 0)) return null
+    return { gross, ...estimateWithholding(gross, date, DEFAULT_WIRE_FEE) }
+  }, [isCashDividend, market, price, date, getActualShares])
 
   // Market Switch: U.S. Stocks Mandate “Odd Lot” Units
   const handleMarketChange = (next: Market) => {
@@ -420,6 +436,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       setShowNameHoldings(false)
       lastSearchedTicker.current = ''
       taxRateManual.current = false
+      feeRateManual.current = false
       setTaxRate('0.003')
       setMessage({ kind: 'ok', text: '🎉 成功新增交易紀錄，Dashboard 與年度收益已同步更新！' })
       onDone?.()
@@ -777,6 +794,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             min="0"
             value={feeRate}
             onChange={(e) => {
+              feeRateManual.current = true
               setFeeRate(e.target.value)
             }}
           />
@@ -878,6 +896,32 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             >
               還原原紀錄
             </button>
+          </div>
+        )}
+        {dividendWithholding && (
+          <div className="field-hint">
+            {dividendWithholding.belowThreshold ? (
+              <>
+                配息總額 {dividendWithholding.gross.toLocaleString('en-US')} 未達{' '}
+                {dividendWithholding.threshold.toLocaleString('en-US')} 元起扣點，不用扣二代健保，通常只有匯費{' '}
+                {dividendWithholding.wire}
+              </>
+            ) : (
+              <>
+                配息總額 {dividendWithholding.gross.toLocaleString('en-US')}，估二代健保{' '}
+                {dividendWithholding.nhi.toLocaleString('en-US')} ＋ 匯費 {dividendWithholding.wire} ＝{' '}
+                {dividendWithholding.total.toLocaleString('en-US')}
+              </>
+            )}{' '}
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => setFee(String(dividendWithholding.total))}
+            >
+              帶入 {dividendWithholding.total.toLocaleString('en-US')}
+            </button>
+            <br />
+            這只是估算值，請以券商的股利通知書為準。
           </div>
         )}
       </div>

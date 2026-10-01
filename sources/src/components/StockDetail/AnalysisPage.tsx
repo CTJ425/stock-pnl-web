@@ -13,7 +13,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { buildHoldingRows } from '../../utils/holdingRows'
 import { taipeiDateKey } from '../../utils/taipeiDate'
-import { getFeeRate } from '../../utils/settings'
+import { getFeeRateOn } from '../../utils/settings'
 import { pnlBasis, rowRoi, rowUnrealized } from '../../utils/pnlBasis'
 import { displayStockName } from '../../services/usStockNames'
 import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
@@ -32,7 +32,8 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const { ledger, current } = useWorkspace()
   const holdings = ledger.holdings
   const { prices } = useStockPrices(holdings)
-  const feeRate = getFeeRate(current?.id)
+  // Today's rate (Task 182): these are estimates of a sell made now, not a re-pricing of the past.
+  const feeRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
   // Same basis as 庫存總覽: derived from the workspace's fee settings (utils/pnlBasis).
   const basis = pnlBasis(feeRate, current?.fee_rebate)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)

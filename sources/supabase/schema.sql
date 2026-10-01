@@ -36,6 +36,17 @@ ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rounding_values;
 ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rounding_values
     CHECK (fee_rounding IS NULL OR fee_rounding IN ('lot', 'position'));
 
+-- Fee-rate history (Task 182): [{"from":"2026-10-01","rate":0.0005415}, ...], ascending by from.
+-- A broker can renegotiate the discount from a given date (玉山 went to 3.8 折 on 2026-10-01) and a
+-- trade made before it was charged the old rate for good, so the rate is a fact with a validity
+-- period. fee_rate above keeps its meaning as the rate BEFORE the first segment, which is what a
+-- client that has not seen this column still reads. NULL means the rate never changed.
+-- The CHECK only guards the shape; utils/feeRateHistory.ts normalises order, duplicates and range.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate_history JSONB;
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_history_shape;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_history_shape
+    CHECK (fee_rate_history IS NULL OR jsonb_typeof(fee_rate_history) = 'array');
+
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can manage their own workspaces" ON workspaces;

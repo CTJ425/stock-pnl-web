@@ -34,7 +34,7 @@ import { type FxFile } from './fxRates.ts'
 import { assertUser } from './gates.ts'
 import { type IndexChartResponse, indexChartUrl } from './globalIndexClose.ts'
 import { makeChartFetch } from './holdingQuotes.ts'
-import { type WorkspaceInput } from './holdingsCard.ts'
+import { type FeeRateSegment, type WorkspaceInput } from './holdingsCard.ts'
 import {
   type HoldingsDataDeps,
   type HoldingsKind,
@@ -334,16 +334,32 @@ export const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, n
 /** Every workspace of the user, each with all of its transactions. BUG-066: page transactions
  * 1,000 rows at a time until a short page — PostgREST caps a single response at `max_rows`. */
 export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceInput[]> {
-  const { data: workspaces, error } = await db
-    .from('workspaces')
-    .select('id, fee_rate, fee_rebate, fee_rounding')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-  if (error) throw new Error(error.message)
+  // Task 182: `fee_rate_history` may not exist yet — PostgREST rejects the whole query for an
+  // unknown column, and the nightly card must not die because the DDL has not been applied. One
+  // step down is enough; without the history the base `fee_rate` is what every workspace used.
+  const selects = [
+    'id, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
+    'id, fee_rate, fee_rebate, fee_rounding',
+  ]
+  let workspaces: Array<Record<string, unknown>> | null = null
+  let lastError = ''
+  for (const columns of selects) {
+    const { data, error } = await db
+      .from('workspaces')
+      .select(columns)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+    if (!error) {
+      workspaces = (data ?? []) as unknown as Array<Record<string, unknown>>
+      break
+    }
+    lastError = error.message
+  }
+  if (workspaces === null) throw new Error(lastError)
 
   const out: WorkspaceInput[] = []
-  for (const ws of workspaces ?? []) {
+  for (const ws of workspaces) {
     const transactions: Transaction[] = []
     for (let from = 0; ; from += 1000) {
       const { data, error: txError } = await db
@@ -359,7 +375,14 @@ export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceI
       transactions.push(...page)
       if (page.length < 1000) break
     }
-    out.push({ id: ws.id, fee_rate: ws.fee_rate, fee_rebate: ws.fee_rebate, fee_rounding: ws.fee_rounding, transactions })
+    out.push({
+      id: ws.id as string,
+      fee_rate: (ws.fee_rate ?? null) as number | null,
+      fee_rate_history: (ws.fee_rate_history ?? null) as FeeRateSegment[] | null,
+      fee_rebate: (ws.fee_rebate ?? null) as WorkspaceInput['fee_rebate'],
+      fee_rounding: (ws.fee_rounding ?? null) as WorkspaceInput['fee_rounding'],
+      transactions,
+    })
   }
   return out
 }

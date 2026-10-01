@@ -17,7 +17,8 @@ import {
   pnlClass,
   roundPrice,
 } from '../../utils/formatters'
-import { getFeeRate, getMinFee } from '../../utils/settings'
+import { getFeeRateOn, getMinFee } from '../../utils/settings'
+import { taipeiDateKey } from '../../utils/taipeiDate'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { rowActivateProps } from '../../hooks/rowActivateProps'
 
@@ -138,7 +139,8 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
   // Scoped to the workspace like every other caller (AnalysisPage, DashboardPage,
   // TransactionForm): an unscoped read would price the estimate with the global rate
   // while the workspace has its own, and the difference would be invisible.
-  const feeRate = getFeeRate(current?.id)
+  // Today's rate (Task 182): the what-if asks what a trade made now would cost.
+  const feeRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
   // Whole-lot vs odd-lot minimum fee follows the entered qty, same rule as the transaction form.
   const minFeeUnit = shares > 0 && shares % 1000 === 0 ? 'whole' : 'odd'
   const minFee = getMinFee(minFeeUnit, current?.id)

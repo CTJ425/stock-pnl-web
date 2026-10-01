@@ -74,14 +74,14 @@ describe.skipIf(!haveFixtures)('真實匯出檔端到端', () => {
   })
 
   it('批次重算：兩筆當沖不被提案，只留下真正對不上費率的紀錄', () => {
-    const ronlinOut = proposeFeeCorrections(ronlin, { feeRate: 0.0004275, minFeeWhole: 20, minFeeOdd: 1 })
+    const ronlinOut = proposeFeeCorrections(ronlin, { rateFor: () => 0.0004275, minFeeWhole: 20, minFeeOdd: 1 })
       .map((p) => `${p.tx.tx_date} ${p.tx.ticker} ${p.tx.fee_tax}->${p.newFee}`)
     // 2891 那筆多收 3,300 元、00685L 那筆用原價而非 3 折 —— 兩者都真的與費率不符，該提案
     expect(ronlinOut).toEqual(['2026-06-05 2891 3932->722', '2026-06-23 00685L 459->137'])
     // 當沖的 2344 與 2303 不得出現：舊版會提議改成 645 / 422，多課 283 / 185 元的稅
     expect(ronlinOut.some((s) => s.includes('2344') || s.includes('2303'))).toBe(false)
     // 玉山全是一般稅率且金額都對，不該提出任何更動
-    expect(proposeFeeCorrections(esun, { feeRate: 0.001425, minFeeWhole: 20, minFeeOdd: 1 })
+    expect(proposeFeeCorrections(esun, { rateFor: () => 0.001425, minFeeWhole: 20, minFeeOdd: 1 })
       .map((p) => `${p.tx.tx_date} ${p.tx.ticker} ${p.tx.fee_tax}->${p.newFee}`)).toEqual([])
   })
 

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import { DEFAULT_FEE_RATE } from '../../src/utils/fees.ts'
 import { DEFAULT_MIN_FEE_ODD, DEFAULT_MIN_FEE_WHOLE } from '../../src/utils/settings.ts'
+import { rateOn as webRateOn } from '../../src/utils/feeRateHistory.ts'
 import * as card from '../../supabase/functions/stock-report/holdingsCard.ts'
 
 describe('holdingsCard fee constants match the web', () => {
@@ -42,5 +43,31 @@ describe('holdingsCard display-width table and colours match discordSummary', ()
   it.each(['RED', 'GREEN', 'GREY'])('%s', (name) => {
     const re = new RegExp(`const ${name} = 0x[0-9a-f]+`)
     expect(block(cardSrc, re)).toBe(block(summarySrc, re))
+  })
+})
+
+// Task 182: holdingsCard.ts re-states `rateOn` (D6 keeps src/ unimported from Edge). A constant
+// comparison is not enough here — the two must agree on the answers, including the boundaries.
+describe('holdingsCard rateOn matches the web', () => {
+  const H = [
+    { from: '2026-10-01', rate: 0.0005415 },
+    { from: '2027-01-01', rate: 0.0004275 },
+  ]
+  const cases = [
+    [H, 0.00092625, '2026-09-30'],
+    [H, 0.00092625, '2026-10-01'],
+    [H, 0.00092625, '2026-12-31'],
+    [H, 0.00092625, '2027-01-01'],
+    [H, null, '2026-09-30'],
+    [H, 0, '2026-09-30'],
+    [[], 0.00092625, '2026-10-01'],
+    [null, null, '2026-10-01'],
+    [[{ from: '2026-10-01', rate: 0 }], 0.00092625, '2026-10-01'],
+  ]
+
+  it.each(cases)('history %#', (history, base, date) => {
+    expect(card.rateOn(history, base, date, DEFAULT_FEE_RATE)).toBe(
+      webRateOn(history, base, date, DEFAULT_FEE_RATE),
+    )
   })
 })

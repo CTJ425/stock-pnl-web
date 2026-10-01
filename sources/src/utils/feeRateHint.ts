@@ -26,3 +26,15 @@ export function describeTwFeeRate(rate: number): FeeRateHint {
   const tenths = Math.round(ratio * 1000) / 100
   return { discount: `＝ ${tenths} 折`, warning: null }
 }
+
+/**
+ * The short name of a rate for a label or a table cell: 「6.5 折」, 「不打折」, 「免手續費」.
+ * `describeTwFeeRate` above is the form's inline explanation; this is the one-token version the
+ * fee history and the recalculation preview print beside a date.
+ */
+export function feeDiscountLabel(rate: number): string {
+  if (!Number.isFinite(rate)) return '—'
+  if (rate === 0) return '免手續費'
+  if (rate >= DEFAULT_FEE_RATE) return '不打折'
+  return `${Math.round((rate / DEFAULT_FEE_RATE) * 1000) / 100} 折`
+}

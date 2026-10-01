@@ -9,7 +9,8 @@ const { useWorkspace } = vi.hoisted(() => ({ useWorkspace: vi.fn() }))
 
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../utils/settings', () => ({
-  getFeeRate: () => 0.001425,
+  getFeeRateOn: () => 0.001425,
+  getFeeRateHistory: () => [],
   getMinFee: (kind: 'whole' | 'odd') => (kind === 'whole' ? 20 : 1),
 }))
 

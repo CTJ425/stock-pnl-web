@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>股利區塊 Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   Mockup: 年度收益 → 股利 區塊
+   Tokens copied verbatim from sources/src/styles/tokens.css so this preview is
+   a faithful stand-in for the app. Do not hand-tune colours here.
+   ========================================================= */
+:root {
+  --cds-background:#11151a; --cds-background-hover:#1a2129;
+  --cds-layer-01:#151b21; --cds-layer-02:#1a2129; --cds-layer-accent-01:#1f2833;
+  --cds-border-subtle:#29323d; --cds-border-strong:#5b6674;
+  --cds-text-primary:#e7ebf0; --cds-text-secondary:#b3bdc9; --cds-text-helper:#8f9aa8;
+  --cds-link-primary:#8db3e2; --cds-focus:#8db3e2; --cds-interactive:#8db3e2;
+  --cds-shadow-menu:0 4px 12px rgba(0,0,0,.4);
+  --up:#ff7d74; --down:#52c98c;
+  --chart-c1:#3987e5; --chart-c2:#c98500; --chart-c3:#9085e9; --chart-c4:#d55181;
+  --chart-other:#8f9aa8;
+  --steel-tint:rgba(141,179,226,.16);
+
+  --sp-01:2px; --sp-02:4px; --sp-03:8px; --sp-04:12px; --sp-05:16px;
+  --sp-06:24px; --sp-07:32px; --sp-08:40px; --sp-09:48px;
+  --type-label-01:.75rem; --type-body-01:.875rem; --type-body-02:1rem;
+  --type-heading-03:1.25rem; --type-heading-04:1.75rem; --type-heading-05:2rem;
+  --radius:2px;
+  --font-body:"Public Sans","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+:root[data-theme='light'] {
+  --cds-background:#ffffff; --cds-background-hover:#eff3f7;
+  --cds-layer-01:#ffffff; --cds-layer-02:#f6f8fa; --cds-layer-accent-01:#e3e9f0;
+  --cds-border-subtle:#d3dae3; --cds-border-strong:#8a94a1;
+  --cds-text-primary:#16191d; --cds-text-secondary:#444d58; --cds-text-helper:#636c78;
+  --cds-link-primary:#2c5785; --cds-focus:#2c5785; --cds-interactive:#2c5785;
+  --cds-shadow-menu:0 4px 12px rgba(22,25,29,.12);
+  --up:#c42f2b; --down:#17784a;
+  --chart-c1:#2a78d6; --chart-c2:#eda100; --chart-c3:#4a3aa7; --chart-c4:#e87ba4;
+  --chart-other:#636c78;
+  --steel-tint:rgba(44,87,133,.10);
+}
+
+/* No explicit choice: follow the system. The dark values above are the base. */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme='dark']){
+  --cds-background:#ffffff; --cds-background-hover:#eff3f7;
+  --cds-layer-01:#ffffff; --cds-layer-02:#f6f8fa; --cds-layer-accent-01:#e3e9f0;
+  --cds-border-subtle:#d3dae3; --cds-border-strong:#8a94a1;
+  --cds-text-primary:#16191d; --cds-text-secondary:#444d58; --cds-text-helper:#636c78;
+  --cds-link-primary:#2c5785; --cds-focus:#2c5785; --cds-interactive:#2c5785;
+  --cds-shadow-menu:0 4px 12px rgba(22,25,29,.12);
+  --up:#c42f2b; --down:#17784a;
+  --chart-c1:#2a78d6; --chart-c2:#eda100; --chart-c3:#4a3aa7; --chart-c4:#e87ba4;
+  --chart-other:#636c78;
+  --steel-tint:rgba(44,87,133,.10);
+}
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--cds-background); color:var(--cds-text-primary);
+  font-family:var(--font-body); font-size:var(--type-body-01); line-height:1.5;
+  font-variant-numeric:tabular-nums lining-nums;
+  caret-color:var(--cds-interactive);
+  scrollbar-color:var(--cds-border-strong) transparent;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--steel-tint); color:var(--cds-text-primary)}
+:focus-visible{outline:2px solid var(--cds-focus); outline-offset:-2px}
+h1,h2,h3{margin:0; font-weight:700; letter-spacing:0}
+
+/* ---------- mockup chrome (not part of the app) ---------- */
+.mk-bar{
+  position:sticky; top:0; z-index:9;
+  height:56px; display:flex; align-items:center; gap:var(--sp-04);
+  padding:0 var(--sp-06); background:var(--cds-background);
+  border-bottom:1px solid var(--cds-border-subtle);
+}
+.mk-bar b{font-size:var(--type-body-02)}
+.mk-bar span{color:var(--cds-text-helper); font-size:.8125rem}
+.mk-bar .seg{margin-left:auto}
+.seg{display:inline-flex; border:1px solid var(--cds-border-subtle); border-radius:var(--radius)}
+.seg button{
+  appearance:none; border:0; background:transparent; height:32px; padding:0 var(--sp-04);
+  font:inherit; font-size:.8125rem; color:var(--cds-text-secondary); cursor:pointer;
+}
+.seg button+button{border-left:1px solid var(--cds-border-subtle)}
+.seg button[aria-pressed='true']{background:var(--cds-layer-accent-01); color:var(--cds-text-primary); font-weight:600}
+
+.page{max-width:1248px; margin:0 auto; padding:var(--sp-07) var(--sp-06) var(--sp-09)}
+.crumb{
+  font-size:.8125rem; color:var(--cds-text-helper);
+  padding-bottom:var(--sp-06); border-bottom:1px solid var(--cds-border-subtle);
+}
+.crumb a{color:var(--cds-link-primary); text-decoration:none}
+.crumb a:hover{text-decoration:underline; text-underline-offset:3px}
+
+/* ---------- section head ---------- */
+.yr-div{margin-top:var(--sp-09)}
+.yr-head{display:flex; align-items:baseline; flex-wrap:wrap; gap:var(--sp-02) var(--sp-04); margin-bottom:var(--sp-04)}
+.yr-head h2{font-size:var(--type-heading-03)}
+.yr-note{font-size:.8125rem; color:var(--cds-text-helper)}
+
+/* ---------- totals: 配息總額 − 代扣費用 = 實收 ---------- */
+.div-totals{
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:var(--sp-05) var(--sp-06);
+  padding-top:var(--sp-04);
+  border-top:1px solid var(--cds-text-primary);
+}
+.div-tot{min-width:0; position:relative}
+.div-tot+.div-tot{padding-left:var(--sp-06); border-left:1px solid var(--cds-border-subtle)}
+.div-tot h3{font-size:var(--type-body-01); font-weight:500; color:var(--cds-text-secondary); margin-bottom:var(--sp-01)}
+.div-fig{font-size:var(--type-heading-04); font-weight:700; line-height:1.15; font-variant-numeric:lining-nums}
+.div-fig.lead{font-size:var(--type-heading-05)}
+.div-sub{font-size:.8125rem; color:var(--cds-text-helper); margin-top:var(--sp-02)}
+.div-op{
+  position:absolute; left:calc(var(--sp-06) / -2 - 4px); top:26px;
+  font-size:var(--type-body-02); font-weight:600; color:var(--cds-text-helper);
+}
+
+/* the closing line: 已實現損益 + 股利 = 總報酬 */
+.div-close{
+  margin-top:var(--sp-05); padding-top:var(--sp-04);
+  border-top:3px double var(--cds-text-primary);
+  display:flex; align-items:baseline; flex-wrap:wrap; gap:var(--sp-02) var(--sp-04);
+}
+.div-close .lbl{font-size:var(--type-body-01); color:var(--cds-text-secondary)}
+.div-close .val{font-size:var(--type-heading-03); font-weight:700}
+.div-close .terms{margin-left:auto; font-size:.8125rem; color:var(--cds-text-helper)}
+
+/* ---------- monthly bars ---------- */
+.div-grid{
+  margin-top:var(--sp-08);
+  display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
+  gap:var(--sp-06) var(--sp-08); align-items:start;
+}
+.blk-head{display:flex; align-items:baseline; gap:var(--sp-03); margin-bottom:var(--sp-05)}
+.blk-head h3{font-size:var(--type-body-02)}
+.blk-head span{font-size:.8125rem; color:var(--cds-text-helper)}
+
+.chart{position:relative; padding-left:56px}
+.chart-plot{margin-top:104px}  /* reserved band: the tooltip must not reach the heading */
+.chart-plot{position:relative; height:200px}
+/* recessive solid hairline grid, one shade off the surface */
+.chart-plot::before{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(to top,
+    var(--cds-border-subtle) 0 1px, transparent 1px) 0 0/100% 33.334%;
+}
+.chart-base{position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--cds-border-strong)}
+.y-axis{position:absolute; left:0; top:0; bottom:0; width:52px; pointer-events:none}
+.y-axis span{
+  position:absolute; right:var(--sp-03); transform:translateY(50%);
+  font-size:var(--type-label-01); color:var(--cds-text-helper); white-space:nowrap;
+}
+.bars{position:absolute; inset:0; display:flex; align-items:flex-end; gap:var(--sp-02)}
+.month{
+  position:relative; flex:1 1 0; min-width:0; height:100%;
+  display:flex; flex-direction:column; justify-content:flex-end;
+  background:transparent; border:0; padding:0; font:inherit; cursor:default;
+}
+.month:hover,.month:focus-visible{background:var(--cds-background-hover)}
+.month .stack{display:flex; flex-direction:column; justify-content:flex-end; height:100%}
+.seg-fill{width:100%}
+.seg-fill+.seg-fill{margin-top:2px}          /* 2px surface gap, never a border */
+.stack .seg-fill:first-child{border-radius:4px 4px 0 0}  /* the data end */
+.c1{background:var(--chart-c1)} .c2{background:var(--chart-c2)}
+.c3{background:var(--chart-c3)} .c4{background:var(--chart-c4)}
+.c5{background:var(--chart-other)}
+
+/* direct label: the peak month only — the axis, tooltip and table carry the rest */
+.peak{
+  position:absolute; left:50%; transform:translateX(-50%);
+  bottom:calc(97.334% + 6px);
+  font-size:var(--type-label-01); font-weight:600; color:var(--cds-text-primary); white-space:nowrap;
+}
+.x-axis{display:flex; gap:var(--sp-02); margin-top:var(--sp-03)}
+.x-axis span{
+  flex:1 1 0; min-width:0; text-align:center;
+  font-size:var(--type-label-01); color:var(--cds-text-helper);
+}
+.x-axis span.dim{opacity:.45}
+
+/* tooltip — enhances, never gates: every value is also in the table below */
+.tip{
+  position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%);
+  min-width:168px; padding:var(--sp-03) var(--sp-04);
+  background:var(--cds-layer-02); border:1px solid var(--cds-border-strong);
+  box-shadow:var(--cds-shadow-menu);
+  opacity:0; visibility:hidden; transition:opacity 110ms cubic-bezier(.2,0,.38,.9);
+  text-align:left; z-index:4; pointer-events:none;
+}
+.month:hover .tip,.month:focus-visible .tip{opacity:1; visibility:visible}
+.month:hover .peak,.month:focus-visible .peak{visibility:hidden}
+@media (hover:none),(max-width:720px){.tip{display:none}}
+.month:nth-child(-n+2) .tip{left:0; transform:none}
+.month:nth-last-child(-n+2) .tip{left:auto; right:0; transform:none}
+.tip b{display:block; font-size:var(--type-label-01); font-weight:600; color:var(--cds-text-secondary); margin-bottom:var(--sp-02)}
+.tip dl{display:grid; grid-template-columns:auto 1fr auto; gap:2px var(--sp-03); margin:0; align-items:center}
+.tip dt{display:contents}
+.tip i{width:8px; height:8px; display:block}
+.tip .nm{font-size:.8125rem; color:var(--cds-text-secondary); white-space:nowrap}
+.tip .vl{font-size:.8125rem; text-align:right; white-space:nowrap}
+.tip .sum{
+  margin-top:var(--sp-03); padding-top:var(--sp-02); border-top:1px solid var(--cds-border-subtle);
+  display:flex; justify-content:space-between; gap:var(--sp-04); font-size:.8125rem; font-weight:600;
+}
+
+/* ---------- share: 100% stacked bar + ranked list ---------- */
+.share-bar{display:flex; gap:2px; height:14px; margin-bottom:var(--sp-05)}
+.share-bar i:first-child{border-radius:4px 0 0 4px}
+.share-bar i:last-child{border-radius:0 4px 4px 0}
+.share{margin:0; padding:0; list-style:none; border-top:1px solid var(--cds-text-primary)}
+.share li{
+  display:grid; grid-template-columns:8px minmax(0,1fr) auto auto;
+  align-items:center; gap:var(--sp-03);
+  min-height:42px; border-bottom:1px solid var(--cds-border-subtle);
+}
+.share i{width:8px; height:8px}
+.share .nm{min-width:0; font-size:.8125rem; color:var(--cds-text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.share .nm b{color:var(--cds-text-primary); margin-right:var(--sp-02)}
+.share .pct{font-size:.8125rem; color:var(--cds-text-helper); width:48px; text-align:right}
+.share .amt{font-weight:700; text-align:right; white-space:nowrap}
+
+/* ---------- ledger ---------- */
+.div-ledger{margin-top:var(--sp-08)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%; border-collapse:collapse; table-layout:auto}
+thead th:first-child{width:112px}
+thead th:nth-child(n+3){width:13%}
+thead th{
+  font-size:var(--type-label-01); font-weight:500; color:var(--cds-text-helper);
+  text-align:right; padding:0 var(--sp-04) var(--sp-03) 0; white-space:nowrap;
+  border-bottom:1px solid var(--cds-text-primary);
+}
+thead th:first-child,thead th:nth-child(2){text-align:left; padding-left:0}
+tbody td{
+  height:48px; padding:0 var(--sp-04) 0 0; text-align:right; white-space:nowrap;
+  border-bottom:1px solid var(--cds-border-subtle);
+}
+tbody td:first-child,tbody td:nth-child(2){text-align:left; padding-left:0}
+tbody tr:hover{background:var(--cds-background-hover)}
+td .tk{display:inline-flex; align-items:center; gap:var(--sp-03)}
+td .tk i{width:8px; height:8px; flex:none}
+td .tk b{font-weight:700}
+td .tk span{color:var(--cds-text-secondary)}
+td.muted{color:var(--cds-text-helper)}
+tfoot td{
+  height:48px; padding:0 var(--sp-04) 0 0; text-align:right; font-weight:700; white-space:nowrap;
+  border-top:3px double var(--cds-text-primary);
+}
+tfoot td:first-child{text-align:left; padding-left:0; font-weight:500; color:var(--cds-text-secondary)}
+
+.foot{margin-top:var(--sp-06); padding-top:var(--sp-04); border-top:1px solid var(--cds-border-subtle)}
+.foot ol{margin:0; padding-left:1.35em; color:var(--cds-text-helper); font-size:.8125rem}
+.foot li+li{margin-top:var(--sp-02)}
+.foot b{color:var(--cds-text-secondary); font-weight:600}
+
+/* ---------- phones ---------- */
+@media (max-width:900px){
+  .div-grid{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .page{padding:var(--sp-06) var(--sp-05) var(--sp-09)}
+  .mk-bar{padding:0 var(--sp-05)}
+  .div-totals{grid-template-columns:1fr; gap:var(--sp-04)}
+  .div-tot+.div-tot{padding-left:0; padding-top:var(--sp-04); border-left:0; border-top:1px solid var(--cds-border-subtle)}
+  .div-fig,.div-fig.lead{font-size:var(--type-heading-03)}
+  .div-close{display:block}
+  .div-close .terms{margin-top:var(--sp-02)}
+  .chart{padding-left:44px}
+  .chart-plot{margin-top:var(--sp-05)}
+  .div-close .terms{display:block; margin-left:0}
+  .y-axis{width:40px}
+  .x-axis span{font-size:var(--type-label-01)}
+
+  /* the ledger becomes two-line entries, like the holdings ledger */
+  thead{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0)}
+  table,tbody,tfoot{display:block; width:100%}
+  tbody tr{
+    display:grid; align-items:baseline;
+    grid-template-columns:auto auto auto minmax(0,1fr) auto auto;
+    grid-template-areas:"prod prod prod prod prod gross" "date qty eps . fee net";
+    column-gap:var(--sp-03); row-gap:var(--sp-02);
+    padding:var(--sp-04) 0; border-bottom:1px solid var(--cds-border-subtle);
+  }
+  tbody td{display:block; height:auto; padding:0; border:0; white-space:nowrap; text-align:left}
+  tbody td:nth-child(1){grid-area:date}
+  tbody td:nth-child(2){grid-area:prod}
+  tbody td:nth-child(3){grid-area:qty}
+  tbody td:nth-child(4){grid-area:eps}
+  tbody td:nth-child(5){grid-area:gross; text-align:right; font-size:var(--type-body-02); font-weight:700}
+  tbody td:nth-child(6){grid-area:fee; text-align:right}
+  tbody td:nth-child(7){grid-area:net; text-align:right; color:var(--cds-text-secondary); font-weight:600}
+  tbody td:nth-child(1),tbody td:nth-child(3),tbody td:nth-child(4),
+  tbody td:nth-child(6),tbody td:nth-child(7){font-size:.8125rem; color:var(--cds-text-helper)}
+  tbody td:nth-child(3)::before{content:"· "}
+  tbody td:nth-child(3)::after{content:" 股"}
+  tbody td:nth-child(4)::before{content:"× "}
+  tbody td:nth-child(6)::before{content:"代扣 "}
+  tbody td:nth-child(7)::before{content:"· 實收 "}
+
+  tfoot tr{display:block; padding-top:var(--sp-04); border-top:3px double var(--cds-text-primary)}
+  tfoot td{display:flex; justify-content:space-between; gap:var(--sp-04); height:auto; padding:0; border:0}
+  tfoot td:nth-child(2),tfoot td:nth-child(3),tfoot td:nth-child(4){display:none}
+  tfoot td:first-child{display:block; margin-bottom:var(--sp-02)}
+  tfoot td[data-l]::before{content:attr(data-l); font-weight:500; color:var(--cds-text-secondary)}
+
+  /* keep the − and = relationship when the three totals stack */
+  .div-op{display:inline; position:static; font-size:var(--type-body-01); margin-right:var(--sp-02)}
+  .div-tot h3{display:inline}
+}
+</style>
+</head>
+<body>
+
+<div class="mk-bar">
+  <b>股利區塊 Mockup</b>
+  <span>年度收益 → 股利｜示意資料，陽明與台灣50為實際數字</span>
+  <div class="seg" role="group" aria-label="佈景主題">
+    <button type="button" aria-pressed="true" data-t="light">淺色</button>
+    <button type="button" aria-pressed="false" data-t="dark">深色</button>
+  </div>
+</div>
+
+<main class="page">
+  <p class="crumb"><a href="#">年度收益</a> ／ 2026 年 ／ 台股（TWD）</p>
+
+  <section class="yr-div" aria-labelledby="h-div">
+    <div class="yr-head">
+      <h2 id="h-div">股利</h2>
+      <p class="yr-note">2026 年收到的現金股利，依發放日認列。金額為配息總額，未扣代扣費用。</p>
+    </div>
+
+    <div class="div-totals">
+      <div class="div-tot">
+        <h3>配息總額</h3>
+        <div class="div-fig lead">55,800</div>
+        <p class="div-sub">10 次配息 · 6 檔</p>
+      </div>
+      <div class="div-tot">
+        <span class="div-op" aria-hidden="true">−</span>
+        <h3>代扣費用</h3>
+        <div class="div-fig">691</div>
+        <p class="div-sub">二代健保 591 · 匯費 100</p>
+      </div>
+      <div class="div-tot">
+        <span class="div-op" aria-hidden="true">=</span>
+        <h3>實收</h3>
+        <div class="div-fig">55,109</div>
+        <p class="div-sub">實際入帳金額</p>
+      </div>
+    </div>
+
+    <div class="div-close">
+      <span class="lbl">總報酬</span>
+      <b class="val">183,559</b>
+      <span class="terms">已實現損益 128,450 ＋ 股利實收 55,109</span>
+    </div>
+
+    <div class="div-grid">
+      <div>
+        <div class="blk-head">
+          <h3>每月配息</h3>
+          <span>配息總額，依發放日</span>
+        </div>
+        <div class="chart">
+          <div class="chart-plot">
+            <div class="y-axis" aria-hidden="true">
+              <span style="top:0">30,000</span>
+              <span style="top:33.334%">20,000</span>
+              <span style="top:66.667%">10,000</span>
+              <span style="top:100%;transform:translateY(-100%)">0</span>
+            </div>
+            <div class="bars">
+              <div class="month" tabindex="0" role="img" aria-label="1 月 沒有配息">
+                <div class="stack"></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="2 月 配息總額 1,000 元：0050 台灣50 1,000 元">
+                <div class="stack">
+                  <b class="seg-fill c1" style="height:3.334%"></b>
+                </div>
+                <div class="tip"><b>2 月</b><dl>
+                  <dt><i class="c1"></i><span class="nm">0050 台灣50</span></dt><dd class="vl">1,000</dd>
+                </dl><div class="sum"><span>合計</span><span>1,000</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="3 月 配息總額 4,500 元：2330 台積電 4,500 元">
+                <div class="stack">
+                  <b class="seg-fill c2" style="height:15%"></b>
+                </div>
+                <div class="tip"><b>3 月</b><dl>
+                  <dt><i class="c2"></i><span class="nm">2330 台積電</span></dt><dd class="vl">4,500</dd>
+                </dl><div class="sum"><span>合計</span><span>4,500</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="4 月 沒有配息">
+                <div class="stack"></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="5 月 配息總額 1,100 元：0050 台灣50 1,100 元">
+                <div class="stack">
+                  <b class="seg-fill c1" style="height:3.667%"></b>
+                </div>
+                <div class="tip"><b>5 月</b><dl>
+                  <dt><i class="c1"></i><span class="nm">0050 台灣50</span></dt><dd class="vl">1,100</dd>
+                </dl><div class="sum"><span>合計</span><span>1,100</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="6 月 配息總額 5,000 元：2330 台積電 5,000 元">
+                <div class="stack">
+                  <b class="seg-fill c2" style="height:16.667%"></b>
+                </div>
+                <div class="tip"><b>6 月</b><dl>
+                  <dt><i class="c2"></i><span class="nm">2330 台積電</span></dt><dd class="vl">5,000</dd>
+                </dl><div class="sum"><span>合計</span><span>5,000</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="7 月 配息總額 8,000 元：2884 玉山金 6,000 元、其他（2882 國泰金） 2,000 元">
+                <div class="stack">
+                  <b class="seg-fill c4" style="height:20%"></b>
+                  <b class="seg-fill c5" style="height:6.667%"></b>
+                </div>
+                <div class="tip"><b>7 月</b><dl>
+                  <dt><i class="c4"></i><span class="nm">2884 玉山金</span></dt><dd class="vl">6,000</dd>
+                  <dt><i class="c5"></i><span class="nm">其他（2882 國泰金）</span></dt><dd class="vl">2,000</dd>
+                </dl><div class="sum"><span>合計</span><span>8,000</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="8 月 配息總額 29,200 元：2609 陽明 28,000 元、0050 台灣50 1,200 元">
+                <span class="peak" aria-hidden="true">29,200</span>
+                <div class="stack">
+                  <b class="seg-fill c3" style="height:93.334%"></b>
+                  <b class="seg-fill c1" style="height:4%"></b>
+                </div>
+                <div class="tip"><b>8 月</b><dl>
+                  <dt><i class="c3"></i><span class="nm">2609 陽明</span></dt><dd class="vl">28,000</dd>
+                  <dt><i class="c1"></i><span class="nm">0050 台灣50</span></dt><dd class="vl">1,200</dd>
+                </dl><div class="sum"><span>合計</span><span>29,200</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="9 月 配息總額 7,000 元：2330 台積電 5,000 元、其他（1101 台泥） 2,000 元">
+                <div class="stack">
+                  <b class="seg-fill c2" style="height:16.667%"></b>
+                  <b class="seg-fill c5" style="height:6.667%"></b>
+                </div>
+                <div class="tip"><b>9 月</b><dl>
+                  <dt><i class="c2"></i><span class="nm">2330 台積電</span></dt><dd class="vl">5,000</dd>
+                  <dt><i class="c5"></i><span class="nm">其他（1101 台泥）</span></dt><dd class="vl">2,000</dd>
+                </dl><div class="sum"><span>合計</span><span>7,000</span></div></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="10 月 尚未到">
+                <div class="stack"></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="11 月 尚未到">
+                <div class="stack"></div>
+              </div>
+
+              <div class="month" tabindex="0" role="img" aria-label="12 月 尚未到">
+                <div class="stack"></div>
+              </div>
+            </div>
+            <div class="chart-base" aria-hidden="true"></div>
+          </div>
+          <div class="x-axis" aria-hidden="true">
+            <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
+            <span>7</span><span>8</span><span>9</span>
+            <span class="dim">10</span><span class="dim">11</span><span class="dim">12</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="blk-head">
+          <h3>個股占比</h3>
+          <span>占配息總額，金額前 4 大</span>
+        </div>
+        <div class="share-bar" aria-hidden="true">
+          <i class="c3" style="width:50.2%"></i>
+          <i class="c2" style="width:26.0%"></i>
+          <i class="c4" style="width:10.7%"></i>
+          <i class="c1" style="width:5.9%"></i>
+          <i class="c5" style="width:7.2%"></i>
+        </div>
+        <ul class="share">
+          <li><i class="c3"></i><span class="nm"><b>2609</b>陽明</span><span class="pct">50.2%</span><span class="amt">28,000</span></li>
+          <li><i class="c2"></i><span class="nm"><b>2330</b>台積電</span><span class="pct">26.0%</span><span class="amt">14,500</span></li>
+          <li><i class="c4"></i><span class="nm"><b>2884</b>玉山金</span><span class="pct">10.7%</span><span class="amt">6,000</span></li>
+          <li><i class="c1"></i><span class="nm"><b>0050</b>台灣50</span><span class="pct">5.9%</span><span class="amt">3,300</span></li>
+          <li><i class="c5"></i><span class="nm">其他 2 檔</span><span class="pct">7.2%</span><span class="amt">4,000</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="div-ledger">
+      <div class="blk-head">
+        <h3>逐筆明細</h3>
+        <span>10 筆，依發放日由新到舊</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">發放日</th><th scope="col">商品</th>
+              <th scope="col">除息股數</th><th scope="col">每股股利</th>
+              <th scope="col">配息總額</th><th scope="col">代扣費用</th>
+              <th scope="col">實收</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026/09/18</td>
+              <td><span class="tk"><i class="c5"></i><b>1101</b><span>台泥</span></span></td>
+              <td>2,000</td>
+              <td>1</td>
+              <td>2,000</td>
+              <td class="muted">10</td>
+              <td>1,990</td>
+            </tr>
+            <tr>
+              <td>2026/09/10</td>
+              <td><span class="tk"><i class="c2"></i><b>2330</b><span>台積電</span></span></td>
+              <td>1,000</td>
+              <td>5</td>
+              <td>5,000</td>
+              <td class="muted">10</td>
+              <td>4,990</td>
+            </tr>
+            <tr>
+              <td>2026/08/10</td>
+              <td><span class="tk"><i class="c1"></i><b>0050</b><span>台灣50</span></span></td>
+              <td>2,000</td>
+              <td>0.6</td>
+              <td>1,200</td>
+              <td class="muted">10</td>
+              <td>1,190</td>
+            </tr>
+            <tr>
+              <td>2026/08/05</td>
+              <td><span class="tk"><i class="c3"></i><b>2609</b><span>陽明</span></span></td>
+              <td>14,000</td>
+              <td>2</td>
+              <td>28,000</td>
+              <td class="muted">601</td>
+              <td>27,399</td>
+            </tr>
+            <tr>
+              <td>2026/07/28</td>
+              <td><span class="tk"><i class="c5"></i><b>2882</b><span>國泰金</span></span></td>
+              <td>1,000</td>
+              <td>2</td>
+              <td>2,000</td>
+              <td class="muted">10</td>
+              <td>1,990</td>
+            </tr>
+            <tr>
+              <td>2026/07/15</td>
+              <td><span class="tk"><i class="c4"></i><b>2884</b><span>玉山金</span></span></td>
+              <td>5,000</td>
+              <td>1.2</td>
+              <td>6,000</td>
+              <td class="muted">10</td>
+              <td>5,990</td>
+            </tr>
+            <tr>
+              <td>2026/06/11</td>
+              <td><span class="tk"><i class="c2"></i><b>2330</b><span>台積電</span></span></td>
+              <td>1,000</td>
+              <td>5</td>
+              <td>5,000</td>
+              <td class="muted">10</td>
+              <td>4,990</td>
+            </tr>
+            <tr>
+              <td>2026/05/14</td>
+              <td><span class="tk"><i class="c1"></i><b>0050</b><span>台灣50</span></span></td>
+              <td>2,000</td>
+              <td>0.55</td>
+              <td>1,100</td>
+              <td class="muted">10</td>
+              <td>1,090</td>
+            </tr>
+            <tr>
+              <td>2026/03/12</td>
+              <td><span class="tk"><i class="c2"></i><b>2330</b><span>台積電</span></span></td>
+              <td>1,000</td>
+              <td>4.5</td>
+              <td>4,500</td>
+              <td class="muted">10</td>
+              <td>4,490</td>
+            </tr>
+            <tr>
+              <td>2026/02/12</td>
+              <td><span class="tk"><i class="c1"></i><b>0050</b><span>台灣50</span></span></td>
+              <td>2,000</td>
+              <td>0.5</td>
+              <td>1,000</td>
+              <td class="muted">10</td>
+              <td>990</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>合計</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td data-l="配息總額">55,800</td>
+              <td data-l="代扣費用">691</td>
+              <td data-l="實收">55,109</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="foot">
+        <ol>
+          <li><b>配息總額</b>是除息股數乘上每股股利，還沒扣任何費用；<b>實收</b>是扣掉代扣費用後真正入帳的錢。</li>
+          <li>日期是<b>發放日</b>，也就是錢進戶頭那天，不是除息日。</li>
+          <li>代扣費用照券商的股利通知書填，裡面通常是二代健保補充保費加匯費。單次配息總額不到 20,000 元不用扣補充保費，所以只會看到匯費。</li>
+          <li><b>總報酬</b>是已實現損益加上股利實收，這一年真正到手的錢。</li>
+          <li>個股占比只畫金額<b>前 4 大</b>，其餘合併成灰色的「其他」，固定排在最後、不參與排名。四個識別色是驗證過色盲可辨的組合，硬生出第五個顏色會跟前四個混淆。</li>
+          <li>股票股利不列在這裡 — 它只增加股數、攤低成本，沒有現金進來。</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  var sync = function (t) {
+    document.querySelectorAll('.seg button').forEach(function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.t === t));
+    });
+  };
+  sync(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.documentElement.dataset.theme = b.dataset.t;
+      sync(b.dataset.t);
+    });
+  });
+</script>
+</body>
+</html>

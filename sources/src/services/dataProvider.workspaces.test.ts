@@ -46,16 +46,17 @@ beforeEach(() => {
 })
 
 describe('SupabaseProvider.listWorkspaces', () => {
-  it('D1 asks for fee_rate, fee_rebate and fee_rounding and returns the rows in one query', async () => {
+  it('D1 asks for fee_rate, fee_rate_history, fee_rebate and fee_rounding and returns the rows in one query', async () => {
     setResults([{ data: rows, error: null }])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate, fee_rounding'])
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding'])
     expect(got).toEqual(rows)
   })
 
   it('D2 steps down to the legacy columns when neither new column exists yet', async () => {
     const legacy = [{ id: 'w1', name: '我的投資組合', created_at: '2026-01-01T00:00:00Z' }]
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate does not exist' } },
@@ -63,6 +64,7 @@ describe('SupabaseProvider.listWorkspaces', () => {
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate',
       'id, name, created_at, fee_rate',
@@ -73,12 +75,14 @@ describe('SupabaseProvider.listWorkspaces', () => {
 
   it('D5 keeps fee_rate when only fee_rebate is missing (frontend deployed before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rebate does not exist' } },
       { data: rows, error: null },
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate',
       'id, name, created_at, fee_rate',
@@ -88,16 +92,32 @@ describe('SupabaseProvider.listWorkspaces', () => {
 
   it('D7 keeps fee_rebate when only fee_rounding is missing (BUG-088, frontend before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
       { data: rows, error: null },
     ])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rebate, fee_rounding', 'id, name, created_at, fee_rate, fee_rebate'])
+    expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
+      'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
+      'id, name, created_at, fee_rate, fee_rebate',
+    ])
+    expect(got).toEqual(rows)
+  })
+
+  it('D8 keeps fee_rounding when only fee_rate_history is missing (Task 182, frontend before the migration)', async () => {
+    setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
+      { data: rows, error: null },
+    ])
+    const got = await new SupabaseProvider().listWorkspaces()
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding', 'id, name, created_at, fee_rate, fee_rebate, fee_rounding'])
     expect(got).toEqual(rows)
   })
 
   it('D3 throws when every column set fails', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42703', message: 'nope' } },
       { data: null, error: { code: '42703', message: 'nope' } },

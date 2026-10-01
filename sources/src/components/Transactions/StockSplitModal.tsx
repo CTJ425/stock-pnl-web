@@ -15,7 +15,7 @@ import { MARKET_LABEL, marketCurrency, positionKey } from '../../types/models'
 import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtPrice, fmtQty } from '../../utils/formatters'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
-import { getFeeRate, getMinFee } from '../../utils/settings'
+import { getFeeRateOn, getMinFee } from '../../utils/settings'
 import type { SplitLogEntry, TxUpdate } from '../../services/dataProvider'
 import { runBatchApply } from './batchUpdate'
 
@@ -42,7 +42,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   const { transactions, updateTransactionsBatch, listSplitLog, recordSplit, current } = useWorkspace()
 
   // Effective fee rate and min fee for the workspace
-  const workspaceFeeRate = current?.fee_rate ?? getFeeRate(current?.id)
+
   const minFeeWhole = getMinFee('whole', current?.id)
   const minFeeOdd = getMinFee('odd', current?.id)
   const minFees = useMemo(() => ({ whole: minFeeWhole, odd: minFeeOdd }), [minFeeWhole, minFeeOdd])
@@ -166,7 +166,13 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
 
       // Prioritize the transaction's own explicit rate; if zero fee, use workspace rate for auto-fill; else infer from historical fee
       const effectiveRate =
-        tx.fee_rate ?? (tx.fee_tax === 0 ? workspaceFeeRate : inferFeeRate(tx, workspaceFeeRate, minFees))
+        // Task 182: a recorded row falls back to the rate in force on its own date, never to a
+        // single workspace-wide rate that may belong to a later agreement.
+        tx.fee_rate ??
+        (() => {
+          const dateRate = getFeeRateOn(tx.tx_date, current?.id)
+          return tx.fee_tax === 0 ? dateRate : inferFeeRate(tx, dateRate, minFees)
+        })()
       let feeTax = tx.fee_tax
       let feeAutoFilled = false
 
@@ -197,7 +203,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
         feeAutoFilled,
       }
     })
-  }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, workspaceFeeRate, minFees])
+  }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, current?.id, minFees])
 
   // Count preview items whose converted quantity rounds down to 0 shares (AUDIT-09)
   const zeroQtyCount = useMemo(() => previewItems.filter((item) => item.newQty === 0).length, [previewItems])
@@ -401,8 +407,8 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                     aria-label="智慧補算手續費"
                   />
                   <span>
-                    <strong>智慧補算手續費</strong>：偵測到部分買入紀錄手續費為 0，自動依目前設定費率（
-                    {(workspaceFeeRate * 100).toFixed(4).replace(/\.?0+$/, '')}%）補算買進手續費，讓換算後總成本與券商 APP 一致。
+                    <strong>智慧補算手續費</strong>：偵測到部分買入紀錄手續費為 0，
+                    自動依每筆交易當天的費率補算買進手續費，讓換算後總成本與券商 APP 一致。
                   </span>
                 </label>
               </div>

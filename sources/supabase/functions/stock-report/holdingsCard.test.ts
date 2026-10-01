@@ -826,9 +826,36 @@ describe('aggregateHoldings — 當日買進的券商口徑用當沖稅率（BUG
       aggregateHoldings(buildLedgers([{ ...ws(), fee_rate: 0.0004275, fee_rebate: 'instant' }]), q, '2026-09-29', '2026-09-29').twd,
       'TPE:6560',
     )
-    // 現折的主數字用「該批次自己的歷史費率」（買進時 46 元 ⇒ 0.1425%）和全額稅：
-    // 32,400 − 32,646 − fee 46 − tax 97 = −389，完全沒有被當沖稅率影響
-    expect(instant.unrealized).toBe(-389)
+    // Task 182：現折的主數字改用「今天的工作區費率」（3 折 ⇒ 13.85 元，被整股最低 20 元夾住）和
+    // 全額稅：32,400 − 32,646 − fee 20 − tax 97 = −363。買進那批自己的 0.1425% 只決定成本，
+    // 不再決定賣出要付多少 —— 賣在今天就是照今天的約定收費。當沖稅率一樣沒有影響到它。
+    expect(instant.unrealized).toBe(-363)
     expect(instant.brokerUnrealized).toBe(-340)
+  })
+})
+
+// Task 182: the nightly card reports what a sell made today would net, so it resolves the
+// workspace's fee-rate history against the run's own Taipei date — the same rate the app shows.
+describe('buildLedgers 依今天的日期取費率（Task 182）', () => {
+  const ws = (): WorkspaceInput => ({
+    id: 'ws-esun',
+    fee_rate: 0.00092625, // 6.5 折
+    fee_rate_history: [{ from: '2026-10-01', rate: 0.0005415 }], // 3.8 折
+    transactions: [],
+  })
+
+  it('生效日之前用基準費率，當天起用新費率', () => {
+    expect(buildLedgers([ws()], '2026-09-30')[0].feeRate).toBe(0.00092625)
+    expect(buildLedgers([ws()], '2026-10-01')[0].feeRate).toBe(0.0005415)
+  })
+
+  it('沒有歷史、或欄位還沒 migrate，就是基準費率', () => {
+    expect(buildLedgers([{ ...ws(), fee_rate_history: null }], '2026-10-01')[0].feeRate).toBe(0.00092625)
+    expect(buildLedgers([{ id: 'w', fee_rate: null, transactions: [] }], '2026-10-01')[0].feeRate).toBe(0.001425)
+  })
+
+  it('月退的 basis 跟著當期費率判斷，不會因為換過費率就誤判成不打折', () => {
+    const l = buildLedgers([{ ...ws(), fee_rebate: 'monthly' }], '2026-10-01')[0]
+    expect(l.basis).toBe('list')
   })
 })

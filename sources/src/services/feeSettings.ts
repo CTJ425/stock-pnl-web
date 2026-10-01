@@ -2,10 +2,10 @@
  * Reconciles the per-workspace fee rate between Supabase (`workspaces.fee_rate`) and the
  * `localStorage` cache read by `getFeeRate`. Runs at workspace bootstrap and on save.
  */
-import type { Workspace } from '../types/models'
+import type { FeeRateSegment, Workspace } from '../types/models'
 import type { DataProvider } from './dataProvider'
-import { getStoredFeeRate, setFeeRate } from '../utils/settings'
-import { planFeeSync } from '../utils/feeSync'
+import { getFeeRateHistory, getStoredFeeRate, setFeeRate, setFeeRateHistory } from '../utils/settings'
+import { planFeeHistorySync, planFeeSync } from '../utils/feeSync'
 import { logClient } from './appLog'
 
 /** Reconciles every workspace's row against the cache. Never rejects — this runs on login. */
@@ -23,6 +23,39 @@ export async function syncWorkspaceFees(list: Workspace[], provider: DataProvide
         // A write failure must not block login; the cache still has the rate.
       }
     }
+
+    const historyAction = planFeeHistorySync(ws.fee_rate_history, getFeeRateHistory(ws.id), ws.fee_rate)
+    if (historyAction.kind === 'adopt-remote') {
+      setFeeRateHistory(historyAction.history, ws.id)
+    } else if (historyAction.kind === 'push-local') {
+      try {
+        await provider.setWorkspaceFeeRateHistory(ws.id, historyAction.history)
+      } catch (err) {
+        logClient('error', 'syncWorkspaceFees', err instanceof Error ? err.message : String(err), {})
+        // Same rule as the rate above: a database without the column must not block login.
+      }
+    }
+  }
+}
+
+/**
+ * Writes the history cache first, then the row — the same order and the same failure contract as
+ * `saveWorkspaceFeeRate`, so a cloud write that fails still leaves this device usable and tells
+ * the user their other devices have not got the new effective date yet.
+ */
+export async function saveWorkspaceFeeRateHistory(
+  provider: DataProvider,
+  workspaceId: string,
+  history: FeeRateSegment[],
+  onError?: (message: string) => void,
+): Promise<void> {
+  setFeeRateHistory(history, workspaceId)
+  try {
+    await provider.setWorkspaceFeeRateHistory(workspaceId, history)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logClient('error', 'saveWorkspaceFeeRateHistory', message, {})
+    onError?.(message)
   }
 }
 

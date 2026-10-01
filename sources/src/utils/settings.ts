@@ -1,7 +1,10 @@
 /** User preferences (handling rate, appearance theme): stored in localStorage, isomorphic to the global default handling rate of the GAS version*/
+import type { FeeRateSegment } from '../types/models'
+import { normalizeFeeRateHistory, rateOn } from './feeRateHistory'
 import { DEFAULT_FEE_RATE } from './fees'
 
 const FEE_RATE_KEY = 'stock-pnl-web/fee-rate'
+const FEE_RATE_HISTORY_KEY = 'stock-pnl-web/fee-rate-history'
 const MIN_FEE_WHOLE_KEY = 'stock-pnl-web/min-fee-whole'
 const MIN_FEE_ODD_KEY = 'stock-pnl-web/min-fee-odd'
 const THEME_KEY = 'stock-pnl-web/theme'
@@ -84,6 +87,45 @@ export function getStoredFeeRate(workspaceId?: string): number | null {
     if (wsRate !== null) return wsRate
   }
   return readRate(FEE_RATE_KEY)
+}
+
+/**
+ * The workspace's fee-rate history (Task 182), cached the same way the rate itself is so that the
+ * dashboard can render before the Supabase row arrives. Per workspace only: a fee discount is
+ * negotiated with one broker, and the legacy global key predates workspaces entirely.
+ */
+export function getFeeRateHistory(workspaceId?: string): FeeRateSegment[] {
+  if (!workspaceId) return []
+  try {
+    const raw = localStorage.getItem(`${FEE_RATE_HISTORY_KEY}/${workspaceId}`)
+    if (raw === null) return []
+    return normalizeFeeRateHistory(JSON.parse(raw), getStoredFeeRate(workspaceId) ?? undefined)
+  } catch {
+    // Unreadable or malformed cache is treated as "no history", never as an error to the user.
+    return []
+  }
+}
+
+export function setFeeRateHistory(history: FeeRateSegment[], workspaceId?: string): void {
+  if (!workspaceId) return
+  try {
+    localStorage.setItem(
+      `${FEE_RATE_HISTORY_KEY}/${workspaceId}`,
+      JSON.stringify(normalizeFeeRateHistory(history, getStoredFeeRate(workspaceId) ?? undefined)),
+    )
+  } catch {
+    // Failure to write does not affect functionality
+  }
+}
+
+/**
+ * The rate this workspace charged on `date`. Two callers, two dates, and the difference is the
+ * whole point of Task 182: a recorded trade passes its own `tx_date`, while an unrealized or
+ * break-even estimate passes today — a sell made now is charged today's rate no matter when the
+ * lot was bought.
+ */
+export function getFeeRateOn(date: string, workspaceId?: string): number {
+  return rateOn(getFeeRateHistory(workspaceId), getFeeRate(workspaceId), date, DEFAULT_FEE_RATE)
 }
 
 function readMinFee(key: string): number | null {

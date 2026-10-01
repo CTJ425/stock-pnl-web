@@ -4,7 +4,7 @@
  * real setting, not an unset one, so a falsy check would silently discard it.
  */
 import { describe, it, expect } from 'vitest'
-import { planFeeSync, isValidFeeRate } from './feeSync'
+import { planFeeHistorySync, planFeeSync, isValidFeeRate } from './feeSync'
 
 describe('isValidFeeRate', () => {
   it('accepts 0 and rejects the boundary, negatives and non-numbers', () => {
@@ -49,5 +49,43 @@ describe('planFeeSync', () => {
 
   it('S8 adopts a remote rate of 0, because zero is a setting and not "unset"', () => {
     expect(planFeeSync(0, null)).toEqual({ kind: 'adopt-remote', rate: 0 })
+  })
+})
+
+// Task 182: the history reconciles on the same contract as the rate itself.
+describe('planFeeHistorySync', () => {
+  const H = [{ from: '2026-10-01', rate: 0.0005415 }]
+
+  it('H1 adopts the row whenever it has one', () => {
+    expect(planFeeHistorySync(H, [])).toEqual({ kind: 'adopt-remote', history: H })
+  })
+
+  it('H2 does nothing when the two already agree', () => {
+    expect(planFeeHistorySync(H, H)).toEqual({ kind: 'none' })
+  })
+
+  it('H3 adopts an empty row array — that is how a deletion reaches the other devices', () => {
+    expect(planFeeHistorySync([], H)).toEqual({ kind: 'adopt-remote', history: [] })
+  })
+
+  it('H4 pushes the cache up when the column is missing or never written', () => {
+    expect(planFeeHistorySync(null, H)).toEqual({ kind: 'push-local', history: H })
+    expect(planFeeHistorySync(undefined, H)).toEqual({ kind: 'push-local', history: H })
+  })
+
+  it('H5 does nothing when neither side has a history', () => {
+    expect(planFeeHistorySync(null, [])).toEqual({ kind: 'none' })
+  })
+
+  it('H6 normalises before comparing, so ordering alone is not a difference', () => {
+    const unsorted = [
+      { from: '2027-01-01', rate: 0.0004275 },
+      { from: '2026-10-01', rate: 0.0005415 },
+    ]
+    const sorted = [
+      { from: '2026-10-01', rate: 0.0005415 },
+      { from: '2027-01-01', rate: 0.0004275 },
+    ]
+    expect(planFeeHistorySync(unsorted, sorted)).toEqual({ kind: 'none' })
   })
 })

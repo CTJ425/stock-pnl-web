@@ -123,7 +123,7 @@ export async function runOneUser(
 ): Promise<'sent' | 'failed' | 'noHoldings'> {
   try {
     const workspaces = await deps.loadWorkspaces(userId)
-    const ledgers = buildLedgers(workspaces)
+    const ledgers = buildLedgers(workspaces, ymd)
     const keys = heldKeys(ledgers)
     const quotes = await quotesFor(quoteCache, keys)
     // `ymd` is already the run's Taipei calendar date (`dashDate(taipeiYmd(now))` at both call
@@ -283,7 +283,7 @@ export async function runHoldingsSettingsOp(
     if (!market) return { ok: false, error: 'no-market-data' }
 
     const workspaces = await deps.loadWorkspaces(userId)
-    const ledgers = buildLedgers(workspaces)
+    const ledgers = buildLedgers(workspaces, ymd)
     const keys = heldKeys(ledgers)
     const quoteCache = createQuoteCache(deps.fetchChart, Math.floor(deps.now().getTime() / 1000))
     const quotes = await quotesFor(quoteCache, keys)

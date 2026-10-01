@@ -18,7 +18,7 @@ import { useUsdTwdRate } from '../../hooks/useUsdTwdRate'
 import { buildHoldingRows } from '../../utils/holdingRows'
 import { basisLabel, pnlBasis } from '../../utils/pnlBasis'
 import { fmtMoney, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
-import { getFeeRate } from '../../utils/settings'
+import { getFeeRateOn } from '../../utils/settings'
 import { taipeiDateKey } from '../../utils/taipeiDate'
 import { WorkspaceFeeSettings, type FeeDraft } from '../WorkspaceFeeSettings'
 import { HoldingsLedger } from './HoldingsLedger'
@@ -180,7 +180,9 @@ export function DashboardPage({
   const [showRecalc, setShowRecalc] = useState(false)
   // Unsaved values from the open fee panel: every figure below is recomputed with them as a preview.
   const [draft, setDraft] = useState<FeeDraft | null>(null)
-  const savedRate = getFeeRate(current?.id)
+  // Task 182: a sell made now is charged the rate in force today, whatever rate the lots were
+  // bought under — so every forward-looking figure on this page asks for today's rate.
+  const savedRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
   const savedRebate = current?.fee_rebate ?? 'instant'
   const savedRounding = current?.fee_rounding ?? 'lot'
   const feeRate = draft?.rate ?? savedRate

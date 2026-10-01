@@ -31,7 +31,9 @@ function tx(date: string, type: TxType, price: number, qty: number, fee = 0): Tr
 }
 
 function renderWith(transactions: Transaction[]) {
-  useWorkspace.mockReturnValue({ ledger: computeLedger(transactions) })
+  // The page reads `transactions` too since Task 183 (the 股利 section builds its own report
+  // from the DIVIDEND rows), so the mock has to carry both halves of the context.
+  useWorkspace.mockReturnValue({ ledger: computeLedger(transactions), transactions })
   render(<YearlyPage />)
 }
 

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>股利資料流</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#11151a; --layer:#151b21; --band:#1a2129;
+  --rule:#29323d; --rule-strong:#5b6674;
+  --ink:#e7ebf0; --ink-2:#b3bdc9; --ink-3:#8f9aa8;
+  --fig-accent:#f28b82;                 /* status red, kept apart from market red/green */
+  --sp-3:8px; --sp-4:12px; --sp-5:16px; --sp-6:24px; --sp-7:32px; --sp-9:48px;
+  --font:"Public Sans","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+:root[data-theme='light']{
+  --bg:#ffffff; --layer:#ffffff; --band:#f6f8fa;
+  --rule:#d3dae3; --rule-strong:#8a94a1;
+  --ink:#16191d; --ink-2:#444d58; --ink-3:#636c78;
+  --fig-accent:#b3261e;
+}
+
+/* No explicit choice: follow the system. The dark values above are the base. */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme='dark']){
+  --bg:#ffffff; --layer:#ffffff; --band:#f6f8fa;
+  --rule:#d3dae3; --rule-strong:#8a94a1;
+  --ink:#16191d; --ink-2:#444d58; --ink-3:#636c78;
+  --fig-accent:#b3261e;
+}
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font);
+  font-size:.875rem; line-height:1.6; font-variant-numeric:tabular-nums lining-nums;
+  scrollbar-color:var(--rule-strong) transparent; -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(141,179,226,.16)}
+:root[data-theme='light'] ::selection{background:rgba(44,87,133,.10)}
+:focus-visible{outline:2px solid var(--rule-strong); outline-offset:-2px}
+
+.bar{
+  position:sticky; top:0; z-index:9; height:56px; display:flex; align-items:center;
+  gap:var(--sp-4); padding:0 var(--sp-6); background:var(--bg);
+  border-bottom:1px solid var(--rule);
+}
+.bar b{font-size:1rem}
+.bar span{color:var(--ink-3); font-size:.8125rem}
+.seg{margin-left:auto; display:inline-flex; border:1px solid var(--rule); border-radius:2px}
+.seg button{
+  appearance:none; border:0; background:transparent; height:32px; padding:0 var(--sp-4);
+  font:inherit; font-size:.8125rem; color:var(--ink-2); cursor:pointer;
+}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed='true']{background:var(--band); color:var(--ink); font-weight:600}
+
+main{max-width:1100px; margin:0 auto; padding:var(--sp-7) var(--sp-6) var(--sp-9)}
+h1{font-size:1.25rem; font-weight:700; margin:0 0 var(--sp-3)}
+h2{font-size:1rem; font-weight:700; margin:var(--sp-9) 0 var(--sp-3)}
+p{margin:0 0 var(--sp-4); color:var(--ink-2); max-width:68ch}
+p.lede{color:var(--ink-3)}
+code{font-family:inherit; font-weight:600; color:var(--ink)}
+
+figure{margin:var(--sp-6) 0 0; padding:var(--sp-6) 0 0; border-top:1px solid var(--rule)}
+figure svg{display:block; width:100%; max-width:100%; height:auto; color:var(--ink); font-family:var(--font)}
+.scroll{overflow-x:auto; overscroll-behavior-x:contain}
+.swipe{display:none; margin:var(--sp-3) 0 0; font-size:.75rem; color:var(--ink-3)}
+@media (max-width:900px){
+  figure svg{min-width:1120px}   /* keep diagram text legible; the figure scrolls instead */
+  .swipe{display:block}
+}
+figcaption{margin-top:var(--sp-5); color:var(--ink-3); font-size:.8125rem; max-width:72ch}
+figcaption b{color:var(--ink-2); font-weight:600}
+
+/* figure marks -------------------------------------------------- */
+.bx{fill:var(--layer); stroke:currentColor; stroke-width:1; opacity:.9}
+.bx-band{fill:var(--band); stroke:var(--rule); stroke-width:1}
+.hd{font-size:12px; font-weight:700; fill:currentColor}
+.k{font-size:12px; fill:var(--ink-3)}
+.v{font-size:12px; font-weight:600; fill:currentColor}
+.ed{stroke:currentColor; stroke-width:1.25; fill:none}
+.el{font-size:11px; fill:var(--ink-3)}
+.accent{stroke:var(--fig-accent)}
+text.accent{fill:var(--fig-accent); stroke:none; font-weight:600}
+.mk{fill:currentColor}
+.mk-a{fill:var(--fig-accent)}
+.rule{stroke:var(--rule); stroke-width:1}
+.tag{fill:none; stroke:currentColor; stroke-width:1; rx:2}
+.tagt{font-size:11px; font-weight:600; fill:currentColor}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b>股利：資料流與存值決策</b>
+  <span>stock-pnl-web · 設計備忘</span>
+  <div class="seg" role="group" aria-label="佈景主題">
+    <button type="button" aria-pressed="true" data-t="light">淺色</button>
+    <button type="button" aria-pressed="false" data-t="dark">深色</button>
+  </div>
+</div>
+
+<main>
+  <h1>一筆現金股利，從輸入到年報</h1>
+  <p class="lede">兩張圖：第一張是這個功能實際怎麼運作，第二張是二代健保那個數字為什麼「存下來」而不是「每次算」。</p>
+
+  <h2>一、資料流</h2>
+  <p>整條路上只有<strong>一次減法</strong>。表單存三個數字，引擎算出淨額，年報的四種呈現全部來自同一份 <code>dividendLegs</code>，不各自重算。</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1200 300" role="img"
+         aria-label="資料流：表單的每股股利、配發股數、代扣費用三個數字寫成 transactions 的一列，pnlEngine 以 price 乘 qty 減 fee_tax 得到淨額並產生 dividendLegs，年報的配息總額、代扣費用、實收與三種呈現全部由這份 dividendLegs 彙總而來。">
+      <defs>
+        <marker id="f1-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <polygon class="mk" points="0,0 8,4 0,8"/>
+        </marker>
+      </defs>
+
+      <text class="hd" x="16"  y="36">表單　TransactionForm</text>
+      <text class="hd" x="332" y="36">資料庫　transactions</text>
+      <text class="hd" x="648" y="36">引擎　pnlEngine</text>
+      <text class="hd" x="964" y="36">年報　股利區塊</text>
+
+      <rect class="bx" x="16"  y="52" width="220" height="214"/>
+      <rect class="bx" x="332" y="52" width="220" height="214"/>
+      <rect class="bx" x="648" y="52" width="220" height="214"/>
+      <rect class="bx" x="964" y="52" width="220" height="214"/>
+
+      <!-- 表單 -->
+      <text class="k" x="32"  y="88">每股股利</text>  <text class="v" x="220" y="88"  text-anchor="end">2</text>
+      <text class="k" x="32"  y="118">配發股數</text> <text class="v" x="220" y="118" text-anchor="end">14,000</text>
+      <text class="k" x="32"  y="148">代扣費用</text> <text class="v" x="220" y="148" text-anchor="end">601</text>
+      <line class="rule" x1="32" y1="162" x2="220" y2="162"/>
+      <text class="el" x="32"  y="182">試算提示帶入，可改</text>
+      <text class="k" x="32"  y="212">發放日</text>   <text class="v" x="220" y="212" text-anchor="end">2026/08/05</text>
+
+      <!-- DB -->
+      <text class="k" x="348" y="88">price</text>    <text class="v" x="536" y="88"  text-anchor="end">2</text>
+      <text class="k" x="348" y="118">qty</text>     <text class="v" x="536" y="118" text-anchor="end">14,000</text>
+      <text class="k" x="348" y="148">fee_tax</text> <text class="v" x="536" y="148" text-anchor="end">601</text>
+      <text class="k" x="348" y="178">tx_type</text> <text class="v" x="536" y="178" text-anchor="end">DIVIDEND</text>
+      <text class="k" x="348" y="208">tx_date</text> <text class="v" x="536" y="208" text-anchor="end">2026-08-05</text>
+
+      <!-- 引擎 -->
+      <text class="k" x="664" y="88">dividends +=</text>
+      <text class="v" x="664" y="118">price × qty − fee_tax</text>
+      <text class="v" x="852" y="148" text-anchor="end">= 27,399</text>
+      <line class="rule" x1="664" y1="164" x2="852" y2="164"/>
+      <text class="k" x="664" y="188">dividendLegs</text>
+      <text class="v" x="664" y="212">{ date, net }</text>
+
+      <!-- 年報 -->
+      <text class="k" x="980" y="88">配息總額</text>  <text class="v" x="1168" y="88"  text-anchor="end">55,800</text>
+      <text class="k" x="980" y="118">代扣費用</text> <text class="v" x="1168" y="118" text-anchor="end">691</text>
+      <text class="k" x="980" y="148">實收</text>     <text class="v" x="1168" y="148" text-anchor="end">55,109</text>
+      <line class="rule" x1="980" y1="164" x2="1168" y2="164"/>
+      <text class="el" x="980" y="188">每月配息 · 個股占比</text>
+      <text class="el" x="980" y="212">逐筆明細 · 總報酬</text>
+
+      <line class="ed" x1="244" y1="159" x2="318" y2="159" marker-end="url(#f1-arrow)"/>
+      <text class="el" x="281" y="148" text-anchor="middle">存成一列</text>
+
+      <line class="ed" x1="560" y1="159" x2="634" y2="159" marker-end="url(#f1-arrow)"/>
+      <text class="el" x="597" y="148" text-anchor="middle">依日期讀入</text>
+
+      <line class="ed" x1="876" y1="159" x2="950" y2="159" marker-end="url(#f1-arrow)"/>
+      <text class="el" x="913" y="148" text-anchor="middle">彙總</text>
+    </svg>
+    </div>
+    <p class="swipe">左右滑動看完整張圖</p>
+    <figcaption>
+      <b>代扣費用是使用者填的，不是算出來的。</b>試算只在表單那一格提供建議值，按下儲存之後它就只是 <code>fee_tax</code> 這個數字。
+      引擎完全不認識二代健保 —— 它只做 <code>price × qty − fee_tax</code>。年報的月柱狀圖、個股占比、逐筆明細、總報酬全部從 <code>dividendLegs</code> 切出來，彼此不會對不起來。
+    </figcaption>
+  </figure>
+
+  <h2>二、為什麼存值，而不是每次讀取時算</h2>
+  <p>兩個做法差在一條邊：健保法規表接到哪裡。接在表單（寫入時，只讀一次），或接在年報（讀取時，每次都讀）。</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1060 404" role="img"
+         aria-label="兩種做法的比較。做法 A：健保法規表接到表單，試算一次後把 601 存進資料庫，年報原樣顯示。做法 B：資料庫只存 price 與 qty，年報每次讀取時再去讀健保法規表重算，因此歷史數字會隨法規改變而變動。">
+      <defs>
+        <marker id="f2-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <polygon class="mk" points="0,0 8,4 0,8"/>
+        </marker>
+        <marker id="f2-arrow-a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <polygon class="mk-a" points="0,0 8,4 0,8"/>
+        </marker>
+      </defs>
+
+      <!-- ===== A ===== -->
+      <text class="hd" x="16" y="28">A　試算當提示，數字存進 fee_tax</text>
+      <rect class="tag" x="880" y="14" width="66" height="20"/>
+      <text class="tagt" x="913" y="28" text-anchor="middle">採用</text>
+
+      <rect class="bx-band" x="16"  y="48" width="150" height="62"/>
+      <rect class="bx"      x="246" y="48" width="180" height="62"/>
+      <rect class="bx"      x="506" y="48" width="180" height="62"/>
+      <rect class="bx"      x="766" y="48" width="180" height="62"/>
+
+      <text class="v" x="32"  y="74">健保法規表</text>
+      <text class="el" x="32" y="94">2.11%・2 萬起扣</text>
+      <text class="v" x="262" y="74">表單</text>
+      <text class="el" x="262" y="94">新增一筆股利</text>
+      <text class="v" x="522" y="74">transactions</text>
+      <text class="el" x="522" y="94">fee_tax　601</text>
+      <text class="v" x="782" y="74">年報　股利</text>
+      <text class="el" x="782" y="94">代扣費用　601</text>
+
+      <line class="ed" x1="174" y1="79" x2="238" y2="79" marker-end="url(#f2-arrow)"/>
+      <text class="el" x="206" y="68" text-anchor="middle">試算一次</text>
+      <line class="ed" x1="434" y1="79" x2="498" y2="79" marker-end="url(#f2-arrow)"/>
+      <text class="el" x="466" y="68" text-anchor="middle">存 601</text>
+      <line class="ed" x1="694" y1="79" x2="758" y2="79" marker-end="url(#f2-arrow)"/>
+      <text class="el" x="726" y="68" text-anchor="middle">原樣顯示</text>
+
+      <line class="rule" x1="16" y1="160" x2="1044" y2="160"/>
+
+      <!-- ===== B ===== -->
+      <text class="hd" x="16" y="206">B　不存，年報每次讀取時即時算</text>
+
+      <rect class="bx" x="246" y="226" width="180" height="62"/>
+      <rect class="bx" x="506" y="226" width="180" height="62"/>
+      <rect class="bx" x="766" y="226" width="180" height="62"/>
+      <rect class="bx-band" x="766" y="330" width="180" height="58"/>
+
+      <text class="v" x="262" y="252">表單</text>
+      <text class="el" x="262" y="272">新增一筆股利</text>
+      <text class="v" x="522" y="252">transactions</text>
+      <text class="el" x="522" y="272">price, qty</text>
+      <text class="v" x="782" y="252">年報　股利</text>
+      <text class="el" x="782" y="272">代扣費用　?</text>
+      <text class="v" x="782" y="356">健保法規表</text>
+      <text class="el" x="782" y="376">2027 起改年度結算</text>
+
+      <line class="ed" x1="434" y1="257" x2="498" y2="257" marker-end="url(#f2-arrow)"/>
+      <text class="el" x="466" y="246" text-anchor="middle">存 price, qty</text>
+      <line class="ed" x1="694" y1="257" x2="758" y2="257" marker-end="url(#f2-arrow)"/>
+      <text class="el" x="726" y="246" text-anchor="middle">讀 price, qty</text>
+
+      <line class="ed accent" x1="856" y1="322" x2="856" y2="298" marker-end="url(#f2-arrow-a)"/>
+      <text class="accent" x="840" y="316" text-anchor="end" font-size="11">每次讀都重算</text>
+    </svg>
+    </div>
+    <p class="swipe">左右滑動看完整張圖</p>
+    <figcaption>
+      <b>A 的法規表只碰得到「之後新增的資料」；B 的法規表碰得到「所有已經存在的資料」。</b>
+      所以 2027 年真的改成年度結算時，A 只影響新資料 —— 2026 年那筆 601 永遠是 601，跟券商對帳單永遠對得起來；
+      B 會讓三年前的股利今天顯示成另一個數字，而且沒有任何地方留下原本的值。
+      這也是為什麼試算只做到「填進欄位」為止：它是一個輸入輔助，不是一條計算規則。
+    </figcaption>
+  </figure>
+
+  <h2>連帶的三個約定</h2>
+  <p>
+    <code>tx_date</code> 存<strong>發放日</strong>（錢進帳那天），不另存除息日 —— 只記實收的前提下，除息日沒有用途。
+    <code>fee_tax</code> 維持「代扣合計」一欄，不拆成健保費與匯費 —— 券商只給一個數字，拆欄位只會逼使用者去猜。
+    法規參數（2.11%、2 萬起扣、1,000 萬上限）帶生效日期，讓舊股利用當時的規則試算。
+  </p>
+</main>
+
+<script>
+  var sync = function (t) {
+    document.querySelectorAll('.seg button').forEach(function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.t === t));
+    });
+  };
+  sync(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.documentElement.dataset.theme = b.dataset.t;
+      sync(b.dataset.t);
+    });
+  });
+</script>
+</body>
+</html>

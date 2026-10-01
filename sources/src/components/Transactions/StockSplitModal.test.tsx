@@ -235,6 +235,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
       recordSplit,
       current: { id: 'ws-1', name: '預設工作區', fee_rate: 0.0004275 }, // 3.0 折
     })
+    // Task 182: the rate is read per transaction date through the settings cache (the same cache
+    // `syncWorkspaceFees` fills from the workspace row at bootstrap), not off `current.fee_rate`.
+    localStorage.setItem('stock-pnl-web/fee-rate/ws-1', '0.0004275')
 
     render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
 

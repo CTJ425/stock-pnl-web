@@ -13,14 +13,14 @@ import {
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
-import type { FeeRebate, FeeRounding, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding, NewTransaction, Transaction, Workspace } from '../types/models'
 import type { Ledger } from '../utils/pnlEngine'
 import { computeLedger } from '../utils/pnlEngine'
 import type { DataProvider, NewSplitLogEntry, SplitLogEntry, TxUpdate } from '../services/dataProvider'
 import { LocalProvider, SupabaseProvider } from '../services/dataProvider'
 import { isSupabaseConfigured } from '../services/supabase'
 import { prefetchStockData } from '../services/prefetchStockData'
-import { syncWorkspaceFees, saveWorkspaceFeeRate } from '../services/feeSettings'
+import { syncWorkspaceFees, saveWorkspaceFeeRate, saveWorkspaceFeeRateHistory } from '../services/feeSettings'
 import { useAuth } from './AuthContext'
 
 const CURRENT_WS_KEY = 'stock-pnl-web/current-workspace'
@@ -50,6 +50,8 @@ export interface WorkspaceState {
   /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions: (ids: string[]) => Promise<void>
   setWorkspaceFeeRate: (id: string, rate: number) => Promise<void>
+  /** Replace the workspace's fee-rate history — which rate applied from which date (Task 182). */
+  setWorkspaceFeeRateHistory: (id: string, history: FeeRateSegment[]) => Promise<void>
   /** Persist how the broker refunds the fee discount; it decides the unrealized P&L basis. */
   setWorkspaceFeeRebate: (id: string, rebate: FeeRebate) => Promise<void>
   /** Persist how the broker floors the estimated sell fee and tax (BUG-088). */
@@ -257,6 +259,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const setWorkspaceFeeRateHistory = useCallback(
+    async (id: string, history: FeeRateSegment[]) => {
+      // Same failure contract as the rate above: the local cache keeps the new history and the
+      // cloud failure is reported, rather than leaving this device silently out of step.
+      await saveWorkspaceFeeRateHistory(provider, id, history, (message) => setError(message))
+      setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, fee_rate_history: history } : w)))
+    },
+    [provider],
+  )
+
   const setWorkspaceFeeRebate = useCallback(
     async (id: string, rebate: FeeRebate) => {
       // Unlike the rate there is no localStorage cache to fall back on: a failed write keeps the
@@ -305,6 +317,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordSplit,
       deleteTransactions,
       setWorkspaceFeeRate,
+      setWorkspaceFeeRateHistory,
       setWorkspaceFeeRebate,
       setWorkspaceFeeRounding,
     }),
@@ -326,6 +339,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordSplit,
       deleteTransactions,
       setWorkspaceFeeRate,
+      setWorkspaceFeeRateHistory,
       setWorkspaceFeeRebate,
       setWorkspaceFeeRounding,
     ],

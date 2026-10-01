@@ -4,9 +4,16 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { WorkspaceFeeSettings } from './WorkspaceFeeSettings'
 
-const { useWorkspace, setWorkspaceFeeRate, setWorkspaceFeeRebate, setWorkspaceFeeRounding } = vi.hoisted(() => ({
+const {
+  useWorkspace,
+  setWorkspaceFeeRate,
+  setWorkspaceFeeRateHistory,
+  setWorkspaceFeeRebate,
+  setWorkspaceFeeRounding,
+} = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   setWorkspaceFeeRate: vi.fn(async () => {}),
+  setWorkspaceFeeRateHistory: vi.fn(async () => {}),
   setWorkspaceFeeRebate: vi.fn(async () => {}),
   setWorkspaceFeeRounding: vi.fn(async () => {}),
 }))
@@ -18,6 +25,7 @@ function mount(current: Record<string, unknown>, rate: string | null, onPreview?
   useWorkspace.mockReturnValue({
     current: { id: 'ws-1', name: '玉山證券', ...current },
     setWorkspaceFeeRate,
+    setWorkspaceFeeRateHistory,
     setWorkspaceFeeRebate,
     setWorkspaceFeeRounding,
   })
@@ -31,6 +39,7 @@ describe('WorkspaceFeeSettings', () => {
   beforeEach(() => {
     cleanup()
     vi.clearAllMocks()
+    localStorage.removeItem('stock-pnl-web/fee-rate-history/ws-1')
   })
 
   it('starts from the stored discount and rebate, and previews the derived basis', () => {
@@ -118,5 +127,80 @@ describe('WorkspaceFeeSettings', () => {
     mount({}, null)
     await user.click(screen.getByRole('button', { name: '儲存' }))
     expect(setWorkspaceFeeRounding).not.toHaveBeenCalled()
+  })
+})
+
+// Task 182: 玉山 moved from 6.5 折 to 3.8 折 on 2026-10-01. Changing the discount must open a new
+// period from a date, not overwrite what the broker charged before it.
+describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
+  const R65 = '0.00092625'
+  const R38 = '0.0005415'
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+
+  beforeEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    localStorage.removeItem('stock-pnl-web/fee-rate-history/ws-1')
+  })
+
+  it('已經有費率的工作區改折扣時，寫的是新的一段，不是覆蓋舊費率', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rate: 0.00092625 }, R65)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
+    await user.clear(screen.getByLabelText('從哪天開始用這個折扣'))
+    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), '2026-10-01')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
+    expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [
+      { from: '2026-10-01', rate: 0.0005415 },
+    ])
+  })
+
+  it('生效日預設是今天', () => {
+    mount({ fee_rate: 0.00092625 }, R65)
+    expect((screen.getByLabelText('從哪天開始用這個折扣') as HTMLInputElement).value).toBe(today)
+  })
+
+  it('還沒有費率的工作區，第一次存的是基準費率，沒有生效日這回事', async () => {
+    const user = userEvent.setup()
+    mount({}, null)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.0005415)
+    expect(setWorkspaceFeeRateHistory).not.toHaveBeenCalled()
+  })
+
+  it('列出變更紀錄，最新的在上面，最早那段標成基準費率；選單開在今天實際在用的費率', () => {
+    localStorage.setItem(
+      'stock-pnl-web/fee-rate-history/ws-1',
+      JSON.stringify([{ from: '2020-01-01', rate: 0.0005415 }]),
+    )
+    mount({ fee_rate: 0.00092625 }, R65)
+    expect(screen.getByText('2020-01-01 起')).toBeTruthy()
+    expect(screen.getByText('2020-01-01 之前')).toBeTruthy()
+    expect((screen.getByLabelText('手續費折扣') as HTMLSelectElement).value).toBe(R38)
+  })
+
+  it('還沒生效的那一段不影響今天：選單仍是舊折扣，並說明何時才會改', () => {
+    localStorage.setItem(
+      'stock-pnl-web/fee-rate-history/ws-1',
+      JSON.stringify([{ from: '2099-01-01', rate: 0.0005415 }]),
+    )
+    mount({ fee_rate: 0.00092625 }, R65)
+    expect((screen.getByLabelText('手續費折扣') as HTMLSelectElement).value).toBe(R65)
+    expect(screen.getByText('2099-01-01 起')).toBeTruthy()
+  })
+
+  it('刪掉一段就回到上一個折扣', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(
+      'stock-pnl-web/fee-rate-history/ws-1',
+      JSON.stringify([{ from: '2020-01-01', rate: 0.0005415 }]),
+    )
+    mount({ fee_rate: 0.00092625 }, R65)
+    await user.click(screen.getByRole('button', { name: '刪除' }))
+    expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [])
   })
 })

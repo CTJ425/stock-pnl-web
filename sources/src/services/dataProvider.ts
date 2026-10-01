@@ -4,7 +4,7 @@
  * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
-import type { FeeRebate, FeeRounding, Market, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding, Market, NewTransaction, Transaction, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 import { logClient } from './appLog'
@@ -53,6 +53,8 @@ export interface DataProvider {
   deleteTransactions(ids: string[]): Promise<void>
   /** Persist the workspace's fee rate (source of truth; localStorage is the cache)*/
   setWorkspaceFeeRate(id: string, rate: number): Promise<void>
+  /** Replaces the whole fee-rate history (Task 182); see `utils/feeRateHistory.ts`. */
+  setWorkspaceFeeRateHistory(id: string, history: FeeRateSegment[]): Promise<void>
   /** Persist how the workspace's broker refunds the fee discount (現折 / 月退). */
   setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void>
   /** Persist how the workspace's broker floors the estimated sell fee and tax (BUG-088). */
@@ -229,6 +231,15 @@ export class LocalProvider implements DataProvider {
     }
   }
 
+  async setWorkspaceFeeRateHistory(id: string, history: FeeRateSegment[]): Promise<void> {
+    const store = readStore()
+    const ws = store.workspaces.find((w) => w.id === id)
+    if (ws) {
+      ws.fee_rate_history = history
+      writeStore(store)
+    }
+  }
+
   async setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void> {
     const store = readStore()
     const ws = store.workspaces.find((w) => w.id === id)
@@ -257,7 +268,9 @@ function client() {
   return supabase
 }
 
-const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate, fee_rebate, fee_rounding'
+const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding'
+/** Without fee_rate_history, for a database that has not run that part of schema.sql (Task 182). */
+const WORKSPACE_COLUMNS_WITHOUT_HISTORY = 'id, name, created_at, fee_rate, fee_rebate, fee_rounding'
 /** Without fee_rounding, for a database that has not run that part of schema.sql (BUG-088). */
 const WORKSPACE_COLUMNS_WITHOUT_ROUNDING = 'id, name, created_at, fee_rate, fee_rebate'
 /** Without fee_rebate, for a database that has not run that part of schema.sql. */
@@ -369,6 +382,7 @@ export class SupabaseProvider implements DataProvider {
     // than break login (a frontend deploy can land before the migration).
     const columnSets = [
       WORKSPACE_COLUMNS,
+      WORKSPACE_COLUMNS_WITHOUT_HISTORY,
       WORKSPACE_COLUMNS_WITHOUT_ROUNDING,
       WORKSPACE_COLUMNS_WITHOUT_REBATE,
       WORKSPACE_COLUMNS_LEGACY,
@@ -531,6 +545,14 @@ export class SupabaseProvider implements DataProvider {
   async setWorkspaceFeeRate(id: string, rate: number): Promise<void> {
     const { error } = await client().from('workspaces').update({ fee_rate: rate }).eq('id', id)
     if (error) throw new Error(`儲存手續費率失敗：${error.message}`)
+  }
+
+  async setWorkspaceFeeRateHistory(id: string, history: FeeRateSegment[]): Promise<void> {
+    const { error } = await client()
+      .from('workspaces')
+      .update({ fee_rate_history: history })
+      .eq('id', id)
+    if (error) throw new Error(`儲存費率生效日失敗：${error.message}`)
   }
 
   async setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void> {

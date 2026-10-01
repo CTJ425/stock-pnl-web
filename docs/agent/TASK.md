@@ -16,6 +16,54 @@
 
 ## 📋 Active Tasks
 
+### Task 183: 股利專區 — the year's cash dividends under the yearly report
+- **Status**: 🔄 IN PROGRESS — feature complete: code, tests and browser verification all green.
+  **Remaining: commit to `dev`, then the usual release decision (the user's call).**
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 19:35:00 Asia/Taipei
+- **Why**: the user could already record a 現金股利, but nothing showed them a year of dividends,
+  and the 二代健保 deduction had to be looked up and typed from scratch every time.
+- **Settled with the user before any code** (all four are implemented as stated):
+  1. 總報酬 = 這一年的已實現損益 + 股利**實收**（不是配息總額）
+  2. 逐筆明細帶「每股股利」欄，讓每一列自己可以驗算
+  3. 個股占比只畫金額**前 4 大**，其餘折成灰色「其他」，固定排最後
+  4. `tx_date` 就是**發放日**，不另加除息日欄位
+- **The rule that must not be reversed**: the 二代健保 figure is estimated at **write** time and
+  stored in `fee_tax`. Nothing recomputes it on read — 衛福部 has a standing proposal to move
+  dividends to an annual settlement, and a read-time formula would silently rewrite every
+  historical dividend the user already reconciled against a broker notice.
+- **Files**: `utils/nhiSupplement.ts`, `utils/dividendReport.ts`,
+  `components/YearlyReport/DividendSection.tsx`, `YearlyPage.tsx` (wiring),
+  `components/Transactions/TransactionForm.tsx` (the hint), `styles/dashboard.css`.
+  Engine and Edge mirror untouched; **no schema change**.
+- **Design record**: `docs/design/dividend-section-mockup.html`, `docs/design/dividend-data-flow.html`.
+- **Left open on purpose** (not started, not blocking):
+  - 匯費 is a constant 10 in the hint. If a broker charges something else, it becomes a workspace
+    setting — deliberately not built on speculation.
+  - The US section shows US dividends gross/net but offers no withholding hint; US dividends are
+    withheld at source (30%) under a rule this module does not model.
+
+### Task 182: Fee rate as a fact with a validity period (玉山 3.8 折 from 2026-10-01)
+- **Status**: 🔄 IN PROGRESS — code done and verified locally; **DDL not applied to DEV or PROD yet**
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 18:40:00 Asia/Taipei
+- **Why**: 玉山 moved from 6.5 折 to 3.8 折 on 2026-10-01. A single `workspaces.fee_rate` cannot say
+  "before this date it was 6.5 折", so 批次重算 re-priced the whole history at the new rate — measured
+  on a seeded store: it listed all three September rows, pre-checked, and applying moved 投入成本
+  450,417 → 450,244, 保本價 904.39 → 903.69, 已實現 +22,720 → +23,075, and overwrote every row's
+  `fee_rate`. See `PROGRESS.md` 2026-09-30 18:40:00 Asia/Taipei.
+- **Shape**: `workspaces.fee_rate_history` JSONB `[{from, rate}]`; `fee_rate` keeps its meaning as the
+  rate **before** the first segment. `utils/feeRateHistory.ts` `rateOn(history, base, date, fallback)`
+  is the one lookup; a recorded trade asks with its own `tx_date`, an unrealized / break-even estimate
+  asks with today.
+- **Items**:
+  1. Apply the DDL to **DEV**, then verify with `verify_setup()` ⏳
+  2. Apply the DDL to **PROD** (separate, needs the user's OK; a `main` push never carries it) ⏳
+  3. Deploy Edge `stock-report` **after** the DDL — `loadHoldingsWorkspaces` selects `fee_rate_history`
+     and steps down one column set if it is missing, so the order is safe either way, but the card only
+     follows the history once both are in ⏳
+  4. Set the real 玉山 workspace to 3.8 折 from 2026-10-01 in the UI (one save; no recalculation needed) ⏳
+
 ### Task 178: Prove the shared ship/versioning skills on a real release
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

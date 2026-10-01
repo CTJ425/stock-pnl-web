@@ -3,6 +3,7 @@ import type { Holding } from './pnlEngine'
 import { computeLedger, estimateUnrealized } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
 import { breakEvenPrice, breakEvenPriceShort, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
+import { rateOn } from './feeRateHistory'
 
 describe('calculateFee（與 GAS Sidebar calculateFee 同構）', () => {
   it('台股買入：手續費元以下無條件捨去', () => {
@@ -171,7 +172,7 @@ function txOf(input: {
 }
 
 describe('proposeFeeCorrections（批次重算手續費）', () => {
-  const opts = { feeRate: 0.0004, minFeeWhole: 20, minFeeOdd: 1 }
+  const opts = { rateFor: () => 0.0004, minFeeWhole: 20, minFeeOdd: 1 }
 
   it('找出與目前費率不符的台股交易並附上重算值', () => {
     // 102.4*1000*0.0004 = 40.96 → floor 40; original record 80 → needs to be corrected
@@ -233,9 +234,46 @@ describe('proposeFeeCorrections（批次重算手續費）', () => {
   })
 })
 
+describe('proposeFeeCorrections 依成交日取費率（Task 182）', () => {
+  // 玉山：2026-10-01 起 6.5 折 → 3.8 折。rateOn 是同一個純函式，這裡用真的歷史資料。
+  const HISTORY = [{ from: '2026-10-01', rate: 0.0005415 }]
+  const rateFor = (txDate: string) => rateOn(HISTORY, 0.00092625, txDate, DEFAULT_FEE_RATE)
+  const opts = { rateFor, minFeeWhole: 20, minFeeOdd: 1 }
+
+  const dated = (date: string, price: number, qty: number, fee: number) => ({
+    ...txOf({ market: 'TPE', ticker: '2330', type: 'BUY' as const, price, qty, fee }),
+    tx_date: date,
+  })
+
+  it('生效日之前的交易用舊費率重算，等於原值，不會被列進清單', () => {
+    // 900*1000*0.00092625 = 833.625 → 833，就是當初收的
+    const sep = dated('2026-09-10', 900, 1000, 833)
+    expect(proposeFeeCorrections([sep], opts)).toEqual([])
+  })
+
+  it('生效日當天起用新費率', () => {
+    // 900*1000*0.0005415 = 487.35 → 487
+    const oct = dated('2026-10-01', 900, 1000, 833)
+    const out = proposeFeeCorrections([oct], opts)
+    expect(out).toHaveLength(1)
+    expect(out[0].newFee).toBe(487)
+    expect(out[0].feeRate).toBe(0.0005415)
+  })
+
+  it('同一份清單裡，兩邊各用各的費率', () => {
+    // 9 月那筆真的填錯了（少收 100），10 月那筆還停在舊費率
+    const sepWrong = dated('2026-09-10', 900, 1000, 733)
+    const octOld = dated('2026-10-05', 900, 1000, 833)
+    const out = proposeFeeCorrections([sepWrong, octOld], opts)
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ newFee: 833, feeRate: 0.00092625 })
+    expect(out[1]).toMatchObject({ newFee: 487, feeRate: 0.0005415 })
+  })
+})
+
 describe('proposeFeeCorrections 不覆蓋當沖賣出（Task 137）', () => {
   // Ronlin 匯出檔的實際費率（3 折）
-  const opts = { feeRate: 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
+  const opts = { rateFor: () => 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
 
   it('當沖賣出不提案，避免被改成兩倍證交稅', () => {
     // 2344 2026-08-18：362 = 減半稅 282 + 手續費 80；一般稅率會算成 645（多課 283）
@@ -299,7 +337,7 @@ describe('breakEvenPrice 零成本持股（BUG-038）', () => {
 
 
 describe('proposeFeeCorrections 尊重明確的交易性質（Task 137 §C）', () => {
-  const opts = { feeRate: 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
+  const opts = { rateFor: () => 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
 
   it('標記為當沖者不提案，即使金額高到推測會判成一般交易', () => {
     const t = txOf({ market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 700, nature: 'DAY_TRADE' })
@@ -520,7 +558,7 @@ describe('費用重算不碰股利（Task 166 EN-01）', () => {
       { ...base, tx_type: 'DIVIDEND' as const },
       { ...base, id: 'd2', tx_type: 'STOCK_DIVIDEND' as const, price: 0, fee_tax: 0 },
     ]
-    expect(proposeFeeCorrections(rows, { feeRate: DEFAULT_FEE_RATE, minFeeWhole: 20, minFeeOdd: 1 })).toEqual([])
+    expect(proposeFeeCorrections(rows, { rateFor: () => DEFAULT_FEE_RATE, minFeeWhole: 20, minFeeOdd: 1 })).toEqual([])
   })
 })
 

@@ -6,14 +6,16 @@
  * fields (plus the fee/tax flooring, BUG-088), and the dashboard derives its P&L basis from
  * them (utils/pnlBasis), so there is no second "basis" setting that could disagree with the fee rate.
  */
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
-import type { FeeRebate, FeeRounding } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding } from '../types/models'
 import { COMMON_FEE_RATES, DEFAULT_FEE_RATE } from '../utils/fees'
-import { describeTwFeeRate } from '../utils/feeRateHint'
+import { describeTwFeeRate, feeDiscountLabel } from '../utils/feeRateHint'
+import { rateOn, withFeeRateFrom, withoutFeeRateFrom } from '../utils/feeRateHistory'
 import { basisLabel, formatFeeRatePct, pnlBasis } from '../utils/pnlBasis'
-import { getFeeRate } from '../utils/settings'
+import { taipeiDateKey } from '../utils/taipeiDate'
+import { getFeeRateHistory, getStoredFeeRate } from '../utils/settings'
 
 const CUSTOM = 'custom'
 
@@ -22,12 +24,6 @@ export interface FeeDraft {
   rate: number
   rebate: FeeRebate
   rounding: FeeRounding
-}
-
-function discountName(rate: number): string {
-  if (rate === DEFAULT_FEE_RATE) return '不打折'
-  if (rate === 0) return '免手續費'
-  return `${Math.round((rate / DEFAULT_FEE_RATE) * 1000) / 100} 折`
 }
 
 function explain(rate: number, rebate: FeeRebate): string {
@@ -56,34 +52,76 @@ export function WorkspaceFeeSettings({
    */
   onPreview?: (draft: FeeDraft | null) => void
 }) {
-  const { current, setWorkspaceFeeRate, setWorkspaceFeeRebate, setWorkspaceFeeRounding } = useWorkspace()
+  const {
+    current,
+    setWorkspaceFeeRate,
+    setWorkspaceFeeRateHistory,
+    setWorkspaceFeeRebate,
+    setWorkspaceFeeRounding,
+  } = useWorkspace()
   const uid = useId()
-  const savedRate = getFeeRate(current?.id)
+  const today = useMemo(() => taipeiDateKey(new Date()), [])
+  const [history, setHistory] = useState<FeeRateSegment[]>(() => getFeeRateHistory(current?.id))
+  useEffect(() => {
+    setHistory(getFeeRateHistory(current?.id))
+  }, [current?.id])
+  // The rate before the first segment. Null means this workspace has never had one, which is the
+  // only case where saving writes the base instead of opening a new period (see `submit`).
+  const base = getStoredFeeRate(current?.id) ?? current?.fee_rate ?? null
+  const savedRate = rateOn(history, base, today, DEFAULT_FEE_RATE)
   const savedRebate: FeeRebate = current?.fee_rebate ?? 'instant'
   const isCommon = COMMON_FEE_RATES.includes(savedRate)
   const [choice, setChoice] = useState<string>(isCommon ? String(savedRate) : CUSTOM)
   const [customInput, setCustomInput] = useState(isCommon ? '' : String(savedRate))
+  const [from, setFrom] = useState(today)
   const [rebate, setRebate] = useState<FeeRebate>(savedRebate)
   const [rounding, setRounding] = useState<FeeRounding>(current?.fee_rounding ?? 'lot')
   const [saving, setSaving] = useState(false)
 
   const rate = choice === CUSTOM ? parseFloat(customInput) : Number(choice)
   const rateValid = Number.isFinite(rate) && rate >= 0 && rate < 1
+  const fromValid = /^\d{4}-\d{2}-\d{2}$/.test(from)
   const noDiscount = rateValid && rate >= DEFAULT_FEE_RATE
   const hint = choice === CUSTOM ? describeTwFeeRate(rate) : null
+  // What this workspace charged on the chosen date, before this form's unsaved change.
+  const rateBefore = fromValid ? rateOn(history, base, from, DEFAULT_FEE_RATE) : savedRate
+  const futureFrom = fromValid && from > today
 
   useEffect(() => {
-    onPreview?.(rateValid ? { rate, rebate, rounding } : null)
-  }, [onPreview, rate, rateValid, rebate, rounding])
+    // A future effective date changes nothing the dashboard shows today, so it previews the rate
+    // still in force rather than one that has not started.
+    const previewRate = futureFrom ? savedRate : rate
+    onPreview?.(rateValid ? { rate: previewRate, rebate, rounding } : null)
+  }, [onPreview, rate, rateValid, rebate, rounding, futureFrom, savedRate])
   // Closing the form (saved or not) ends the preview; the dashboard falls back to the saved values.
   useEffect(() => () => onPreview?.(null), [onPreview])
 
+  const removeSegment = async (segFrom: string) => {
+    if (!current || saving) return
+    const next = withoutFeeRateFrom(history, base, segFrom)
+    setHistory(next)
+    setSaving(true)
+    await setWorkspaceFeeRateHistory(current.id, next)
+    setSaving(false)
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!current || !rateValid || saving) return
+    if (!current || !rateValid || !fromValid || saving) return
     setSaving(true)
-    const rateChanged = rate !== savedRate
-    if (rateChanged) await setWorkspaceFeeRate(current.id, rate)
+    const rateChanged = rate !== rateBefore
+    if (rateChanged) {
+      if (base === null && history.length === 0) {
+        // Task 182: the workspace's first rate is not a change of agreement — there is no earlier
+        // period for a segment to end. It becomes the base, so every transaction already recorded
+        // is priced under it, whatever date the user picked here.
+        await setWorkspaceFeeRate(current.id, rate)
+      } else {
+        const next = withFeeRateFrom(history, base, from, rate)
+        setHistory(next)
+        await setWorkspaceFeeRateHistory(current.id, next)
+      }
+    }
     if (rebate !== (current.fee_rebate ?? 'instant')) await setWorkspaceFeeRebate(current.id, rebate)
     if (rounding !== (current.fee_rounding ?? 'lot')) await setWorkspaceFeeRounding(current.id, rounding)
     setSaving(false)
@@ -111,7 +149,7 @@ export function WorkspaceFeeSettings({
           <select id={`${uid}-rate`} value={choice} autoFocus onChange={(e) => setChoice(e.target.value)}>
             {COMMON_FEE_RATES.map((r) => (
               <option key={r} value={String(r)}>
-                {discountName(r)}（{formatFeeRatePct(r)}）
+                {feeDiscountLabel(r)}（{formatFeeRatePct(r)}）
               </option>
             ))}
             <option value={CUSTOM}>自訂費率…</option>
@@ -133,6 +171,64 @@ export function WorkspaceFeeSettings({
           {hint?.discount && <span className="fee-rate-hint">{hint.discount}</span>}
           {hint?.warning && <span className="fee-rate-warning">{hint.warning}</span>}
           <div className="field-hint">和券商約定的電子下單折扣。新增交易會用它帶入手續費。</div>
+
+          <label className="fee-settings-from-label" htmlFor={`${uid}-from`}>
+            從哪天開始用這個折扣
+          </label>
+          <input
+            id={`${uid}-from`}
+            type="date"
+            value={from}
+            max="2999-12-31"
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <div className="field-hint">
+            這天（含）之後的交易用新折扣，之前的維持原本的，批次重算也不會動到它們。
+            券商從月初才生效就填那天；要連舊交易一起改，把日期往前填。
+          </div>
+          {!fromValid && <span className="fee-rate-warning">請選一個日期。</span>}
+          {futureFrom && (
+            <span className="fee-rate-hint">還沒生效，總覽的數字要到 {from} 才會改用這個折扣。</span>
+          )}
+
+          {(history.length > 0 || base !== null) && (
+            <div className="fee-history">
+              <h3>費率變更紀錄</h3>
+              <ul>
+                {[...history].reverse().map((seg) => (
+                  <li key={seg.from}>
+                    <span className="fee-history-from">{seg.from} 起</span>
+                    <span className="fee-history-rate">
+                      {feeDiscountLabel(seg.rate)}
+                      <small>{formatFeeRatePct(seg.rate)}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={saving}
+                      onClick={() => void removeSegment(seg.from)}
+                    >
+                      刪除
+                    </button>
+                  </li>
+                ))}
+                {base !== null && (
+                  <li className="fee-history-base">
+                    <span className="fee-history-from">
+                      {history.length > 0 ? `${history[0].from} 之前` : '一直以來'}
+                    </span>
+                    <span className="fee-history-rate">
+                      {feeDiscountLabel(base)}
+                      <small>{formatFeeRatePct(base)}</small>
+                    </span>
+                  </li>
+                )}
+              </ul>
+              {history.length > 0 && (
+                <div className="field-hint">刪除一段，那段期間的交易就回到上一個折扣。</div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="fee-settings-methods">

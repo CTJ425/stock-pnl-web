@@ -1,16 +1,19 @@
 /**
  * Batch recalculation fee:
- * - Find all inconsistent Taiwan stock transactions based on "current workspace rate + minimum handling fee" and preview the list
+ * - Find all inconsistent Taiwan stock transactions based on "the rate in force on each
+ *   transaction's own date + minimum handling fee" and preview the list
  * - Check each transaction one by one (select all by default) and then update with one click; for transactions with special tax rates such as hedging, you can uncheck the check box and use individual editing instead.
  * - U.S. stocks are not included in the batch recalculation (the charging structures of each brokerage vary greatly)
  */
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { Modal } from '../Common/Modal'
 import { useToast } from '../Common/Toast'
 import { proposeFeeCorrections } from '../../utils/fees'
-import { getFeeRate, getMinFee } from '../../utils/settings'
+import { feeDiscountLabel } from '../../utils/feeRateHint'
+import { formatFeeRatePct } from '../../utils/pnlBasis'
+import { getFeeRateHistory, getFeeRateOn, getMinFee } from '../../utils/settings'
 import { TX_TYPE_LABEL } from '../../types/models'
 import type { TxUpdate } from '../../services/dataProvider'
 import { runBatchApply } from './batchUpdate'
@@ -19,13 +22,16 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
   const { current, transactions, updateTransactionsBatch } = useWorkspace()
   const { show } = useToast()
   const workspaceId = current?.id
-  const feeRate = getFeeRate(workspaceId)
   const minFeeWhole = getMinFee('whole', workspaceId)
   const minFeeOdd = getMinFee('odd', workspaceId)
+  // Task 182: every row is priced at the rate its own date fell under, so a workspace whose broker
+  // changed the discount does not re-price the trades made under the old agreement.
+  const rateFor = useCallback((txDate: string) => getFeeRateOn(txDate, workspaceId), [workspaceId])
+  const history = getFeeRateHistory(workspaceId)
 
   const proposals = useMemo(
-    () => proposeFeeCorrections(transactions, { feeRate, minFeeWhole, minFeeOdd }),
-    [transactions, feeRate, minFeeWhole, minFeeOdd],
+    () => proposeFeeCorrections(transactions, { rateFor, minFeeWhole, minFeeOdd }),
+    [transactions, rateFor, minFeeWhole, minFeeOdd],
   )
   const [checked, setChecked] = useState<Set<string>>(
     () => new Set(proposals.map((p) => p.tx.id)),
@@ -54,7 +60,13 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
     // would be the same question twice. The success toast below is what was actually missing.
     const updates: TxUpdate[] = proposals
       .filter(({ tx }) => checked.has(tx.id))
-      .map(({ tx, newFee }) => ({ id: tx.id, price: tx.price, qty: tx.qty, fee_tax: newFee, fee_rate: feeRate }))
+      .map(({ tx, newFee, feeRate }) => ({
+        id: tx.id,
+        price: tx.price,
+        qty: tx.qty,
+        fee_tax: newFee,
+        fee_rate: feeRate,
+      }))
     const ok = await runBatchApply(updateTransactionsBatch, updates, setBusy, setError)
     if (!ok) return
     show(`已更新 ${updates.length} 筆手續費`)
@@ -64,9 +76,9 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="批次重算手續費" onClose={onClose} wide disableBackdropClose>
       <div className="field-hint" style={{ marginBottom: 12 }}>
-        依目前設定（費率 {feeRate}、最低手續費整股 {minFeeWhole} 元 / 零股 {minFeeOdd} 元）
-        重算台股手續費，賣出會一併算證交稅。
-        美股和當沖請到「交易紀錄 → 編輯」個別調整。
+        依每筆交易當天的費率重算台股手續費（最低手續費整股 {minFeeWhole} 元 / 零股 {minFeeOdd} 元），
+        賣出會一併算證交稅。美股和當沖請到「交易紀錄 → 編輯」個別調整。
+        {history.length > 0 && '　費率改過的日期之前，交易維持原本的費率，不會出現在下面的清單裡。'}
       </div>
 
       {error && <div className="notice notice-error">{error}</div>}
@@ -101,12 +113,13 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
                   <th scope="col">類型</th>
                   <th scope="col" className="num">單價</th>
                   <th scope="col" className="num">股數</th>
+                  <th scope="col">費率</th>
                   <th scope="col" className="num">原手續費</th>
                   <th scope="col" className="num">重算後</th>
                 </tr>
               </thead>
               <tbody>
-                {proposals.map(({ tx, newFee }) => (
+                {proposals.map(({ tx, newFee, feeRate }) => (
                   <tr key={tx.id}>
                     <td>
                       <input
@@ -121,6 +134,7 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
                     <td>{TX_TYPE_LABEL[tx.tx_type]}</td>
                     <td className="num">{tx.price}</td>
                     <td className="num">{tx.qty.toLocaleString('en-US')}</td>
+                    <td title={formatFeeRatePct(feeRate)}>{feeDiscountLabel(feeRate)}</td>
                     <td className="num">{tx.fee_tax.toLocaleString('en-US')}</td>
                     <td className="num" style={{ fontWeight: 600 }}>
                       {newFee.toLocaleString('en-US')}

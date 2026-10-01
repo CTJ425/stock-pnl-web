@@ -103,7 +103,11 @@ export function buildHoldingRows(
       // Taiwan stocks apply the minimum handling fee for whole shares/fractional shares according to the shareholding size; there is no lower limit for US stocks
       const minFee =
         h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
-      const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee, false, rounding) : null
+      // Task 182: `overrideFeeRate` is true because a sell made today is charged today's rate on
+      // every lot. The per-lot rate describes what the *buy* cost, and that is already inside
+      // `cost` / `avgCost`; using it again for the sell would price the exit under an agreement
+      // the broker no longer honours (and would contradict this row's own 折扣後 label).
+      const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee, true, rounding) : null
       const netMktVal = mktVal !== null && unrealized !== null ? h.cost + unrealized : null
       const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
       // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
@@ -124,7 +128,8 @@ export function buildHoldingRows(
         h.currency === 'TWD' &&
         standardUnrealized !== null &&
         h.openLots.some((lot) => lotSellTaxRate(h.ticker, lot.date, today) < sellTaxRate(h.ticker))
-      const breakEven = breakEvenPrice(h, feeRate, minFee, false, rounding)
+      // Same rate as `unrealized` above — the two must answer the same question (Task 182).
+      const breakEven = breakEvenPrice(h, feeRate, minFee, true, rounding)
       rows.push({
         rowKey: `${h.key}:LONG`,
         direction: 'LONG',

@@ -15,7 +15,10 @@ export const DEFAULT_MIN_FEE_ODD = 1
 
 export interface WorkspaceInput {
   id: string
+  /** The rate before the first `fee_rate_history` segment; see `Workspace.fee_rate`. */
   fee_rate: number | null
+  /** Ascending by `from`; see `FeeRateSegment` and `rateOn` below (Task 182). */
+  fee_rate_history?: FeeRateSegment[] | null
   /** NULL / absent = 'instant' (現折), as on the dashboard. */
   fee_rebate?: FeeRebate | null
   /** NULL / absent = 'lot' (BUG-088), as on the dashboard. */
@@ -39,13 +42,45 @@ function isValidFeeRate(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1
 }
 
+/** One period of a workspace's fee rate; same shape as `FeeRateSegment` in src/types/models.ts. */
+export interface FeeRateSegment {
+  from: string
+  rate: number
+}
+
+/**
+ * Same rule as `rateOn` in src/utils/feeRateHistory.ts, re-stated because Edge cannot import src/
+ * (a drift test in scripts/lib/edgeConstants.test.mjs compares the two implementations' answers).
+ * The card reports what a sell made today would net, so its caller passes today's date — never a
+ * lot's buy date.
+ */
+export function rateOn(
+  history: FeeRateSegment[] | null | undefined,
+  base: number | null | undefined,
+  date: string,
+  fallback: number,
+): number {
+  const baseRate = isValidFeeRate(base) ? base : fallback
+  if (!Array.isArray(history) || history.length === 0) return baseRate
+  let rate = baseRate
+  for (const seg of history) {
+    if (!seg || typeof seg.from !== 'string' || !isValidFeeRate(seg.rate) || seg.from > date) break
+    rate = seg.rate
+  }
+  return rate
+}
+
 /**
  * One ledger per workspace — never over the concatenated transactions, or a sell in one
  * workspace would consume a buy in another.
+ *
+ * `today` (Task 182) is the run's Taipei calendar date, used to pick the fee rate in force now out
+ * of the workspace's history. Omitted — as a hand-built test ledger leaves it — no segment has
+ * started yet and the base `fee_rate` applies, which is the pre-Task-182 behaviour.
  */
-export function buildLedgers(workspaces: WorkspaceInput[]): WorkspaceLedger[] {
+export function buildLedgers(workspaces: WorkspaceInput[], today = ''): WorkspaceLedger[] {
   return workspaces.map((w) => {
-    const feeRate = isValidFeeRate(w.fee_rate) ? w.fee_rate : DEFAULT_FEE_RATE
+    const feeRate = rateOn(w.fee_rate_history, w.fee_rate, today, DEFAULT_FEE_RATE)
     return {
       id: w.id,
       feeRate,
@@ -362,7 +397,9 @@ export function aggregateHoldings(
       if (h.qty > 0) {
         const minFee = minFeeFor(h.currency, h.qty)
         const mktVal = close != null ? close * h.qty : null
-        const net = close != null ? estimateUnrealized(h, close, l.feeRate, minFee, false, l.rounding) : null
+        // Task 182: `overrideFeeRate` is true for the same reason as src/utils/holdingRows.ts —
+        // a sell made today is charged today's rate, not the rate each lot was bought under.
+        const net = close != null ? estimateUnrealized(h, close, l.feeRate, minFee, true, l.rounding) : null
         // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden.
         const brokerUnrealized =
           close != null && h.currency === 'TWD'

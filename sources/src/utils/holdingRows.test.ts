@@ -274,3 +274,35 @@ describe('buildHoldingRows — 當日買進的券商口徑用當沖稅率（BUG-
     expect(bondRow.brokerDayTradeTax).toBe(false)
   })
 })
+
+// Task 182: a sell made today is charged today's rate, whatever rate each lot was bought under.
+// Before this, the 折扣後 figure priced the exit with each lot's own recorded rate — invisible
+// while the rate never changed, and wrong the day 玉山 moved from 6.5 折 to 3.8 折.
+describe('未實現與保本價用今天的費率，不是買進那批的費率（Task 182）', () => {
+  // One lot bought at the statutory rate, one at 3 折. Neither rate may reach the sell estimate.
+  const holdings = holdingsOf([
+    tx({ id: 'old', tx_date: '2026-01-05', price: 100, qty: 1000, fee_tax: 142, fee_rate: 0.001425 }),
+    tx({ id: 'new', tx_date: '2026-06-05', price: 100, qty: 1000, fee_tax: 42, fee_rate: 0.0004275 }),
+  ])
+
+  it('兩批不同歷史費率，未實現只跟著傳進來的今日費率走', () => {
+    const [cheap] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.0004275)
+    const [dear] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
+    // 240,000 市值：3 折賣出費 102（每批 51），原價 342（每批 171）—— 差 240 元
+    expect((cheap.unrealized as number) - (dear.unrealized as number)).toBe(240)
+  })
+
+  it('保本賣出價和未實現用同一個費率，兩者不會各答各的', () => {
+    const [cheap] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.0004275)
+    const [dear] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
+    expect(cheap.breakEven).not.toBeNull()
+    expect(dear.breakEven).not.toBeNull()
+    expect(cheap.breakEven as number).toBeLessThan(dear.breakEven as number)
+  })
+
+  it('牌告口徑（月退在看的那個數字）不受費率歷史影響，永遠是 0.1425%', () => {
+    const [cheap] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.0004275)
+    const [dear] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
+    expect(cheap.brokerUnrealized).toBe(dear.brokerUnrealized)
+  })
+})

@@ -965,6 +965,11 @@ export function computeLedger(transactions: Transaction[]): Ledger {
  * half the securities tax, the way the broker app estimates a 現股當沖 (see `lotSellTaxRate` for the
  * evidence and the caveats). Omitted — the default — keeps the full rate for every lot, which is
  * what the app's own net figure and break-even use.
+ *
+ * `overrideFeeRate` (Task 182): true prices every lot at `feeRate`, and that is what every caller
+ * in the app and in the Edge card now passes — a sell made today is charged the rate in force
+ * today, whatever each lot was bought under. The false branch (each lot's own recorded rate) is
+ * kept for callers that really are re-pricing the past; nothing in the product does.
  */
 export function estimateUnrealized(
   holding: Holding,

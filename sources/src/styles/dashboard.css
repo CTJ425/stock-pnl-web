@@ -299,6 +299,67 @@
   margin: 0 0 var(--sp-03);
 }
 
+/* Fee-rate history (Task 182): the discount is a fact with a validity period, so the form prints
+   the periods as ruled statement lines, newest first, with the pre-history rate closing the list. */
+.fee-settings-from-label {
+  display: block;
+  margin-top: var(--sp-05);
+}
+
+.fee-history {
+  margin-top: var(--sp-05);
+  padding-top: var(--sp-04);
+  border-top: 1px solid var(--cds-border-subtle);
+}
+
+.fee-history h3 {
+  margin: 0 0 var(--sp-02);
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--cds-text-helper);
+}
+
+.fee-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fee-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(52px, auto);
+  align-items: baseline;
+  gap: var(--sp-04);
+  padding: var(--sp-03) 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  font-size: 0.8125rem;
+}
+
+.fee-history li:last-child {
+  border-bottom: 0;
+}
+
+.fee-history-from {
+  color: var(--cds-text-secondary);
+}
+
+.fee-history-rate {
+  font-weight: 600;
+  text-align: right;
+}
+
+.fee-history-rate small {
+  margin-left: var(--sp-03);
+  font-weight: 400;
+  color: var(--cds-text-helper);
+}
+
+.fee-history-base .fee-history-from,
+.fee-history-base .fee-history-rate {
+  color: var(--cds-text-helper);
+  font-weight: 400;
+}
+
 .fee-settings-actions {
   display: flex;
   gap: var(--sp-03);
@@ -1263,5 +1324,711 @@ table.hl-table {
   .yr-range-dates .hint {
     margin-left: 0;
     flex-basis: 100%;
+  }
+}
+
+/* ---------- 股利 (Task 183): the year's cash dividends, under the yearly report ----------
+   Statement geometry throughout: square blocks, hairline rules, a double rule under the totals.
+   Identity colours come from the chart ramp (never 漲跌 red/green); the folded 其他 bucket takes a
+   neutral, because a fifth identity hue would not survive the colour-blind check the four passed. */
+.div-section {
+  margin-top: var(--sp-09);
+}
+
+.div-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-02) var(--sp-04);
+  margin-bottom: var(--sp-04);
+}
+
+.div-head h2 {
+  font-size: var(--type-heading-03);
+}
+
+.div-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.div-years {
+  margin-left: auto;
+}
+
+/* Totals: 配息總額 − 代扣費用 = 實收, the operators printed between the columns. */
+.div-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-05) var(--sp-06);
+  padding-top: var(--sp-04);
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.div-tot {
+  min-width: 0;
+  position: relative;
+}
+
+.div-tot + .div-tot {
+  padding-left: var(--sp-06);
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.div-tot h3 {
+  margin: 0 0 2px;
+  font-size: var(--type-body-01);
+  font-weight: 500;
+  color: var(--cds-text-secondary);
+}
+
+.div-fig {
+  font-size: var(--type-heading-04);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.div-fig-lead {
+  font-size: var(--type-heading-05);
+}
+
+.div-sub {
+  margin: var(--sp-02) 0 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.div-op {
+  position: absolute;
+  left: calc(var(--sp-06) / -2 - 4px);
+  top: 26px;
+  font-size: var(--type-body-02);
+  font-weight: 600;
+  color: var(--cds-text-helper);
+}
+
+/* The year closes on a double rule, like every other total in this app. */
+.div-close {
+  margin-top: var(--sp-05);
+  padding-top: var(--sp-04);
+  border-top: 3px double var(--cds-text-primary);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-02) var(--sp-04);
+}
+
+.div-close-lbl {
+  font-size: var(--type-body-01);
+  color: var(--cds-text-secondary);
+}
+
+.div-close-val {
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+}
+
+.div-close-terms {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+.div-grid {
+  margin-top: var(--sp-08);
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--sp-06) var(--sp-08);
+  align-items: start;
+}
+
+.div-blk-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-03);
+  margin-bottom: var(--sp-05);
+}
+
+.div-blk-head h3 {
+  font-size: var(--type-body-02);
+}
+
+.div-blk-head span {
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+}
+
+/* ---- the identity ramp, plus the neutral the bucket takes ---- */
+.div-seg-c1 { background: var(--chart-c1); }
+.div-seg-c2 { background: var(--chart-c2); }
+.div-seg-c3 { background: var(--chart-c3); }
+.div-seg-c4 { background: var(--chart-c4); }
+.div-seg-other { background: var(--cds-text-helper); }
+
+/* ---- monthly bars ---- */
+.div-chart {
+  position: relative;
+  padding-left: 56px;
+}
+
+/* Reserved band: the hover tooltip is drawn above the plot and must not reach the heading. */
+.div-plot {
+  position: relative;
+  height: 200px;
+  margin-top: 104px;
+}
+
+.div-plot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--cds-border-subtle) 0 1px, transparent 1px) 0 0 / 100% 33.334%;
+}
+
+.div-base {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--cds-border-strong);
+}
+
+.div-y {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 52px;
+  pointer-events: none;
+}
+
+.div-y span {
+  position: absolute;
+  right: var(--sp-03);
+  transform: translateY(-50%);
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+  white-space: nowrap;
+}
+
+/* The zero tick sits above the baseline instead of straddling the month labels below it. */
+.div-y span.div-y-zero {
+  transform: translateY(-100%);
+}
+
+.div-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-02);
+}
+
+.div-month {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.div-month:hover,
+.div-month:focus-visible {
+  background: var(--cds-background-hover);
+}
+
+.div-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.div-fill {
+  width: 100%;
+}
+
+/* A 2px surface gap separates stacked segments — never a border drawn around them. */
+.div-fill + .div-fill {
+  margin-top: 2px;
+}
+
+.div-stack .div-fill:first-child {
+  border-radius: 4px 4px 0 0;
+}
+
+/* One direct label, on the peak month; the axis, the tooltip and the table carry the rest. */
+.div-peak {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--cds-text-primary);
+  white-space: nowrap;
+}
+
+.div-month:hover .div-peak,
+.div-month:focus-visible .div-peak {
+  visibility: hidden;
+}
+
+.div-x {
+  display: flex;
+  gap: var(--sp-02);
+  margin-top: var(--sp-03);
+}
+
+.div-x span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+.div-x span.dim {
+  opacity: 0.45;
+}
+
+.div-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  min-width: 168px;
+  padding: var(--sp-03) var(--sp-04);
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-strong);
+  box-shadow: var(--cds-shadow-menu);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--cds-dur-moderate) var(--cds-ease-productive);
+  text-align: left;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.div-month:hover .div-tip,
+.div-month:focus-visible .div-tip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.div-month:nth-child(-n + 2) .div-tip {
+  left: 0;
+  transform: none;
+}
+
+.div-month:nth-last-child(-n + 2) .div-tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.div-tip > b {
+  display: block;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+  margin-bottom: var(--sp-02);
+}
+
+.div-tip dl {
+  margin: 0;
+}
+
+.div-tip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+}
+
+.div-tip-row + .div-tip-row {
+  margin-top: 2px;
+}
+
+.div-tip-row dt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  white-space: nowrap;
+}
+
+.div-tip-row dt i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+
+.div-tip-row dd {
+  margin: 0 0 0 auto;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.div-tip-sum {
+  margin-top: var(--sp-03);
+  padding-top: var(--sp-02);
+  border-top: 1px solid var(--cds-border-subtle);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-04);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* ---- share: a 100% bar plus the ranked list (a two-slice donut is not a comparison) ---- */
+.div-share-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  margin-bottom: var(--sp-05);
+}
+
+.div-share-bar i:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.div-share-bar i:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.div-share {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.div-share li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-03);
+  min-height: 42px;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.div-share li > i {
+  width: 8px;
+  height: 8px;
+}
+
+.div-share-name {
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.div-share-name b {
+  color: var(--cds-text-primary);
+  margin-right: var(--sp-02);
+}
+
+.div-share-pct {
+  font-size: 0.8125rem;
+  color: var(--cds-text-helper);
+  width: 52px;
+  text-align: right;
+}
+
+.div-share-amt {
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---- the payments themselves ---- */
+.div-ledger {
+  margin-top: var(--sp-08);
+}
+
+.div-tbl-wrap {
+  overflow-x: auto;
+}
+
+.div-tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.div-tbl thead th {
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  text-align: right;
+  padding: 0 var(--sp-04) var(--sp-03) 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--cds-text-primary);
+}
+
+.div-tbl thead th:first-child,
+.div-tbl thead th:nth-child(2) {
+  text-align: left;
+  padding-left: 0;
+}
+
+.div-tbl thead th:first-child {
+  width: 112px;
+}
+
+.div-tbl thead th:nth-child(n + 3) {
+  width: 13%;
+}
+
+.div-tbl tbody td {
+  height: 48px;
+  padding: 0 var(--sp-04) 0 0;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.div-tbl tbody td:first-child,
+.div-tbl tbody td:nth-child(2) {
+  text-align: left;
+  padding-left: 0;
+}
+
+.div-tbl tbody tr:hover {
+  background: var(--cds-background-hover);
+}
+
+.div-tk {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-03);
+}
+
+.div-tk i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+
+.div-tk b {
+  font-weight: 700;
+}
+
+.div-tk span {
+  color: var(--cds-text-secondary);
+}
+
+.div-tbl td.div-muted {
+  color: var(--cds-text-helper);
+}
+
+.div-tbl tfoot td {
+  height: 48px;
+  padding: 0 var(--sp-04) 0 0;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+  border-top: 3px double var(--cds-text-primary);
+}
+
+.div-tbl tfoot td:first-child {
+  text-align: left;
+  padding-left: 0;
+  font-weight: 500;
+  color: var(--cds-text-secondary);
+}
+
+.div-notes {
+  margin-top: var(--sp-06);
+}
+
+@media (max-width: 900px) {
+  .div-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .div-totals {
+    grid-template-columns: 1fr;
+    gap: var(--sp-04);
+  }
+
+  .div-tot + .div-tot {
+    padding-left: 0;
+    padding-top: var(--sp-04);
+    border-left: 0;
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  /* The − and = keep the three figures readable as one sentence once they stack. */
+  .div-op {
+    position: static;
+    display: inline;
+    font-size: var(--type-body-01);
+    margin-right: var(--sp-02);
+  }
+
+  .div-tot h3 {
+    display: inline;
+  }
+
+  .div-fig,
+  .div-fig-lead {
+    font-size: var(--type-heading-03);
+  }
+
+  .div-close {
+    display: block;
+  }
+
+  .div-close-terms {
+    display: block;
+    margin-left: 0;
+  }
+
+  .div-years {
+    margin-left: 0;
+  }
+
+  .div-chart {
+    padding-left: 44px;
+  }
+
+  .div-y {
+    width: 40px;
+  }
+
+  .div-plot {
+    margin-top: var(--sp-05);
+  }
+
+  /* A touch laptop reports hover:hover, so the width decides: the tooltip would overflow here
+     and the ledger below already carries every figure. */
+  .div-tip {
+    display: none;
+  }
+
+  /* The ledger becomes two-line entries, like the holdings ledger. */
+  .div-tbl thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .div-tbl,
+  .div-tbl tbody,
+  .div-tbl tfoot {
+    display: block;
+    width: 100%;
+  }
+
+  .div-tbl tbody tr {
+    display: grid;
+    align-items: baseline;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'prod prod prod prod prod gross' 'date qty eps . fee net';
+    column-gap: var(--sp-02);
+    row-gap: var(--sp-02);
+    padding: var(--sp-04) 0;
+    border-bottom: 1px solid var(--cds-border-subtle);
+  }
+
+  /* 代扣 / 實收 lose the currency prefix here; the section heading names the market. */
+  .div-tbl tbody td[data-plain] .div-cell-full {
+    display: none;
+  }
+
+  .div-tbl tbody td[data-plain]::after {
+    content: attr(data-plain);
+  }
+
+  .div-tbl tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .div-tbl tbody td:nth-child(1) { grid-area: date; }
+  .div-tbl tbody td:nth-child(2) { grid-area: prod; }
+  .div-tbl tbody td:nth-child(3) { grid-area: qty; }
+  .div-tbl tbody td:nth-child(4) { grid-area: eps; }
+
+  .div-tbl tbody td:nth-child(5) {
+    grid-area: gross;
+    text-align: right;
+    font-size: var(--type-body-02);
+    font-weight: 700;
+  }
+
+  .div-tbl tbody td:nth-child(6) {
+    grid-area: fee;
+    text-align: right;
+  }
+
+  .div-tbl tbody td:nth-child(7) {
+    grid-area: net;
+    text-align: right;
+    color: var(--cds-text-secondary);
+    font-weight: 600;
+  }
+
+  .div-tbl tbody td:nth-child(1),
+  .div-tbl tbody td:nth-child(3),
+  .div-tbl tbody td:nth-child(4),
+  .div-tbl tbody td:nth-child(6),
+  .div-tbl tbody td:nth-child(7) {
+    font-size: 0.8125rem;
+    color: var(--cds-text-helper);
+  }
+
+  .div-tbl tbody td:nth-child(3)::before { content: '· '; }
+  .div-tbl tbody td:nth-child(3)::after { content: ' 股'; }
+  .div-tbl tbody td:nth-child(4)::before { content: '× '; }
+  .div-tbl tbody td:nth-child(6)::before { content: '代扣 '; }
+  .div-tbl tbody td:nth-child(7)::before { content: '· 實收 '; }
+
+  .div-tbl tfoot tr {
+    display: block;
+    padding-top: var(--sp-04);
+    border-top: 3px double var(--cds-text-primary);
+  }
+
+  .div-tbl tfoot td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-04);
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .div-tbl tfoot td:nth-child(2),
+  .div-tbl tfoot td:nth-child(3),
+  .div-tbl tfoot td:nth-child(4) {
+    display: none;
+  }
+
+  .div-tbl tfoot td:first-child {
+    display: block;
+    margin-bottom: var(--sp-02);
+  }
+
+  .div-tbl tfoot td[data-l]::before {
+    content: attr(data-l);
+    font-weight: 500;
+    color: var(--cds-text-secondary);
   }
 }

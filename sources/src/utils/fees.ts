@@ -142,19 +142,31 @@ export function calculateFee(input: FeeInput): number {
 
 export interface FeeCorrection {
   tx: Transaction
-  /** Handling fee re-estimated based on current rate setting (sale includes certificate payment tax)*/
+  /** Handling fee re-estimated based on the rate in force on the transaction's own date (a sale includes the securities tax). */
   newFee: number
+  /**
+   * The rate used for this row (Task 182). The wizard both shows it and writes it back to
+   * `transactions.fee_rate`, so a re-priced row states which agreement it was priced under.
+   */
+  feeRate: number
 }
 
 /**
- * Find Taiwan stock transactions whose handling fees are inconsistent with the "current fee setting" for batch correction.
+ * Find Taiwan stock transactions whose handling fees are inconsistent with the fee setting for
+ * batch correction.
  * - Taiwan stocks only: The fee structure of each brokerage in the U.S. stock market is quite different (no commission/fixed fee/SEC fee) and is not included in the batch recalculation.
  * - The tax on selling securities is automatically determined based on the code (0.1% for ETFs, 0% for bond ETFs, and 0.3% for the rest);
  *   Recalculation of transactions with special tax rates such as hedging will not be allowed. Users can uncheck or edit individually in the preview.
+ *
+ * Task 182: `rateFor` is asked per transaction, with that transaction's own date — never one rate
+ * for the whole ledger. A broker that moves from 6.5 折 to 3.8 折 on 2026-10-01 charged the old
+ * rate on everything before it, so those rows re-price to exactly what they already hold and never
+ * reach this list. Passing a constant function restores the pre-Task-182 behaviour of rewriting
+ * the entire history at one rate, which is what made this wizard dangerous.
  */
 export function proposeFeeCorrections(
   transactions: Transaction[],
-  opts: { feeRate: number; minFeeWhole: number; minFeeOdd: number },
+  opts: { rateFor: (txDate: string) => number; minFeeWhole: number; minFeeOdd: number },
 ): FeeCorrection[] {
   const out: FeeCorrection[] = []
   for (const tx of transactions) {
@@ -162,6 +174,8 @@ export function proposeFeeCorrections(
     // Task 166 (EN-01): a 現金股利 row carries a price and a qty too, but its fee_tax is a
     // withholding, not a brokerage commission — recalculating it would overwrite real data.
     if (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL') continue
+    // The rate this workspace charged on this transaction's own date (Task 182).
+    const feeRate = opts.rateFor(tx.tx_date)
     // Day-trade detection (Task 137, revised 2026-09-01): same-date buy/sell matching was
     // measured against two real broker exports and gives 12 false positives out of 14
     // same-day round trips (only 2 are actual day trades), so it is not used. Instead a
@@ -175,7 +189,7 @@ export function proposeFeeCorrections(
       const stdTax = floorSafe(gross * rate)
       const halfTax = floorSafe((gross * rate) / 2)
       const minFee = tx.qty >= 1000 ? opts.minFeeWhole : opts.minFeeOdd
-      const expFee = Math.max(minFee, floorSafe(gross * opts.feeRate))
+      const expFee = Math.max(minFee, floorSafe(gross * feeRate))
       // EN-06: `tx.fee_tax` is user-entered/imported and not guaranteed to be a clean integer
       // (e.g. 361.9999999999999 from prior float arithmetic); round both sides before comparing
       // so that near-miss floats don't defeat the day-trade exclusion.
@@ -186,12 +200,12 @@ export function proposeFeeCorrections(
       txType: tx.tx_type,
       price: tx.price,
       qty: tx.qty,
-      feeRate: opts.feeRate,
+      feeRate,
       taxRate: sellTaxRate(tx.ticker),
       minFee: tx.qty >= 1000 ? opts.minFeeWhole : opts.minFeeOdd,
       nature: tx.tx_nature,
     })
-    if (newFee !== tx.fee_tax) out.push({ tx, newFee })
+    if (newFee !== tx.fee_tax) out.push({ tx, newFee, feeRate })
   }
   return out
 }
@@ -202,8 +216,8 @@ export function proposeFeeCorrections(
  * Then use calculateFee to actually calculate the two-way convergence - the floor to yuan and the minimum handling fee will cause a closed boundary error.
  * When there is a shortage, make up for it; when there is a surplus, go down to find the lowest price, and ensure that the "lowest price at which you can sell without losing money" is sent back.
  *
- * BUG-079: the fee model for TWD holdings matches `estimateUnrealized` exactly — same per-lot
- * `feeRate` (e.g. a historical discount recorded on the lot), workspace `feeRate` fallback, same
+ * BUG-079: the fee model for TWD holdings matches `estimateUnrealized` exactly — same
+ * `feeRate` handling (Task 182: callers pass today's workspace rate with `overrideFeeRate`), same
  * `sellTaxRate`, same single minFee clamp, same `overrideFeeRate` override — computed inline
  * (`netAt` below) rather than through `estimateUnrealized` itself, because that function's
  * outer `Math.round` is a display rounding: it can round an actually-negative net (e.g. -0.5)

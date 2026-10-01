@@ -23,7 +23,7 @@ const MODULES = import.meta.glob('./*.ts', {
 
 /** Files whose every catch must record. Counts are the sites found on 2026-09-06. */
 const REQUIRED: Record<string, number> = {
-  'feeSettings.ts': 2,
+  'feeSettings.ts': 4,
   'priceProxy.ts': 4,
   'reportsBucket.ts': 1,
   'twMarketData.ts': 3,

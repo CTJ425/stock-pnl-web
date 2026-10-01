@@ -28,11 +28,29 @@ export type FeeRebate = 'instant' | 'monthly'
  */
 export type FeeRounding = 'lot' | 'position'
 
+/**
+ * One segment of a workspace's fee-rate history (Task 182): `rate` applies to a trade made on
+ * `from` ('YYYY-MM-DD') or later, until the next segment starts. A broker can renegotiate the
+ * discount from a given date, and a trade made before it was charged the old rate for good.
+ * See `utils/feeRateHistory.ts` for the lookup and the normalisation rules.
+ */
+export interface FeeRateSegment {
+  from: string
+  rate: number
+}
+
 export interface Workspace {
   id: string
   name: string
   created_at: string
+  /**
+   * The rate that applied **before** the first `fee_rate_history` segment — and, when there is no
+   * history, the workspace's only rate. It is never rewritten when a new discount starts, so a
+   * client or an Edge Function that has not seen `fee_rate_history` still reads a real rate.
+   */
   fee_rate?: number | null
+  /** Ascending by `from`; see `FeeRateSegment`. Absent/null means the rate never changed. */
+  fee_rate_history?: FeeRateSegment[] | null
   fee_rebate?: FeeRebate | null
   fee_rounding?: FeeRounding | null
 }
