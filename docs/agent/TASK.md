@@ -17,7 +17,7 @@
 ## 📋 Active Tasks
 
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
-- **Status**: ✅ DONE — released as **0.10.13** (`4a1a083`), on `main` and `dev` (identical), CI green
+- **Status**: ✅ DONE — released as **0.10.13** (`dd5a727`), on `main` and `dev` (identical), CI green
   on both, Release published by CI with the final body. Gates: vitest 2,762 pass / 7 skipped, build /
   `typecheck:edge` / lint exit 0. DDL and `stock-price` applied to **DEV and PROD**,
   `verify_setup()` 10/10 on both. Verified in a real browser (local mode, 13/13) and live against both
@@ -34,7 +34,7 @@
   6. B2 CSP `connect-src` has `https:` ⏳ — shrink it, then check a deployed preview with the console open
      (the build and tests cannot catch a CSP mistake)
   7. B3 ✅ **settled 2026-10-01 — measured, not assumed.** The leaked `CRON_SECRET` was exposed for
-     **14.5 hours** (`81cf71a` 2026-08-11 20:46 → `c3b7c09` 2026-08-12 11:04) and belonged to the
+     **14.5 hours** (`04a2833` 2026-08-11 20:46 → `0b2bea9` 2026-08-12 11:04) and belonged to the
      retired self-hosted deployment at `korq9tvdz0jd7yblr72p.ivan.lab` (10.8.22.99, RFC1918 — not
      reachable from the internet). Its sha256 is `951e1bbd…`; the live secrets are `de418211…` (DEV)
      and `21d0257c…` (PROD), both set 2026-09-01 when the cloud projects were recreated, so **the
@@ -42,11 +42,19 @@
      the three `scratchpad/bootstrap-dev*` files, `trust-ivanlab-ca-db.sh`, `certs/rootCA.crt` (a CA
      certificate with no private key) and `scripts/verify-watchlist-e2e.cjs`. `scratchpad/` keeps 13
      design-mockup and one-off-SQL files; nothing in them is a credential.
-     - ⏳ **Left for the user, and the only part an agent cannot do**: decide whether the retired
-       `*.ivan.lab` host still accepts that secret. It resolves on the LAN; testing a leaked
-       credential against a live host was refused here as credential probing. If the host is gone,
-       nothing is left to do. **The value stays in git history forever** — deleting the files does
-       not remove it, and rewriting a public repo's history is a separate decision.
+     - ✅ **The retired `*.ivan.lab` host is gone** (user confirmed 2026-10-01), so nothing can still
+       accept that secret.
+     - ✅ **History rewritten 2026-10-01 at the user's instruction.** `git filter-repo --replace-text`
+       turned the value into `***REMOVED-CRON-SECRET***`; 696 commits and 179 tags preserved, `main`
+       and `dev` force-pushed, all tags re-pointed (0.10.13 was created by CI and missing locally, so
+       it was mapped through `.git/filter-repo/commit-map` by hand). A fresh mirror clone from GitHub
+       contains **0** occurrences. Stale commit SHAs in the live docs were remapped in the same pass.
+       Pre-rewrite mirror backup: `/home/ivan/stock-pnl-web-backup-20261001-102622.git` — **it still
+       contains the secret**, delete it when you are satisfied.
+     - ⏳ **Left for the user**: GitHub still serves the pre-rewrite objects by direct SHA (verified:
+       `/commit/81cf71a` and the raw file there both answer 200). Only GitHub Support can purge them.
+       The request to send, and the checks to run afterwards, are in
+       `docs/agent/github-support-purge-request.md`.
   10. C2 verify when the bond-ETF securities-tax exemption ends and give `sellTaxRate` a date dimension ⏳
   12. **B1 is still open and it is the sharpest one** ⏳ — measured against deployed DEV and PROD:
      `Bearer <the sb_publishable_ key in the public bundle>` returns **200 with quote data**. 0.10.13
@@ -58,7 +66,7 @@
      Cloudflare's chunk hash never matches a local `npm run build`, so it is not a deploy check.
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
-- **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`c320006`), on `main` and `dev`
+- **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`19b4175`), on `main` and `dev`
   (identical), both Releases published by CI, CI green. vitest 2,697 pass / 7 skipped,
   `npm run build` and `typecheck:edge` exit 0. **Neither release was checked in a browser** — the
   user asked to ship fast; the change is covered by App-level tests that render the real form.
@@ -85,7 +93,7 @@
      already the discounted rate (saving the same rate from a date is not a change, so the segment
      was dropped). It re-normalises the history against the new base.
   4. 月退 is the default once a discount is picked, 現折 at the list price; a stored value equal to
-     the old default does not count as a choice, so a workspace is never pinned to 現折. Persisted
+     the new default does not count as a choice, so a workspace is never pinned to 現折. Persisted
      on save because the Edge holdings card reads `fee_rebate` from the row.
 - **Items**:
   5. ~~Commit to `dev`, run the gates, release~~ ✅ 0.10.11 (14:45) and 0.10.12 (15:38). No deploy

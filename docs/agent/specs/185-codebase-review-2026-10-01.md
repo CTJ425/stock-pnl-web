@@ -1,6 +1,6 @@
 # Task 185 — Codebase review 2026-10-01: defects, hardening and optimizations
 
-Reviewed at `10ba6b4` (0.10.12) on `dev`. Line numbers are as of that commit.
+Reviewed at `4d787a7` (0.10.12) on `dev`. Line numbers are as of that commit.
 
 ## Status (2026-10-01 16:40 Asia/Taipei)
 
@@ -40,11 +40,11 @@ Re-verified 2026-10-01 16:10 Asia/Taipei: B1 was rewritten (its premise was wron
 - **Failure**: BUY 1,000 @100, SELL 400 @110 (before the split), then 1 拆 2. The wizard rewrites the BUY to 2,000 @50 and leaves the SELL at 400. Measured with `computeLedger`: holding **1,600** shares (correct 1,200), realized **+24,000** (correct +4,000) — a phantom +20,000.
 - **Also**: a `STOCK_DIVIDEND` row before the cutoff keeps its pre-split share count for the same reason.
 - **Fix**: convert SELL and STOCK_DIVIDEND rows on or before the cutoff in the same batch; or, if that is out of scope, detect them for the selected ticker and block with a message. Add a `computeLedger`-level test (buy, partial sell, split) that compares against the hand-computed post-split ledger.
-- **Done**: first option. `fee_tax` and the recorded `fee_rate` of those rows are written back untouched; cash `DIVIDEND` rows stay as they are (the cash amount does not change with a split); the summary cards stay buy-only. The old `StockSplitModal` tests had encoded the buy-only behaviour (their fixture contains an NVDA sell and asserted 2 rows) and now assert 3; Task 145 §3 had already suggested converting both sides. The new ledger-level test checks that, after the wizard's output, realized profit and cost are unchanged and shares double.
+- **Done**: first option. `fee_tax` and the recorded `fee_rate` of those rows are written back untouched; cash `DIVIDEND` rows stay as they are (the cash amount does not change with a split); the summary cards stay buy-only. The new `StockSplitModal` tests had encoded the buy-only behaviour (their fixture contains an NVDA sell and asserted 2 rows) and now assert 3; Task 145 §3 had already suggested converting both sides. The new ledger-level test checks that, after the wizard's output, realized profit and cost are unchanged and shares double.
 
-### A2. Switching or deleting a workspace keeps the old workspace's transactions in state
+### A2. Switching or deleting a workspace keeps the new workspace's transactions in state
 - **Where**: `sources/src/context/WorkspaceContext.tsx:125-132` (load effect), `:170` (`deleteWorkspace`).
-- **Failure**: `currentId` changes at once; `transactions` (and so `ledger`) changes only when `listTransactions` resolves, and nothing sets a loading state on a switch. Until then — and until the next successful load if this one fails — the new workspace's name is shown over the previous workspace's holdings. A transaction added in that window is written to the right workspace, but `addTransactions` appends it to the old workspace's list in state, and the form's holdings hints come from the old ledger.
+- **Failure**: `currentId` changes at once; `transactions` (and so `ledger`) changes only when `listTransactions` resolves, and nothing sets a loading state on a switch. Until then — and until the next successful load if this one fails — the new workspace's name is shown over the previous workspace's holdings. A transaction added in that window is written to the right workspace, but `addTransactions` appends it to the new workspace's list in state, and the form's holdings hints come from the new ledger.
 - **Fix**: `setTransactions([])` at the top of the effect (or gate the views on a per-workspace loading flag).
 - **Done**: a per-workspace flag (`txWorkspaceId`, set together with the rows); `transactions`, `ledger` and `loading` are derived from it, so `AppShell`'s existing placeholder covers the gap. A failed load keeps the placeholder plus the error banner rather than an empty portfolio, which would look like data loss. Consequence: the header 新增交易 button appears once the rows have loaded, a tick after the shell.
 
@@ -94,10 +94,10 @@ Bearer not-a-jwt                   -> 401
 
 **Measured, then cleaned.**
 
-- **The leak**: `scratchpad/bootstrap-dev.sh` carried a `CRON_SECRET` as a parameter-expansion default from `81cf71a` (2026-08-11 20:46) to `c3b7c09` (2026-08-12 11:04) — a **14.5-hour** window in a public repo.
+- **The leak**: `scratchpad/bootstrap-dev.sh` carried a `CRON_SECRET` as a parameter-expansion default from `04a2833` (2026-08-11 20:46) to `0b2bea9` (2026-08-12 11:04) — a **14.5-hour** window in a public repo.
 - **Whose secret**: the retired self-hosted deployment `korq9tvdz0jd7yblr72p.ivan.lab`, which resolves to **10.8.22.99** (RFC1918, not internet-routable). Never the cloud projects.
 - **Is it still live anywhere?** No. sha256 of the leaked value is `951e1bbd…`; `supabase secrets list` reports `de418211…` on DEV and `21d0257c…` on PROD, both `updated_at` 2026-09-01 — the day the cloud projects were recreated. (Comparing the hash is the method `supabase-ops` prescribes; the value itself is never printed.)
-- **Cleanup, at the user's instruction** ("把所有關於 docker 或是 self host 相關的內容都刪掉"): deleted `scratchpad/bootstrap-dev.sh`, `bootstrap-dev-full.sql`, `bootstrap-dev-phase1.sql`, `trust-ivanlab-ca-db.sh`, `certs/rootCA.crt` and `sources/scripts/verify-watchlist-e2e.cjs` (it drove `docker exec` into a DB container). Four dead self-hosted/old-ref URLs in `comprehensive-audit.cjs` and `reconcile-market-daily.cjs` were repointed at the current cloud projects and their `rejectUnauthorized: false` (only ever needed for the lab CA) removed; two Playwright scripts stopped writing a `sb-korq9tvdz0jd7yblr72p-auth-token` key. The stale "a local docker stack runs on this host" claim was removed from `CLAUDE.md`, `supabase-ops` and `probe-ops` — **`docker` is not installed on this host at all**.
+- **Cleanup, at the user's instruction** ("把所有關於 docker 或是 self host 相關的內容都刪掉"): deleted `scratchpad/bootstrap-dev.sh`, `bootstrap-dev-full.sql`, `bootstrap-dev-phase1.sql`, `trust-ivanlab-ca-db.sh`, `certs/rootCA.crt` and `sources/scripts/verify-watchlist-e2e.cjs` (it drove `docker exec` into a DB container). Four dead self-hosted/new-ref URLs in `comprehensive-audit.cjs` and `reconcile-market-daily.cjs` were repointed at the current cloud projects and their `rejectUnauthorized: false` (only ever needed for the lab CA) removed; two Playwright scripts stopped writing a `sb-korq9tvdz0jd7yblr72p-auth-token` key. The stale "a local docker stack runs on this host" claim was removed from `CLAUDE.md`, `supabase-ops` and `probe-ops` — **`docker` is not installed on this host at all**.
 - **Still open, and only the user can close it**: whether the retired `*.ivan.lab` host still accepts that secret. It still resolves on the LAN; probing a live host with a leaked credential was refused here. **The value remains in git history** — deleting a file does not remove it, and rewriting a public repo's history is a separate decision.
 - The CA certificate that was tracked carried **no private key** (`CA:TRUE`, certificate only), so it was an internal-topology disclosure, not a key leak.
 

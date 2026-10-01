@@ -387,7 +387,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.9.52（2026-09-15）— 移除未使用的 PDF 產生器與兩個相依套件，並修補開發相依漏洞
 
-- 🔐 **`jspdf` 的 critical 漏洞來自死碼**：`npm audit` 報 `jspdf@3.0.4` 一個 critical（AcroForm 任意 JavaScript 執行、FreeText 物件注入、新視窗路徑的 HTML 注入、惡意 GIF 尺寸造成 DoS）與連帶的 `dompurify` moderate。追查後確認 **`generatePdfBlob()` 沒有任何正式程式呼叫**：PDF 下載按鈕早在 0.9.17（`11516cd`）隨個股分析頁改版移除，`StockDetailPage.test.tsx` 另有一條測試斷言「PDF 功能已完全拔除，畫面上沒有下載 PDF 按鈕」，但產生器本體、兩個動態 `import()` 與 `package.json` 的相依全都留了下來。因為是動態 `import()`，它甚至不在主 bundle 裡，但 `npm ci` 照裝，稽核照報。
+- 🔐 **`jspdf` 的 critical 漏洞來自死碼**：`npm audit` 報 `jspdf@3.0.4` 一個 critical（AcroForm 任意 JavaScript 執行、FreeText 物件注入、新視窗路徑的 HTML 注入、惡意 GIF 尺寸造成 DoS）與連帶的 `dompurify` moderate。追查後確認 **`generatePdfBlob()` 沒有任何正式程式呼叫**：PDF 下載按鈕早在 0.9.17（`1f166b5`）隨個股分析頁改版移除，`StockDetailPage.test.tsx` 另有一條測試斷言「PDF 功能已完全拔除，畫面上沒有下載 PDF 按鈕」，但產生器本體、兩個動態 `import()` 與 `package.json` 的相依全都留了下來。因為是動態 `import()`，它甚至不在主 bundle 裡，但 `npm ci` 照裝，稽核照報。
   - **選擇移除而非升級**：修補版 `jspdf@4.2.1` 是 major 升級。為一個沒有呼叫者的函式承擔破壞性變更並不划算。
   - 刪除 `generatePdfBlob()` 與 `pdfScaleFor()`（`sources/src/services/reportPdf.ts` 由 85 行降為 19 行）。**保留 `downloadBlob()`** —— `AppShell.tsx` 與 `Admin/BackupsSection.tsx` 仍用它下載備份檔。
   - 刪除 `sources/src/services/reportPdf.test.ts`：其中 5 條測試全部針對 `pdfScaleFor`。
@@ -954,7 +954,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 > PROD Supabase 專案於本日遭刪除，資料永久遺失，DEV 與 PROD 均重建為全新環境。本版配合該情況把 GitHub Pages 完全移除，並把 README 的「部署方式」改寫為一份可逐步執行的初始化手冊，每一步同時提供 WebUI 與 CLI 兩種做法。另修正註冊確認信重導至 `localhost:3000` 的缺陷。
 
-- 🗑️ **GitHub Pages 完全移除** — 線上站台以 GitHub API 停用（`DELETE /repos/CTJ425/stock-pnl-web/pages`，現回 404）；`.github/workflows/deploy.yml` 已刪除（commit `3634dca`）。`.github/workflows/release.yml` 保留，它是 GitHub Releases 同步，與 Pages 無關。
+- 🗑️ **GitHub Pages 完全移除** — 線上站台以 GitHub API 停用（`DELETE /repos/CTJ425/stock-pnl-web/pages`，現回 404）；`.github/workflows/deploy.yml` 已刪除（commit `8ccde2b`）。`.github/workflows/release.yml` 保留，它是 GitHub Releases 同步，與 Pages 無關。
 - 🧹 **全 repo 引用清除（含歷史歸檔）** — 依使用者要求連同 `PROGRESS_ARCHIVE.md` / `TASK_ARCHIVE.md` / `CHANGELOG.md` 的歷史記述一併處理。供應商名稱一律改為中性用語（前端部署／靜態託管／front-end deployment／static hosting）。未虛構替代託管商，PROD 部署目標目前為未設定狀態。`sources/src/components/AppShell.tsx` 未更動，該處的 "Pages" 指應用程式分頁而非 GitHub Pages。
 - 📘 **README 改寫為初始化手冊** — 刪除「GitHub Actions 自動部署」與「環境變數與 Secrets」兩節；「部署方式」改為「初始化與部署」，含步驟 0–10：clone → 建立 Supabase 專案 → 產生 `CRON_SECRET` → 套用 schema（18 處佔位符替換）→ 設定 Edge 密鑰 → 部署 3 支 Edge Functions → 覆驗排程 → Auth 設定 → 升級管理員 → 前端建置 → 驗收清單 → 常見初始化錯誤。每一步皆列 WebUI 與 CLI 兩種做法。
 - 🔧 **`sources/supabase/README.md` 更正** — 該文件停留在 2 支函數與過期檔案清單，走 WebUI 逐檔貼會導致函數 import 失敗。更正為 3 支（補上 `backup-transactions`）、`stock-price` 2→4 檔、`stock-report` 10→17 檔，並移除已刪除的 `twNews.ts`。
@@ -975,7 +975,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - ⚠️ **已知並接受的 RISK-003** — 籌碼補齊寫出的 6 個非最新日報表檔，其 `incomplete` 旗標為 true，會嵌入「歷史資料回補中」註記且永不清除（夜間排程只重寫當日檔）。目前無消費端會讀取指定過去日期的報表（`reportProxy.ts` 只讀 `manifest.ymd`），故無使用者可見影響。語意上該註記亦屬正確——7 天前那份報表的歷史視窗確實只有 1 天資料。
 - 🧪 **測試** — 新增 10 個測試（實作前確認紅燈 exit 1）。全套 **85 檔 / 1345 測試通過**，exit 0；`npm run lint`、`npm run typecheck:edge`、`npx tsc --noEmit` 均 exit 0。Reviewer PASS。
 - 🔬 **DEV 實測（2026-08-31）** — 以真實使用者 JWT 對自架 DEV 驗證：首次補齊回 `{daysWritten: 7, daysFetchedUpstream: 1}`、1.17 秒，寫出 `20260820`–`20260828` 共 7 個報表檔；第二次同樣呼叫回 `skipped: "already-present"`、0 次抓取、17 毫秒。對外抓取 1 次未觸及上限 2。`manifest.json` 的 `updated_at` 全程未變。產出檔案與排程產生的同日檔案結構一致（schema 3、外資買賣超、融資券、借券齊全）。測試用資料已還原。
-- 🔎 **權限閘門的既有行為** — `warm` 沿用 `allowedTwTickers()`（持股 ∪ 觀察清單）。`heldTwTickers()` 只認 `net > 0`，因此已清倉的代號會回 403，需加入觀察清單才可補齊。此為 0.8.0（`cbbdba0`）既有行為，非本版變更。買進路徑順序正確：`WorkspaceContext.tsx` 先 `await addTransactions()` 才 `void prefetchStockData()`，閘門查詢時新部位已存在。
+- 🔎 **權限閘門的既有行為** — `warm` 沿用 `allowedTwTickers()`（持股 ∪ 觀察清單）。`heldTwTickers()` 只認 `net > 0`，因此已清倉的代號會回 403，需加入觀察清單才可補齊。此為 0.8.0（`c921fae`）既有行為，非本版變更。買進路徑順序正確：`WorkspaceContext.tsx` 先 `await addTransactions()` 才 `void prefetchStockData()`，閘門查詢時新部位已存在。
 - 📋 **覆蓋缺口** — 本 repo 無 `stock-report/index.ts` action dispatch 的測試骨架，Edge 端 `phase: 'chips'` handler 與 `maxUpstreamDays` 上限僅由 `typecheck:edge` 覆蓋，需手動 DEV 驗證。
 - 🚀 **需要 Edge 部署** — 改動含 `sources/supabase/functions/stock-report/index.ts`；`main` 的 push 只部署前端，Edge 必須另外部署，且 `stock-report` 一律帶 `--no-verify-jwt`（該函式以 `CRON_SECRET` 供 pg_cron 呼叫，不走 JWT）。
 
@@ -1135,7 +1135,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 > 推翻 `watchlist-ux-overhaul` spec 的「選單只列持股」決定。0.9.0 起觀察中的股票只能從「觀察股票」籤標進入，0.9.9 移除該籤標後改由儀表板 WatchSection 導航，但「切換個股」選單始終看不到觀察標的。本版把觀察分組加回選單。
 
-- 🔁 **推翻既有設計決定**（`docs/agent/specs/watchlist-ux-overhaul.md`）— 該 spec 明文記載「Stock picker: holdings only，觀察分組自下拉移除」，並於 `f106f43` 實作。本版依使用者要求反轉，spec 已附加 Revision 段落註明不得回退，避免後續依舊 spec 再次移除。
+- 🔁 **推翻既有設計決定**（`docs/agent/specs/watchlist-ux-overhaul.md`）— 該 spec 明文記載「Stock picker: holdings only，觀察分組自下拉移除」，並於 `8d3b67b` 實作。本版依使用者要求反轉，spec 已附加 Revision 段落註明不得回退，避免後續依舊 spec 再次移除。
 - 🎯 **選單分組**（`sources/src/components/StockDetail/AnalysisPage.tsx`）— 「切換個股」下拉改為 `持股` 與 `觀察` 兩段，各自帶標題、之間一條分隔線；任一組為空則整組（含標題）不渲染。樣式沿用既有 `.hmenu-head` / `.hmenu-sep` 通用類別，**CSS 零新增**。
 - ♻️ **資料流本來就齊備，只補渲染** — `listWatchlist()` 載入與重載、`Entry` union 的 `kind: 'watch'`、觀察股單檔報價 `fetchPrices([{ market: 'TPE', ticker }])`、選取解析與 fallback 鏈皆已存在，唯一缺口是選單只映射 `holdingEntries`。本版新增 `watchEntries` 一份清單，同時供選單、`watchByTicker()` 與 fallback 使用，並移除重複的 `firstWatchEntry` 建構。
 - 🔒 **去重語意不變** — 同一檔同時在持股與觀察名單時只出現一次，且走持股路徑（帶股數、成本、`useStockPrices` 報價）；`heldTickers` / `availableWatch` 邏輯未動。選單維持台股 only（TWSE 盤後籌碼只涵蓋上市台股）。
@@ -1179,7 +1179,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🗜️ **`foreignTopFingerprint()` 改為回傳雜湊** — 原本把 buyTop／sellTop 每一格用 U+001F 接成一長串後直接回傳。該值同時寫入 `source_probe_tick.fingerprint`（每一輪探測一列）與 Storage 的 `market/foreign_top50.json`（當作該檔的冪等鍵），因此原文形式是雙倍成本，也與其他所有來源的 `<長度>:<djb2>` 短格式不一致。改為在 join 之後過 `pollPlan.ts` 的 `fingerprint()`。U+001F 分隔仍在 join 階段生效，AUDIT-04 的黏合碰撞不會復活。
 - 🧪 **測試改為行為驗證** — 舊測試直接斷言指紋字串「含有 U+001F」，雜湊化之後分隔符不再看得見。改成斷言 `['12','3']` 與 `['1','23']` 兩筆必須得到不同指紋（真正要守的性質），並新增一項斷言指紋為短雜湊格式。`npx vitest run supabase/functions/stock-report/` 366 項全通；`npm test` 75 檔 1136 項全通；`npx tsc --noEmit` 與 `npm run typecheck:edge` 乾淨。
 - ♻️ **一次性副作用（預期內）** — 格式改變會讓 `market/foreign_top50.json` 既有的舊格式指紋在部署後第一次比對時判為「已變動」，因而多上傳一次。之後自癒。`source_probe_tick` 只在當日視窗內比對，隔日重新開始，不受影響。
-- 🚀 **部署** — DEV Edge 與 **PROD Edge 皆已部署**。PROD 以 `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` 自 `main` @ `9db87d3` 推送，`ezbr_sha256` 由 `420050a1…` 變為 `f776a7a0…`（依 `supabase-ops` 規則以雜湊為證，不看版號），`verify_jwt` 維持 `false`。
+- 🚀 **部署** — DEV Edge 與 **PROD Edge 皆已部署**。PROD 以 `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` 自 `main` @ `c0b7bef` 推送，`ezbr_sha256` 由 `420050a1…` 變為 `f776a7a0…`（依 `supabase-ops` 規則以雜湊為證，不看版號），`verify_jwt` 維持 `false`。
 
 ### 0.9.6（2026-08-20）— 探針退休判準修正：融資指紋失效、判準改為尾端連續
 
@@ -1339,7 +1339,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.7.22（2026-08-18）— BUG-029：修復 TWT38U 探針自 0.7.19 來從未執行
 
-> 目前狀態：0.7.22 DEV Edge 已於 2026-08-18 21:28 Asia/Taipei 部署（commit 0f8612b），方式為 volume copy + `docker compose up -d --force-recreate functions`。驗證：`source-probe` cron 於 21:45 及 21:50 均回 HTTP 200 並寫入新碼的 `source_probe_tick` 列，無他源迴歸。
+> 目前狀態：0.7.22 DEV Edge 已於 2026-08-18 21:28 Asia/Taipei 部署（commit bbe25bb），方式為 volume copy + `docker compose up -d --force-recreate functions`。驗證：`source-probe` cron 於 21:45 及 21:50 均回 HTTP 200 並寫入新碼的 `source_probe_tick` 列，無他源迴歸。
 > Bug 足跡確認於部署前：`SELECT count(*) FROM source_probe_tick WHERE source='twt38u'` 全史 0 列；今日 17:00–18:00 窗僅 `bwibbu`（加 17:15/17:20 的 `mops_revenue`）。twt38u 分支因 `handleProbe()` 讀實時鐘無時間覆蓋，迄未端對端驗證；預期首次驗證 2026-08-19 17:00 Asia/Taipei。
 > 部署後 21:30／21:35 兩輪超逾時原因：診斷期間併行手動探測呼叫，非本更動；21:45／21:50 恢復 200；同類超時已於部署前 21:00 出現；與開放 RISK-001 相關。
 
@@ -1350,8 +1350,8 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🧪 **驗證**：`npx vitest run supabase/functions/stock-report/` 15 檔 / 352 項全通；`npm run typecheck:edge` 0 errors；`npx oxlint supabase/functions/stock-report/` 0 errors；稽核員二輪（第一輪發現缺口 2，修正後）**PASS**。
 - ⚠️ **接受的風險**：`probeRound.ts:95–98` 無逐源預算檢查。17:00 時三個視窗重疊（`t86` 至 17:00 含、`bwibbu` 與 `twt38u` 始於 17:00），17:15/17:20 四源並排。各抓取 10s 超時，最壞情況逼近 60s Edge Function 限制，已評估認可。
 - ✅ **PROD 已部署**：
-  - `main` 合併並推送於 commit `5480f05`（`dev` 與 `main` 同步於同一 commit）。
-  - PROD Edge `stock-report` 已部署：version 52 → **53**，`ezbr_sha256` 由 `6b3812f15827bc992c380f60849ae9e2af3b6b5fd182a215b2b7c261c8494436` 變為 `98bb077688b1011ef62fe040e9b67b6ceea04f99d50ae03a507ba4867bdce94d`，`verify_jwt` 維持 `false`。部署來源為乾淨工作區的 `main` @ `5480f05`。
+  - `main` 合併並推送於 commit `18cc847`（`dev` 與 `main` 同步於同一 commit）。
+  - PROD Edge `stock-report` 已部署：version 52 → **53**，`ezbr_sha256` 由 `6b3812f15827bc992c380f60849ae9e2af3b6b5fd182a215b2b7c261c8494436` 變為 `98bb077688b1011ef62fe040e9b67b6ceea04f99d50ae03a507ba4867bdce94d`，`verify_jwt` 維持 `false`。部署來源為乾淨工作區的 `main` @ `18cc847`。
   - 仍待觀察：PROD 首次 TWT38U 探針預期於 **2026-08-19 17:00 Asia/Taipei**，屆時 `source_probe_tick` 應出現 `source='twt38u'` 的列。
 
 ### 0.7.21（2026-08-18）— 盤後探針退休條件加上「內容已停止變動」，接線改為可測純函式
@@ -1459,7 +1459,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.7.14（2026-08-12）— App icon 改為手寫 SVG 元件＋修掉 scribe 中斷會吃掉紀錄的問題
 
-> 目前狀態：正式 release commit `3f0eaea`（`0.7.14`），`dev`／`main` 都在 `3f0eaea`——本次 fast-forward，
+> 目前狀態：正式 release commit `bd56ca3`（`0.7.14`），`dev`／`main` 都在 `bd56ca3`——本次 fast-forward，
 > 兩支天生同版。GitHub Release `0.7.14` 已建立（本政策下首個 Release）。
 > 正式站煙霧測試通過：首頁引用 `./favicon.svg`（200, 890B），`favicon.svg` 本身 200、1207B、含字面色 `#6366f1`。
 > 無 Supabase／Edge Function 變更。
@@ -1473,7 +1473,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.7.13（2026-08-12）— 借券翻日死在半路（BUG-026）＋到位判準抽樣未排序（BUG-027）
 
-> 目前狀態：正式 release commit `33c1bd7`（`0.7.13`），`dev`／`main` 已同步推送；GitHub
+> 目前狀態：正式 release commit `0d3b6cc`（`0.7.13`），`dev`／`main` 已同步推送；GitHub
 > 前端部署 Actions run `31562082598` 已成功，兩區 Edge 也已部署（PROD `stock-report` v46，
 > `verify_jwt=false`）。DEV 的 cron 移除是資料庫層操作，PROD cron 仍維持原本 7 支（見下）。
 
@@ -1486,7 +1486,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🐞 **BUG-027**：`readFundamentalSnapshot` 只抽樣 `batchTwTickers()` 的前 20 檔，而它來源的
   `heldTwTickers` 查 `transactions` **沒有 `ORDER BY`**——抽到哪 20 檔全憑 Postgres 當下的列序，卻用這個
   抽樣的 `max` 決定 `bwibbu`／`mops_revenue`／`mops_profit` 三個來源收工與否。PROD 持有 26 檔會被這個上限
-  咬到，DEV 只有 5 檔永遠咬不到——這正是 `ac3177e` 記下的懸案（`mops_profit` 同一份 v45 在 PROD 答
+  咬到，DEV 只有 5 檔永遠咬不到——這正是 `bc4cc81` 記下的懸案（`mops_profit` 同一份 v45 在 PROD 答
   `landed=false`、DEV 答 `true`）的成因：21:00 當時的實際列序沒有留存，屬於高度支持但非重播的結論，但無論
   哪種列序，改成讀取**全部持股**都能拿掉這個失敗模式。
 - 🔍 **診斷筆記補齊**：`summariseFollowUp` 對 `generate-chips` 原本無論發生什麼都壓縮成「產出 N 檔」，讓
