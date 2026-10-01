@@ -134,5 +134,8 @@ may still point at a dead one. Do not check this by eye — run `verify_setup()`
   `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%')`, **not** a job
   count: the count is identical on both projects, and it changed from 6 to 7 on 2026-09-06
   when `app-log-prune` was added.
-- A local docker stack (`stock-pnl-web-dev-db-1`) still runs on this host and answers every
-  check plausibly, but the app never talks to it — a DDL applied there has no effect on DEV.
+- There is no local stack: both environments are cloud projects and `docker` is not installed on
+  this host. The self-hosted `*.ivan.lab` deployment this project once used is gone; its bootstrap
+  scripts were deleted on 2026-10-01.
+- `db query` **does** take `--project-ref` in CLI v2.117 (`--linked --project-ref <ref>`), which
+  targets another project without moving the global link. Earlier versions did not.

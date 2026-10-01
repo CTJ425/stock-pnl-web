@@ -46,10 +46,9 @@ SELECT count(*) FROM source_probe_tick WHERE source = '<id>';
 ```
 
 Run them against DEV with `supabase db query --linked`, from `sources/`. DEV is the cloud project
-`zyebvayngwrqzoaicbwd`; the local docker container `stock-pnl-web-dev-db-1` is an unrelated stack
-that answers every probe query plausibly while telling you nothing about DEV. `--linked` resolves
-against the current working directory and has silently written to PROD before, so `cd sources/`
-first and put the identity predicate from `supabase-ops` in the same query:
+`zyebvayngwrqzoaicbwd`. `--linked` resolves against the current working directory and has silently
+written to PROD before, so `cd sources/` first and put the identity predicate from `supabase-ops`
+in the same query:
 `SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%') AS is_dev, …`.
 
 ## A source that never fires: check both halves of the dispatch path

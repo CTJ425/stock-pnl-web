@@ -14,7 +14,7 @@ Implemented in the working tree, **uncommitted and not deployed**; gates green (
 | A4 0-row update | ✅ fixed — every Supabase update asks for the ids back |
 | B1 `stock-price` | ✅ validation (`symbols.ts`), deployed DEV v25 + PROD · ⏳ **endpoint is still callable by anyone** (measured) |
 | B2 CSP | ⏳ open — needs a deployed-preview check |
-| B3 `scratchpad/` | ⏳ open — needs the secrets checked |
+| B3 `scratchpad/` | ✅ measured and cleaned — leaked secret is live nowhere; self-hosted artefacts deleted · ⏳ the retired lab host is the user's call |
 | C1, C4, C5, C6 | ✅ fixed |
 | C3 split-log FK | ✅ applied to DEV and PROD; cascade and orphan-reject proven on DEV |
 | C2 bond-ETF exemption | ⏳ open — needs the statute's end date |
@@ -90,10 +90,16 @@ Bearer not-a-jwt                   -> 401
 - **Fix**: shrink to the explicit origin list. The file's own header says a change must be checked on a deployed preview with the console open; the build and tests cannot catch it.
 - **Open**: not changed here, for that reason.
 
-### B3. `scratchpad/` is tracked in a public repo
-- 18 files, including an internal root CA certificate (`CA:TRUE`), a script naming internal hostnames, and DEV bootstrap SQL. A pattern scan for credentials found no hit.
-- Commit `c3b7c09` records that a `CRON_SECRET` was in `scratchpad/bootstrap-dev.sh` from `81cf71a` to `c3b7c09`. Per that commit's message it belonged to the **self-hosted docker DEV stack** (compose `.env`, `functions` container), not to the cloud projects. **Confirm** that the docker stack (CLAUDE.md says it still runs on this host) rotated it or is not reachable from outside, and that the value was not reused when the cloud DEV and PROD projects were recreated on 2026-08-31. This could not be checked without reading the secrets.
-- Decide whether the directory should be tracked at all.
+### B3. `scratchpad/` in a public repo — closed on 2026-10-01
+
+**Measured, then cleaned.**
+
+- **The leak**: `scratchpad/bootstrap-dev.sh` carried a `CRON_SECRET` as a parameter-expansion default from `81cf71a` (2026-08-11 20:46) to `c3b7c09` (2026-08-12 11:04) — a **14.5-hour** window in a public repo.
+- **Whose secret**: the retired self-hosted deployment `korq9tvdz0jd7yblr72p.ivan.lab`, which resolves to **10.8.22.99** (RFC1918, not internet-routable). Never the cloud projects.
+- **Is it still live anywhere?** No. sha256 of the leaked value is `951e1bbd…`; `supabase secrets list` reports `de418211…` on DEV and `21d0257c…` on PROD, both `updated_at` 2026-09-01 — the day the cloud projects were recreated. (Comparing the hash is the method `supabase-ops` prescribes; the value itself is never printed.)
+- **Cleanup, at the user's instruction** ("把所有關於 docker 或是 self host 相關的內容都刪掉"): deleted `scratchpad/bootstrap-dev.sh`, `bootstrap-dev-full.sql`, `bootstrap-dev-phase1.sql`, `trust-ivanlab-ca-db.sh`, `certs/rootCA.crt` and `sources/scripts/verify-watchlist-e2e.cjs` (it drove `docker exec` into a DB container). Four dead self-hosted/old-ref URLs in `comprehensive-audit.cjs` and `reconcile-market-daily.cjs` were repointed at the current cloud projects and their `rejectUnauthorized: false` (only ever needed for the lab CA) removed; two Playwright scripts stopped writing a `sb-korq9tvdz0jd7yblr72p-auth-token` key. The stale "a local docker stack runs on this host" claim was removed from `CLAUDE.md`, `supabase-ops` and `probe-ops` — **`docker` is not installed on this host at all**.
+- **Still open, and only the user can close it**: whether the retired `*.ivan.lab` host still accepts that secret. It still resolves on the LAN; probing a live host with a leaked credential was refused here. **The value remains in git history** — deleting a file does not remove it, and rewriting a public repo's history is a separate decision.
+- The CA certificate that was tracked carried **no private key** (`CA:TRUE`, certificate only), so it was an internal-topology disclosure, not a key leak.
 
 ---
 

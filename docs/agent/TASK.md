@@ -33,8 +33,20 @@
 - **Items still open**:
   6. B2 CSP `connect-src` has `https:` ⏳ — shrink it, then check a deployed preview with the console open
      (the build and tests cannot catch a CSP mistake)
-  7. B3 `scratchpad/` tracked in a public repo ⏳ — confirm the docker-DEV `CRON_SECRET` in git history was
-     rotated and never reused for the cloud projects; decide whether the directory should be tracked
+  7. B3 ✅ **settled 2026-10-01 — measured, not assumed.** The leaked `CRON_SECRET` was exposed for
+     **14.5 hours** (`81cf71a` 2026-08-11 20:46 → `c3b7c09` 2026-08-12 11:04) and belonged to the
+     retired self-hosted deployment at `korq9tvdz0jd7yblr72p.ivan.lab` (10.8.22.99, RFC1918 — not
+     reachable from the internet). Its sha256 is `951e1bbd…`; the live secrets are `de418211…` (DEV)
+     and `21d0257c…` (PROD), both set 2026-09-01 when the cloud projects were recreated, so **the
+     leaked value is in use nowhere**. The user then had every docker / self-hosted artefact deleted:
+     the three `scratchpad/bootstrap-dev*` files, `trust-ivanlab-ca-db.sh`, `certs/rootCA.crt` (a CA
+     certificate with no private key) and `scripts/verify-watchlist-e2e.cjs`. `scratchpad/` keeps 13
+     design-mockup and one-off-SQL files; nothing in them is a credential.
+     - ⏳ **Left for the user, and the only part an agent cannot do**: decide whether the retired
+       `*.ivan.lab` host still accepts that secret. It resolves on the LAN; testing a leaked
+       credential against a live host was refused here as credential probing. If the host is gone,
+       nothing is left to do. **The value stays in git history forever** — deleting the files does
+       not remove it, and rewriting a public repo's history is a separate decision.
   10. C2 verify when the bond-ETF securities-tax exemption ends and give `sellTaxRate` a date dimension ⏳
   12. **B1 is still open and it is the sharpest one** ⏳ — measured against deployed DEV and PROD:
      `Bearer <the sb_publishable_ key in the public bundle>` returns **200 with quote data**. 0.10.13

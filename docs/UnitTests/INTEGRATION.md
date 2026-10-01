@@ -86,7 +86,7 @@ DOM-only Playwright checks → promote here first.
 | | Vitest integration | DEV ops smoke |
 | ---- | ---- | ---- |
 | `npm test` | Yes | No |
-| Needs Docker Supabase | No | Yes |
+| Needs a real Supabase project | No | Yes (cloud DEV) |
 | Catches deleted Edge helpers | No | Yes (`generate-all` 500) |
 
 After `stock-report/index.ts` wiring changes: pure unit + **DEV generate-all** (`supabase-ops`).

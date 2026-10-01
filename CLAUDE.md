@@ -92,8 +92,8 @@ verifier, the DEV/PROD identity predicate, and the DDL rules: **`supabase-ops`**
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
-- **DEV is cloud, not local docker.** A local docker stack runs on this host and answers every
-  check plausibly, but the app never talks to it. DDL rules: **`supabase-ops`** skill.
+- **DEV is cloud.** Both environments are Supabase cloud projects; there is no local stack and
+  `docker` is not installed here. DDL rules: **`supabase-ops`** skill.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.
 
 ## This repo is public — where raw logs may go

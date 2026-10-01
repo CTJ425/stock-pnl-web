@@ -132,7 +132,7 @@ const mockMacro = {
         }),
       )
 
-      // Inject session for korq9tvdz0jd7yblr72p
+      // Inject a session so the app renders past the login gate.
       await page.addInitScript(() => {
         const dummyUser = { id: 'dummy-user-id', email: 'test@example.com' }
         const payload = {
@@ -141,8 +141,7 @@ const mockMacro = {
           expires_at: Math.floor(Date.now() / 1000) + 3600,
           user: dummyUser,
         }
-        window.localStorage.setItem('sb-korq9tvdz0jd7yblr72p-auth-token', JSON.stringify(payload))
-        window.localStorage.setItem('sb-test-auth-token', JSON.stringify(payload))
+                window.localStorage.setItem('sb-test-auth-token', JSON.stringify(payload))
       })
 
       await page.goto(BASE, { waitUntil: 'networkidle' })

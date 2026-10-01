@@ -5,12 +5,12 @@
  *   node sources/scripts/reconcile-market-daily.cjs --target=dev
  *   node sources/scripts/reconcile-market-daily.cjs --target=prod
  */
-const https = require('https')
 const fs = require('fs')
 const path = require('path')
 
-const PROD_URL = 'https://kxnxadaghidwumqsqneu.supabase.co/storage/v1/object/public/reports/market/daily.json'
-const DEV_URL = 'https://korq9tvdz0jd7yblr72p.ivan.lab/storage/v1/object/public/reports/market/daily.json'
+// Both projects were recreated on 2026-08-31; the refs before that answer 404 (see CLAUDE.md).
+const PROD_URL = 'https://hrilemueiqyaoiwnkeuu.supabase.co/storage/v1/object/public/reports/market/daily.json'
+const DEV_URL = 'https://zyebvayngwrqzoaicbwd.supabase.co/storage/v1/object/public/reports/market/daily.json'
 
 function num(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
@@ -102,8 +102,7 @@ function parseFmtqik(json) {
 }
 
 async function fetchJson(url) {
-  const agent = new https.Agent({ rejectUnauthorized: false })
-  const res = await fetch(url, { agent })
+  const res = await fetch(url)
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
   return await res.json()
 }

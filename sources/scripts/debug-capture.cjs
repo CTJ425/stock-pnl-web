@@ -96,8 +96,7 @@ const mockMacro = {
       expires_at: Math.floor(Date.now() / 1000) + 3600,
       user: dummyUser,
     }
-    window.localStorage.setItem('sb-korq9tvdz0jd7yblr72p-auth-token', JSON.stringify(payload))
-    window.localStorage.setItem('sb-test-auth-token', JSON.stringify(payload))
+        window.localStorage.setItem('sb-test-auth-token', JSON.stringify(payload))
   })
 
   await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })

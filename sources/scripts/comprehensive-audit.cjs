@@ -1,13 +1,12 @@
-const https = require('https')
 
-const PROD_BASE = 'https://kxnxadaghidwumqsqneu.supabase.co/storage/v1/object/public/reports'
-const DEV_BASE = 'https://korq9tvdz0jd7yblr72p.ivan.lab/storage/v1/object/public/reports'
+// Both projects were recreated on 2026-08-31; the refs before that answer 404 (see CLAUDE.md).
+const PROD_BASE = 'https://hrilemueiqyaoiwnkeuu.supabase.co/storage/v1/object/public/reports'
+const DEV_BASE = 'https://zyebvayngwrqzoaicbwd.supabase.co/storage/v1/object/public/reports'
 
 const PROD_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PROD_KEY || ''
 
 async function fetchJson(url) {
-  const agent = new https.Agent({ rejectUnauthorized: false })
-  const res = await fetch(url, { agent })
+  const res = await fetch(url)
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
   return await res.json()
 }
@@ -133,7 +132,7 @@ async function auditTickers() {
   console.log('\n========================================')
   console.log('5. AUDIT: daily/*.json & fundamental/*.json (Holdings & Reports)')
   console.log('========================================')
-  const prodFiles = await listFiles('https://kxnxadaghidwumqsqneu.supabase.co', PROD_KEY)
+  const prodFiles = await listFiles('https://hrilemueiqyaoiwnkeuu.supabase.co', PROD_KEY)
   const dailyFiles = prodFiles.filter(f => f.startsWith('daily/'))
   const fundFiles = prodFiles.filter(f => f.startsWith('fundamental/'))
 
