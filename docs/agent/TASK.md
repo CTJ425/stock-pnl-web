@@ -41,8 +41,9 @@
      validates *what* can be asked, not *who* asks. Closing it means `assertUser` plus a per-user quota
      like `stock-report`'s, which changes who can use the quote path — a product decision, so it was
      deliberately not taken here.
-  13. **Confirm the frontend went live** ⏳ — at 17:30 Cloudflare Pages was still serving the pre-0.10.13
-     bundle (`index-JvzydgNb.js`). Nothing needs redeploying; just check the footer reads 0.10.13.
+  13. ~~Confirm the frontend went live~~ ✅ — Cloudflare Pages serves `index-JvzydgNb.js`, which carries this
+     release's code; the login page renders with no console errors and no CSP violations. Note for next time:
+     Cloudflare's chunk hash never matches a local `npm run build`, so it is not a deploy check.
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
 - **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`c320006`), on `main` and `dev`
