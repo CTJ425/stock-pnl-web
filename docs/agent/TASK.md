@@ -46,30 +46,27 @@
     withheld at source (30%) under a rule this module does not model.
 
 ### Task 182: Fee rate as a fact with a validity period (玉山 3.8 折 from 2026-10-01)
-- **Status**: 🔄 IN PROGRESS — **shipped to PROD in 0.10.10 with its DDL still unapplied** (the user's
-  call, 2026-10-01). Until the column exists, changing a workspace's 手續費率 throws
-  「儲存費率生效日失敗」 — reads degrade safely, that one write does not
-  (`dataProvider.ts:550` has no ladder; `WorkspaceFeeSettings.tsx:113-120` takes that path whenever
-  the workspace already has a `fee_rate`). Fix: run the two statements already in
-  `sources/supabase/schema.sql` against DEV then PROD, then redeploy `stock-report`.
+- **Status**: 🔄 IN PROGRESS — infrastructure complete (2026-10-01). DDL on DEV **and** PROD,
+  `verify_setup()` 10/10 PASS on both, Edge `stock-report` redeployed (DEV v35 / PROD v23, ezbr
+  `056ef180e20bdba5…` on both). Verified in a browser against **cloud** DEV: saving 3.8 折 effective
+  2026-10-01 no longer errors and the history reads back. **Only item 4 is left, and it is the user's.**
 - **Agent**: Claude
-- **Timestamp**: 2026-09-30 18:40:00 Asia/Taipei
+- **Timestamp**: 2026-10-01 11:20:00 Asia/Taipei
 - **Why**: 玉山 moved from 6.5 折 to 3.8 折 on 2026-10-01. A single `workspaces.fee_rate` cannot say
   "before this date it was 6.5 折", so 批次重算 re-priced the whole history at the new rate — measured
   on a seeded store: it listed all three September rows, pre-checked, and applying moved 投入成本
   450,417 → 450,244, 保本價 904.39 → 903.69, 已實現 +22,720 → +23,075, and overwrote every row's
-  `fee_rate`. See `PROGRESS.md` 2026-09-30 18:40:00 Asia/Taipei.
+  `fee_rate`. See `PROGRESS_ARCHIVE.md` 2026-09-30 18:40:00 Asia/Taipei.
 - **Shape**: `workspaces.fee_rate_history` JSONB `[{from, rate}]`; `fee_rate` keeps its meaning as the
   rate **before** the first segment. `utils/feeRateHistory.ts` `rateOn(history, base, date, fallback)`
   is the one lookup; a recorded trade asks with its own `tx_date`, an unrealized / break-even estimate
   asks with today.
+- **Done**: items 1-3 — full detail in `PROGRESS.md` 2026-10-01 11:20:00 Asia/Taipei.
 - **Items**:
-  1. Apply the DDL to **DEV**, then verify with `verify_setup()` ⏳
-  2. Apply the DDL to **PROD** (separate, needs the user's OK; a `main` push never carries it) ⏳
-  3. Deploy Edge `stock-report` **after** the DDL — `loadHoldingsWorkspaces` selects `fee_rate_history`
-     and steps down one column set if it is missing, so the order is safe either way, but the card only
-     follows the history once both are in ⏳
-  4. Set the real 玉山 workspace to 3.8 折 from 2026-10-01 in the UI (one save; no recalculation needed) ⏳
+  4. Set the real 玉山 workspace to **3.8 折 from 2026-10-01** in the UI ⏳ — one save, but it moves
+     the user's own P&L and opens the recalculation wizard, so it is theirs to make and watch. The
+     wizard should come up **empty** for trades dated before 2026-10-01; if it lists them, stop and
+     check the effective date before applying.
 
 ### Task 178: Prove the shared ship/versioning skills on a real release
 - **Status**: 🔄 IN PROGRESS
