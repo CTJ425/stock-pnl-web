@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { basisLabel, chargedFeeRate, formatFeeRatePct, pnlBasis, rowRoi, rowUnrealized } from './pnlBasis'
+import { basisLabel, formatFeeRatePct, pnlBasis, rowRoi, rowUnrealized } from './pnlBasis'
 import type { HoldingRow } from './holdingRows'
 
 const row = (over: Partial<HoldingRow>): HoldingRow =>
@@ -14,19 +14,6 @@ describe('pnlBasis', () => {
     expect(pnlBasis(0.000399, null)).toBe('net')
     expect(pnlBasis(0.000399, undefined)).toBe('net')
     expect(pnlBasis(0.001425, 'monthly')).toBe('net')
-  })
-})
-
-// A recorded fee is what the settlement statement says, not what the discount works out to.
-describe('chargedFeeRate', () => {
-  it('a monthly-rebate discount is billed at the statutory rate', () => {
-    expect(chargedFeeRate(0.000399, 'monthly')).toBe(0.001425)
-  })
-  it('an instant discount, an unset rebate and no discount are billed as they stand', () => {
-    expect(chargedFeeRate(0.000399, 'instant')).toBe(0.000399)
-    expect(chargedFeeRate(0.000399, null)).toBe(0.000399)
-    expect(chargedFeeRate(0.001425, 'monthly')).toBe(0.001425)
-    expect(chargedFeeRate(0, 'instant')).toBe(0)
   })
 })
 

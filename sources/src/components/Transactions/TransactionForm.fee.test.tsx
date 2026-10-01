@@ -31,11 +31,10 @@ async function openNewTransactionForm(user: ReturnType<typeof userEvent.setup>) 
 }
 
 /**
- * 月退 (`chargedFeeRate`): the broker bills the statutory rate at trade time and refunds the
- * discount separately, so the fee this form fills in is the full one — the discounted rate would
- * record a fee no settlement statement ever shows.
+ * The rebate decides the dashboard's headline basis only (user's call, 2026-10-01). A recorded fee
+ * is what the trade ends up costing you, so the form fills the discount either way.
  */
-describe('TransactionForm 月退的工作區帶入全額費率', () => {
+describe('TransactionForm 折扣怎麼退不影響帶入的費率', () => {
   beforeEach(() => {
     cleanup()
     window.localStorage.clear()
@@ -61,46 +60,10 @@ describe('TransactionForm 月退的工作區帶入全額費率', () => {
     window.localStorage.setItem('stock-pnl-web/fee-rate/ws-fee', '0.0005415')
   }
 
-  it('月退：帶入牌告 0.1425%', async () => {
+  it.each(['monthly', 'instant'] as const)('%s：都帶入折扣後的費率', async (rebate) => {
     const user = userEvent.setup()
-    seed('monthly')
+    seed(rebate)
     const form = await openNewTransactionForm(user)
-    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.001425')
-  })
-
-  it('現折：帶入折扣後的費率', async () => {
-    const user = userEvent.setup()
-    seed('instant')
-    const form = await openNewTransactionForm(user)
-    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.0005415')
-  })
-
-  // Without this the field looks broken: it says 0.001425 and the discount hint calls it
-  // 「原價（不打折）」 on a workspace the user just set to 3.8 折.
-  it('月退：說明為什麼帶的是牌告而不是折扣後', async () => {
-    const user = userEvent.setup()
-    seed('monthly')
-    const form = await openNewTransactionForm(user)
-    expect(form.getByText(/月退：成交當下收全額/)).toBeTruthy()
-    expect(form.getByText(/3.8 折/)).toBeTruthy()
-  })
-
-  it('月退：自己改過費率之後就不再說明', async () => {
-    const user = userEvent.setup()
-    seed('monthly')
-    const form = await openNewTransactionForm(user)
-    const rate = form.getByLabelText('手續費率')
-    await user.clear(rate)
-    await user.type(rate, '0.0005415')
-    expect(form.queryByText(/月退：成交當下收全額/)).toBeNull()
-  })
-
-  // 月退 is a TW broker's arrangement; a US trade has no statutory rate to be refunded against.
-  it('月退：美股不套用牌告費率', async () => {
-    const user = userEvent.setup()
-    seed('monthly')
-    const form = await openNewTransactionForm(user)
-    await user.selectOptions(form.getByLabelText('交易市場'), 'US')
     expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.0005415')
   })
 })

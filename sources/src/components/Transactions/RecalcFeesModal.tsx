@@ -10,9 +10,9 @@ import { CheckCircle2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { Modal } from '../Common/Modal'
 import { useToast } from '../Common/Toast'
-import { DEFAULT_FEE_RATE, proposeFeeCorrections } from '../../utils/fees'
+import { proposeFeeCorrections } from '../../utils/fees'
 import { feeDiscountLabel } from '../../utils/feeRateHint'
-import { chargedFeeRate, formatFeeRatePct } from '../../utils/pnlBasis'
+import { formatFeeRatePct } from '../../utils/pnlBasis'
 import { getFeeRateHistory, getFeeRateOn, getMinFee } from '../../utils/settings'
 import { TX_TYPE_LABEL } from '../../types/models'
 import type { TxUpdate } from '../../services/dataProvider'
@@ -26,13 +26,11 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
   const minFeeOdd = getMinFee('odd', workspaceId)
   // Task 182: every row is priced at the rate its own date fell under, so a workspace whose broker
   // changed the discount does not re-price the trades made under the old agreement.
-  // 月退 (`chargedFeeRate`): what the broker billed that day is the statutory rate, not the
-  // discounted one — the discount comes back as a separate refund and never as a lower `fee_tax`.
-  const feeRebate = current?.fee_rebate ?? null
-  const rateFor = useCallback(
-    (txDate: string) => chargedFeeRate(getFeeRateOn(txDate, workspaceId), feeRebate),
-    [workspaceId, feeRebate],
-  )
+  // 現折 / 月退 deliberately does NOT enter here (user's call, 2026-10-01): a recorded fee is what
+  // the trade ends up costing you, and under 月退 the broker refunds the difference. Recording the
+  // list price instead would leave that refund outside the ledger, since nothing here records it.
+  // The rebate still decides the dashboard's headline basis — see `pnlBasis`.
+  const rateFor = useCallback((txDate: string) => getFeeRateOn(txDate, workspaceId), [workspaceId])
   const history = getFeeRateHistory(workspaceId)
 
   const proposals = useMemo(
@@ -85,8 +83,6 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
         依每筆交易當天的費率重算台股手續費（最低手續費整股 {minFeeWhole} 元 / 零股 {minFeeOdd} 元），
         賣出會一併算證交稅。美股和當沖請到「交易紀錄 → 編輯」個別調整。
         {history.length > 0 && '　費率改過的日期之前，交易維持原本的費率，不會出現在下面的清單裡。'}
-        {feeRebate === 'monthly' &&
-          `　你的券商是月退，成交當下收全額 ${formatFeeRatePct(DEFAULT_FEE_RATE)}，所以這裡用全額重算；折讓金另外退。`}
       </div>
 
       {error && <div className="notice notice-error">{error}</div>}

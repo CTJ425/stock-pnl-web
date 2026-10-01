@@ -98,9 +98,9 @@ describe('RecalcFeesModal (批次重算手續費)', () => {
 })
 
 
-// 月退: the broker collects the statutory rate at trade time and refunds the discount separately,
-// so a recalculation that wrote the discounted fee would contradict the settlement statement.
-describe('RecalcFeesModal 月退的工作區用全額重算', () => {
+// The rebate deliberately does not reach the recalculation (user's call, 2026-10-01): a recorded
+// fee is what the trade ends up costing, and nothing in this app records the monthly refund.
+describe('RecalcFeesModal 折扣怎麼退不影響重算的費率', () => {
   const updateTransactionsBatch = vi.fn()
 
   beforeEach(() => {
@@ -122,24 +122,10 @@ describe('RecalcFeesModal 月退的工作區用全額重算', () => {
     render(<RecalcFeesModal onClose={vi.fn()} />)
   }
 
-  it('月退：用牌告 0.1425% 重算，並說明折讓另退', async () => {
+  it.each(['monthly', 'instant', null] as const)('%s：都用折扣後的費率重算', async (rebate) => {
     const user = userEvent.setup()
     updateTransactionsBatch.mockResolvedValue(undefined)
-    mount('monthly')
-
-    expect(screen.getByText(/月退/)).toBeTruthy()
-    // 1,000 股 × 1,000 元 × 0.1425% = 1,425
-    expect(screen.getByText('1,425')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: /更新勾選的 1 筆手續費/ }))
-    expect(updateTransactionsBatch).toHaveBeenCalledWith([
-      { id: 'tx-a', price: 1000, qty: 1000, fee_tax: 1425, fee_rate: 0.001425 },
-    ])
-  })
-
-  it('現折：用折扣後的費率重算', async () => {
-    const user = userEvent.setup()
-    updateTransactionsBatch.mockResolvedValue(undefined)
-    mount('instant')
+    mount(rebate)
 
     // 1,000 股 × 1,000 元 × 0.0541% = 541.5 → 541
     await user.click(screen.getByRole('button', { name: /更新勾選的 1 筆手續費/ }))
