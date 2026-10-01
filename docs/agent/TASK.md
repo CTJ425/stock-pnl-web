@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-01 16:40:00 Asia/Taipei
+- Timestamp: 2026-10-01 17:30:00 Asia/Taipei
 
 ---
 
@@ -17,24 +17,32 @@
 ## 📋 Active Tasks
 
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
-- **Status**: 🔄 IN PROGRESS — A1–A4, B1, C1, C3, C4, C5, C6 are implemented in the working tree and
-  green (vitest 2,762 pass / 7 skipped, lint, build, `typecheck:edge`, engine sync). **Uncommitted
-  and not deployed.** Full list, evidence and fixes: `docs/agent/specs/185-codebase-review-2026-10-01.md`.
+- **Status**: ✅ DONE — released as **0.10.13** (`4a1a083`), on `main` and `dev` (identical), CI green
+  on both, Release published by CI with the final body. Gates: vitest 2,762 pass / 7 skipped, build /
+  `typecheck:edge` / lint exit 0. DDL and `stock-price` applied to **DEV and PROD**,
+  `verify_setup()` 10/10 on both. Verified in a real browser (local mode, 13/13) and live against both
+  Edge deployments. Details: `docs/agent/specs/185-codebase-review-2026-10-01.md`.
 - **Agent**: Claude
-- **Timestamp**: 2026-10-01 16:40:00 Asia/Taipei
+- **Timestamp**: 2026-10-01 17:30:00 Asia/Taipei
 - **Spec**: docs/agent/specs/185-codebase-review-2026-10-01.md
-- **Items**:
-  1. ~~A1 split wizard converts sells and stock dividends too~~ ✅
-  2. A3 all-or-nothing `apply_transaction_updates` — code ✅, **DDL not applied to DEV / PROD** ⏳ (`schema.sql` §16 via `supabase-ops`; the client works with both RPC versions)
-  3. ~~A2 stale transactions after a workspace switch~~ ✅
-  4. ~~A4 a Supabase update that matches 0 rows is a failure~~ ✅
-  5. B1 `stock-price` symbol validation — code ✅, **Edge not redeployed** ⏳; still open: no per-user rate limit
-  6. B2 CSP `connect-src` has `https:`, whose stated reason no longer exists ⏳ (shrink it, then check a deployed preview with the console open)
-  7. B3 `scratchpad/` tracked in a public repo; confirm the docker-DEV `CRON_SECRET` in git history was rotated and never reused for the cloud projects ⏳
-  8. ~~C1 hidden tabs stop polling · C4 unreadable local store is backed up · C5 CSV `費率` column and stray-quote fix · C6 `setCurrentId` out of the updater~~ ✅
-  9. C3 `tx_split_log` foreign key — SQL written, **DDL not applied** ⏳ (deletes orphan rows first)
-  10. C2 verify when the bond-ETF securities-tax exemption ends and give `sellTaxRate` a date dimension ⏳ (needs the statute)
-  11. **Commit to `dev`, apply the DDL (DEV then PROD), redeploy `stock-price`, release via `ship`** ⏳ — each needs the user's OK; nothing here has been committed.
+- **Done**: items 1–5, 8, 9 — A1 split wizard converts sells and stock dividends, A2 no stale rows on a
+  workspace switch, A3 all-or-nothing batch RPC (proven on DEV Postgres), A4 a 0-row update is a failure,
+  B1 symbol validation, C1 hidden tabs stop polling, C3 split-log FK (cascade proven on DEV), C4 corrupt
+  local store is backed up, C5 CSV 費率 column and the stray-quote fix, C6 `setCurrentId` out of the updater.
+  Full text in `TASK_ARCHIVE.md`.
+- **Items still open**:
+  6. B2 CSP `connect-src` has `https:` ⏳ — shrink it, then check a deployed preview with the console open
+     (the build and tests cannot catch a CSP mistake)
+  7. B3 `scratchpad/` tracked in a public repo ⏳ — confirm the docker-DEV `CRON_SECRET` in git history was
+     rotated and never reused for the cloud projects; decide whether the directory should be tracked
+  10. C2 verify when the bond-ETF securities-tax exemption ends and give `sellTaxRate` a date dimension ⏳
+  12. **B1 is still open and it is the sharpest one** ⏳ — measured against deployed DEV and PROD:
+     `Bearer <the sb_publishable_ key in the public bundle>` returns **200 with quote data**. 0.10.13
+     validates *what* can be asked, not *who* asks. Closing it means `assertUser` plus a per-user quota
+     like `stock-report`'s, which changes who can use the quote path — a product decision, so it was
+     deliberately not taken here.
+  13. **Confirm the frontend went live** ⏳ — at 17:30 Cloudflare Pages was still serving the pre-0.10.13
+     bundle (`index-JvzydgNb.js`). Nothing needs redeploying; just check the footer reads 0.10.13.
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
 - **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`c320006`), on `main` and `dev`

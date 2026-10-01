@@ -3057,3 +3057,28 @@ Both findings are correlational — routed sessions may simply be harder tasks. 
 - **What was done**: Items 1–7 complete. Frontend search box and non-holding path deployed. Edge `stock-report` and schema `warm_quota` table + `take_warm_quota` function deployed to PROD. All 14 public tables present and identical to DEV set as of 2026-08-26.
 - **Unfinished**: None — task complete and shipped.
 
+### Task 185 — completed sub-items (rolled from TASK.md 2026-10-01 17:30:00 Asia/Taipei)
+
+Released as 0.10.13 (`4a1a083`). The open items (6, 7, 10, 12, 13) stay in `TASK.md`.
+
+### Task 185: Fix the findings of the 2026-10-01 codebase review
+- **Status**: 🔄 IN PROGRESS — A1–A4, B1, C1, C3, C4, C5, C6 are implemented in the working tree and
+  green (vitest 2,762 pass / 7 skipped, lint, build, `typecheck:edge`, engine sync). **Uncommitted
+  and not deployed.** Full list, evidence and fixes: `docs/agent/specs/185-codebase-review-2026-10-01.md`.
+- **Agent**: Claude
+- **Timestamp**: 2026-10-01 16:40:00 Asia/Taipei
+- **Spec**: docs/agent/specs/185-codebase-review-2026-10-01.md
+- **Items**:
+  1. ~~A1 split wizard converts sells and stock dividends too~~ ✅
+  2. A3 all-or-nothing `apply_transaction_updates` — code ✅, **DDL not applied to DEV / PROD** ⏳ (`schema.sql` §16 via `supabase-ops`; the client works with both RPC versions)
+  3. ~~A2 stale transactions after a workspace switch~~ ✅
+  4. ~~A4 a Supabase update that matches 0 rows is a failure~~ ✅
+  5. B1 `stock-price` symbol validation — code ✅, **Edge not redeployed** ⏳; still open: no per-user rate limit
+  6. B2 CSP `connect-src` has `https:`, whose stated reason no longer exists ⏳ (shrink it, then check a deployed preview with the console open)
+  7. B3 `scratchpad/` tracked in a public repo; confirm the docker-DEV `CRON_SECRET` in git history was rotated and never reused for the cloud projects ⏳
+  8. ~~C1 hidden tabs stop polling · C4 unreadable local store is backed up · C5 CSV `費率` column and stray-quote fix · C6 `setCurrentId` out of the updater~~ ✅
+  9. C3 `tx_split_log` foreign key — SQL written, **DDL not applied** ⏳ (deletes orphan rows first)
+  10. C2 verify when the bond-ETF securities-tax exemption ends and give `sellTaxRate` a date dimension ⏳ (needs the statute)
+  11. **Commit to `dev`, apply the DDL (DEV then PROD), redeploy `stock-price`, release via `ship`** ⏳ — each needs the user's OK; nothing here has been committed.
+
+
