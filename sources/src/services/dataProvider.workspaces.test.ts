@@ -153,3 +153,55 @@ describe('SupabaseProvider.setWorkspaceFeeRounding', () => {
     )
   })
 })
+
+// A4: PostgREST reports an UPDATE that matched no row as success. Every workspace write asks for
+// the ids back and fails on an empty answer, so a workspace deleted elsewhere is not "saved".
+describe('SupabaseProvider workspace writes that match no row', () => {
+  const none = [{ data: [], error: null }]
+  const one = [{ data: [{ id: 'w1' }], error: null }]
+
+  it('D9 renameWorkspace', async () => {
+    setResults(one)
+    await new SupabaseProvider().renameWorkspace('w1', '新名稱')
+    setResults(none)
+    await expect(new SupabaseProvider().renameWorkspace('gone', '新名稱')).rejects.toThrow(
+      '重新命名工作區失敗：找不到這個工作區',
+    )
+  })
+
+  it('D10 setWorkspaceFeeRate', async () => {
+    setResults(one)
+    await new SupabaseProvider().setWorkspaceFeeRate('w1', 0.0004275)
+    setResults(none)
+    await expect(new SupabaseProvider().setWorkspaceFeeRate('gone', 0.0004275)).rejects.toThrow(
+      '儲存手續費率失敗：找不到這個工作區',
+    )
+  })
+
+  it('D11 setWorkspaceFeeRateHistory', async () => {
+    setResults(one)
+    await new SupabaseProvider().setWorkspaceFeeRateHistory('w1', [{ from: '2026-10-01', rate: 0.0005415 }])
+    setResults(none)
+    await expect(
+      new SupabaseProvider().setWorkspaceFeeRateHistory('gone', [{ from: '2026-10-01', rate: 0.0005415 }]),
+    ).rejects.toThrow('儲存費率生效日失敗：找不到這個工作區')
+  })
+
+  it('D12 setWorkspaceFeeRebate', async () => {
+    setResults(one)
+    await new SupabaseProvider().setWorkspaceFeeRebate('w1', 'monthly')
+    setResults(none)
+    await expect(new SupabaseProvider().setWorkspaceFeeRebate('gone', 'monthly')).rejects.toThrow(
+      '儲存折扣退還方式失敗：找不到這個工作區',
+    )
+  })
+
+  it('D13 setWorkspaceFeeRounding', async () => {
+    setResults(one)
+    await new SupabaseProvider().setWorkspaceFeeRounding('w1', 'position')
+    setResults(none)
+    await expect(new SupabaseProvider().setWorkspaceFeeRounding('gone', 'position')).rejects.toThrow(
+      '儲存手續費計算方式失敗：找不到這個工作區',
+    )
+  })
+})

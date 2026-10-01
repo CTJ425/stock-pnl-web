@@ -79,6 +79,25 @@ describe('useStockPrices', () => {
     expect(fetchPrices).toHaveBeenCalledTimes(1)
   })
 
+  it('分頁在背景時，輪詢的計時器不發請求；回到前景才補抓 (Task 185 / C1)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    renderHook(() => useStockPrices([holding]))
+    await waitFor(() => expect(fetchPrices).toHaveBeenCalledTimes(1))
+
+    visibility.mockReturnValue('hidden')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180_000)
+    })
+    expect(fetchPrices).toHaveBeenCalledTimes(1)
+
+    visibility.mockReturnValue('visible')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    expect(fetchPrices.mock.calls.length).toBeGreaterThan(1)
+  })
+
   it('手動重新整理帶 force 略過快取', async () => {
     const { result } = renderHook(() => useStockPrices([holding]))
     await waitFor(() => expect(fetchPrices).toHaveBeenCalledTimes(1))

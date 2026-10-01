@@ -277,7 +277,7 @@ describe('交易性質與分項費用欄位（Task 137 §C）', () => {
   it('匯出的表頭同時帶分項欄位與舊的合併欄位', () => {
     const header = transactionsToCsv([]).replace('\uFEFF', '').split('\r\n')[0]
     expect(header).toBe(
-      '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅,借券費,手續費 / 稅金',
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅,借券費,手續費 / 稅金,費率',
     )
   })
 
@@ -311,8 +311,8 @@ describe('交易性質與分項費用欄位（Task 137 §C）', () => {
       },
     ]
     const cells = transactionsToCsv(txs).trim().split('\r\n')[1].split(',')
-    // 手續費 80、證交稅 282（減半稅率）、借券費 0（非融券）、合併欄位 362
-    expect(cells.slice(-4)).toEqual(['80', '282', '0', '362'])
+    // 手續費 80、證交稅 282（減半稅率）、借券費 0（非融券）、合併欄位 362，費率欄為空（未記錄）
+    expect(cells.slice(-5)).toEqual(['80', '282', '0', '362', ''])
   })
 
   // The same identity, on the row that motivated BUG-063: for a 融券 sell the three split
@@ -326,8 +326,74 @@ describe('交易性質與分項費用欄位（Task 137 §C）', () => {
       },
     ]
     const cells = transactionsToCsv(txs).trim().split('\r\n')[1].split(',')
-    expect(cells.slice(-4)).toEqual(['1425', '3000', '800', '5225'])
+    expect(cells.slice(-5)).toEqual(['1425', '3000', '800', '5225', ''])
     expect(1425 + 3000 + 800).toBe(5225)
+  })
+})
+
+/**
+ * Task 185 / C5. The export used to drop each row's recorded `fee_rate`, so an export/import round
+ * trip silently turned every row back into "rate unknown". And a `"` in the middle of an unquoted
+ * field opened a quoted field that swallowed the rest of the file.
+ */
+describe('費率欄與引號處理（Task 185 / C5）', () => {
+  const HEAD = '交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金'
+  const tx = (o: Partial<Transaction>): Transaction => ({
+    id: '1', workspace_id: 'w', tx_date: '2026-08-18', market: 'TPE', ticker: '2344',
+    name: '華邦電', tx_type: 'BUY', price: 100, qty: 1000, fee_tax: 57, created_at: '2026-01-01T00:00:00Z',
+    ...o,
+  })
+
+  it('匯出再匯入：每筆自己的費率保留，沒記錄的維持不存在', () => {
+    const csv = transactionsToCsv([
+      tx({ id: '1', fee_rate: 0.0005415 }),
+      tx({ id: '2', ticker: '2330', fee_rate: 0 }),
+      tx({ id: '3', ticker: '0050', fee_rate: null }),
+      tx({ id: '4', ticker: '2603' }),
+    ])
+    const { rows, errors } = parseTransactionsCsv(csv)
+    expect(errors).toEqual([])
+    expect(rows.map((r) => r.fee_rate)).toEqual([0.0005415, 0, undefined, undefined])
+    expect('fee_rate' in rows[2]).toBe(false)
+  })
+
+  it('沒有費率欄的檔案（券商匯出、舊版匯出）照舊匯入', () => {
+    const { rows, errors } = parseTransactionsCsv(`${HEAD}\n2026/08/18,TPE,2344,華邦電,買入,100,1000,57`)
+    expect(errors).toEqual([])
+    expect('fee_rate' in rows[0]).toBe(false)
+  })
+
+  it.each(['1', '1.5', '-0.1', '0.1425%', 'abc'])('費率「%s」是這一列的錯誤，其餘列照常匯入', (bad) => {
+    const csv = `${HEAD},費率\n2026/08/18,TPE,2344,華邦電,買入,100,1000,57,${bad}\n2026/08/19,TPE,2330,台積電,買入,100,1000,57,0.001425`
+    const { rows, errors } = parseTransactionsCsv(csv)
+    expect(errors).toHaveLength(1)
+    expect(errors[0].line).toBe(2)
+    expect(errors[0].message).toContain('費率無效')
+    expect(rows.map((r) => r.ticker)).toEqual(['2330'])
+  })
+
+  it('費率欄不會被舊的「手續費」欄位比對誤認成手續費', () => {
+    const csv = `${HEAD},費率\n2026/08/18,TPE,2344,華邦電,買入,100,1000,57,0.0005415`
+    const { rows } = parseTransactionsCsv(csv)
+    expect(rows[0]).toMatchObject({ fee_tax: 57, fee_rate: 0.0005415 })
+  })
+
+  it('欄位中間的雙引號是一般字元，不會吞掉後面的列', () => {
+    expect(parseCsv('a,5" pipe,c\nd,e,f')).toEqual([
+      ['a', '5" pipe', 'c'],
+      ['d', 'e', 'f'],
+    ])
+    expect(parseCsv('Smith "Jr",x\ny,z')).toEqual([
+      ['Smith "Jr"', 'x'],
+      ['y', 'z'],
+    ])
+  })
+
+  it('欄位開頭的引號照舊是引號欄位：逗號、換行與跳脫的引號都保留', () => {
+    expect(parseCsv('"a,b","line1\nline2","say ""hi""",plain')).toEqual([
+      ['a,b', 'line1\nline2', 'say "hi"', 'plain'],
+    ])
+    expect(parseCsv('x,"",y')).toEqual([['x', '', 'y']])
   })
 })
 

@@ -8,10 +8,13 @@
  * The same stock does not make repeated requests to external APIs.
  * Deployment method (need to install Supabase CLI and log in):
  *   supabase functions deploy stock-price
- *   Keep the default verify_jwt=true: the front end calls this with an anon JWT.
- *   Deploying with --no-verify-jwt turns the quote endpoint into a public one that
- *   anybody can call (Edge Function quota abuse). Only stock-report uses
+ *   Keep the default verify_jwt=true. The front end calls this with the signed-in user's session
+ *   JWT; the app's own key is a publishable key, which is not a JWT, so the platform rejects a
+ *   call that carries only that key. The check in the handler below only tests that a bearer
+ *   token is present, so that platform flag is the whole gate: deploying with --no-verify-jwt
+ *   would make the quote endpoint public (Edge Function quota abuse). Only stock-report uses
  *   --no-verify-jwt, because pg_cron calls it with x-cron-secret and no JWT.
+ *   Request shapes are validated in symbols.ts (Task 185 / B1); there is no per-user rate limit.
  *
  * interface:
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
@@ -63,11 +66,7 @@ import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyR
 import { extractDaily } from '../stock-report/twDaily.ts'
 import { buildTwList } from './twList.ts'
 import { TPEX_FALLBACK_GENERATED_AT, TPEX_FALLBACK_ROWS } from './tpexFallback.ts'
-
-interface SymbolItem {
-  market: 'TPE' | 'US' | 'IDX'
-  ticker: string
-}
+import { isValidSymbol, sanitizeSymbols, type SymbolItem } from './symbols.ts'
 
 /**
  * First price quote. `prevClose` is **yesterday's closing**, which is used by the front-end to determine whether the current price is red or green.
@@ -773,7 +772,7 @@ Deno.serve(async (req) => {
 
   try {
     if (body.action === 'prices' && Array.isArray(body.symbols)) {
-      return await handlePrices(body.symbols)
+      return await handlePrices(sanitizeSymbols(body.symbols))
     }
     if (body.action === 'search' && typeof body.query === 'string' && body.query.trim()) {
       return await handleSearch(body.query.trim())
@@ -787,11 +786,13 @@ Deno.serve(async (req) => {
       return await handleTwList()
     }
     if (body.action === 'intraday' && body.symbol && typeof body.symbol === 'object') {
+      if (!isValidSymbol(body.symbol)) return json({ error: 'symbol 格式不正確' }, 400)
       const range = body.range ?? '1d'
       if (range !== '1d' && range !== '5d') return json({ error: 'range 需為 1d 或 5d' }, 400)
       return await handleIntraday(body.symbol, range)
     }
     if (body.action === 'daily' && body.symbol && typeof body.symbol === 'object') {
+      if (!isValidSymbol(body.symbol)) return json({ error: 'symbol 格式不正確' }, 400)
       const range = body.range
       if (range !== '5y' && range !== 'max') return json({ error: 'range 需為 5y 或 max' }, 400)
       return await handleDailyRange(body.symbol, range)

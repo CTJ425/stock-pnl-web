@@ -2,6 +2,9 @@
  * Stock split conversion wizard modal:
  * - Select an existing ticker with BUY transactions
  * - Configure split type (Forward 1拆N or Reverse N併1), ratio, and optional cutoff date
+ * - Converts every spot BUY, SELL and STOCK_DIVIDEND row on or before the cutoff: the engine nets
+ *   shares across all of them, so converting only the buys left a partial sell in pre-split units
+ *   (Task 185 / A1: 1,000 bought, 400 sold, 1 拆 2 → 1,600 shares held instead of 1,200)
  * - Live preview before & after total quantity, average cost, invariant total cost, and affected transactions
  * - Applies the conversion in one atomic batch (TX-03/TX-09) and warns before reapplying a split
  *   already recorded in tx_split_log (TX-04)
@@ -11,7 +14,7 @@ import { AlertTriangle, CheckCircle2, Scissors, Sparkles } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { Modal } from '../Common/Modal'
 import type { Market, Transaction } from '../../types/models'
-import { MARKET_LABEL, marketCurrency, positionKey } from '../../types/models'
+import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency, positionKey } from '../../types/models'
 import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtPrice, fmtQty } from '../../utils/formatters'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
@@ -34,9 +37,13 @@ interface PreviewItem {
   newPrice: number
   oldFeeTax: number
   feeTax: number
-  feeRate: number
+  /** null keeps a row's missing rate missing: the batch RPC writes whatever it is given. */
+  feeRate: number | null
   feeAutoFilled: boolean
 }
+
+/** The row types a split changes: shares and unit price scale, the cash fee / tax stays as recorded. */
+const SPLIT_TX_TYPES: ReadonlySet<Transaction['tx_type']> = new Set(['BUY', 'SELL', 'STOCK_DIVIDEND'])
 
 export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   const { transactions, updateTransactionsBatch, listSplitLog, recordSplit, current } = useWorkspace()
@@ -122,7 +129,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
     }
   }, [current?.id, selectedTickerInfo, isValidRatio, ratioFrom, ratioTo, cutoffKey, listSplitLog])
 
-  // Filter matching BUY transactions
+  // Filter the transactions a split converts (spot BUY / SELL / STOCK_DIVIDEND up to the cutoff)
   const matchingTxs = useMemo(() => {
     if (!selectedKey) return []
     const [market, ticker] = selectedKey.split(':')
@@ -131,14 +138,19 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
         (tx) =>
           tx.market === market &&
           tx.ticker === ticker &&
-          tx.tx_type === 'BUY' &&
+          SPLIT_TX_TYPES.has(tx.tx_type) &&
           tx.tx_nature !== 'SHORT' &&
           (!cutoffDate || tx.tx_date <= cutoffDate),
       )
       .sort((a, b) => a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at))
   }, [transactions, selectedKey, cutoffDate])
 
-  const hasZeroFeeTx = useMemo(() => matchingTxs.some((tx) => tx.fee_tax === 0), [matchingTxs])
+  // The smart fee fill is about buys only: a stock dividend legitimately carries no fee.
+  const hasZeroFeeTx = useMemo(
+    () => matchingTxs.some((tx) => tx.tx_type === 'BUY' && tx.fee_tax === 0),
+    [matchingTxs],
+  )
+  const hasNonBuyTx = useMemo(() => matchingTxs.some((tx) => tx.tx_type !== 'BUY'), [matchingTxs])
 
   // Count 融券 transactions (either direction) for the selected ticker: the wizard only converts
   // spot BUY rows, so a short position's share count is left unconverted and must be flagged.
@@ -162,6 +174,22 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
       } else {
         newQty = Math.round(tx.qty / ratio)
         newPrice = Number((tx.price * ratio).toFixed(4))
+      }
+
+      // SELL / STOCK_DIVIDEND: only the share count and the unit price scale. `fee_tax` already holds
+      // what that trade actually cost, so it and its recorded rate are written back untouched.
+      if (tx.tx_type !== 'BUY') {
+        return {
+          tx,
+          oldQty: tx.qty,
+          newQty,
+          oldPrice: tx.price,
+          newPrice,
+          oldFeeTax: tx.fee_tax,
+          feeTax: tx.fee_tax,
+          feeRate: tx.fee_rate ?? null,
+          feeAutoFilled: false,
+        }
       }
 
       // Prioritize the transaction's own explicit rate; if zero fee, use workspace rate for auto-fill; else infer from historical fee
@@ -210,14 +238,18 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
 
   // Aggregate stats
   const currency = selectedTickerInfo ? marketCurrency(selectedTickerInfo.market) : 'TWD'
-  const totalQtyBefore = matchingTxs.reduce((s, tx) => s + tx.qty, 0)
-  const totalGrossBefore = matchingTxs.reduce((s, tx) => s + tx.price * tx.qty, 0)
-  const totalCostBefore = matchingTxs.reduce((s, tx) => s + tx.price * tx.qty + tx.fee_tax, 0)
+  // The summary cards describe the buy side (總買入股數 / 平均買進單價 / 總投入成本); a sell or a stock
+  // dividend would only blur them, and the table below lists every converted row.
+  const buyTxs = matchingTxs.filter((tx) => tx.tx_type === 'BUY')
+  const buyItems = previewItems.filter((item) => item.tx.tx_type === 'BUY')
+  const totalQtyBefore = buyTxs.reduce((s, tx) => s + tx.qty, 0)
+  const totalGrossBefore = buyTxs.reduce((s, tx) => s + tx.price * tx.qty, 0)
+  const totalCostBefore = buyTxs.reduce((s, tx) => s + tx.price * tx.qty + tx.fee_tax, 0)
   const avgPriceBefore = totalQtyBefore > 0 ? totalGrossBefore / totalQtyBefore : 0
 
-  const totalQtyAfter = previewItems.reduce((s, item) => s + item.newQty, 0)
-  const totalGrossAfter = previewItems.reduce((s, item) => s + item.newPrice * item.newQty, 0)
-  const totalCostAfter = previewItems.reduce((s, item) => s + item.newPrice * item.newQty + item.feeTax, 0)
+  const totalQtyAfter = buyItems.reduce((s, item) => s + item.newQty, 0)
+  const totalGrossAfter = buyItems.reduce((s, item) => s + item.newPrice * item.newQty, 0)
+  const totalCostAfter = buyItems.reduce((s, item) => s + item.newPrice * item.newQty + item.feeTax, 0)
   const avgPriceAfter = totalQtyAfter > 0 ? totalGrossAfter / totalQtyAfter : 0
 
   const handleConfirm = async () => {
@@ -266,7 +298,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
     const stockDisplayName = selectedTickerInfo
       ? `${selectedTickerInfo.ticker} ${displayStockName(selectedTickerInfo.market, selectedTickerInfo.ticker, selectedTickerInfo.name)}`
       : ''
-    const msg = `✂️ 已成功完成 ${stockDisplayName} 的股票分割換算，共更新 ${previewItems.length} 筆買入紀錄。${splitLogFailed ? '（分割紀錄儲存失敗，之後重複執行同一筆分割將不會被偵測。）' : ''}`
+    const msg = `✂️ 已成功完成 ${stockDisplayName} 的股票分割換算，共更新 ${previewItems.length} 筆交易紀錄。${splitLogFailed ? '（分割紀錄儲存失敗，之後重複執行同一筆分割將不會被偵測。）' : ''}`
     if (onSuccess) {
       onSuccess(msg)
     }
@@ -276,7 +308,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   return (
     <Modal title="股票分割換算精靈" onClose={onClose} wide disableBackdropClose>
       <div className="field-hint" style={{ marginBottom: 14 }}>
-        當持有股票發生分割（如 1 拆 N）或反向分割（併股 N 併 1）時，本精靈可自動依比例批次換算歷史買入紀錄的「股數」與「單價」，並保持總投入成本與手續費不變。
+        當持有股票發生分割（如 1 拆 N）或反向分割（併股 N 併 1）時，本精靈可自動依比例批次換算歷史買入、賣出與股票股利紀錄的「股數」與「單價」，並保持總投入成本與手續費不變。
       </div>
 
       {error && (
@@ -383,7 +415,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
           {/* Step 2 note & Smart fee option */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div className="field-hint" style={{ fontSize: 12 }}>
-              💡 基準截止日留空表示換算該標的所有歷史買入紀錄；若指定日期，則僅換算該日期（含）之前的買入筆數。
+              💡 基準截止日留空表示換算該標的所有歷史買入、賣出與股票股利紀錄；若指定日期，則僅換算該日期（含）之前的筆數。
             </div>
             {hasZeroFeeTx && (
               <div
@@ -417,14 +449,14 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
 
           {shortTxCount > 0 && (
             <div className="notice notice-warn" role="alert">
-              ⚠️ 此標的另有 {shortTxCount} 筆融券交易無法自動換算（本精靈只處理現股買進）。分割後請自行調整融券部位，否則資券兩邊的股數基準會不一致。
+              ⚠️ 此標的另有 {shortTxCount} 筆融券交易無法自動換算（本精靈只處理現股交易）。分割後請自行調整融券部位，否則資券兩邊的股數基準會不一致。
             </div>
           )}
 
           {/* Step 3: Live Preview Card */}
           {matchingTxs.length === 0 ? (
             <div className="empty-state" style={{ padding: '20px 0' }}>
-              <div>在指定條件下找不到符合的買入紀錄。</div>
+              <div>在指定條件下找不到符合的交易紀錄。</div>
             </div>
           ) : !isValidRatio ? (
             <div className="notice notice-warn">請輸入大於 0 的有效分割比例數字。</div>
@@ -433,7 +465,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
               {zeroQtyCount > 0 && (
                 <div className="notice notice-error" role="alert">
                   ⚠️ 此比例下有 {zeroQtyCount} 筆紀錄的股數會變成 0
-                  股，但原手續費仍會保留，永久墊高該標的的平均成本。請改用較小的併股比例，或先個別調整這幾筆紀錄。
+                  股（買入紀錄的原手續費仍會保留，永久墊高該標的的平均成本）。請改用較小的併股比例，或先個別調整這幾筆紀錄。
                 </div>
               )}
               {duplicateSplit && (
@@ -464,7 +496,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
               >
                 <div style={{ fontWeight: 600, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Scissors size={16} />
-                  換算前後數據預覽（共 {previewItems.length} 筆買入紀錄）
+                  換算前後數據預覽（共 {previewItems.length} 筆交易紀錄）
                 </div>
 
                 <div
@@ -516,22 +548,30 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                   </div>
                 </div>
 
+                {hasNonBuyTx && (
+                  <div className="field-hint" style={{ fontSize: 12, marginBottom: 8 }}>
+                    賣出與股票股利紀錄只換算股數與單價，手續費 / 稅金維持原值；上方統計只計買入。
+                  </div>
+                )}
+
                 {/* Table of affected transactions */}
                 <div className="table-scroll" style={{ maxHeight: '35vh', overflowY: 'auto' }}>
                   <table className="data-table">
                     <thead>
                       <tr>
                         <th scope="col">交易日期</th>
+                        <th scope="col">類型</th>
                         <th scope="col">代號 / 名稱</th>
                         <th scope="col" className="num">原股數 → 換算後股數</th>
                         <th scope="col" className="num">原單價 → 換算後單價</th>
-                        <th scope="col" className="num">買進手續費</th>
+                        <th scope="col" className="num">手續費 / 稅金</th>
                       </tr>
                     </thead>
                     <tbody>
                       {previewItems.map((item) => (
                         <tr key={item.tx.id}>
                           <td>{item.tx.tx_date}</td>
+                          <td>{TX_TYPE_LABEL[item.tx.tx_type]}</td>
                           <td>
                             {item.tx.ticker}{' '}
                             <span style={{ opacity: 0.75, fontSize: 12 }}>

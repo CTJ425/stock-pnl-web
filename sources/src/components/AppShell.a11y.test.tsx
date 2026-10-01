@@ -34,7 +34,8 @@ describe('AppShell page identity', () => {
     const { container } = render(<App />)
     await screen.findByText('本機模式')
 
-    const buttons = screen.getAllByRole('button', { name: '新增交易' })
+    // The button appears once the workspace's transactions have loaded (Task 185 / A2), a tick after the shell.
+    const buttons = await screen.findAllByRole('button', { name: '新增交易' })
     expect(buttons).toHaveLength(1)
     expect(buttons[0].closest('.app-header')).toBeTruthy()
     expect(container.querySelector('.fab')).toBeNull()

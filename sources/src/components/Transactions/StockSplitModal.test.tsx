@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Transaction } from '../../types/models'
+import { computeLedger } from '../../utils/pnlEngine'
 import { StockSplitModal } from './StockSplitModal'
 
 const { useWorkspace } = vi.hoisted(() => ({
@@ -100,7 +101,7 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     expect(select.options.length).toBe(2)
   })
 
-  it('正向分割 (1 拆 N)：以 1:10 換算 NVDA 買入紀錄，單價變 1/10，股數變 10 倍，成本不變', async () => {
+  it('正向分割 (1 拆 N)：以 1:10 換算 NVDA 買入與賣出紀錄，單價變 1/10，股數變 10 倍，成本不變', async () => {
     const user = userEvent.setup()
     render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
 
@@ -118,11 +119,12 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     expect(screen.getAllByText(/150/).length).toBeGreaterThan(0)
 
     // Confirm button
-    const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 2 筆紀錄）/ })
+    // tx1, tx2 (buys) and tx3 (the 2026-07-01 sell, which is in pre-split units too — Task 185 / A1)
+    const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 3 筆紀錄）/ })
     await user.click(confirmBtn)
 
     expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
-    expect(batchUpdates()).toHaveLength(2)
+    expect(batchUpdates()).toHaveLength(3)
     // tx1 update: qty 10 -> 100, price 1200 -> 120, fee_tax 5 unchanged
     expect(batchUpdates()[0]).toMatchObject({
       id: 'tx1',
@@ -136,6 +138,14 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
         qty: 50,
         price: 130,
         fee_tax: 3,
+    })
+    // tx3 (SELL): shares and price scale, the fee / tax and the missing rate stay as recorded
+    expect(batchUpdates()[2]).toMatchObject({
+      id: 'tx3',
+      qty: 20,
+      price: 135,
+      fee_tax: 2,
+      fee_rate: null,
     })
 
     expect(onSuccess).toHaveBeenCalledTimes(1)
@@ -659,6 +669,134 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
 
       await screen.findByRole('button', { name: /確認套用分割換算/ })
       expect(screen.queryByText(/套用過相同的分割換算/)).toBeNull()
+    })
+  })
+
+  /**
+   * Task 185 / A1. The engine nets shares across every row of a ticker, so a split that converted
+   * only the buys left an earlier partial sell in pre-split units: 1,000 bought, 400 sold, 1 拆 2
+   * held 1,600 shares (should be 1,200) and booked a phantom +20,000 of realized profit.
+   */
+  describe('賣出與股票股利一併換算（Task 185 / A1）', () => {
+    const row = (o: Partial<Transaction>): Transaction => ({
+      id: 'x',
+      workspace_id: 'ws-1',
+      tx_date: '2026-01-05',
+      market: 'TPE',
+      ticker: '2330',
+      name: '台積電',
+      tx_type: 'BUY',
+      price: 100,
+      qty: 1000,
+      fee_tax: 10,
+      created_at: '2026-01-05T00:00:00Z',
+      ...o,
+    })
+    const LEDGER_ROWS: Transaction[] = [
+      row({ id: 'b1' }),
+      row({ id: 's1', tx_type: 'SELL', tx_date: '2026-02-10', price: 110, qty: 400, fee_tax: 70, created_at: '2026-02-10T00:00:00Z' }),
+      row({ id: 'd1', tx_type: 'STOCK_DIVIDEND', tx_date: '2026-03-20', price: 0, qty: 100, fee_tax: 0, created_at: '2026-03-20T00:00:00Z' }),
+    ]
+
+    // `vi.clearAllMocks()` keeps implementations, so the duplicate-split tests above leave a logged
+    // 2330 1:2 split behind that would block these confirmations.
+    beforeEach(() => {
+      listSplitLog.mockReset()
+      listSplitLog.mockResolvedValue([])
+    })
+
+    const useRows = (transactions: Transaction[]) =>
+      useWorkspace.mockReturnValue({
+        transactions,
+        updateTransaction,
+        updateTransactionsBatch,
+        listSplitLog,
+        recordSplit,
+        current: { id: 'ws-1', name: '預設工作區' },
+      })
+
+    const setRatio = (value: string) =>
+      fireEvent.change(screen.getByRole('spinbutton', { name: '分割比例' }), { target: { value } })
+
+    it('1 拆 2 之後，帳上持股翻倍、已實現損益與持有成本不變', async () => {
+      const user = userEvent.setup()
+      useRows(LEDGER_ROWS)
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+      setRatio('2')
+      await user.click(screen.getByRole('button', { name: /確認套用分割換算（更新 3 筆紀錄）/ }))
+
+      const updates = batchUpdates() as unknown as Array<{ id: string; price: number; qty: number; fee_tax: number; fee_rate: number | null }>
+      expect(updates.map((u) => u.id)).toEqual(['b1', 's1', 'd1'])
+      const byId = new Map(updates.map((u) => [u.id, u]))
+      const converted = LEDGER_ROWS.map((t) => ({ ...t, ...byId.get(t.id) }))
+
+      const before = computeLedger(LEDGER_ROWS)
+      const after = computeLedger(converted)
+      expect(before.positions['TPE:2330'].qty).toBe(700)
+      expect(after.positions['TPE:2330'].qty).toBe(1400)
+      expect(after.summary.realizedTw).toBeCloseTo(before.summary.realizedTw, 6)
+      expect(after.positions['TPE:2330'].cost).toBeCloseTo(before.positions['TPE:2330'].cost, 6)
+      expect(after.warnings).toEqual([])
+    })
+
+    it('賣出與股票股利的手續費 / 稅金與已記錄的費率原樣寫回，股票股利單價維持 0', async () => {
+      const user = userEvent.setup()
+      useRows([
+        row({ id: 'b1', fee_rate: 0.0004275 }),
+        row({ id: 's1', tx_type: 'SELL', tx_date: '2026-02-10', price: 110, qty: 400, fee_tax: 70, fee_rate: 0.0004275 }),
+        row({ id: 'd1', tx_type: 'STOCK_DIVIDEND', tx_date: '2026-03-20', price: 0, qty: 100, fee_tax: 0 }),
+      ])
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+      setRatio('2')
+      await user.click(screen.getByRole('button', { name: /確認套用分割換算/ }))
+
+      expect(batchUpdates()[1]).toMatchObject({ id: 's1', qty: 800, price: 55, fee_tax: 70, fee_rate: 0.0004275 })
+      expect(batchUpdates()[2]).toMatchObject({ id: 'd1', qty: 200, price: 0, fee_tax: 0, fee_rate: null })
+    })
+
+    it('基準截止日（含）之後的賣出不換算，當天的賣出要換算', async () => {
+      const user = userEvent.setup()
+      useRows(LEDGER_ROWS)
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+      setRatio('2')
+
+      fireEvent.change(screen.getByLabelText('基準截止日'), { target: { value: '2026-02-09' } })
+      expect(screen.getByRole('button', { name: /確認套用分割換算（更新 1 筆紀錄）/ })).toBeTruthy()
+
+      fireEvent.change(screen.getByLabelText('基準截止日'), { target: { value: '2026-02-10' } })
+      await user.click(screen.getByRole('button', { name: /確認套用分割換算（更新 2 筆紀錄）/ }))
+      expect(batchUpdates().map((u) => u.id)).toEqual(['b1', 's1'])
+    })
+
+    it('反向分割時，賣出股數換算後變成 0 股也要擋下，不寫入任何一筆', async () => {
+      const user = userEvent.setup()
+      useRows([
+        row({ id: 'b1' }),
+        row({ id: 's1', tx_type: 'SELL', tx_date: '2026-02-10', price: 110, qty: 4, fee_tax: 20 }),
+      ])
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+      await user.selectOptions(screen.getByRole('combobox', { name: '分割類型' }), 'reverse')
+      setRatio('10')
+
+      expect(screen.getByText(/股數會變成 0 股/)).toBeTruthy()
+      const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ }) as HTMLButtonElement
+      expect(confirmBtn.disabled).toBe(true)
+      await user.click(confirmBtn)
+      expect(updateTransactionsBatch).not.toHaveBeenCalled()
+    })
+
+    it('現金股利不換算，統計卡仍只計買入，並提示賣出與股票股利只換算股數與單價', async () => {
+      useRows([
+        ...LEDGER_ROWS,
+        row({ id: 'cash', tx_type: 'DIVIDEND', tx_date: '2026-04-01', price: 3, qty: 700, fee_tax: 0 }),
+      ])
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+      setRatio('2')
+
+      expect(screen.getByRole('button', { name: /確認套用分割換算（更新 3 筆紀錄）/ })).toBeTruthy()
+      expect(screen.getByText(/賣出與股票股利紀錄只換算股數與單價/)).toBeTruthy()
+      // 總買入股數 is the buy side only: 1,000 → 2,000, not 1,500 → 3,000
+      expect(screen.getAllByText(/1,000 →/).length).toBeGreaterThan(0)
     })
   })
 })

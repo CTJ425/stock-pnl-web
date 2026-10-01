@@ -78,9 +78,24 @@ function newId(): string {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function readStore(): LocalStore {
+/**
+ * Where a store that could not be read is copied before it is replaced (Task 185 / C4). An empty
+ * store is returned for it, and the very next write would otherwise overwrite the user's only copy.
+ */
+const UNREADABLE_BACKUP_KEY = `${LOCAL_KEY}/unreadable-backup`
+
+function backUpUnreadableStore(raw: string): void {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY)
+    if (localStorage.getItem(UNREADABLE_BACKUP_KEY) !== raw) localStorage.setItem(UNREADABLE_BACKUP_KEY, raw)
+  } catch {
+    // Quota or blocked storage: the copy is a courtesy, never a reason to fail a read.
+  }
+}
+
+function readStore(): LocalStore {
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(LOCAL_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as LocalStore
       if (Array.isArray(parsed.workspaces) && Array.isArray(parsed.transactions)) {
@@ -89,8 +104,9 @@ function readStore(): LocalStore {
       }
     }
   } catch {
-    // Rebuild empty store when data is damaged
+    // Rebuild an empty store when the data is damaged — after keeping what was there.
   }
+  if (raw) backUpUnreadableStore(raw)
   return { workspaces: [], transactions: [], splitLog: [] }
 }
 
@@ -369,6 +385,15 @@ async function withTxColumnDegrade<R extends TxOpResult>(run: (degrade: TxDegrad
   return run('both')
 }
 
+/**
+ * PostgREST answers an UPDATE that matched no row (filtered out by RLS, or already deleted from
+ * another tab or device) with plain success. The write paths ask for the ids back (`.select('id')`)
+ * and treat an empty answer as a failure, the way `LocalProvider` already does for a missing id.
+ */
+function assertRowsAffected(data: unknown, message: string): void {
+  if (!Array.isArray(data) || data.length === 0) throw new Error(message)
+}
+
 async function currentUserId(): Promise<string> {
   const { data, error } = await client().auth.getUser()
   if (error || !data.user) throw new Error('尚未登入')
@@ -411,8 +436,9 @@ export class SupabaseProvider implements DataProvider {
   }
 
   async renameWorkspace(id: string, name: string): Promise<void> {
-    const { error } = await client().from('workspaces').update({ name }).eq('id', id)
+    const { data, error } = await client().from('workspaces').update({ name }).eq('id', id).select('id')
     if (error) throw new Error(`重新命名工作區失敗：${error.message}`)
+    assertRowsAffected(data, '重新命名工作區失敗：找不到這個工作區')
   }
 
   async deleteWorkspace(id: string): Promise<void> {
@@ -486,20 +512,23 @@ export class SupabaseProvider implements DataProvider {
       client()
         .from('transactions')
         .update(stripTxRow(patch, degrade))
-        .eq('id', id),
+        .eq('id', id)
+        .select('id'),
     )
     if (result.error) {
       logClient('error', 'updateTransaction', result.error.message, { code: result.error.code })
       throw new Error(`更新交易失敗：${result.error.message}`)
     }
+    assertRowsAffected(result.data, '更新交易失敗：找不到要更新的交易')
   }
 
   /**
    * One RPC call updates every row inside one SQL statement (TX-03) — no per-row round trip
    * that could leave a split or a fee recalculation half-applied. `apply_transaction_updates`
-   * returns the number of rows it actually updated (RLS still applies inside it); fewer than
-   * requested means some ids were not this user's rows, so the whole call is reported as failed
-   * rather than silently accepted.
+   * returns the number of rows it actually updated (RLS still applies inside it). Since Task 185
+   * (A3) it raises — rolling the whole batch back — when any id matched no row. The count check
+   * below is the second line for a database that has not applied that schema.sql yet: there the
+   * matched rows are already committed, and the message says so instead of claiming nothing changed.
    */
   async updateTransactionsBatch(updates: TxUpdate[]): Promise<void> {
     if (updates.length === 0) return
@@ -510,7 +539,9 @@ export class SupabaseProvider implements DataProvider {
     }
     const updated = typeof data === 'number' ? data : Number(data ?? 0)
     if (updated < updates.length) {
-      throw new Error(`批次更新交易失敗：預期更新 ${updates.length} 筆，實際更新 ${updated} 筆`)
+      throw new Error(
+        `批次更新交易失敗：預期更新 ${updates.length} 筆，實際更新 ${updated} 筆。若資料庫尚未套用最新的 schema.sql，已更新的列不會自動回復，請重新整理後檢查這些交易紀錄。`,
+      )
     }
   }
 
@@ -543,25 +574,30 @@ export class SupabaseProvider implements DataProvider {
   }
 
   async setWorkspaceFeeRate(id: string, rate: number): Promise<void> {
-    const { error } = await client().from('workspaces').update({ fee_rate: rate }).eq('id', id)
+    const { data, error } = await client().from('workspaces').update({ fee_rate: rate }).eq('id', id).select('id')
     if (error) throw new Error(`儲存手續費率失敗：${error.message}`)
+    assertRowsAffected(data, '儲存手續費率失敗：找不到這個工作區')
   }
 
   async setWorkspaceFeeRateHistory(id: string, history: FeeRateSegment[]): Promise<void> {
-    const { error } = await client()
+    const { data, error } = await client()
       .from('workspaces')
       .update({ fee_rate_history: history })
       .eq('id', id)
+      .select('id')
     if (error) throw new Error(`儲存費率生效日失敗：${error.message}`)
+    assertRowsAffected(data, '儲存費率生效日失敗：找不到這個工作區')
   }
 
   async setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void> {
-    const { error } = await client().from('workspaces').update({ fee_rebate: rebate }).eq('id', id)
+    const { data, error } = await client().from('workspaces').update({ fee_rebate: rebate }).eq('id', id).select('id')
     if (error) throw new Error(`儲存折扣退還方式失敗：${error.message}`)
+    assertRowsAffected(data, '儲存折扣退還方式失敗：找不到這個工作區')
   }
 
   async setWorkspaceFeeRounding(id: string, rounding: FeeRounding): Promise<void> {
-    const { error } = await client().from('workspaces').update({ fee_rounding: rounding }).eq('id', id)
+    const { data, error } = await client().from('workspaces').update({ fee_rounding: rounding }).eq('id', id).select('id')
     if (error) throw new Error(`儲存手續費計算方式失敗：${error.message}`)
+    assertRowsAffected(data, '儲存手續費計算方式失敗：找不到這個工作區')
   }
 }

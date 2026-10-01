@@ -46,7 +46,10 @@ export function parseCsv(text: string): string[][] {
       } else {
         field += ch
       }
-    } else if (ch === '"') {
+    } else if (ch === '"' && field === '') {
+      // A quote opens a quoted field only at the start of one (RFC 4180). In the middle of an
+      // unquoted field — `5" pipe`, `Smith "Jr"` — it is an ordinary character; treating it as an
+      // opening quote swallowed every following row into one field without a single error.
       inQuotes = true
     } else if (ch === ',') {
       row.push(field)
@@ -353,6 +356,9 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
     feeSplit: feeSplitCol,
     taxSplit: taxSplitCol,
     borrowSplit: borrowSplitCol,
+    // 費率 (the rate recorded on the row) is optional: files exported before it existed and every broker
+    // export have none. Its exact name cannot be caught by the legacy `includes('手續費')` match above.
+    feeRate: header.indexOf('費率'),
   }
   if (col.date < 0 || col.ticker < 0 || col.type < 0 || col.price < 0 || col.qty < 0) {
     result.errors.push({
@@ -457,6 +463,21 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
       }
     }
 
+    let feeRate: number | undefined
+    if (col.feeRate >= 0) {
+      const feeRateRaw = at(col.feeRate).trim()
+      if (feeRateRaw !== '') {
+        const parsed = parseNumber(feeRateRaw)
+        // Same rule as the database CHECK and `isValidFeeRate`: 0 <= rate < 1. Catches "0.1425%"-style
+        // and percent-point mistakes (0.1425 meaning 0.1425%) that would otherwise price every fee at 14%.
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed >= 1) {
+          result.errors.push({ line, message: `費率無效：「${feeRateRaw}」（需為 0 以上、小於 1 的小數）` })
+          continue
+        }
+        feeRate = parsed
+      }
+    }
+
     result.rows.push({
       tx_date: txDate,
       market: mt.market,
@@ -467,6 +488,7 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
       qty,
       fee_tax: feeTax,
       ...(txNature !== undefined ? { tx_nature: txNature } : {}),
+      ...(feeRate !== undefined ? { fee_rate: feeRate } : {}),
     })
   }
 
@@ -493,6 +515,7 @@ export function transactionsToCsv(txs: Transaction[]): string {
     '證交稅',
     '借券費',
     '手續費 / 稅金',
+    '費率',
   ]
   const lines = [header.join(',')]
   for (const tx of txs) {
@@ -510,6 +533,7 @@ export function transactionsToCsv(txs: Transaction[]): string {
       String(tax),
       String(borrow),
       String(tx.fee_tax),
+      tx.fee_rate === null || tx.fee_rate === undefined ? '' : String(tx.fee_rate),
     ]
     lines.push(cells.map((c) => csvField(escapeFormulaPrefix(c))).join(','))
   }

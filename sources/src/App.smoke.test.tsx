@@ -316,7 +316,8 @@ describe('App（本機模式煙霧測試）', () => {
     await screen.findByText('本機模式')
 
     // Add a new transaction using the global header button
-    await user.click(screen.getByRole('button', { name: /新增交易/ }))
+    // (found asynchronously: the button appears once the workspace's transactions have loaded — Task 185 / A2)
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
     const addDialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
     const addForm = within(addDialog)
     await user.type(addForm.getByLabelText(/股票代號/), '2330')

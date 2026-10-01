@@ -237,7 +237,7 @@ describe('退回重試只能由「欄位不存在」觸發', () => {
 
 describe('SupabaseProvider.updateTransaction', () => {
   it('T6 error names fee_rate only: patch keeps tx_nature', async () => {
-    setResults([{ data: null, error: missingColumn }, { data: null, error: null }])
+    setResults([{ data: null, error: missingColumn }, { data: [{ id: 't1' }], error: null }])
     await new SupabaseProvider().updateTransaction('t1', newTx)
 
     expect(payloads).toHaveLength(2)
@@ -246,6 +246,19 @@ describe('SupabaseProvider.updateTransaction', () => {
     expect((payloads[1] as Record<string, unknown>).tx_nature).toBe('DAY_TRADE')
     expect('fee_rate' in (payloads[1] as Record<string, unknown>)).toBe(false)
     expect((payloads[1] as Record<string, unknown>).fee_tax).toBe(362)
+  })
+
+  it('T11 an update that matched no row is a failure, not a silent success (A4)', async () => {
+    setResults([{ data: [], error: null }])
+    await expect(new SupabaseProvider().updateTransaction('gone', newTx)).rejects.toThrow(
+      '更新交易失敗：找不到要更新的交易',
+    )
+  })
+
+  it('T12 asks for the updated ids back so a zero-row update can be told from a real one (A4)', async () => {
+    setResults([{ data: [{ id: 't1' }], error: null }])
+    await new SupabaseProvider().updateTransaction('t1', newTx)
+    expect(selects).toContain('id')
   })
 
   it('T7 throws when the retry also fails', async () => {

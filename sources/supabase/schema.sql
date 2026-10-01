@@ -1588,14 +1588,34 @@ WITH CHECK (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS tx_split_log_lookup_idx
     ON tx_split_log (workspace_id, market, ticker);
 
+-- Task 185 / C3: the log row belongs to a workspace like a transaction does, so it goes with it.
+-- Until now deleting a workspace left its split-log rows behind (nothing read them, but nothing
+-- removed them either). Rows whose workspace is already gone are deleted first, or the constraint
+-- cannot be added; they described splits of a ledger that no longer exists. Re-runnable: the
+-- constraint is dropped and re-added, which re-validates a small table.
+DELETE FROM tx_split_log l
+ WHERE NOT EXISTS (
+       SELECT 1 FROM workspaces w WHERE w.id = l.workspace_id AND w.user_id = l.user_id);
+ALTER TABLE tx_split_log DROP CONSTRAINT IF EXISTS tx_split_log_workspace_fkey;
+ALTER TABLE tx_split_log ADD CONSTRAINT tx_split_log_workspace_fkey
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspaces (id, user_id) ON DELETE CASCADE;
+
 -- SECURITY INVOKER on purpose: the caller's RLS decides which rows may change, exactly as the
 -- per-row UPDATE it replaces did. The return value is the number of rows actually updated, so the
 -- client can tell a partially matched batch (someone else's id in the list) from a full apply.
+--
+-- All or nothing (Task 185 / A3): a batch in which any id matched no row (deleted from another tab
+-- or device, or not this user's under RLS) RAISES, which rolls the whole statement back. Returning
+-- the short count instead left the matched rows committed while the client reported a failure, and
+-- a split that was half applied with no split-log row would be applied again on the next run.
+-- Duplicate ids count against the batch too: `UPDATE … FROM` updates a row once, so a duplicate
+-- always shows up as a shortfall.
 CREATE OR REPLACE FUNCTION public.apply_transaction_updates(p_updates JSONB)
 RETURNS INTEGER
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
 DECLARE
-    updated INTEGER;
+    updated  INTEGER;
+    expected INTEGER := jsonb_array_length(COALESCE(p_updates, '[]'::JSONB));
 BEGIN
     WITH u AS (
         SELECT (e->>'id')::UUID       AS id,
@@ -1618,6 +1638,11 @@ BEGIN
         RETURNING 1
     )
     SELECT count(*) INTO updated FROM upd;
+    IF updated <> expected THEN
+        RAISE EXCEPTION '批次更新已回復：預期更新 % 筆，實際只找到 % 筆（可能已在其他分頁或裝置被刪除）。請重新整理後再試。',
+            expected, updated
+            USING ERRCODE = 'P0002';
+    END IF;
     RETURN updated;
 END;
 $$;

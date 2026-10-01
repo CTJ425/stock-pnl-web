@@ -61,14 +61,19 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
 
   // Background polling + re-capture when switching back to the foreground after paging (the background paging timer will be throttled by the browser and will be replenished when switching back)
   useEffect(() => {
-    let timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS)
+    // A hidden tab has nobody to show a price to: skip the tick, the visibilitychange handler below
+    // catches up the moment the tab comes back (Task 185 / C1).
+    const poll = () => {
+      if (document.visibilityState === 'visible') void load({ silent: true })
+    }
+    let timer = setInterval(poll, POLL_INTERVAL_MS)
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       // A visibility change landing right on top of the interval would otherwise fire two
       // loads back to back — restart the interval so the next tick is a full period away.
       clearInterval(timer)
       void load({ silent: true })
-      timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS)
+      timer = setInterval(poll, POLL_INTERVAL_MS)
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {

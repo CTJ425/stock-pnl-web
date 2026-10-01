@@ -30,7 +30,7 @@ export async function runBatchApply(
     return true
   } catch (err) {
     const message = err instanceof Error ? err.message : '批次更新失敗，請稍後再試'
-    setError(`批次更新失敗，共 ${updates.length} 筆均未變更：${message}`)
+    setError(`批次更新失敗（${updates.length} 筆）：${message}`)
     return false
   } finally {
     setBusy(false)

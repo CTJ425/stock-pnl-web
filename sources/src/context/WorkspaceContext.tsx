@@ -61,6 +61,7 @@ export interface WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
 
 const EMPTY_LEDGER = computeLedger([])
+const NO_TRANSACTIONS: Transaction[] = []
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -72,13 +73,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  // Which workspace `transactions` was loaded for. It is set together with the rows, so a switch
+  // can tell "the new workspace's rows" from "the previous workspace's rows still in state".
+  const [txWorkspaceId, setTxWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const current = workspaces.find((w) => w.id === currentId) ?? null
+  // Until the rows of the current workspace have arrived — and for good if their load failed — the
+  // rows in state belong to another workspace. Showing them under this workspace's name would be
+  // wrong data, so they are hidden and the whole view reports `loading` instead.
+  const txReady = currentId === null || txWorkspaceId === currentId
+  const visibleTransactions = txReady ? transactions : NO_TRANSACTIONS
   const ledger = useMemo(
-    () => (transactions.length > 0 ? computeLedger(transactions) : EMPTY_LEDGER),
-    [transactions],
+    () => (visibleTransactions.length > 0 ? computeLedger(visibleTransactions) : EMPTY_LEDGER),
+    [visibleTransactions],
   )
 
   const runSafely = useCallback(async (action: () => Promise<void>) => {
@@ -128,7 +137,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(CURRENT_WS_KEY, currentId)
     runSafely(async () => {
       const txs = await provider.listTransactions(currentId)
-      if (!cancelled) setTransactions(txs)
+      if (!cancelled) {
+        setTransactions(txs)
+        setTxWorkspaceId(currentId)
+      }
     })
     return () => {
       cancelled = true
@@ -165,11 +177,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // holds for any other caller too.
         if (workspaces.length <= 1) throw new Error('至少需保留一個工作區。')
         await provider.deleteWorkspace(id)
-        setWorkspaces((prev) => {
-          const next = prev.filter((w) => w.id !== id)
-          if (currentId === id) setCurrentId(next[0]?.id ?? null)
-          return next
-        })
+        // Outside the updater: a state setter is a side effect, and StrictMode runs updaters twice.
+        if (currentId === id) setCurrentId(workspaces.find((w) => w.id !== id)?.id ?? null)
+        setWorkspaces((prev) => prev.filter((w) => w.id !== id))
       })
     },
     [provider, runSafely, currentId, workspaces],
@@ -302,9 +312,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     () => ({
       workspaces,
       current,
-      transactions,
+      transactions: visibleTransactions,
       ledger,
-      loading,
+      loading: loading || !txReady,
       error,
       selectWorkspace,
       createWorkspace,
@@ -324,9 +334,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       workspaces,
       current,
-      transactions,
+      visibleTransactions,
       ledger,
       loading,
+      txReady,
       error,
       selectWorkspace,
       createWorkspace,
