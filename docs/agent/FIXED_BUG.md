@@ -6,6 +6,29 @@
 
 ---
 
+### Bug ID: BUG-089 — Same-day 買→賣→買 inflated 持股成本 *and* 已實現損益 because the 當沖 engine was never switched on
+- **Date**: found 2026-10-01, fixed 2026-10-01 (pending release)
+- **Symptom**: SNAP-RON, 聯電 2303. Dashboard 均價 162.07 / 未實現 -2,243 (現折+每批) or -2,566 (月退+整筆); RON's app 均價 161.82 / -2,066. The gap was a flat 500 under **every** combination of 現折/月退 and 每批/整筆, so no fee setting could close it. 6182 and 00685L matched to the dollar, which isolated it to one ticker.
+- **Root Cause**: `computeLedger` already nets a 現股當沖 out before the moving average sees it (`pnlEngine.ts:516-630`: the matched quantities raise `pos.realized` / `pos.buyCostTotal` and are removed from `effQty`, never touching `qty` / `cost` / `openLots`) — but **only when at least one leg of that date carries `tx_nature === 'DAY_TRADE'`**. The RON workspace had **zero** such rows (55 `null` + 8 `'SPOT'`) although three sells carried a halved securities tax. With the mechanism off, 2026-09-22's 買 164.5 → 賣 166 → 買 163.5 fell through to the moving average, where `compareTxOrder`'s BUG-049 tie-break (open legs first when `tx_date` *and* `created_at` tie, as a bulk import writes them) made it 買、買、賣: the two buys blended to 164.0695 and the sell removed that instead of the 164.5 lot. The leftover **500.5 was counted twice** — parked in 持股成本 and booked as realized profit.
+- **Fix**: `proposeDayTradeLabels` + `hasDayTradeFeeSignature` (`sources/src/utils/fees.ts`) find the unlabelled round trips, and `MarkDayTradesModal`「標記當沖」(交易紀錄 toolbar and 工具 sheet) applies them. The detector is the one `proposeFeeCorrections` has trusted since Task 137 — it reads the **money** (a recorded total that cannot cover the standard tax, whose residual after the halved tax lands exactly on the expected fee), not the calendar — plus a second condition: same-day BUYs must **fully** cover the sell, so a day trade that could not have been made is never proposed. `TxUpdate.tx_nature` and `apply_transaction_updates` carry the label with the same key-presence rule as `fee_rate`, so re-pricing or splitting a trade can never reclassify it.
+- **Evidence**: on the real ledger the detector proposes exactly the three real day trades (2026-08-24, 09-18, 09-22) and **not** 07-13 or 07-27 (full-tax same-day round trips); on 09-22 it pairs the 164.5 buy, never the 163.5 lot that is still held. After labelling, `computeLedger` gives `cost` **323,637** / 均價 **161.8185** and `realized` **19,334 → 18,833**. Re-run against the live DEV rows with SNAP-RON's own settings: 2303 **-2,066**, 6182 **-3,631**, 總成本 **456,693** — every figure identical to the broker app's screenshot (報酬 -5,697).
+- **Applied to DEV data 2026-10-01**: the six legs of those three round trips are labelled `DAY_TRADE` (the 09-22 BUY at 163.5 deliberately is not — that lot is still held). PROD not touched yet.
+- **Still open**: the general same-day ordering problem. `compareTxOrder` cannot recover the real intraday order when `created_at` ties, and the user is adding a transaction sequence column for that (see `TASK.md` Task 186). Labelling fixes the day trades; the sequence column is what fixes an unlabelled same-day sequence in general.
+- **Status**: ✅ FIXED in code, verified against live DEV data; release pending
+
+---
+
+### Bug ID: BUG-090 — The 當沖 tax halving was hardcoded, but only 玉山 does it
+- **Date**: found 2026-10-01, fixed 2026-10-01 (pending release)
+- **Symptom**: with SNAP-RON on 月退, 合晶 6182 (bought 2026-10-01, the same calendar day) read **-3,436** against the app's **-3,631** — 195 too optimistic. Every other row matched.
+- **Root Cause**: BUG-087 established that a lot bought today is estimated by the broker at the halved 現股當沖 tax and `lotSellTaxRate` halves it for the 牌告 figure. **That evidence was entirely 玉山's**, and it was applied unconditionally to every workspace. RON does not halve: 133 × 1000 (fee 56) bought that morning shows -3,631 = 130,000 − 185 − **390**, the full 0.3%.
+- **Fix**: `workspaces.day_trade_tax_estimate BOOLEAN` (NULL = true, so a workspace reconciled against 玉山 does not move), a radio pair in 手續費設定 (「當天用當沖稅率（減半）」／「一律用完整稅率」) that previews like the other fee choices, and `DashboardPage` / `AnalysisPage` passing `today` to `buildHoldingRows` only when it is on. Mirrored into the Edge card per workspace (`WorkspaceLedger.dayTradeTax`), because one nightly run serves workspaces whose brokers disagree.
+- **Evidence**: `buildHoldingRows` on the real rows returns 6182 **-3,436** with `today` and **-3,631** without it; the app shows -3,631. This also answers the「Unverified」note left in BUG-087 below — the behaviour is per broker, not universal.
+- **Applied to DEV 2026-10-01**: column added, SNAP-RON set to `false`. PROD not touched yet.
+- **Status**: ✅ FIXED in code, verified against live DEV data; release pending
+
+---
+
 ### Bug ID: BUG-079 — 保本賣出價 and 未實現淨損益 read the same fee rate differently
 - **Date**: 2026-10-01, fixed in 0.10.14 (the Taiwan half was already fixed in 0.9.64 / Task 166)
 - **Root Cause**: two halves, found a year apart.

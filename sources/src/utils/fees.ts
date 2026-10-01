@@ -8,6 +8,7 @@ import type { FeeRounding, Market, Transaction, TxNature, TxType } from '../type
 import type { Holding } from './pnlEngine'
 import {
   BORROW_FEE_RATE,
+  compareTxOrder,
   estimateUnrealizedShort,
   floorSafe,
   sellTaxRate,
@@ -184,16 +185,7 @@ export function proposeFeeCorrections(
     if (tx.tx_type === 'SELL') {
       // An explicit DAY_TRADE label is trusted directly, skipping the inference test below.
       if (tx.tx_nature === 'DAY_TRADE') continue
-      const gross = tx.price * tx.qty
-      const rate = sellTaxRate(tx.ticker)
-      const stdTax = floorSafe(gross * rate)
-      const halfTax = floorSafe((gross * rate) / 2)
-      const minFee = tx.qty >= 1000 ? opts.minFeeWhole : opts.minFeeOdd
-      const expFee = Math.max(minFee, floorSafe(gross * feeRate))
-      // EN-06: `tx.fee_tax` is user-entered/imported and not guaranteed to be a clean integer
-      // (e.g. 361.9999999999999 from prior float arithmetic); round both sides before comparing
-      // so that near-miss floats don't defeat the day-trade exclusion.
-      if (tx.fee_tax < stdTax && Math.round(tx.fee_tax - halfTax) === Math.round(expFee)) continue
+      if (hasDayTradeFeeSignature(tx, feeRate, { whole: opts.minFeeWhole, odd: opts.minFeeOdd })) continue
     }
     const newFee = calculateFee({
       market: tx.market,
@@ -208,6 +200,117 @@ export function proposeFeeCorrections(
     if (newFee !== tx.fee_tax) out.push({ tx, newFee, feeRate })
   }
   return out
+}
+
+/**
+ * Does this SELL's recorded `fee_tax` carry a **halved** securities tax? (BUG-089)
+ *
+ * Extracted from `proposeFeeCorrections`, which has relied on it since Task 137 to avoid
+ * re-pricing a 現股當沖 row. It is the one day-trade test this codebase trusts, and the reason is
+ * worth restating: it reads the **money**, not the calendar. Same-date buy/sell matching was
+ * measured against two real broker exports and produced 12 false positives out of 14 same-day
+ * round trips, so a date match proves nothing on its own. A recorded total that cannot even cover
+ * the standard tax, and whose residual after the halved tax lands exactly on the expected
+ * brokerage fee, is the broker's own arithmetic — a 0.15% / 0.05% row cannot be produced any
+ * other way.
+ *
+ * EN-06: `fee_tax` is user-entered/imported and not guaranteed to be a clean integer (e.g.
+ * 361.9999999999999 from prior float arithmetic), so both sides are rounded before comparing.
+ */
+export function hasDayTradeFeeSignature(
+  tx: Pick<Transaction, 'price' | 'qty' | 'ticker' | 'fee_tax'>,
+  feeRate: number,
+  minFees: { whole: number; odd: number },
+): boolean {
+  const gross = tx.price * tx.qty
+  if (!(gross > 0)) return false
+  const rate = sellTaxRate(tx.ticker)
+  if (!(rate > 0)) return false // a 0% bond ETF has no tax to halve, so the signature cannot exist
+  const stdTax = floorSafe(gross * rate)
+  const halfTax = floorSafe((gross * rate) / 2)
+  const minFee = tx.qty >= 1000 ? minFees.whole : minFees.odd
+  const expFee = Math.max(minFee, floorSafe(gross * feeRate))
+  return tx.fee_tax < stdTax && Math.round(tx.fee_tax - halfTax) === Math.round(expFee)
+}
+
+/** One 現股當沖 the ledger is not being told about (BUG-089). */
+export interface DayTradeProposal {
+  /** The SELL leg whose recorded fee carries the halved tax. */
+  sell: Transaction
+  /**
+   * The same-day BUY legs of the same ticker that cover it, FIFO, each with the quantity matched
+   * from it. A BUY appears here **only when every one of its shares was matched** — labelling a
+   * partly-matched BUY would claim the whole row was day-traded, and the engine does not need it:
+   * one labelled leg on that date is enough for `computeLedger` to pair the rest.
+   */
+  buys: Transaction[]
+}
+
+/**
+ * Find the 現股當沖 round trips that are recorded as ordinary trades (BUG-089).
+ *
+ * Why this exists: `computeLedger` already nets a day trade out before the moving average sees it,
+ * so the position's cost never moves — but **only when at least one leg of that date carries
+ * `tx_nature === 'DAY_TRADE'`**. A broker export that does not carry the label leaves the whole
+ * mechanism switched off, and a same-day 買→賣→買 then lands the day trade's profit inside
+ * 持股成本 *and* inside 已實現損益 at once (measured on 2303: 均價 162.07 against the broker's
+ * 161.82, and 已實現 overstated by 501).
+ *
+ * Two conditions must both hold, and the second is what keeps this honest:
+ * 1. the sell carries the halved-tax fee signature (`hasDayTradeFeeSignature`), and
+ * 2. same-day BUYs of the same ticker **fully** cover it. A day trade you could not have made —
+ *    no shares bought that day to sell — is not proposed, whatever the fee looks like.
+ */
+export function proposeDayTradeLabels(
+  transactions: Transaction[],
+  opts: { rateFor: (txDate: string) => number; minFeeWhole: number; minFeeOdd: number },
+): DayTradeProposal[] {
+  const minFees = { whole: opts.minFeeWhole, odd: opts.minFeeOdd }
+  // Group by (date, ticker): a day trade never crosses either boundary.
+  const groups = new Map<string, Transaction[]>()
+  for (const tx of transactions) {
+    if (tx.market !== 'TPE' || !(tx.price > 0) || !(tx.qty > 0)) continue
+    if (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL') continue
+    if (tx.tx_nature === 'SHORT') continue // 融券 is a different instrument, never paired here
+    const key = `${tx.tx_date}\u0000${tx.ticker}`
+    const group = groups.get(key)
+    if (group) group.push(tx)
+    else groups.set(key, [tx])
+  }
+
+  const out: DayTradeProposal[] = []
+  for (const group of groups.values()) {
+    // Already told? Then the engine is already pairing this date and nothing is missing.
+    if (group.some((tx) => tx.tx_nature === 'DAY_TRADE')) continue
+    const sells = group.filter((tx) => tx.tx_type === 'SELL')
+    const buys = group.filter((tx) => tx.tx_type === 'BUY').sort(compareTxOrder)
+    if (sells.length === 0 || buys.length === 0) continue
+
+    // Shares a buy still has left, so two day-trade sells on one date cannot both claim them.
+    const remaining = new Map(buys.map((b) => [b.id, b.qty]))
+    for (const sell of sells.sort(compareTxOrder)) {
+      const feeRate = opts.rateFor(sell.tx_date)
+      if (!hasDayTradeFeeSignature(sell, feeRate, minFees)) continue
+      let need = sell.qty
+      const used = new Map<string, number>()
+      for (const buy of buys) {
+        if (need <= 0) break
+        const left = remaining.get(buy.id) ?? 0
+        if (left <= 0) continue
+        const take = Math.min(left, need)
+        used.set(buy.id, take)
+        need -= take
+      }
+      // Condition 2: anything short of full cover is left alone rather than guessed at.
+      if (need > 0) continue
+      for (const [id, take] of used) remaining.set(id, (remaining.get(id) ?? 0) - take)
+      out.push({
+        sell,
+        buys: buys.filter((b) => used.get(b.id) === b.qty),
+      })
+    }
+  }
+  return out.sort((a, b) => compareTxOrder(a.sell, b.sell))
 }
 
 /**

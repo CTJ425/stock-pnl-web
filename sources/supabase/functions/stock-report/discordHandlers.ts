@@ -338,6 +338,9 @@ export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceI
   // unknown column, and the nightly card must not die because the DDL has not been applied. One
   // step down is enough; without the history the base `fee_rate` is what every workspace used.
   const selects = [
+    'id, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate',
+    // BUG-090: one more step, so a database that has the history but not the new column does not
+    // fall all the way back and silently lose every workspace's fee-rate history with it.
     'id, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
     'id, fee_rate, fee_rebate, fee_rounding',
   ]
@@ -381,6 +384,7 @@ export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceI
       fee_rate_history: (ws.fee_rate_history ?? null) as FeeRateSegment[] | null,
       fee_rebate: (ws.fee_rebate ?? null) as WorkspaceInput['fee_rebate'],
       fee_rounding: (ws.fee_rounding ?? null) as WorkspaceInput['fee_rounding'],
+      day_trade_tax_estimate: (ws.day_trade_tax_estimate ?? null) as WorkspaceInput['day_trade_tax_estimate'],
       transactions,
     })
   }

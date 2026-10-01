@@ -31,6 +31,11 @@ ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rebate_values
 
 -- How the broker floors the estimated sell fee and tax on unrealized P&L (BUG-088): 'lot' floors
 -- each open lot on its own (玉山), 'position' floors the whole position once (元大). NULL reads as 'lot'.
+-- BUG-090: does this workspace's broker estimate a lot bought today at the halved 現股當沖 tax?
+-- 玉山 does (BUG-087 measured it); RON does not. NULL keeps the BUG-087 behaviour, so a workspace
+-- already reconciled against 玉山 does not move when this column arrives.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS day_trade_tax_estimate BOOLEAN;
+
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rounding TEXT;
 ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rounding_values;
 ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rounding_values
@@ -1623,7 +1628,9 @@ BEGIN
                (e->>'qty')::NUMERIC    AS qty,
                (e->>'fee_tax')::NUMERIC AS fee_tax,
                NULLIF(e->>'fee_rate', '')::NUMERIC AS fee_rate,
-               (e ? 'fee_rate') AS has_fee_rate
+               (e ? 'fee_rate') AS has_fee_rate,
+               NULLIF(e->>'tx_nature', '') AS tx_nature,
+               (e ? 'tx_nature') AS has_tx_nature
         FROM jsonb_array_elements(COALESCE(p_updates, '[]'::JSONB)) AS e
     ), upd AS (
         UPDATE transactions t
@@ -1632,7 +1639,10 @@ BEGIN
                fee_tax  = u.fee_tax,
                -- Task 166 review: an element that carries the `fee_rate` key writes it, even when
                -- it is null (clearing the override). An element without the key leaves it alone.
-               fee_rate = CASE WHEN u.has_fee_rate THEN u.fee_rate ELSE t.fee_rate END
+               fee_rate = CASE WHEN u.has_fee_rate THEN u.fee_rate ELSE t.fee_rate END,
+               -- BUG-089: same key-presence rule. Only the 當沖 labelling wizard sends this key;
+               -- re-pricing or splitting a trade must never reclassify it as a side effect.
+               tx_nature = CASE WHEN u.has_tx_nature THEN u.tx_nature ELSE t.tx_nature END
           FROM u
          WHERE t.id = u.id
         RETURNING 1

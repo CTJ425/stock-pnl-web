@@ -60,6 +60,7 @@ BEGIN
     VALUES ('workspaces','fee_rate'),      -- 0.9.24, task 135
            ('workspaces','fee_rebate'),    -- 0.9.71, statement redesign (Task 170)
            ('workspaces','fee_rounding'),  -- 0.10.5, per-lot vs whole-position flooring (BUG-088)
+           ('workspaces','day_trade_tax_estimate'),  -- 0.10.15, per-broker 當沖 tax estimate (BUG-090)
            ('transactions','tx_nature'),   -- 0.9.25, task 137 §C
            ('transactions','fee_rate'),    -- 0.9.27, fee_rate persistence
            ('price_cache','industry')      -- BUG-085
@@ -71,7 +72,7 @@ BEGIN
   )
   SELECT 'migration columns',
          CASE WHEN m IS NULL THEN 'PASS' ELSE 'FAIL' END,
-         COALESCE('missing: ' || m, 'fee_rate, fee_rebate, fee_rounding, tx_nature, industry present')
+         COALESCE('missing: ' || m, 'fee_rate, fee_rebate, fee_rounding, day_trade_tax_estimate, tx_nature, industry present')
     FROM missing;
 
   -- ---- extensions ---------------------------------------------------------

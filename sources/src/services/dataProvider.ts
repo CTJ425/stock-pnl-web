@@ -4,18 +4,24 @@
  * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
-import type { FeeRateSegment, FeeRebate, FeeRounding, Market, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding, Market, NewTransaction, Transaction, TxNature, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 import { logClient } from './appLog'
 
-/** One row of a batch update (TX-03): price/qty/fee_tax/fee_rate only, by id. */
+/** One row of a batch update (TX-03): price/qty/fee_tax/fee_rate, plus an optional tx_nature, by id. */
 export interface TxUpdate {
   id: string
   price: number
   qty: number
   fee_tax: number
   fee_rate: number | null
+  /**
+   * BUG-089: optional on purpose, and absent means "leave it alone". Only the 當沖 labelling
+   * wizard sends it; `RecalcFeesModal` and `StockSplitModal` must not reclassify a trade as a
+   * side effect of re-pricing or splitting it. Mirrors how `fee_rate` is keyed in the RPC.
+   */
+  tx_nature?: TxNature | null
 }
 
 /** A previously-applied stock split, logged so the wizard can warn before it is reapplied (TX-04). */
@@ -59,6 +65,7 @@ export interface DataProvider {
   setWorkspaceFeeRebate(id: string, rebate: FeeRebate): Promise<void>
   /** Persist how the workspace's broker floors the estimated sell fee and tax (BUG-088). */
   setWorkspaceFeeRounding(id: string, rounding: FeeRounding): Promise<void>
+  setWorkspaceDayTradeTaxEstimate(id: string, enabled: boolean): Promise<void>
 }
 
 /* =========================================================
@@ -214,6 +221,9 @@ export class LocalProvider implements DataProvider {
         qty: u.qty,
         fee_tax: u.fee_tax,
         fee_rate: u.fee_rate,
+        // Same key-presence rule as the cloud RPC: an update without the key keeps the stored
+        // nature, so local mode and cloud mode cannot drift apart (BUG-089).
+        ...('tx_nature' in u ? { tx_nature: u.tx_nature ?? null } : {}),
       }
     })
     writeStore(store)
@@ -273,6 +283,15 @@ export class LocalProvider implements DataProvider {
       writeStore(store)
     }
   }
+
+  async setWorkspaceDayTradeTaxEstimate(id: string, enabled: boolean): Promise<void> {
+    const store = readStore()
+    const ws = store.workspaces.find((w) => w.id === id)
+    if (ws) {
+      ws.day_trade_tax_estimate = enabled
+      writeStore(store)
+    }
+  }
 }
 
 /* =========================================================
@@ -284,7 +303,11 @@ function client() {
   return supabase
 }
 
-const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding'
+const WORKSPACE_COLUMNS =
+  'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate'
+/** Without day_trade_tax_estimate, for a database that has not run that part of schema.sql (BUG-090). */
+const WORKSPACE_COLUMNS_WITHOUT_DAY_TRADE =
+  'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding'
 /** Without fee_rate_history, for a database that has not run that part of schema.sql (Task 182). */
 const WORKSPACE_COLUMNS_WITHOUT_HISTORY = 'id, name, created_at, fee_rate, fee_rebate, fee_rounding'
 /** Without fee_rounding, for a database that has not run that part of schema.sql (BUG-088). */
@@ -407,6 +430,7 @@ export class SupabaseProvider implements DataProvider {
     // than break login (a frontend deploy can land before the migration).
     const columnSets = [
       WORKSPACE_COLUMNS,
+      WORKSPACE_COLUMNS_WITHOUT_DAY_TRADE,
       WORKSPACE_COLUMNS_WITHOUT_HISTORY,
       WORKSPACE_COLUMNS_WITHOUT_ROUNDING,
       WORKSPACE_COLUMNS_WITHOUT_REBATE,
@@ -599,5 +623,15 @@ export class SupabaseProvider implements DataProvider {
     const { data, error } = await client().from('workspaces').update({ fee_rounding: rounding }).eq('id', id).select('id')
     if (error) throw new Error(`儲存手續費計算方式失敗：${error.message}`)
     assertRowsAffected(data, '儲存手續費計算方式失敗：找不到這個工作區')
+  }
+
+  async setWorkspaceDayTradeTaxEstimate(id: string, enabled: boolean): Promise<void> {
+    const { data, error } = await client()
+      .from('workspaces')
+      .update({ day_trade_tax_estimate: enabled })
+      .eq('id', id)
+      .select('id')
+    if (error) throw new Error(`儲存當沖稅率估算方式失敗：${error.message}`)
+    assertRowsAffected(data, '儲存當沖稅率估算方式失敗：找不到這個工作區')
   }
 }

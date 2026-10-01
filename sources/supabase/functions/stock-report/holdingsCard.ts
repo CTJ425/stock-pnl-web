@@ -23,6 +23,8 @@ export interface WorkspaceInput {
   fee_rebate?: FeeRebate | null
   /** NULL / absent = 'lot' (BUG-088), as on the dashboard. */
   fee_rounding?: FeeRounding | null
+  /** NULL / absent = true (BUG-090), as on the dashboard: keeps the BUG-087 玉山 behaviour. */
+  day_trade_tax_estimate?: boolean | null
   transactions: Transaction[]
 }
 
@@ -34,6 +36,12 @@ export interface WorkspaceLedger {
   feeRate: number
   rounding: FeeRounding
   basis: PnlBasis
+  /**
+   * BUG-090: whether this workspace's broker estimates a lot bought today at the halved 現股當沖
+   * tax. Per workspace, not per run — the two brokers in use disagree, so one run's `today` cannot
+   * answer for all of them.
+   */
+  dayTradeTax: boolean
   ledger: Ledger
 }
 
@@ -86,6 +94,7 @@ export function buildLedgers(workspaces: WorkspaceInput[], today = ''): Workspac
       feeRate,
       rounding: w.fee_rounding === 'position' ? 'position' : 'lot',
       basis: pnlBasis(feeRate, w.fee_rebate),
+      dayTradeTax: w.day_trade_tax_estimate ?? true,
       ledger: computeLedger(w.transactions),
     }
   })
@@ -375,6 +384,9 @@ export function aggregateHoldings(
    * market day, and on a weekend it points back at Friday. Only the 券商 figure uses it, to
    * withhold the halved 現股當沖 tax on a lot bought today the way the broker app does. Omitted
    * keeps every figure at the full rate.
+   *
+   * BUG-090: a workspace whose broker does not do this (`dayTradeTax: false`) ignores it, so this
+   * argument is the run's date, not a decision — the decision is each ledger's own.
    */
   today?: string,
 ): HoldingsSummary {
@@ -403,7 +415,7 @@ export function aggregateHoldings(
         // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden.
         const brokerUnrealized =
           close != null && h.currency === 'TWD'
-            ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding, today)
+            ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding, l.dayTradeTax ? today : undefined)
             : null
         // Each workspace leg follows its own basis before merging (`rowUnrealized` in src/utils/pnlBasis.ts).
         const unrealized = l.basis === 'list' && brokerUnrealized != null ? brokerUnrealized : net

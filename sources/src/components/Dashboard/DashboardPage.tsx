@@ -185,11 +185,18 @@ export function DashboardPage({
   const savedRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
   const savedRebate = current?.fee_rebate ?? 'instant'
   const savedRounding = current?.fee_rounding ?? 'lot'
+  // BUG-090: null means "not set" and keeps the BUG-087 behaviour (玉山 halves it, RON does not).
+  const savedDayTradeTax = current?.day_trade_tax_estimate ?? true
   const feeRate = draft?.rate ?? savedRate
   const rebate = draft?.rebate ?? savedRebate
   const rounding = draft?.rounding ?? savedRounding
+  const dayTradeTax = draft?.dayTradeTax ?? savedDayTradeTax
   const previewing =
-    draft !== null && (draft.rate !== savedRate || draft.rebate !== savedRebate || draft.rounding !== savedRounding)
+    draft !== null &&
+    (draft.rate !== savedRate ||
+      draft.rebate !== savedRebate ||
+      draft.rounding !== savedRounding ||
+      draft.dayTradeTax !== savedDayTradeTax)
   const basis = pnlBasis(feeRate, rebate)
 
   const handleRefresh = () => {
@@ -199,7 +206,9 @@ export function DashboardPage({
 
   // BUG-087: the 券商 figure withholds the halved 現股當沖 tax on a lot bought today. A plain
   // string, so the memo below compares by value and only re-runs when the Taipei date turns over.
-  const today = taipeiDateKey(new Date())
+  // BUG-090: and only when this workspace's broker actually does that — RON withholds the full
+  // 0.3% on a position opened the same morning, so passing the date would read 195 too optimistic.
+  const today = dayTradeTax ? taipeiDateKey(new Date()) : undefined
   const rows = useMemo(
     () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding, today),
     [holdings, prices, feeRate, current?.id, rounding, today],

@@ -10,6 +10,7 @@ const {
   setWorkspaceFeeRateHistory,
   setWorkspaceFeeRebate,
   setWorkspaceFeeRounding,
+  setWorkspaceDayTradeTaxEstimate,
 } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   // Mirrors `saveWorkspaceFeeRate`, which writes the localStorage cache the form reads its base
@@ -20,6 +21,7 @@ const {
   setWorkspaceFeeRateHistory: vi.fn(async () => {}),
   setWorkspaceFeeRebate: vi.fn(async () => {}),
   setWorkspaceFeeRounding: vi.fn(async () => {}),
+  setWorkspaceDayTradeTaxEstimate: vi.fn(async () => {}),
 }))
 vi.mock('../context/WorkspaceContext', () => ({ useWorkspace }))
 
@@ -32,6 +34,7 @@ function mount(current: Record<string, unknown>, rate: string | null, onPreview?
     setWorkspaceFeeRateHistory,
     setWorkspaceFeeRebate,
     setWorkspaceFeeRounding,
+    setWorkspaceDayTradeTaxEstimate,
   })
   const onClose = vi.fn()
   const onSaved = vi.fn()
@@ -111,12 +114,22 @@ describe('WorkspaceFeeSettings', () => {
     const user = userEvent.setup()
     const onPreview = vi.fn()
     const { unmount } = mount({ fee_rebate: 'monthly' }, '0.0004275', onPreview)
-    expect(onPreview).toHaveBeenLastCalledWith({ rate: 0.0004275, rebate: 'monthly', rounding: 'lot' })
+    const base = { rate: 0.0004275, rebate: 'monthly', rounding: 'lot', dayTradeTax: true }
+    expect(onPreview).toHaveBeenLastCalledWith(base)
     await user.click(screen.getByRole('radio', { name: /整筆一起算/ }))
-    expect(onPreview).toHaveBeenLastCalledWith({ rate: 0.0004275, rebate: 'monthly', rounding: 'position' })
+    expect(onPreview).toHaveBeenLastCalledWith({ ...base, rounding: 'position' })
     await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.000285')
-    expect(onPreview).toHaveBeenLastCalledWith({ rate: 0.000285, rebate: 'monthly', rounding: 'position' })
+    expect(onPreview).toHaveBeenLastCalledWith({ ...base, rate: 0.000285, rounding: 'position' })
+    // BUG-090: the 當沖 tax estimate previews like the rest, and saves nothing until 儲存.
+    await user.click(screen.getByRole('radio', { name: /一律用完整稅率/ }))
+    expect(onPreview).toHaveBeenLastCalledWith({
+      ...base,
+      rate: 0.000285,
+      rounding: 'position',
+      dayTradeTax: false,
+    })
     expect(setWorkspaceFeeRounding).not.toHaveBeenCalled()
+    expect(setWorkspaceDayTradeTaxEstimate).not.toHaveBeenCalled()
     unmount()
     expect(onPreview).toHaveBeenLastCalledWith(null)
   })
@@ -304,5 +317,36 @@ describe('WorkspaceFeeSettings 折扣怎麼退的預設值', () => {
     mount({ fee_rebate: 'instant' }, '0.001425')
     await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.0005415')
     expect((screen.getByRole('radio', { name: /月退/ }) as HTMLInputElement).checked).toBe(true)
+  })
+})
+
+// BUG-090: the 當沖 tax estimate is broker behaviour, so it is a per-workspace choice. 玉山 halves
+// the tax on a lot bought today (that is what BUG-087 measured); RON withheld the full 0.3% on a
+// position opened the same morning. An absent column must keep the 玉山 behaviour, or every
+// workspace already reconciled against it would move the day this column ships.
+describe('WorkspaceFeeSettings 當沖稅率估算（BUG-090）', () => {
+  it('沒設定過時預設沿用 BUG-087 的減半估算', () => {
+    mount({}, '0.0004275')
+    expect((screen.getByRole('radio', { name: /當天用當沖稅率/ }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('讀回已存的「一律用完整稅率」', () => {
+    mount({ day_trade_tax_estimate: false }, '0.0004275')
+    expect((screen.getByRole('radio', { name: /一律用完整稅率/ }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('沒改就不寫入（儲存一個沒動過的表單）', async () => {
+    const user = userEvent.setup()
+    mount({}, '0.0004275')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceDayTradeTaxEstimate).not.toHaveBeenCalled()
+  })
+
+  it('改成完整稅率後儲存才寫入', async () => {
+    const user = userEvent.setup()
+    mount({}, '0.0004275')
+    await user.click(screen.getByRole('radio', { name: /一律用完整稅率/ }))
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceDayTradeTaxEstimate).toHaveBeenCalledWith('ws-1', false)
   })
 })

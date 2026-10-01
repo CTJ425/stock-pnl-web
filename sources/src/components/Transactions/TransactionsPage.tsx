@@ -4,7 +4,7 @@
  * The "Profit and Loss/Income and Expenses" column is the same as column H in the GAS version: buy = -(unit price × number of shares + expenses), sell = unit price × number of shares - expenses.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, Download, MoreHorizontal, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
+import { ArrowLeftRight, Calculator, Download, MoreHorizontal, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -18,6 +18,7 @@ import { Modal } from '../Common/Modal'
 import { useToast } from '../Common/Toast'
 import { useConfirm } from '../Common/useConfirm'
 import { CsvImportModal } from './CsvImportModal'
+import { MarkDayTradesModal } from './MarkDayTradesModal'
 import { RecalcFeesModal } from './RecalcFeesModal'
 import { StockSplitModal } from './StockSplitModal'
 import { TransactionForm } from './TransactionForm'
@@ -133,6 +134,7 @@ export function TransactionsPage() {
   const confirm = useConfirm()
   const [showImport, setShowImport] = useState(false)
   const [showRecalc, setShowRecalc] = useState(false)
+  const [showDayTrades, setShowDayTrades] = useState(false)
   const [showSplit, setShowSplit] = useState(false)
   const [showTools, setShowTools] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -351,6 +353,15 @@ export function TransactionsPage() {
           <Calculator size={15} />
           重算手續費
         </button>
+        <button
+          className="btn tx-tool"
+          title="找出證交稅只收一半、卻沒標記成當沖的交易"
+          onClick={() => setShowDayTrades(true)}
+          disabled={transactions.length === 0}
+        >
+          <ArrowLeftRight size={15} />
+          標記當沖
+        </button>
         <button className="btn tx-tool" onClick={() => setShowImport(true)}>
           <Upload size={15} />
           匯入 CSV
@@ -487,6 +498,8 @@ export function TransactionsPage() {
 
       {showRecalc && <RecalcFeesModal onClose={() => setShowRecalc(false)} />}
 
+      {showDayTrades && <MarkDayTradesModal onClose={() => setShowDayTrades(false)} />}
+
       {showSplit && (
         <StockSplitModal
           onClose={() => setShowSplit(false)}
@@ -520,6 +533,18 @@ export function TransactionsPage() {
             >
               <Calculator size={15} />
               重算手續費
+            </button>
+            <button
+              type="button"
+              className="btn tx-tools-item"
+              disabled={transactions.length === 0}
+              onClick={() => {
+                setShowTools(false)
+                setShowDayTrades(true)
+              }}
+            >
+              <ArrowLeftRight size={15} />
+              標記當沖
             </button>
             <button
               type="button"

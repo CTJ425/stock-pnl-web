@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
 import { computeLedger, estimateUnrealized, estimateUnrealizedShort } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
-import { breakEvenPrice, breakEvenPriceShort, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
+import {
+  breakEvenPrice,
+  breakEvenPriceShort,
+  calculateFee,
+  DEFAULT_FEE_RATE,
+  hasDayTradeFeeSignature,
+  inferFeeRate,
+  proposeDayTradeLabels,
+  proposeFeeCorrections,
+} from './fees'
 import { rateOn } from './feeRateHistory'
 
 describe('calculateFee（與 GAS Sidebar calculateFee 同構）', () => {
@@ -616,5 +625,124 @@ describe('breakEvenPrice 整筆捨去與 estimateUnrealized 一致（BUG-088）'
 
   it('未指定時與逐批相同', () => {
     expect(breakEvenPrice(h, DEFAULT_FEE_RATE, 20)).toBe(breakEvenPrice(h, DEFAULT_FEE_RATE, 20, false, 'lot'))
+  })
+})
+
+describe('proposeDayTradeLabels（找出漏標的現股當沖，BUG-089）', () => {
+  // The real 2303 ledger that produced BUG-089. Every row shares one `created_at`, as a bulk
+  // import writes them, which is what makes `compareTxOrder` put both 9/22 buys before the sell.
+  const RON: Array<[string, TxType, number, number, number, string]> = [
+    ['2026-07-13', 'BUY', 1000, 154, 65, 'a1'],
+    ['2026-07-13', 'SELL', 1000, 163, 558, 'a2'],
+    ['2026-08-24', 'BUY', 1000, 125.5, 53, 'd1'],
+    ['2026-08-24', 'SELL', 1000, 123.5, 237, 'd2'],
+    ['2026-09-22', 'BUY', 1000, 164.5, 70, 'g1'],
+    ['2026-09-22', 'SELL', 1000, 166, 319, 'g2'],
+    ['2026-09-22', 'BUY', 1000, 163.5, 69, 'g3'],
+    ['2026-09-23', 'BUY', 1000, 160, 68, 'h1'],
+  ]
+  const ronRows = (nature: TxNature = 'SPOT'): Transaction[] =>
+    RON.map(([tx_date, tx_type, qty, price, fee_tax, id]) => ({
+      id,
+      workspace_id: 'ws-1',
+      tx_date,
+      market: 'TPE',
+      ticker: '2303',
+      name: '聯電',
+      tx_type,
+      price,
+      qty,
+      fee_tax,
+      tx_nature: nature,
+      created_at: '2026-10-01T14:53:39.739Z',
+    }))
+  const opts = { rateFor: () => 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
+
+  it('只挑出證交稅收一半的賣出，完整稅率的同日買賣不算當沖', () => {
+    const out = proposeDayTradeLabels(ronRows(), opts)
+    // 7/13 sell: 558 = fee 69 + full tax 489 → not a day trade, however same-day it looks.
+    expect(out.map((p) => p.sell.id)).toEqual(['d2', 'g2'])
+  })
+
+  it('配對當天最早的買進，不是價格比較近的那一批', () => {
+    const out = proposeDayTradeLabels(ronRows(), opts)
+    const sep22 = out.find((p) => p.sell.id === 'g2')!
+    // The real sequence was 買 164.5 → 賣 166 → 買 163.5; FIFO must take g1, never g3,
+    // or the 163.5 lot would be netted away and the position would keep the wrong one.
+    expect(sep22.buys.map((b) => b.id)).toEqual(['g1'])
+  })
+
+  it('當天買進不足以賣出時不提案（寧可不猜）', () => {
+    // Sell 3,000 on 9/22 with the halved-tax signature (fee 212 + half tax 747 = 959), but only
+    // 2,000 were bought that day. A day trade you could not have made is left alone.
+    const rows = ronRows()
+      .filter((tx) => tx.id !== 'g2')
+      .concat({
+        id: 'g2',
+        workspace_id: 'ws-1',
+        tx_date: '2026-09-22',
+        market: 'TPE',
+        ticker: '2303',
+        name: '聯電',
+        tx_type: 'SELL',
+        price: 166,
+        qty: 3000,
+        fee_tax: 959,
+        tx_nature: 'SPOT',
+        created_at: '2026-10-01T14:53:39.739Z',
+      })
+    expect(hasDayTradeFeeSignature({ price: 166, qty: 3000, ticker: '2303', fee_tax: 959 }, 0.0004275, { whole: 20, odd: 1 })).toBe(true)
+    expect(proposeDayTradeLabels(rows, opts).map((p) => p.sell.id)).toEqual(['d2'])
+  })
+
+  it('已經標過 DAY_TRADE 的日期不再提案', () => {
+    const rows = ronRows().map((tx) => (tx.id === 'g2' ? { ...tx, tx_nature: 'DAY_TRADE' as TxNature } : tx))
+    expect(proposeDayTradeLabels(rows, opts).map((p) => p.sell.id)).toEqual(['d2'])
+  })
+
+  it('融券不納入配對', () => {
+    const rows = ronRows().map((tx) => (tx.id === 'g2' ? { ...tx, tx_nature: 'SHORT' as TxNature } : tx))
+    expect(proposeDayTradeLabels(rows, opts).map((p) => p.sell.id)).toEqual(['d2'])
+  })
+
+  it('標記後持股成本回到券商的均價，且已實現不再重複計入（BUG-089 迴歸）', () => {
+    const rows = ronRows()
+    const before = computeLedger(rows).holdings.find((h) => h.ticker === '2303')!
+    // 均價 162.07 against the broker's 161.82: the 9/22 day trade's profit is sitting in cost.
+    expect(before.cost).toBe(324137.5)
+
+    const labelled = new Set(
+      proposeDayTradeLabels(rows, opts).flatMap((p) => [p.sell.id, ...p.buys.map((b) => b.id)]),
+    )
+    const after = computeLedger(
+      rows.map((tx) => (labelled.has(tx.id) ? { ...tx, tx_nature: 'DAY_TRADE' as TxNature } : tx)),
+    ).holdings.find((h) => h.ticker === '2303')!
+
+    expect(after.cost).toBe(323637)
+    expect(after.cost / after.qty).toBeCloseTo(161.8185, 4)
+    // The same 500.5 was also booked as realized profit, so it moves in both places at once.
+    expect(Math.round(before.realized - after.realized)).toBe(501)
+  })
+})
+
+describe('hasDayTradeFeeSignature', () => {
+  const minFees = { whole: 20, odd: 1 }
+  it('免證交稅的債券 ETF 沒有半稅可言，永遠不是當沖訊號', () => {
+    // No tax to halve, so a low recorded fee says nothing about 當沖.
+    expect(
+      hasDayTradeFeeSignature({ price: 100, qty: 1000, ticker: '00679B', fee_tax: 42 }, 0.0004275, minFees),
+    ).toBe(false)
+  })
+  it('完整稅率的賣出不是當沖', () => {
+    // 159000: fee 67 + full tax 477 = 544
+    expect(
+      hasDayTradeFeeSignature({ price: 159, qty: 1000, ticker: '2303', fee_tax: 544 }, 0.0004275, minFees),
+    ).toBe(false)
+  })
+  it('半稅加上應收手續費才算數', () => {
+    // 159000: fee 67 + half tax 238 = 305
+    expect(
+      hasDayTradeFeeSignature({ price: 159, qty: 1000, ticker: '2303', fee_tax: 305 }, 0.0004275, minFees),
+    ).toBe(true)
   })
 })

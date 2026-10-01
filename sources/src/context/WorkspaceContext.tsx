@@ -56,6 +56,7 @@ export interface WorkspaceState {
   setWorkspaceFeeRebate: (id: string, rebate: FeeRebate) => Promise<void>
   /** Persist how the broker floors the estimated sell fee and tax (BUG-088). */
   setWorkspaceFeeRounding: (id: string, rounding: FeeRounding) => Promise<void>
+  setWorkspaceDayTradeTaxEstimate: (id: string, enabled: boolean) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -308,6 +309,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const setWorkspaceDayTradeTaxEstimate = useCallback(
+    async (id: string, enabled: boolean) => {
+      // Same failure handling as the rounding above: keep the old value and report through `error`.
+      try {
+        await provider.setWorkspaceDayTradeTaxEstimate(id, enabled)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      }
+      setWorkspaces((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, day_trade_tax_estimate: enabled } : w)),
+      )
+    },
+    [provider],
+  )
+
   const value = useMemo<WorkspaceState>(
     () => ({
       workspaces,
@@ -330,6 +347,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceFeeRateHistory,
       setWorkspaceFeeRebate,
       setWorkspaceFeeRounding,
+      setWorkspaceDayTradeTaxEstimate,
     }),
     [
       workspaces,
@@ -353,6 +371,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceFeeRateHistory,
       setWorkspaceFeeRebate,
       setWorkspaceFeeRounding,
+      setWorkspaceDayTradeTaxEstimate,
     ],
   )
 

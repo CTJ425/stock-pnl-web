@@ -72,14 +72,16 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
     }
   }, [initialTicker])
 
-  // BUG-087, same as the dashboard: only the 券商 figure uses it.
+  // BUG-087, same as the dashboard: only the 券商 figure uses it, and BUG-090 only when this
+  // workspace's broker estimates a lot bought today at the halved 當沖 tax at all.
   const today = taipeiDateKey(new Date())
+  const dayTradeToday = (current?.day_trade_tax_estimate ?? true) ? today : undefined
   const twRows = useMemo(
     () =>
-      buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot', today).filter(
+      buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot', dayTradeToday).filter(
         (r) => r.holding.currency === 'TWD',
       ),
-    [holdings, prices, feeRate, current?.id, current?.fee_rounding, today],
+    [holdings, prices, feeRate, current?.id, current?.fee_rounding, dayTradeToday],
   )
 
   type Entry =

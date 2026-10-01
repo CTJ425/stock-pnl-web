@@ -38,6 +38,8 @@ export interface FeeDraft {
   rate: number
   rebate: FeeRebate
   rounding: FeeRounding
+  /** BUG-090: whether a lot bought today is estimated at the halved 現股當沖 tax. */
+  dayTradeTax: boolean
 }
 
 function explain(rate: number, rebate: FeeRebate): string {
@@ -72,6 +74,7 @@ export function WorkspaceFeeSettings({
     setWorkspaceFeeRateHistory,
     setWorkspaceFeeRebate,
     setWorkspaceFeeRounding,
+    setWorkspaceDayTradeTaxEstimate,
   } = useWorkspace()
   const uid = useId()
   const today = useMemo(() => taipeiDateKey(new Date()), [])
@@ -95,6 +98,8 @@ export function WorkspaceFeeSettings({
   const [from, setFrom] = useState(today)
   const [rebate, setRebate] = useState<FeeRebate>(savedRebate ?? defaultRebate(savedRate))
   const [rounding, setRounding] = useState<FeeRounding>(current?.fee_rounding ?? 'lot')
+  // BUG-090: null keeps the BUG-087 behaviour (玉山 halves the tax on a lot bought today).
+  const [dayTradeTax, setDayTradeTax] = useState<boolean>(current?.day_trade_tax_estimate ?? true)
   const [saving, setSaving] = useState(false)
   // The base row's inline editor (null = not editing). Without it a workspace whose base is
   // already the discounted rate has no way to say "before that date I paid the list price":
@@ -125,8 +130,8 @@ export function WorkspaceFeeSettings({
     // A future effective date changes nothing the dashboard shows today, so it previews the rate
     // still in force rather than one that has not started.
     const previewRate = futureFrom ? savedRate : rate
-    onPreview?.(rateValid ? { rate: previewRate, rebate, rounding } : null)
-  }, [onPreview, rate, rateValid, rebate, rounding, futureFrom, savedRate])
+    onPreview?.(rateValid ? { rate: previewRate, rebate, rounding, dayTradeTax } : null)
+  }, [onPreview, rate, rateValid, rebate, rounding, dayTradeTax, futureFrom, savedRate])
   // Closing the form (saved or not) ends the preview; the dashboard falls back to the saved values.
   useEffect(() => () => onPreview?.(null), [onPreview])
 
@@ -183,6 +188,8 @@ export function WorkspaceFeeSettings({
     }
     if (rebate !== savedRebate) await setWorkspaceFeeRebate(current.id, rebate)
     if (rounding !== (current.fee_rounding ?? 'lot')) await setWorkspaceFeeRounding(current.id, rounding)
+    if (dayTradeTax !== (current.day_trade_tax_estimate ?? true))
+      await setWorkspaceDayTradeTaxEstimate(current.id, dayTradeTax)
     setSaving(false)
     onSaved?.({ rateChanged })
     onClose()
@@ -393,6 +400,35 @@ export function WorkspaceFeeSettings({
               <span>同一檔股票合在一起算一次再捨去零頭，例如元大。</span>
             </label>
             <div className="field-hint">兩種算法每批最多差 1 元，選和你的券商 App 一樣的就好。</div>
+          </fieldset>
+
+          <fieldset className="fee-settings-rebate">
+            <legend>今天剛買進的股票，證交稅怎麼估</legend>
+            <label className="fee-settings-radio">
+              <input
+                type="radio"
+                name={`${uid}-daytradetax`}
+                value="half"
+                checked={dayTradeTax}
+                onChange={() => setDayTradeTax(true)}
+              />
+              <b>當天用當沖稅率（減半）</b>
+              <span>當天買的那批先用 0.15%（ETF 0.05%）估，隔天恢復，例如玉山。</span>
+            </label>
+            <label className="fee-settings-radio">
+              <input
+                type="radio"
+                name={`${uid}-daytradetax`}
+                value="full"
+                checked={!dayTradeTax}
+                onChange={() => setDayTradeTax(false)}
+              />
+              <b>一律用完整稅率</b>
+              <span>不分買進日期都用 0.3%（ETF 0.1%），例如 RON。</span>
+            </label>
+            <div className="field-hint">
+              只影響「牌告」那個口徑的預估，不影響已經成交的手續費。選錯會讓當天買進的股票看起來比券商 App 樂觀。
+            </div>
           </fieldset>
         </div>
 

@@ -53,6 +53,13 @@ export interface Workspace {
   fee_rate_history?: FeeRateSegment[] | null
   fee_rebate?: FeeRebate | null
   fee_rounding?: FeeRounding | null
+  /**
+   * BUG-090: does this broker estimate a lot bought *today* at the halved 現股當沖 tax?
+   * 玉山 does (that is what BUG-087 measured); RON does not — its app withheld the full 0.3% on a
+   * position opened the same morning. Null means "not set" and keeps the BUG-087 behaviour, so a
+   * workspace that was reconciled against 玉山 does not move when this column arrives.
+   */
+  day_trade_tax_estimate?: boolean | null
 }
 
 export interface Transaction {

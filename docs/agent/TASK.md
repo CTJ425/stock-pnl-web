@@ -16,67 +16,46 @@
 
 ## 📋 Active Tasks
 
+### Task 186: Persist the transaction import order so same-day sequences are not reordered
+- **Status**: 🔄 OPEN — the user takes this one. BUG-089's day trades are fixed by labelling
+  (`FIXED_BUG.md`), but that is the labelled case; this is the general one.
+- **Agent**: —
+- **Timestamp**: 2026-10-02 00:10:00 Asia/Taipei
+- **Why**: `compareTxOrder` (`sources/src/utils/pnlEngine.ts:278`) breaks a `tx_date` + `created_at`
+  tie by putting opening legs first (BUG-049, so a sell is never processed before the position
+  exists). A bulk import writes one `created_at` for every row, so a same-day 買→賣→買 is replayed
+  as 買、買、賣 and the moving average removes a blended cost instead of the lot that was actually
+  sold. The data as stored cannot recover the real intraday order, so no code-only fix is correct.
+- **Shape**: a sequence column on `transactions`, written with the CSV row order at import,
+  preferred by `compareTxOrder` over the `isOpenLeg` tie-break. Needs DDL + a backfill, so it is
+  **not** shipped by a `main` push (CLAUDE.md § Release workflow).
+- **Known limit of the current state**: an unlabelled same-day round trip whose fee does **not**
+  carry the halved-tax signature (a 融資/融券 leg, a broker that bills differently, a hand-typed
+  fee) is still reordered. 「標記當沖」cannot see those.
+
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
-- **Status**: ✅ DONE — released as **0.10.13** (`dd5a727`), on `main` and `dev` (identical), CI green
-  on both, Release published by CI with the final body. Gates: vitest 2,762 pass / 7 skipped, build /
-  `typecheck:edge` / lint exit 0. DDL and `stock-price` applied to **DEV and PROD**,
-  `verify_setup()` 10/10 on both. Verified in a real browser (local mode, 13/13) and live against both
-  Edge deployments. Details: `docs/agent/specs/185-codebase-review-2026-10-01.md`.
+- **Status**: 🔄 OPEN REMAINDER — the task itself shipped as **0.10.13** (`dd5a727`) and the entry is
+  archived; only items 7, 10 and 12 below are still live. Full text, evidence and the completed items:
+  `TASK_ARCHIVE.md` → `### Task 185` (top of file).
 - **Agent**: Claude
-- **Timestamp**: 2026-10-01 17:30:00 Asia/Taipei
+- **Timestamp**: 2026-10-01 23:10:00 Asia/Taipei
 - **Spec**: docs/agent/specs/185-codebase-review-2026-10-01.md
-- **Done**: items 1–5, 8, 9 — A1 split wizard converts sells and stock dividends, A2 no stale rows on a
-  workspace switch, A3 all-or-nothing batch RPC (proven on DEV Postgres), A4 a 0-row update is a failure,
-  B1 symbol validation, C1 hidden tabs stop polling, C3 split-log FK (cascade proven on DEV), C4 corrupt
-  local store is backed up, C5 CSV 費率 column and the stray-quote fix, C6 `setCurrentId` out of the updater.
-  Full text in `TASK_ARCHIVE.md`.
-- **Items still open**:
-  6. B2 ✅ **done 2026-10-01** — `connect-src` is now `'self' https://*.supabase.co
-     https://openapi.twse.com.tw https://www.tpex.org.tw`. The `https:` and `http://localhost:*`
-     wildcards existed for a user-supplied AI provider base URL; **that feature is gone** (`schema.sql`
-     drops `ai_provider` / `ai_base_url` / `ai_api_key`, no AI code is left in `src/`). The list was
-     derived from every absolute URL in the production bundle: the four remaining ones
-     (`localhost:9999`, `react.dev`, `discord.com`, `github.com`) are supabase-js defaults and error
-     strings, not connection targets. TWSE/TPEx stay because `twMarketData.ts:171-173` falls back to a
-     direct browser fetch when the Edge proxy fails. `wss:` deliberately omitted — nothing subscribes
-     to a realtime channel. **Verified in a browser 2026-10-01 19:10**: the tightened header is live on
-     `stock-pnl-web.pages.dev`, and a full logged-in journey (login → 庫存總覽 → 總體經濟 → 個股分析)
-     produced **zero CSP violations, zero blocked requests and zero console errors**. The logged-in
-     half was driven against DEV by serving `dist/` locally with the exact production CSP header,
-     because the PROD site only accepts PROD accounts — 國際指數 rendered live quotes for 8 indices,
-     which exercises the Supabase and TWSE/TPEx origins end to end.
-     (the build and tests cannot catch a CSP mistake)
-  7. B3 ✅ **settled 2026-10-01 — measured, not assumed.** The leaked `CRON_SECRET` was exposed for
-     **14.5 hours** (`04a2833` 2026-08-11 20:46 → `0b2bea9` 2026-08-12 11:04) and belonged to the
-     retired self-hosted deployment at `korq9tvdz0jd7yblr72p.ivan.lab` (10.8.22.99, RFC1918 — not
-     reachable from the internet). Its sha256 is `951e1bbd…`; the live secrets are `de418211…` (DEV)
-     and `21d0257c…` (PROD), both set 2026-09-01 when the cloud projects were recreated, so **the
-     leaked value is in use nowhere**. The user then had every docker / self-hosted artefact deleted:
-     the three `scratchpad/bootstrap-dev*` files, `trust-ivanlab-ca-db.sh`, `certs/rootCA.crt` (a CA
-     certificate with no private key) and `scripts/verify-watchlist-e2e.cjs`. `scratchpad/` keeps 13
-     design-mockup and one-off-SQL files; nothing in them is a credential.
-     - ✅ **The retired `*.ivan.lab` host is gone** (user confirmed 2026-10-01), so nothing can still
-       accept that secret.
-     - ✅ **History rewritten 2026-10-01 at the user's instruction.** `git filter-repo --replace-text`
-       turned the value into `***REMOVED-CRON-SECRET***`; 696 commits and 179 tags preserved, `main`
-       and `dev` force-pushed, all tags re-pointed (0.10.13 was created by CI and missing locally, so
-       it was mapped through `.git/filter-repo/commit-map` by hand). A fresh mirror clone from GitHub
-       contains **0** occurrences. Stale commit SHAs in the live docs were remapped in the same pass.
-       Pre-rewrite mirror backup: `/home/ivan/stock-pnl-web-backup-20261001-102622.git` — **it still
-       contains the secret**, delete it when you are satisfied.
+- **Done**: items 1–6, 8, 9, 13 — full text in `TASK_ARCHIVE.md`.
+- **Items still open** (numbers kept as they were — other documents cite them):
+  7. B3 — the `CRON_SECRET` leak itself is **settled** (exposed 14.5 h, retired `*.ivan.lab` host,
+     value in use nowhere, history rewritten 2026-10-01; full evidence in `TASK_ARCHIVE.md`).
      - ⏳ **Left for the user**: GitHub still serves the pre-rewrite objects by direct SHA (verified:
        `/commit/81cf71a` and the raw file there both answer 200). Only GitHub Support can purge them.
        The request to send, and the checks to run afterwards, are in
        `docs/agent/github-support-purge-request.md`.
+     - ⏳ Pre-rewrite mirror backup `/home/ivan/stock-pnl-web-backup-20261001-102622.git` **still
+       contains the secret** — delete it when you are satisfied.
   10. C2 verify when the bond-ETF securities-tax exemption ends and give `sellTaxRate` a date dimension ⏳
   12. **B1 is still open and it is the sharpest one** ⏳ — measured against deployed DEV and PROD:
      `Bearer <the sb_publishable_ key in the public bundle>` returns **200 with quote data**. 0.10.13
      validates *what* can be asked, not *who* asks. Closing it means `assertUser` plus a per-user quota
      like `stock-report`'s, which changes who can use the quote path — a product decision, so it was
      deliberately not taken here.
-  13. ~~Confirm the frontend went live~~ ✅ — Cloudflare Pages serves `index-JvzydgNb.js`, which carries this
-     release's code; the login page renders with no console errors and no CSP violations. Note for next time:
-     Cloudflare's chunk hash never matches a local `npm run build`, so it is not a deploy check.
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
 - **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`19b4175`), on `main` and `dev`
