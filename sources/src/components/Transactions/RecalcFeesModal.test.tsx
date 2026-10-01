@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Transaction } from '../../types/models'
 import { RecalcFeesModal } from './RecalcFeesModal'
 
-const { useWorkspace } = vi.hoisted(() => ({ useWorkspace: vi.fn() }))
+const { useWorkspace, RATE } = vi.hoisted(() => ({
+  useWorkspace: vi.fn(),
+  RATE: { value: 0.001425 },
+}))
 
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../utils/settings', () => ({
-  getFeeRateOn: () => 0.001425,
+  getFeeRateOn: () => RATE.value,
   getFeeRateHistory: () => [],
   getMinFee: (kind: 'whole' | 'odd') => (kind === 'whole' ? 20 : 1),
 }))
@@ -91,5 +94,57 @@ describe('RecalcFeesModal (批次重算手續費)', () => {
     expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
     expect(await screen.findByText(/未變更|失敗/)).toBeTruthy()
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+
+// 月退: the broker collects the statutory rate at trade time and refunds the discount separately,
+// so a recalculation that wrote the discounted fee would contradict the settlement statement.
+describe('RecalcFeesModal 月退的工作區用全額重算', () => {
+  const updateTransactionsBatch = vi.fn()
+
+  beforeEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    RATE.value = 0.0005415
+  })
+  afterEach(() => {
+    RATE.value = 0.001425
+  })
+
+  const mount = (rebate: 'instant' | 'monthly' | null) => {
+    useWorkspace.mockReturnValue({
+      transactions: [MOCK_TRANSACTIONS[0]],
+      updateTransaction: vi.fn(),
+      updateTransactionsBatch,
+      current: { id: 'ws-1', name: '玉山證券', fee_rebate: rebate },
+    })
+    render(<RecalcFeesModal onClose={vi.fn()} />)
+  }
+
+  it('月退：用牌告 0.1425% 重算，並說明折讓另退', async () => {
+    const user = userEvent.setup()
+    updateTransactionsBatch.mockResolvedValue(undefined)
+    mount('monthly')
+
+    expect(screen.getByText(/月退/)).toBeTruthy()
+    // 1,000 股 × 1,000 元 × 0.1425% = 1,425
+    expect(screen.getByText('1,425')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /更新勾選的 1 筆手續費/ }))
+    expect(updateTransactionsBatch).toHaveBeenCalledWith([
+      { id: 'tx-a', price: 1000, qty: 1000, fee_tax: 1425, fee_rate: 0.001425 },
+    ])
+  })
+
+  it('現折：用折扣後的費率重算', async () => {
+    const user = userEvent.setup()
+    updateTransactionsBatch.mockResolvedValue(undefined)
+    mount('instant')
+
+    // 1,000 股 × 1,000 元 × 0.0541% = 541.5 → 541
+    await user.click(screen.getByRole('button', { name: /更新勾選的 1 筆手續費/ }))
+    expect(updateTransactionsBatch).toHaveBeenCalledWith([
+      { id: 'tx-a', price: 1000, qty: 1000, fee_tax: 541, fee_rate: 0.0005415 },
+    ])
   })
 })

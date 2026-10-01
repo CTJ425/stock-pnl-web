@@ -1,5 +1,34 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 183: 股利專區 — the year's cash dividends under the yearly report
+- **Status**: ✅ DONE — released as **0.10.10** (`abe8c38`), on `main` and `dev`, Release published by CI.
+  No deploy was needed: the 股利 feature is frontend-only and changes no schema.
+- **Agent**: Claude
+- **Timestamp**: 2026-09-30 19:35:00 Asia/Taipei
+- **Why**: the user could already record a 現金股利, but nothing showed them a year of dividends,
+  and the 二代健保 deduction had to be looked up and typed from scratch every time.
+- **Settled with the user before any code** (all four are implemented as stated):
+  1. 總報酬 = 這一年的已實現損益 + 股利**實收**（不是配息總額）
+  2. 逐筆明細帶「每股股利」欄，讓每一列自己可以驗算
+  3. 個股占比只畫金額**前 4 大**，其餘折成灰色「其他」，固定排最後
+  4. `tx_date` 就是**發放日**，不另加除息日欄位
+- **The rule that must not be reversed**: the 二代健保 figure is computed at **write** time and
+  stored in `fee_tax`. Nothing recomputes it on read — 衛福部 has a standing proposal to move
+  dividends to an annual settlement, and a read-time formula would silently rewrite every
+  historical dividend the user already reconciled against a broker notice. Since 0.10.10-dev.2 the
+  field **fills itself and follows every edit**, exactly like 手續費 (the user's call); that is a
+  write-time behaviour and does not weaken the rule.
+- **Files**: `utils/nhiSupplement.ts`, `utils/dividendReport.ts`,
+  `components/YearlyReport/DividendSection.tsx`, `YearlyPage.tsx` (wiring),
+  `components/Transactions/TransactionForm.tsx` (the hint), `styles/dashboard.css`.
+  Engine and Edge mirror untouched; **no schema change**.
+- **Design record**: `docs/design/dividend-section-mockup.html`, `docs/design/dividend-data-flow.html`.
+- **Left open on purpose** (not started, not blocking):
+  - 匯費 is a constant 10 in the hint. If a broker charges something else, it becomes a workspace
+    setting — deliberately not built on speculation.
+  - The US section shows US dividends gross/net but offers no withholding hint; US dividends are
+    withheld at source (30%) under a rule this module does not model.
+
 ### Task 180: Deploy `stock-report` for the BUG-087 day-trade tax rule
 - **Status**: ✅ DONE (2026-09-30)
 - **Agent**: Claude

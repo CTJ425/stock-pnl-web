@@ -1,9 +1,20 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 182 infrastructure done.** `fee_rate_history` DDL applied to DEV and PROD, `stock-report` redeployed to both (ezbr changed on both), and the dated fee rate verified in a browser against cloud DEV.
-- Status: ✅ 0.10.10 on `main` + `dev`. DDL applied to **both** projects, `verify_setup()` 10/10 PASS on both, Edge `stock-report` DEV v35 / PROD v23. 改手續費率 no longer errors. ⏳ One step left and it is the user's: set the real 玉山 workspace to 3.8 折 from 2026-10-01.
-- Timestamp: 2026-10-01 11:20:00 Asia/Taipei
+- Action: **Task 184 code done (uncommitted).** 月退 now decides the fee that gets *recorded*, not just the estimate; the fee-rate base is editable; a moved 生效日 on a fresh workspace writes a segment instead of re-pricing the whole ledger.
+- Status: ✅ vitest 2,697 pass / 7 skipped, `npm run build` exit 0. Proven against the broker's app: 玉山 is **月退**, and 月退 + 3.8 折 makes the dashboard match 玉山 App to the dollar (78,276). ⏳ Not committed, not released, no browser check yet. ⏳ User's own step: fix PROD 玉山證卷's base (「一直以來 3.8 折」 → 不打折) so 10/1 之前的交易 keep the list price.
+- Timestamp: 2026-10-01 14:36:00 Asia/Taipei
+
+---
+## 📅 Log: 2026-10-01 14:36:00 Asia/Taipei (Task 184 — 月退 bills the list price; fee-rate base is editable)
+- **Root question the user asked.** 「10/1 之前不打折、10/2 之後打折，重算手續費會不會失真?」 It does not — Task 182 already prices every row at `rateFor(tx.tx_date)` (`RecalcFeesModal.tsx:29` → `fees.ts proposeFeeCorrections`) — **but three ways into a wrong state survived**, and the user then hit two of them on their own workspaces.
+- **Measured against the broker's own app, which is what settled it.** 玉山 App 總損益 **78,276** vs the dashboard's **79,523**, difference **1,247**. Per row: 0050 899, 2303 **322 exactly**, 欣普羅 26. Reconstructed: the dashboard withheld 3.8 折 0.0541%, the App withheld the statutory 0.1425% (2303: 460 − 138 = 322; 0050 901 vs 899 is per-lot flooring). Taxes agreed (ETF 0.1% / 0.3%, 1,969 total), costs and quotes agreed. So **玉山 is 月退** — it bills the list price and refunds the discount later. The user switched to 月退 and the two numbers now match to the dollar.
+- **The real bug that fell out of it.** `fee_rebate` only reached `pnlBasis` (the *estimate*). Recording a fee ignored it, so on a 月退 workspace 新增交易 and 批次重算 wrote the **discounted** fee — a number no settlement statement ever shows, and the discount never comes back to that row. New `chargedFeeRate(rate, rebate)` in `utils/pnlBasis.ts`, derived from `pnlBasis` so the two cannot drift; wired into `TransactionForm.tsx:66,86`, `RecalcFeesModal.tsx:31` (with a 月退 hint in the modal) and `StockSplitModal.tsx:175`.
+- **Trap A — the chosen date was ignored on a workspace with no rate yet.** `WorkspaceFeeSettings.tsx:114` wrote the first rate as the base whatever date was picked, so "3.8 折 from 2026-10-02" re-priced every trade ever made. Now: date left at today → base (unchanged); date moved → `fee_rate = 0.001425` **plus** the segment, which says "before that day, list price".
+- **Trap B — a base that is already the discounted rate had no exit.** Saving the same rate from a date is not a change, so `normalizeFeeRateHistory` (`feeRateHistory.ts:67`) dropped it and the whole ledger stayed on the discount. The 費率變更紀錄 base row now has a 「改」 inline editor (`saveBase`), which also re-normalises the history against the new base. **This is exactly the state the user's PROD 玉山證卷 workspace is in** — it reads 「一直以來 3.8 折」 while DEV reads 「2026-10-01 起 3.8 折 / 之前 不打折」, because DEV already had 原價 as its base and PROD had no rate at all when 3.8 折 was first saved.
+- **月退 is now the default when a discount is picked** (user's call), 現折 at the list price. A stored value that merely repeats what the default would have been does **not** count as a choice (`rebateChosen`), so a workspace saved today at 原價 is not pinned to 現折 when a discount is negotiated later. The default is persisted on save, because the Edge holdings card reads `fee_rebate` from the row — a default only the form knew would make the nightly card disagree with the dashboard.
+- **Gates**: vitest **2,697 passed / 7 skipped (+14)**, `npm run build` exit 0. Not committed, not released, not verified in a browser yet.
+- **Left for the user**: on PROD 玉山證卷, press 「改」 on 「一直以來 3.8 折」 → 不打折, then save 3.8 折 from 2026-10-01, so 10/1 之前的交易 keep the list price. Under 月退 the recalculation now uses 0.1425% for every date anyway, so this is about the record being true rather than about today's numbers.
 
 ---
 ## 📅 Log: 2026-10-01 11:20:00 Asia/Taipei (Task 182 — DDL applied to DEV and PROD, stock-report redeployed)
@@ -13,15 +24,5 @@
 - **Edge `stock-report` redeployed to both** with `--no-verify-jwt`, from a clean tree at `a03f9af` whose `sources/supabase/` is byte-identical to `origin/main`'s (checked with `git diff --stat`, empty). DEV v34 → **v35**, PROD v22 → **v23**; `ezbr_sha256` moved `31cac8de13efd3ff…` → **`056ef180e20bdba53b4012fe…` on both**, which is the evidence that new code actually landed rather than a bumped version number. `verify_jwt=false` survived on both, so the pg_cron caller will not start getting 401s. `POST {}` answers 400 on both hosts — the expected reply for an unrouted body, so the function boots.
 - **The link was borrowed and given back.** `supabase link` is global, so PROD was linked only for its DDL and the link is back on DEV (`projects list` shows `linked=true` on `zyebvayngwrqzoaicbwd` only).
 - **Still open, and deliberately left to the user**: set the real 玉山 workspace to 3.8 折 from 2026-10-01 in the UI. It is one save, but it changes how their own P&L is computed and it opens the recalculation wizard — that is a decision to watch, not to make for them.
-
----
-## 📅 Log: 2026-10-01 10:00:00 Asia/Taipei (0.10.10 released to main)
-- **Released on the user's explicit decision after the risk was stated.** I raised that merging ships Task 182 as well — the two tasks share `TransactionForm.tsx` and are in one commit (`cecf819`) — and that Task 182's DDL is unapplied. The user chose to merge anyway. Recording the decision, not re-litigating it.
-- **What "unapplied DDL" actually costs, checked rather than assumed.** Reads are safe: `dataProvider.ts:384` steps the workspace query down to `WORKSPACE_COLUMNS_WITHOUT_HISTORY` when PostgREST rejects the unknown column, so login, 庫存 and 年度收益 are unaffected. Writes are not: `WorkspaceFeeSettings.tsx:113-120` sends a rate change down `setWorkspaceFeeRateHistory` whenever `base !== null`, and `base` is the workspace's existing `fee_rate` (`:70`), which every PROD workspace has. So **changing a workspace's 手續費率 in PROD throws 「儲存費率生效日失敗」** until the column exists. `dataProvider.ts:550` has no degrade ladder on that write, unlike the read.
-- **Changelog finalized before the push, on purpose.** `release.yml` generates the Release body from the section and **skips a Release that already exists**, so the Task 182 caveat was rewritten from an internal "pending" note into the user-facing consequence above. Confirmed in the published body.
-- **Shipped**: `abe8c38 chore(release): 0.10.10` on both branches (fast-forward, `main` and `dev` identical). CI run 36803253690 success; Sync GitHub Releases run 36803253703 success; Release `0.10.10` published by `github-actions[bot]`, marked Latest.
-- **Deployed nothing.** A `main` push moves code, not services. PROD Edge Functions and the DDL are still untouched, and the nightly Discord card still runs the old bundle. Cloudflare Pages will serve the new frontend from `main` on its own.
-- **Open, and the only thing between the user and a working 費率生效日**: apply to PROD (and DEV) —
-  `ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate_history JSONB;` plus its shape CHECK, both already in `sources/supabase/schema.sql`. Idempotent, touches no existing data. Then redeploy `stock-report` so the Edge card reads the history too.
 
 ---

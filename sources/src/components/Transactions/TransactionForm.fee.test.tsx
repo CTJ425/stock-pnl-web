@@ -30,6 +30,52 @@ async function openNewTransactionForm(user: ReturnType<typeof userEvent.setup>) 
   return within(dialog)
 }
 
+/**
+ * 月退 (`chargedFeeRate`): the broker bills the statutory rate at trade time and refunds the
+ * discount separately, so the fee this form fills in is the full one — the discounted rate would
+ * record a fee no settlement statement ever shows.
+ */
+describe('TransactionForm 月退的工作區帶入全額費率', () => {
+  beforeEach(() => {
+    cleanup()
+    window.localStorage.clear()
+  })
+
+  const seed = (rebate: 'instant' | 'monthly') => {
+    window.localStorage.setItem(
+      'stock-pnl-web/local-store-v1',
+      JSON.stringify({
+        workspaces: [
+          {
+            id: 'ws-fee',
+            name: '玉山證券',
+            created_at: '2026-01-01T00:00:00Z',
+            fee_rate: 0.0005415,
+            fee_rebate: rebate,
+          },
+        ],
+        transactions: [],
+      }),
+    )
+    window.localStorage.setItem('stock-pnl-web/current-workspace', 'ws-fee')
+    window.localStorage.setItem('stock-pnl-web/fee-rate/ws-fee', '0.0005415')
+  }
+
+  it('月退：帶入牌告 0.1425%', async () => {
+    const user = userEvent.setup()
+    seed('monthly')
+    const form = await openNewTransactionForm(user)
+    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.001425')
+  })
+
+  it('現折：帶入折扣後的費率', async () => {
+    const user = userEvent.setup()
+    seed('instant')
+    const form = await openNewTransactionForm(user)
+    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.0005415')
+  })
+})
+
 describe('TransactionForm 手續費欄位不連動全域預設', () => {
   beforeEach(() => {
     cleanup()

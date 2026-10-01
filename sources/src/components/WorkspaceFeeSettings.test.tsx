@@ -12,7 +12,11 @@ const {
   setWorkspaceFeeRounding,
 } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
-  setWorkspaceFeeRate: vi.fn(async () => {}),
+  // Mirrors `saveWorkspaceFeeRate`, which writes the localStorage cache the form reads its base
+  // rate back from; without it the base row would never show what was just saved.
+  setWorkspaceFeeRate: vi.fn(async (_id: string, rate: number) => {
+    localStorage.setItem('stock-pnl-web/fee-rate/ws-1', String(rate))
+  }),
   setWorkspaceFeeRateHistory: vi.fn(async () => {}),
   setWorkspaceFeeRebate: vi.fn(async () => {}),
   setWorkspaceFeeRounding: vi.fn(async () => {}),
@@ -67,7 +71,10 @@ describe('WorkspaceFeeSettings', () => {
     await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.000285')
     await user.click(screen.getByRole('button', { name: '儲存' }))
     expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.000285)
-    expect(setWorkspaceFeeRebate).not.toHaveBeenCalled()
+    // Picking a discount also writes the 月退 default (see the 折扣怎麼退 describe below): the
+    // Edge holdings card reads fee_rebate from the row, so a default only the form knows about
+    // would make the nightly card disagree with the dashboard.
+    expect(setWorkspaceFeeRebate).toHaveBeenCalledWith('ws-1', 'monthly')
     expect(onSaved).toHaveBeenCalledWith({ rateChanged: true })
   })
 
@@ -162,7 +169,7 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     expect((screen.getByLabelText('從哪天開始用這個折扣') as HTMLInputElement).value).toBe(today)
   })
 
-  it('還沒有費率的工作區，第一次存的是基準費率，沒有生效日這回事', async () => {
+  it('還沒有費率的工作區，日期沒動時存的是基準費率，套用到全部交易', async () => {
     const user = userEvent.setup()
     mount({}, null)
     await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
@@ -170,6 +177,48 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
 
     expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.0005415)
     expect(setWorkspaceFeeRateHistory).not.toHaveBeenCalled()
+  })
+
+  // The trap this closes: on a workspace with no rate yet, the chosen date used to be ignored and
+  // the discount became the base, so a batch recalculation re-priced every trade ever made at it.
+  it('還沒有費率的工作區，動過生效日就寫成一段，更早之前記成不打折', async () => {
+    const user = userEvent.setup()
+    mount({}, null)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
+    await user.clear(screen.getByLabelText('從哪天開始用這個折扣'))
+    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), '2026-10-02')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.001425)
+    expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [
+      { from: '2026-10-02', rate: 0.0005415 },
+    ])
+  })
+
+  // The other half of the same trap: the base is already the discounted rate and no segment can be
+  // added, because saving the same rate from a date is not a change at all.
+  it('基準費率可以直接改，不用繞路；重複的段落會一起收掉', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rate: 0.0005415 }, R38)
+    await user.click(screen.getByRole('button', { name: '改' }))
+    await user.selectOptions(screen.getByLabelText('更早之前的費率'), '0.001425')
+    await user.click(screen.getByRole('button', { name: '確定' }))
+
+    expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.001425)
+    expect(screen.getByText('不打折')).toBeTruthy()
+  })
+
+  it('改完基準費率後，同樣的折扣就能記成新的一段', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rate: 0.001425 }, '0.001425')
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
+    await user.clear(screen.getByLabelText('從哪天開始用這個折扣'))
+    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), '2026-10-02')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [
+      { from: '2026-10-02', rate: 0.0005415 },
+    ])
   })
 
   it('列出變更紀錄，最新的在上面，最早那段標成基準費率；選單開在今天實際在用的費率', () => {
@@ -202,5 +251,51 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     mount({ fee_rate: 0.00092625 }, R65)
     await user.click(screen.getByRole('button', { name: '刪除' }))
     expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [])
+  })
+})
+
+// A negotiated discount is normally refunded monthly, and that is the only setting under which the
+// dashboard agrees with the broker's own app (the app withholds the list price).
+describe('WorkspaceFeeSettings 折扣怎麼退的預設值', () => {
+  beforeEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    localStorage.removeItem('stock-pnl-web/fee-rate-history/ws-1')
+  })
+
+  it('選了折扣就預設月退', async () => {
+    const user = userEvent.setup()
+    mount({}, '0.001425')
+    expect((screen.getByRole('radio', { name: /現折/ }) as HTMLInputElement).checked).toBe(true)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.0005415')
+    expect((screen.getByRole('radio', { name: /月退/ }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('改回不打折就回到現折', async () => {
+    const user = userEvent.setup()
+    mount({}, '0.0005415')
+    expect((screen.getByRole('radio', { name: /月退/ }) as HTMLInputElement).checked).toBe(true)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.001425')
+    expect((screen.getByRole('radio', { name: /現折/ }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('使用者自己選了現折，換折扣也不會被改回月退', async () => {
+    const user = userEvent.setup()
+    mount({}, '0.00092625')
+    await user.click(screen.getByRole('radio', { name: /現折/ }))
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.0005415')
+    expect((screen.getByRole('radio', { name: /現折/ }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('以前存過、而且和預設不一樣的選擇會留著', () => {
+    mount({ fee_rebate: 'instant' }, '0.0005415')
+    expect((screen.getByRole('radio', { name: /現折/ }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('以前存的只是當時的預設值，不會把工作區鎖在現折', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rebate: 'instant' }, '0.001425')
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.0005415')
+    expect((screen.getByRole('radio', { name: /月退/ }) as HTMLInputElement).checked).toBe(true)
   })
 })

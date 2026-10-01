@@ -16,6 +16,7 @@ import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtPrice, fmtQty } from '../../utils/formatters'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
 import { getFeeRateOn, getMinFee } from '../../utils/settings'
+import { chargedFeeRate } from '../../utils/pnlBasis'
 import type { SplitLogEntry, TxUpdate } from '../../services/dataProvider'
 import { runBatchApply } from './batchUpdate'
 
@@ -170,7 +171,9 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
         // single workspace-wide rate that may belong to a later agreement.
         tx.fee_rate ??
         (() => {
-          const dateRate = getFeeRateOn(tx.tx_date, current?.id)
+          // 月退: the broker billed the list price that day and refunded the discount separately,
+          // so an auto-filled fee must use the charged rate, not the discounted one.
+          const dateRate = chargedFeeRate(getFeeRateOn(tx.tx_date, current?.id), current?.fee_rebate)
           return tx.fee_tax === 0 ? dateRate : inferFeeRate(tx, dateRate, minFees)
         })()
       let feeTax = tx.fee_tax
@@ -203,7 +206,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
         feeAutoFilled,
       }
     })
-  }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, current?.id, minFees])
+  }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, current?.id, current?.fee_rebate, minFees])
 
   // Count preview items whose converted quantity rounds down to 0 shares (AUDIT-09)
   const zeroQtyCount = useMemo(() => previewItems.filter((item) => item.newQty === 0).length, [previewItems])

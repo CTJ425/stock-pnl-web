@@ -16,34 +16,38 @@
 
 ## 📋 Active Tasks
 
-### Task 183: 股利專區 — the year's cash dividends under the yearly report
-- **Status**: ✅ DONE — released as **0.10.10** (`abe8c38`), on `main` and `dev`, Release published by CI.
-  No deploy was needed: the 股利 feature is frontend-only and changes no schema.
+### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
+- **Status**: ✅ DONE in code (2026-10-01), **uncommitted and unreleased**. vitest 2,697 pass / 7
+  skipped (+14), `npm run build` exit 0. No browser check yet.
 - **Agent**: Claude
-- **Timestamp**: 2026-09-30 19:35:00 Asia/Taipei
-- **Why**: the user could already record a 現金股利, but nothing showed them a year of dividends,
-  and the 二代健保 deduction had to be looked up and typed from scratch every time.
-- **Settled with the user before any code** (all four are implemented as stated):
-  1. 總報酬 = 這一年的已實現損益 + 股利**實收**（不是配息總額）
-  2. 逐筆明細帶「每股股利」欄，讓每一列自己可以驗算
-  3. 個股占比只畫金額**前 4 大**，其餘折成灰色「其他」，固定排最後
-  4. `tx_date` 就是**發放日**，不另加除息日欄位
-- **The rule that must not be reversed**: the 二代健保 figure is computed at **write** time and
-  stored in `fee_tax`. Nothing recomputes it on read — 衛福部 has a standing proposal to move
-  dividends to an annual settlement, and a read-time formula would silently rewrite every
-  historical dividend the user already reconciled against a broker notice. Since 0.10.10-dev.2 the
-  field **fills itself and follows every edit**, exactly like 手續費 (the user's call); that is a
-  write-time behaviour and does not weaken the rule.
-- **Files**: `utils/nhiSupplement.ts`, `utils/dividendReport.ts`,
-  `components/YearlyReport/DividendSection.tsx`, `YearlyPage.tsx` (wiring),
-  `components/Transactions/TransactionForm.tsx` (the hint), `styles/dashboard.css`.
-  Engine and Edge mirror untouched; **no schema change**.
-- **Design record**: `docs/design/dividend-section-mockup.html`, `docs/design/dividend-data-flow.html`.
-- **Left open on purpose** (not started, not blocking):
-  - 匯費 is a constant 10 in the hint. If a broker charges something else, it becomes a workspace
-    setting — deliberately not built on speculation.
-  - The US section shows US dividends gross/net but offers no withholding hint; US dividends are
-    withheld at source (30%) under a rule this module does not model.
+- **Timestamp**: 2026-10-01 14:36:00 Asia/Taipei
+- **Why**: the dashboard read 79,523 against 玉山 App's 78,276. The 1,247 is entirely the sell-fee
+  rate (2303 matched to the dollar: 460 − 138 = 322), which proves 玉山 bills the statutory 0.1425%
+  and refunds the discount — **月退**. `fee_rebate` only reached `pnlBasis`, so 新增交易 and 批次重算
+  recorded the *discounted* fee: a number no settlement statement shows, and the discount never
+  comes back to that row.
+- **Shape**: `chargedFeeRate(rate, rebate)` in `utils/pnlBasis.ts`, derived from `pnlBasis` so they
+  cannot drift. Recording paths use it; estimates keep using `pnlBasis`.
+- **Done**:
+  1. `chargedFeeRate` wired into `TransactionForm`, `RecalcFeesModal` (+ 月退 hint) and `StockSplitModal`.
+  2. Trap A: a moved 生效日 on a workspace with no rate writes `fee_rate = 0.001425` **plus** the
+     segment, instead of making the discount the base and re-pricing the whole ledger.
+  3. Trap B: the 費率變更紀錄 base row has a 「改」 inline editor, the only exit when the base is
+     already the discounted rate (saving the same rate from a date is not a change, so the segment
+     was dropped). It re-normalises the history against the new base.
+  4. 月退 is the default once a discount is picked, 現折 at the list price; a stored value equal to
+     the old default does not count as a choice, so a workspace is never pinned to 現折. Persisted
+     on save because the Edge holdings card reads `fee_rebate` from the row.
+- **Items**:
+  5. Commit to `dev`, run the gates, release ⏳ — not started.
+  6. User's own save ⏳: PROD 玉山證卷 → 「改」 on 「一直以來 3.8 折」 → 不打折, then 3.8 折 from
+     2026-10-01. Under 月退 the recalculation uses 0.1425% for every date anyway, so this is about the
+     record being true, not about today's numbers.
+- **Not done, named on purpose**: 最低手續費 still has no date dimension (`settings.ts:152`, global,
+  BUG-084), so a recalculation applies today's 20 元 / 1 元 to every date. Narrow (small odd lots
+  only) and only wrong if the broker's minimum changed with the agreement. `WhatIfTab` /
+  `AnalysisPage` estimates still use the discounted rate under 月退 — they are estimates, so they
+  follow `pnlBasis`, but worth a look if the user reports a mismatch there.
 
 ### Task 182: Fee rate as a fact with a validity period (玉山 3.8 折 from 2026-10-01)
 - **Status**: 🔄 IN PROGRESS — infrastructure complete (2026-10-01). DDL on DEV **and** PROD,
@@ -63,10 +67,12 @@
   asks with today.
 - **Done**: items 1-3 — full detail in `PROGRESS.md` 2026-10-01 11:20:00 Asia/Taipei.
 - **Items**:
-  4. Set the real 玉山 workspace to **3.8 折 from 2026-10-01** in the UI ⏳ — one save, but it moves
-     the user's own P&L and opens the recalculation wizard, so it is theirs to make and watch. The
-     wizard should come up **empty** for trades dated before 2026-10-01; if it lists them, stop and
-     check the effective date before applying.
+  4. ~~Set the real 玉山 workspace to **3.8 折 from 2026-10-01** in the UI (user did this on both
+     DEV and PROD, 2026-10-01)~~ ✅ — **but PROD landed in the wrong shape**: 玉山證卷 had no rate at
+     all, so the save became the base and the dialog reads 「一直以來 3.8 折」, i.e. every trade ever
+     made counts as 3.8 折. DEV (SNAP-Ivan正式區) already had 原價 as its base and reads correctly
+     (「2026-10-01 起 3.8 折 / 2026-10-01 之前 不打折」). The fix is Task 184's 「改」 button —— ⏳ one
+     save left for the user, tracked in Task 184.
 
 ### Task 178: Prove the shared ship/versioning skills on a real release
 - **Status**: 🔄 IN PROGRESS

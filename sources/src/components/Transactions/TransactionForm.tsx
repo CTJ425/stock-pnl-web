@@ -20,6 +20,7 @@ import { DEFAULT_WIRE_FEE, estimateWithholding } from '../../utils/nhiSupplement
 import type { Holding } from '../../utils/pnlEngine'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRateOn, getMinFee } from '../../utils/settings'
+import { chargedFeeRate } from '../../utils/pnlBasis'
 import { describeTwFeeRate } from '../../utils/feeRateHint'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
@@ -57,11 +58,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [qty, setQty] = useState(initial ? String(initial.qty) : '')
   // Edit mode displays the original number of shares in "odd shares" to avoid ambiguity in lot/odd share conversions
   const [unit, setUnit] = useState<Unit>(initial ? '零股' : '張')
+  // 月退: the broker bills the statutory rate at trade time and refunds the discount later, so the
+  // fee this form records is the full one. See `chargedFeeRate`.
+  const feeRebate = current?.fee_rebate ?? null
   const [feeRate, setFeeRate] = useState(() => {
     if (initial?.fee_rate !== undefined && initial.fee_rate !== null) {
       return String(initial.fee_rate)
     }
-    const defaultRate = getFeeRateOn(initial?.tx_date ?? todayStr(), workspaceId)
+    const defaultRate = chargedFeeRate(
+      getFeeRateOn(initial?.tx_date ?? todayStr(), workspaceId),
+      feeRebate,
+    )
     if (initial) {
       const minFees = { whole: getMinFee('whole', workspaceId), odd: getMinFee('odd', workspaceId) }
       return String(inferFeeRate(initial, defaultRate, minFees))
@@ -77,8 +84,8 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // When switching workspaces/whole shares or odd units, the corresponding memorized rates and minimum handling fees are brought in
   useEffect(() => {
     if (isEdit || feeRateManual.current) return
-    setFeeRate(String(getFeeRateOn(date, workspaceId)))
-  }, [workspaceId, isEdit, date])
+    setFeeRate(String(chargedFeeRate(getFeeRateOn(date, workspaceId), feeRebate)))
+  }, [workspaceId, isEdit, date, feeRebate])
   useEffect(() => {
     // A different workspace has different defaults, so drop any values typed under the previous one.
     if (minFeeWorkspaceRef.current !== workspaceId) {

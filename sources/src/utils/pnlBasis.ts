@@ -17,6 +17,19 @@ export function pnlBasis(feeRate: number, rebate: FeeRebate | null | undefined):
   return rebate === 'monthly' && feeRate < DEFAULT_FEE_RATE ? 'list' : 'net'
 }
 
+/**
+ * The rate the broker actually bills at trade time, which is what a recorded `fee_tax` must match.
+ *
+ * `pnlBasis` answers this for an *estimate* (what the dashboard withholds); this answers it for a
+ * number written into a transaction row. A 月退 broker collects the statutory 0.1425% on the
+ * settlement statement and refunds the discount separately, so filling or recalculating a fee at
+ * the discounted rate understates what was really charged — and the discount never comes back to
+ * that row. Derived from `pnlBasis` so the two cannot drift apart.
+ */
+export function chargedFeeRate(rate: number, rebate: FeeRebate | null | undefined): number {
+  return pnlBasis(rate, rebate) === 'list' ? DEFAULT_FEE_RATE : rate
+}
+
 /** 0.001425 → '0.1425%', 0.000399 → '0.0399%'. */
 export function formatFeeRatePct(rate: number): string {
   return `${(rate * 100).toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}%`
