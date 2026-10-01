@@ -31,7 +31,16 @@
   local store is backed up, C5 CSV 費率 column and the stray-quote fix, C6 `setCurrentId` out of the updater.
   Full text in `TASK_ARCHIVE.md`.
 - **Items still open**:
-  6. B2 CSP `connect-src` has `https:` ⏳ — shrink it, then check a deployed preview with the console open
+  6. B2 ✅ **done 2026-10-01** — `connect-src` is now `'self' https://*.supabase.co
+     https://openapi.twse.com.tw https://www.tpex.org.tw`. The `https:` and `http://localhost:*`
+     wildcards existed for a user-supplied AI provider base URL; **that feature is gone** (`schema.sql`
+     drops `ai_provider` / `ai_base_url` / `ai_api_key`, no AI code is left in `src/`). The list was
+     derived from every absolute URL in the production bundle: the four remaining ones
+     (`localhost:9999`, `react.dev`, `discord.com`, `github.com`) are supabase-js defaults and error
+     strings, not connection targets. TWSE/TPEx stay because `twMarketData.ts:171-173` falls back to a
+     direct browser fetch when the Edge proxy fails. `wss:` deliberately omitted — nothing subscribes
+     to a realtime channel. ⏳ **Confirm on the deployed site with the console open**; a CSP mistake
+     fails silently and no test can catch it.
      (the build and tests cannot catch a CSP mistake)
   7. B3 ✅ **settled 2026-10-01 — measured, not assumed.** The leaked `CRON_SECRET` was exposed for
      **14.5 hours** (`04a2833` 2026-08-11 20:46 → `0b2bea9` 2026-08-12 11:04) and belonged to the
@@ -148,7 +157,20 @@
 - **Background**: `ship` and `versioning` now live in `script-docs/AI/skill/`, are installed globally (`~/.claude/skills/`), and read this repo's paths from `.claude/release.config.json`. The project copies under `.claude/skills/` were `git rm`'d — recover from git if the cutover has to be undone. See `PROGRESS.md` 2026-09-30 16:05:30.
 - **Items**:
   1. Commit both repos: ~~`stock-pnl-web` (config in, project skills out, `CLAUDE.md` trimmed) — done 2026-09-30 in the 0.10.9 bookkeeping commit~~ · `script-docs` (new `AI/skill/` subproject, installer, manifest, CI job, renamed `.claude/release.config.json`) —— ⏳
-  2. Run the next release of this repo through the global `ship` skill end to end and record where it needed a human that the skill should have handled. ⏳
+  2. ~~Run the next release of this repo through the global `ship` skill end to end and record where it
+     needed a human that the skill should have handled~~ ✅ — 0.10.13 on 2026-10-01 was that run. The
+     pipeline itself held: gates, bump, changelog finalised **before** the `main` push (so the Release
+     body was right first time), deploy via `supabase-ops`, verify, then the step-8 stop. Three things
+     the skills did not cover were measured and written back to
+     `script-docs/AI/skill/{ship,versioning}/SKILL.md` (and reinstalled globally):
+     **(a)** comparing a static host's asset hashes against a local `npm run build` is not a deploy
+     check — the host builds in its own environment and the hashes legitimately differ; ~15 minutes
+     were lost to that. Verify by content instead, and remember an SPA answers `200` with `index.html`
+     for a missing asset. **(b)** a CI-created tag is not in the local clone, so after a history
+     rewrite `git push --force --tags` silently leaves it pointing at a dead commit — one of 179 tags,
+     and it was the newest. **(c)** `supabase db query` reads a leading `--` SQL comment as a flag, and
+     `RAISE NOTICE` never comes back — both now in the `supabase-ops` skill, with the
+     `--linked --project-ref` note.
   3. Check the pieces the config expresses for the first time for real: ~~`type: "npm"` writing both `sources/package.json` and the lockfile — confirmed on 0.10.9, `npm version` wrote `version` and `packages[""].version` together~~ · `release.publishedBy: "ci"` — the skill must **confirm** the Release `release.yml` created, not try to create it —— ⏳ (0.10.9 is the first push to test it)
   4. Pre-existing and unrelated: `script-docs` CI runs `shellcheck` with `|| fail=1`, and `script/setup-en-cli-zh-tw-desktop/setup-en-cli-zh-tw-desktop.sh:60` emits SC2016 (info) on shellcheck 0.10.0. Decide there whether to silence it or pin severity — it can turn the new CI job red for reasons that have nothing to do with the skills. ⏳
 

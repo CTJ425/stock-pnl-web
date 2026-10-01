@@ -10,10 +10,21 @@
 # change here against a real deployed preview and check the console, not just
 # by re-running the test suite.
 #
-# connect-src includes `https:` and `http://localhost:*` because the AI
-# provider base URL (Admin > AI settings, openai-compatible path) is a
-# user-supplied runtime value — it can be any cloud endpoint or a local
-# Ollama/vLLM instance — so it cannot be pinned to a fixed origin list here.
+# connect-src is the full list of origins the deployed app talks to, checked
+# against the production bundle on 2026-10-01 (Task 185 / B2):
+#   *.supabase.co          REST, auth, Edge Functions and the reports bucket
+#   openapi.twse.com.tw    TWSE list — `twMarketData.ts` falls back to a direct
+#   www.tpex.org.tw        TPEx list — fetch when the Edge proxy fails, so both
+#                          are reached from the browser in production, not only
+#                          server-side
+# It used to carry `https:` and `http://localhost:*` for a user-supplied AI
+# provider base URL. That feature is gone — `schema.sql` drops `ai_provider`,
+# `ai_base_url` and `ai_api_key`, and no AI code is left in `src/` — so the
+# wildcard only widened where injected script could send data.
+#
+# Deliberately absent: `wss:`. supabase-js ships a realtime client, but nothing
+# here subscribes to a channel. If a realtime feature is ever added, its socket
+# will be blocked until `wss://*.supabase.co` is added back.
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co https://openapi.twse.com.tw https://www.tpex.org.tw https: http://localhost:*; frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co https://openapi.twse.com.tw https://www.tpex.org.tw; frame-ancestors 'none'; base-uri 'self'; object-src 'none'

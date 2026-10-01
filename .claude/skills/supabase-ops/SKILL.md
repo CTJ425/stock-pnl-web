@@ -139,3 +139,9 @@ may still point at a dead one. Do not check this by eye — run `verify_setup()`
   scripts were deleted on 2026-10-01.
 - `db query` **does** take `--project-ref` in CLI v2.117 (`--linked --project-ref <ref>`), which
   targets another project without moving the global link. Earlier versions did not.
+- **Pass SQL with `--file`, never as an argument.** A statement that begins with a `--` comment is
+  read by the CLI as a flag (`Unrecognized flag: -- Task 185 DDL …`), and every DDL script in this
+  repo starts with one. Writing the statement to a file and using `--file <path>` avoids it, and
+  keeps the identity predicate in the same script.
+- `RAISE NOTICE` output never comes back through `db query`. To see intermediate results from a
+  `DO` block, write them into a `CREATE TEMP TABLE` and `SELECT` it at the end of the same script.
