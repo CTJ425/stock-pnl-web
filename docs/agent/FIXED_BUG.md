@@ -6,6 +6,16 @@
 
 ---
 
+### Bug ID: BUG-092 — 「標記當沖」會把融資／融券的同日來回改成當沖，抹掉使用者記錄的交易性質
+- **Date**: found 2026-10-02 while auditing BUG-089's edge cases, fixed the same day (pending release)
+- **Symptom**: a 融資 (MARGIN) buy + sell on one date, whose sell carries the halved-tax fee signature, is proposed by `proposeDayTradeLabels` and would be written back as `DAY_TRADE` — replacing MARGIN.
+- **Root Cause**: the candidate filter excluded `'SHORT'` only. It was written when the only instrument that must never be paired was 融券; 融資 was never considered. But **資券當沖 does not get the halved securities tax at all** — `splitFeeTax` states exactly that — so a MARGIN row carrying the signature is *contradictory data*, not a missing label. Rewriting its nature destroys a fact the user recorded in order to repair a figure the wizard cannot be sure about.
+- **Fix**: only an **unclassified** row may be relabelled — `tx_nature` of `null` (never set) or `'SPOT'`. MARGIN and SHORT are skipped whatever their fee looks like. `DAY_TRADE` stays allowed so the group's "already told" check still works.
+- **Evidence**: new test — both legs MARGIN with the signature on the sell, and the proposal list drops to the unrelated 08-24 pair. Found by an edge-case audit, not by the real ledger: no workspace here records 融資 yet, so this would have shipped silently and only bitten the first 融資 user.
+- **Status**: ✅ FIXED (pending release)
+
+---
+
 ### Bug ID: BUG-091 — 編輯一筆當沖，證交稅率顯示 0.3%，下一次改動就把半稅蓋掉
 - **Date**: found 2026-10-02 (user), fixed 2026-10-02 (pending release)
 - **Symptom**: after「標記當沖」marked the 2303 round trips, opening one of them in 編輯交易紀錄 showed 證交稅率 **0.003**. 交易性質 read 當沖 correctly; only the rate disagreed.

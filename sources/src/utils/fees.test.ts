@@ -705,6 +705,15 @@ describe('proposeDayTradeLabels（找出漏標的現股當沖，BUG-089）', () 
     expect(proposeDayTradeLabels(rows, opts).map((p) => p.sell.id)).toEqual(['d2'])
   })
 
+  it('融資也不碰：資券當沖沒有減半稅，改掉它的性質等於毀掉使用者記的資料', () => {
+    // Both legs 融資, and the sell carries the halved-tax signature anyway. Relabelling it
+    // DAY_TRADE would silently lose the 融資 fact; leave it to the user.
+    const rows = ronRows().map((tx) =>
+      tx.id === 'g2' || tx.id === 'g1' ? { ...tx, tx_nature: 'MARGIN' as TxNature } : tx,
+    )
+    expect(proposeDayTradeLabels(rows, opts).map((p) => p.sell.id)).toEqual(['d2'])
+  })
+
   it('標記後持股成本回到券商的均價，且已實現不再重複計入（BUG-089 迴歸）', () => {
     const rows = ronRows()
     const before = computeLedger(rows).holdings.find((h) => h.ticker === '2303')!

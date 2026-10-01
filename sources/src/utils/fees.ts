@@ -271,7 +271,12 @@ export function proposeDayTradeLabels(
   for (const tx of transactions) {
     if (tx.market !== 'TPE' || !(tx.price > 0) || !(tx.qty > 0)) continue
     if (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL') continue
-    if (tx.tx_nature === 'SHORT') continue // 融券 is a different instrument, never paired here
+    // Only an **unclassified** row may be relabelled: `null` (never set) or `'SPOT'`. 融券 (SHORT)
+    // and 融資 (MARGIN) are different instruments, and 資券當沖 does not get the halved tax at all
+    // (`splitFeeTax` says so), so a MARGIN row carrying the signature is contradictory data —
+    // overwriting its nature here would destroy what the user actually recorded to fix a figure
+    // this wizard cannot be sure about.
+    if (tx.tx_nature != null && tx.tx_nature !== 'SPOT' && tx.tx_nature !== 'DAY_TRADE') continue
     const key = `${tx.tx_date}\u0000${tx.ticker}`
     const group = groups.get(key)
     if (group) group.push(tx)

@@ -156,6 +156,14 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
   const R65 = '0.00092625'
   const R38 = '0.0005415'
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+  /**
+   * A date the user typed that is **not** today, for the tests about "動過生效日".
+   * It must be in the past: a literal equal to today makes the form take the "date untouched"
+   * branch, and the test then asserts the opposite of what runs. This bit on 2026-10-02 at
+   * 00:00 Asia/Taipei, when a hardcoded '2026-10-02' silently became today and one of these
+   * tests went red with no code change behind it.
+   */
+  const PAST = '2026-09-15'
 
   beforeEach(() => {
     cleanup()
@@ -168,12 +176,12 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     mount({ fee_rate: 0.00092625 }, R65)
     await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
     await user.clear(screen.getByLabelText('從哪天開始用這個折扣'))
-    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), '2026-10-01')
+    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), PAST)
     await user.click(screen.getByRole('button', { name: '儲存' }))
 
     expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
     expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [
-      { from: '2026-10-01', rate: 0.0005415 },
+      { from: PAST, rate: 0.0005415 },
     ])
   })
 
@@ -199,12 +207,12 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     mount({}, null)
     await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
     await user.clear(screen.getByLabelText('從哪天開始用這個折扣'))
-    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), '2026-10-02')
+    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), PAST)
     await user.click(screen.getByRole('button', { name: '儲存' }))
 
     expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.001425)
     expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [
-      { from: '2026-10-02', rate: 0.0005415 },
+      { from: PAST, rate: 0.0005415 },
     ])
   })
 
@@ -233,11 +241,11 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     mount({ fee_rate: 0.001425 }, '0.001425')
     await user.selectOptions(screen.getByLabelText('手續費折扣'), R38)
     await user.clear(screen.getByLabelText('從哪天開始用這個折扣'))
-    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), '2026-10-02')
+    await user.type(screen.getByLabelText('從哪天開始用這個折扣'), PAST)
     await user.click(screen.getByRole('button', { name: '儲存' }))
 
     expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [
-      { from: '2026-10-02', rate: 0.0005415 },
+      { from: PAST, rate: 0.0005415 },
     ])
   })
 
