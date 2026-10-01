@@ -17,8 +17,8 @@
 ## 📋 Active Tasks
 
 ### Task 183: 股利專區 — the year's cash dividends under the yearly report
-- **Status**: 🔄 IN PROGRESS — on `dev` at **0.10.10-dev.2**, CI green (`cecf819` → `f57acfc` → `cd19976`).
-  **Remaining: the deploy decision (ship step 5) and the release decision (step 8) — both the user's.**
+- **Status**: ✅ DONE — released as **0.10.10** (`abe8c38`), on `main` and `dev`, Release published by CI.
+  No deploy was needed: the 股利 feature is frontend-only and changes no schema.
 - **Agent**: Claude
 - **Timestamp**: 2026-09-30 19:35:00 Asia/Taipei
 - **Why**: the user could already record a 現金股利, but nothing showed them a year of dividends,
@@ -46,7 +46,12 @@
     withheld at source (30%) under a rule this module does not model.
 
 ### Task 182: Fee rate as a fact with a validity period (玉山 3.8 折 from 2026-10-01)
-- **Status**: 🔄 IN PROGRESS — code done and verified locally; **DDL not applied to DEV or PROD yet**
+- **Status**: 🔄 IN PROGRESS — **shipped to PROD in 0.10.10 with its DDL still unapplied** (the user's
+  call, 2026-10-01). Until the column exists, changing a workspace's 手續費率 throws
+  「儲存費率生效日失敗」 — reads degrade safely, that one write does not
+  (`dataProvider.ts:550` has no ladder; `WorkspaceFeeSettings.tsx:113-120` takes that path whenever
+  the workspace already has a `fee_rate`). Fix: run the two statements already in
+  `sources/supabase/schema.sql` against DEV then PROD, then redeploy `stock-report`.
 - **Agent**: Claude
 - **Timestamp**: 2026-09-30 18:40:00 Asia/Taipei
 - **Why**: 玉山 moved from 6.5 折 to 3.8 折 on 2026-10-01. A single `workspaces.fee_rate` cannot say

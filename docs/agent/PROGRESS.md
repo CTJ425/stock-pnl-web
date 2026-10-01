@@ -1,9 +1,19 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 183 — 股利專區 + 二代健保自動試算.** The yearly report gained a 股利 section per market, and 代扣費用 for a TW cash dividend now fills itself and recomputes on every edit, exactly like 手續費. What is saved is still whatever stands in the field, and nothing recomputes it on read.
-- Status: ✅ Pushed to `dev` at 0.10.10-dev.2, CI green. No schema change. ⏳ Not deployed and not on `main` — both await the user. ⚠️ Task 182's DDL is still unapplied in DEV and PROD.
-- Timestamp: 2026-10-01 09:30:00 Asia/Taipei
+- Action: **0.10.10 released.** 股利專區 + 二代健保自動試算 (Task 183) and 費率生效日 (Task 182) are on `main`. Release published by CI, both branches at `abe8c38`.
+- Status: ✅ 0.10.10 on `main` + `dev`, CI green, Release published. ⚠️ **Task 182's DDL is still unapplied in DEV and PROD — until it is, changing a workspace's 手續費率 errors.** Nothing was deployed: PROD Edge and the DDL are separate steps.
+- Timestamp: 2026-10-01 10:00:00 Asia/Taipei
+
+---
+## 📅 Log: 2026-10-01 10:00:00 Asia/Taipei (0.10.10 released to main)
+- **Released on the user's explicit decision after the risk was stated.** I raised that merging ships Task 182 as well — the two tasks share `TransactionForm.tsx` and are in one commit (`cecf819`) — and that Task 182's DDL is unapplied. The user chose to merge anyway. Recording the decision, not re-litigating it.
+- **What "unapplied DDL" actually costs, checked rather than assumed.** Reads are safe: `dataProvider.ts:384` steps the workspace query down to `WORKSPACE_COLUMNS_WITHOUT_HISTORY` when PostgREST rejects the unknown column, so login, 庫存 and 年度收益 are unaffected. Writes are not: `WorkspaceFeeSettings.tsx:113-120` sends a rate change down `setWorkspaceFeeRateHistory` whenever `base !== null`, and `base` is the workspace's existing `fee_rate` (`:70`), which every PROD workspace has. So **changing a workspace's 手續費率 in PROD throws 「儲存費率生效日失敗」** until the column exists. `dataProvider.ts:550` has no degrade ladder on that write, unlike the read.
+- **Changelog finalized before the push, on purpose.** `release.yml` generates the Release body from the section and **skips a Release that already exists**, so the Task 182 caveat was rewritten from an internal "pending" note into the user-facing consequence above. Confirmed in the published body.
+- **Shipped**: `abe8c38 chore(release): 0.10.10` on both branches (fast-forward, `main` and `dev` identical). CI run 36803253690 success; Sync GitHub Releases run 36803253703 success; Release `0.10.10` published by `github-actions[bot]`, marked Latest.
+- **Deployed nothing.** A `main` push moves code, not services. PROD Edge Functions and the DDL are still untouched, and the nightly Discord card still runs the old bundle. Cloudflare Pages will serve the new frontend from `main` on its own.
+- **Open, and the only thing between the user and a working 費率生效日**: apply to PROD (and DEV) —
+  `ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate_history JSONB;` plus its shape CHECK, both already in `sources/supabase/schema.sql`. Idempotent, touches no existing data. Then redeploy `stock-report` so the Edge card reads the history too.
 
 ---
 ## 📅 Log: 2026-10-01 09:30:00 Asia/Taipei (Task 183 — 二代健保改為自動填入，0.10.10-dev.2)
@@ -13,16 +23,5 @@
 - **Gates**: vitest **2,683 passed / 7 skipped (+2)**, `npm run build` / `oxlint` / `typecheck:edge` exit 0. CI run 36802105283 green on `dev`.
 - **Shipped to `dev` only**: `cecf819` (feature) → `f57acfc` (0.10.10-dev.1) → `cd19976` (0.10.10-dev.2). **Nothing deployed, nothing on `main`.**
 - **Note on `npm run lint` locally**: the wrapper prints 「ESLint output (JSON parse failed)」 and exits 1 while `npx oxlint` exits 0 with no findings; CI's `npm run lint` passes. Local shell artefact, not a lint failure.
-
----
-## 📅 Log: 2026-09-30 19:35:00 Asia/Taipei (Task 183 — 股利專區 + 二代健保試算提示)
-- **What the user asked, and what the discussion settled.** The ask started as "how do I add dividends, and does 二代健保 get computed?" — dividends already existed as `DIVIDEND` / `STOCK_DIVIDEND` rows; the premium was, and stays, hand-typed. Four decisions came out of the exchange and are what the code implements: 總報酬 = 已實現損益 + 股利**實收**; the ledger carries 每股股利 so a row can be verified on its own; the share picture names the top 4 and folds the rest into a grey 其他; `tx_date` is read as the **發放日**, with no second date added.
-- **The one architectural rule.** The premium is estimated at **write** time and stored in `fee_tax`; nothing recomputes it on read. Measured against the user's own notices: 陽明 28,000 x 2.11% = 590.8 -> 591, plus 10 匯費 = 601, and 28,000 - 601 = 27,399 exactly; 0050 at 1,200 is under the 20,000 起扣點 so only the 10 匯費 comes off. The estimate is therefore good enough to offer and never good enough to impose — 匯費 differs per 股務代理, a same-payment 股票股利 raises the base by its 面額 (invisible from one row), and 衛福部 has a standing proposal to move dividends to an **annual** settlement, which no per-payment formula survives. Computing on read would rewrite figures the user reconciled years ago.
-- **What changed.** New `utils/nhiSupplement.ts` (dated rule table, same shape as `feeRateHistory`) and `utils/dividendReport.ts` (per-year, per-market aggregation: rows, months, top-4 shares, largest-remainder percentages). New `components/YearlyReport/DividendSection.tsx`, rendered once per market under `RangeSection` and returning `null` for a market with no dividend. `TransactionForm` gained a hint under 代扣費用 with a 帶入 button; TW cash dividends only, since a US dividend is withheld at source under a different rule. The report is built from `Transaction[]`, not from `DividendLeg` — it needs the gross, the withheld and the shares, which is literally a DIVIDEND row — and it sums the same `price*qty - fee_tax` the engine does, so `net` equals `YearTickerDetail.dividends` by construction (pinned by a test). **The engine and the Edge mirror were not touched.**
-- **Verified in the browser** (local mode, seeded 10 payments / 6 tickers + one US row): totals NT$55,800 - NT$691 = NT$55,109; 總報酬 +NT$151,742 = 已實現 +NT$96,633 + 股利實收 NT$55,109; shares 50.2 / 26.0 / 10.7 / 5.9 / 7.2 summing to 100.0 with 其他 last although it outweighs 0050; the August bar's tooltip and `aria-label` both read 陽明 28,000 + 台灣50 1,200 = 29,200; the US section stays separate at US$25.00 and never merges. In the form, 2 x 14,000 offers 「估二代健保 591 ＋ 匯費 10 ＝ 601」, 帶入 fills it, re-editing the payment re-estimates without touching the field, and submitting with a hand-typed 661 stores **661**. No console or page errors at 1280 or 390.
-- **Gates**: vitest **2,681 passed / 7 skipped (+51)**, `npm run build` and `oxlint` exit 0, `typecheck:edge` clean. Impeccable detector clean on the new component and CSS.
-- **Design record**: `docs/design/dividend-section-mockup.html` (the approved comp) and `docs/design/dividend-data-flow.html` (why the value is stored, not recomputed), both also published as private artifacts.
-- **Deliberate departure from the reference the user showed.** Their broker app draws the per-stock split as a two-slice donut; a two-slice pie is not a comparison, so this is a 100pct stacked bar plus a ranked list. Identity colours come from `--chart-c1..4` (never 漲跌 red/green) and 其他 takes a neutral rather than a fifth hue, which would not have survived the colour-blind check the four passed.
-- **Not mine, noticed on the way**: Task 182's DDL is still unapplied in both environments; this work does not depend on it (no schema change at all).
 
 ---
