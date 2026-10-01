@@ -221,6 +221,16 @@ export function sellTaxRate(ticker: string): number {
 }
 
 /**
+ * The securities tax a 現股當沖 sell of this ticker pays: half the normal rate, so a general stock
+ * is 0.15%, an ETF 0.05% and a bond ETF still 0. Shared by `lotSellTaxRate` (the estimate for a lot
+ * bought today) and by the transaction form (the rate a row recorded as 當沖 was actually charged),
+ * because a hardcoded 0.0015 overtaxes every ETF day trade by three times (BUG-091).
+ */
+export function dayTradeTaxRate(ticker: string): number {
+  return sellTaxRate(ticker) / 2
+}
+
+/**
  * Last calendar day the 現股當沖 securities-tax halving is legislated for. A same-day lot pays the
  * full rate again from 2028-01-01, so the rule below must not outlive the statute.
  */
@@ -244,9 +254,8 @@ export const DAY_TRADE_TAX_SUNSET = '2027-12-31'
  * column asks for it, and the app's own net figure and break-even stay at the full rate.
  */
 export function lotSellTaxRate(ticker: string, lotDate: string, today?: string | null): number {
-  const rate = sellTaxRate(ticker)
-  if (!today || lotDate !== today || today > DAY_TRADE_TAX_SUNSET) return rate
-  return rate / 2
+  if (!today || lotDate !== today || today > DAY_TRADE_TAX_SUNSET) return sellTaxRate(ticker)
+  return dayTradeTaxRate(ticker)
 }
 
 /** First correct the binary floating point error (for example, 114 is mistakenly stored as 113.99999999999999) and then round it to the nearest dollar.*/

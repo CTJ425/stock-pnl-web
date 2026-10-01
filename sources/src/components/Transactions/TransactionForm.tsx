@@ -18,7 +18,7 @@ import { TX_NATURE_LABEL } from '../../types/models'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
 import { DEFAULT_WIRE_FEE, estimateWithholding } from '../../utils/nhiSupplement'
 import type { Holding } from '../../utils/pnlEngine'
-import { sellTaxRate } from '../../utils/pnlEngine'
+import { dayTradeTaxRate, sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRateOn, getMinFee } from '../../utils/settings'
 import { describeTwFeeRate } from '../../utils/feeRateHint'
 import type { StockSearchResult } from '../../services/stockSearch'
@@ -28,7 +28,7 @@ import { isSupabaseConfigured } from '../../services/supabase'
 type Unit = '張' | '零股'
 
 /** Securities tax rate quick selection value (general/ETF/halved/tax-free)*/
-const TAX_PRESET_VALUES = ['0.003', '0.001', '0.0015', '0']
+const TAX_PRESET_VALUES = ['0.003', '0.001', '0.0015', '0.0005', '0']
 
 function todayStr(): string {
   const d = new Date()
@@ -90,8 +90,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     const typed = minFeeTyped.current[minFeeUnit]
     setMinFee(typed !== undefined ? typed : String(getMinFee(minFeeUnit, workspaceId)))
   }, [workspaceId, minFeeUnit])
+  // BUG-091: the rate has to follow the row's own 交易性質, not just its ticker. Opening a 當沖
+  // row showed 0.3% — and the moment any core input changed, the recalc effect below rewrote the
+  // stored half-tax fee at the full rate, which lands in 持股成本 and 年度收益 alike.
   const [taxRate, setTaxRate] = useState(() =>
-    initial ? String(sellTaxRate(initial.ticker)) : '0.003',
+    initial
+      ? String(initial.tx_nature === 'DAY_TRADE' ? dayTradeTaxRate(initial.ticker) : sellTaxRate(initial.ticker))
+      : '0.003',
   )
   const [fee, setFee] = useState(initial ? String(initial.fee_tax) : '0')
   const [busy, setBusy] = useState(false)
@@ -207,13 +212,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   }, [qty, unit, market])
 
   // Securities tax rate field: automatically brought in according to the code if not manually modified (0.1% starting with ETF 00)
+  // `nextNature` is explicit because the 交易性質 dropdown calls this during its own onChange,
+  // when `nature` still holds the previous value (BUG-091).
   const updateTaxRateAuto = useCallback(
-    (nextTicker: string) => {
+    (nextTicker: string, nextNature: TxNature = nature) => {
       if (taxRateManual.current) return
       const clean = nextTicker.trim().toUpperCase().replace(/^TPE:/, '')
-      setTaxRate(String(sellTaxRate(clean)))
+      setTaxRate(String(nextNature === 'DAY_TRADE' ? dayTradeTaxRate(clean) : sellTaxRate(clean)))
     },
-    [],
+    [nature],
   )
 
   // Automatic conversion of handling fees (recalculated when enabled and dependent on changes; users can still manually modify field values).
@@ -528,15 +535,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 // nature feeds isSpotSell, so switching it hides the search drop-down.
                 // Without this the spinner keeps turning and stale results come back.
                 closeSuggestions()
-                // 當沖 is what a user sets the tax rate preset to by hand today; keep it in sync.
-                if (next === 'DAY_TRADE') {
-                  taxRateManual.current = true
-                  setTaxRate('0.0015')
-                } else if (next === 'SHORT') {
-                  // 融券賣出付全額證交稅，資券當沖不適用減半
-                  taxRateManual.current = false
-                  updateTaxRateAuto(ticker)
-                }
+                // The rate follows 交易性質 as well as the ticker: 當沖 halves it (an ETF
+                // therefore gets 0.05%, not a hardcoded 0.15%), 融券賣出 pays the full rate and
+                // 資券當沖 does not qualify for the halving at all (BUG-091).
+                taxRateManual.current = false
+                updateTaxRateAuto(ticker, next)
               }}
             >
               <option value="SPOT">{TX_NATURE_LABEL.SPOT}</option>
@@ -877,12 +880,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 <option value="0.003">一般 0.3%</option>
                 <option value="0.001">ETF 0.1%</option>
                 <option value="0.0015">當沖 0.15%</option>
+                <option value="0.0005">ETF 當沖 0.05%</option>
                 <option value="0">免稅 0%</option>
                 {!TAX_PRESET_VALUES.includes(taxRate) && <option value="custom">自訂</option>}
               </select>
             </div>
             <div className="field-hint">
-              只有台股賣出才收；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅
+              只有台股賣出才收；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅；選「當沖」會自動減半
             </div>
           </div>
         </div>

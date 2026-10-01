@@ -241,6 +241,30 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
     form = within(dialog)
     expect((form.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('DAY_TRADE')
+    // BUG-091: 重開編輯時稅率也要記得是減半的。原本這裡會顯示 0.003，而且只要動到任何一個
+    // 核心欄位，手續費就會用全額稅率重算，把當初存進去的半稅金額蓋掉。
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.0015')
+    const fee = form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement
+    const before = fee.value
+    const qty = form.getByLabelText('交易股數')
+    await user.clear(qty)
+    await user.type(qty, '1000')
+    expect(fee.value).toBe(before)
+  })
+
+  it('F8b: ETF 的當沖稅率是 0.05%，不是寫死的 0.15%（BUG-091）', async () => {
+    const user = userEvent.setup()
+    const form = await openNewTransactionForm(user)
+    await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
+    await user.type(form.getByLabelText(/股票代號/), '0050')
+    await user.type(form.getByLabelText('股票名稱'), '元大台灣50')
+    // 一般賣出 0.1%，選了當沖就該減半成 0.05% —— 寫死 0.0015 會把 ETF 當沖的稅多收三倍
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
+    await user.selectOptions(form.getByLabelText('交易性質'), 'DAY_TRADE')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.0005')
+    // 切回現股就回到全額
+    await user.selectOptions(form.getByLabelText('交易性質'), 'SPOT')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
   })
 
   it('F9: 美股沒有交易性質欄位', async () => {

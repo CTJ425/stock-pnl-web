@@ -225,7 +225,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setTransactions((prev) =>
         prev.map((t) => {
           const u = byId.get(t.id)
-          return u ? { ...t, price: u.price, qty: u.qty, fee_tax: u.fee_tax, fee_rate: u.fee_rate } : t
+          if (!u) return t
+          // BUG-089: `tx_nature` follows the same key-presence rule as the provider and the RPC —
+          // an update without the key keeps the stored value. Patching only the fee fields left
+          // the 當沖 labels invisible until a reload (caught in a browser, not by the unit tests).
+          const nature = 'tx_nature' in u ? { tx_nature: u.tx_nature ?? null } : {}
+          return { ...t, price: u.price, qty: u.qty, fee_tax: u.fee_tax, fee_rate: u.fee_rate, ...nature }
         }),
       )
     },
