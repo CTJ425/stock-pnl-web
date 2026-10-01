@@ -298,7 +298,9 @@ export function WorkspaceFeeSettings({
                           value={baseEdit}
                           onChange={(e) => setBaseEdit(e.target.value)}
                         >
-                          {COMMON_FEE_RATES.map((r) => (
+                          {/* A base outside the list (a custom rate) would otherwise open the
+                              editor on a blank selection, hiding what it is about to replace. */}
+                          {(COMMON_FEE_RATES.includes(base) ? COMMON_FEE_RATES : [base, ...COMMON_FEE_RATES]).map((r) => (
                             <option key={r} value={String(r)}>
                               {feeDiscountLabel(r)}（{formatFeeRatePct(r)}）
                             </option>

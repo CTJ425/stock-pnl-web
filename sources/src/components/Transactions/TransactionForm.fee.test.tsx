@@ -74,6 +74,35 @@ describe('TransactionForm 月退的工作區帶入全額費率', () => {
     const form = await openNewTransactionForm(user)
     expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.0005415')
   })
+
+  // Without this the field looks broken: it says 0.001425 and the discount hint calls it
+  // 「原價（不打折）」 on a workspace the user just set to 3.8 折.
+  it('月退：說明為什麼帶的是牌告而不是折扣後', async () => {
+    const user = userEvent.setup()
+    seed('monthly')
+    const form = await openNewTransactionForm(user)
+    expect(form.getByText(/月退：成交當下收全額/)).toBeTruthy()
+    expect(form.getByText(/3.8 折/)).toBeTruthy()
+  })
+
+  it('月退：自己改過費率之後就不再說明', async () => {
+    const user = userEvent.setup()
+    seed('monthly')
+    const form = await openNewTransactionForm(user)
+    const rate = form.getByLabelText('手續費率')
+    await user.clear(rate)
+    await user.type(rate, '0.0005415')
+    expect(form.queryByText(/月退：成交當下收全額/)).toBeNull()
+  })
+
+  // 月退 is a TW broker's arrangement; a US trade has no statutory rate to be refunded against.
+  it('月退：美股不套用牌告費率', async () => {
+    const user = userEvent.setup()
+    seed('monthly')
+    const form = await openNewTransactionForm(user)
+    await user.selectOptions(form.getByLabelText('交易市場'), 'US')
+    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.0005415')
+  })
 })
 
 describe('TransactionForm 手續費欄位不連動全域預設', () => {

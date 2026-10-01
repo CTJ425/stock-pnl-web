@@ -15,13 +15,13 @@ import { useConfirm } from '../Common/useConfirm'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
-import { calculateFee, inferFeeRate } from '../../utils/fees'
+import { DEFAULT_FEE_RATE, calculateFee, inferFeeRate } from '../../utils/fees'
 import { DEFAULT_WIRE_FEE, estimateWithholding } from '../../utils/nhiSupplement'
 import type { Holding } from '../../utils/pnlEngine'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRateOn, getMinFee } from '../../utils/settings'
 import { chargedFeeRate } from '../../utils/pnlBasis'
-import { describeTwFeeRate } from '../../utils/feeRateHint'
+import { describeTwFeeRate, feeDiscountLabel } from '../../utils/feeRateHint'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
 import { isSupabaseConfigured } from '../../services/supabase'
@@ -65,10 +65,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     if (initial?.fee_rate !== undefined && initial.fee_rate !== null) {
       return String(initial.fee_rate)
     }
-    const defaultRate = chargedFeeRate(
-      getFeeRateOn(initial?.tx_date ?? todayStr(), workspaceId),
-      feeRebate,
-    )
+    // 月退 is a TW broker's arrangement, so it must not raise a US trade's default to the TW
+    // statutory rate — a US fee has no statutory rate to be refunded against.
+    const initRate = getFeeRateOn(initial?.tx_date ?? todayStr(), workspaceId)
+    const defaultRate =
+      (initial?.market ?? 'TPE') === 'TPE' ? chargedFeeRate(initRate, feeRebate) : initRate
     if (initial) {
       const minFees = { whole: getMinFee('whole', workspaceId), odd: getMinFee('odd', workspaceId) }
       return String(inferFeeRate(initial, defaultRate, minFees))
@@ -84,8 +85,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // When switching workspaces/whole shares or odd units, the corresponding memorized rates and minimum handling fees are brought in
   useEffect(() => {
     if (isEdit || feeRateManual.current) return
-    setFeeRate(String(chargedFeeRate(getFeeRateOn(date, workspaceId), feeRebate)))
-  }, [workspaceId, isEdit, date, feeRebate])
+    const dateRate = getFeeRateOn(date, workspaceId)
+    setFeeRate(String(market === 'TPE' ? chargedFeeRate(dateRate, feeRebate) : dateRate))
+  }, [workspaceId, isEdit, date, feeRebate, market])
   useEffect(() => {
     // A different workspace has different defaults, so drop any values typed under the previous one.
     if (minFeeWorkspaceRef.current !== workspaceId) {
@@ -481,6 +483,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     () => (market === 'TPE' ? describeTwFeeRate(parseFloat(feeRate)) : { discount: null, warning: null }),
     [market, feeRate],
   )
+  // The discount the workspace negotiated for this transaction's date — which under 月退 is *not*
+  // what the field holds. Tested against the field's current value rather than a ref, so typing a
+  // rate of your own clears the note on the next render.
+  const workspaceRateOnDate = useMemo(
+    () => getFeeRateOn(date, workspaceId),
+    [date, workspaceId],
+  )
+  const showMonthlyNote =
+    feeRebate === 'monthly' &&
+    workspaceRateOnDate < DEFAULT_FEE_RATE &&
+    parseFloat(feeRate) === DEFAULT_FEE_RATE
 
   return (
     <form onSubmit={submit}>
@@ -825,6 +838,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           />
           {market === 'TPE' && feeRateHint.discount && (
             <span className="fee-rate-hint">{feeRateHint.discount}</span>
+          )}
+          {/*
+            Without this line the field looks broken on a 月退 workspace: the workspace says 3.8 折
+            and the form fills 0.001425, which the hint above then labels 「原價（不打折）」. The
+            rate is right — 月退 bills the list price and refunds the discount later — but nothing
+            said so. See `chargedFeeRate`.
+          */}
+          {market === 'TPE' && showMonthlyNote && (
+            <span className="fee-rate-hint">
+              月退：成交當下收全額，折扣（{feeDiscountLabel(workspaceRateOnDate)}）之後才退，所以這裡帶入牌告費率
+            </span>
           )}
           {market === 'TPE' && feeRateHint.warning && (
             <span className="fee-rate-warning">{feeRateHint.warning}</span>

@@ -208,6 +208,13 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     expect(screen.getByText('不打折')).toBeTruthy()
   })
 
+  it('自訂的基準費率也看得到，不會開在空白選項', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rate: 0.0004 }, '0.0004')
+    await user.click(screen.getByRole('button', { name: '改' }))
+    expect((screen.getByLabelText('更早之前的費率') as HTMLSelectElement).value).toBe('0.0004')
+  })
+
   it('改完基準費率後，同樣的折扣就能記成新的一段', async () => {
     const user = userEvent.setup()
     mount({ fee_rate: 0.001425 }, '0.001425')
