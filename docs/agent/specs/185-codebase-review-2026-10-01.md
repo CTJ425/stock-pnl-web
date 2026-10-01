@@ -13,7 +13,7 @@ Implemented in the working tree, **uncommitted and not deployed**; gates green (
 | A3 partial batch commit | ✅ code + DDL applied to DEV and PROD, behaviour proven on DEV Postgres |
 | A4 0-row update | ✅ fixed — every Supabase update asks for the ids back |
 | B1 `stock-price` | ✅ validation (`symbols.ts`), deployed DEV v25 + PROD · ⏳ **endpoint is still callable by anyone** (measured) |
-| B2 CSP | ✅ wildcards removed · ⏳ confirm on the deployed site with the console open |
+| B2 CSP | ✅ wildcards removed, live and verified in a browser (no violations) |
 | B3 `scratchpad/` | ✅ measured and cleaned — leaked secret is live nowhere; self-hosted artefacts deleted · ⏳ the retired lab host is the user's call |
 | C1, C4, C5, C6 | ✅ fixed |
 | C3 split-log FK | ✅ applied to DEV and PROD; cascade and orphan-reject proven on DEV |
@@ -89,7 +89,7 @@ Bearer not-a-jwt                   -> 401
 - **Why**: the stated reason is a user-supplied AI base URL, but the front end now only fetches TWSE / TPEx (`twMarketData.ts`) and Supabase (`reportsBucket.ts`, `BackupsSection.tsx`, `functions.invoke`); no WebSocket, EventSource or realtime channel is used. The wildcard lets injected script send data to any HTTPS origin.
 - **Fix**: shrink to the explicit origin list. The file's own header says a change must be checked on a deployed preview with the console open; the build and tests cannot catch it.
 - **Done 2026-10-01**: `connect-src` is now `'self' https://*.supabase.co https://openapi.twse.com.tw https://www.tpex.org.tw`. The stated reason for `https:` — a user-supplied AI provider base URL — **no longer exists**: `schema.sql` drops `ai_provider`, `ai_base_url` and `ai_api_key`, and `src/` has no AI code left. The origin list was derived from every absolute URL in the production bundle; the four that remain (`localhost:9999`, `react.dev`, `discord.com`, `github.com`) are a supabase-js default and error strings, not connection targets. TWSE and TPEx stay because `twMarketData.ts:171-173` falls back to a **direct browser fetch** when the Edge proxy fails, so they are reached client-side in production. `wss:` was deliberately left out — supabase-js ships a realtime client but nothing subscribes to a channel; a future realtime feature will need `wss://*.supabase.co` added back.
-- ⏳ **Still to confirm**: load the deployed site with the DevTools console open and check for CSP violations. Neither the build nor the test suite can catch a mistake in this file.
+- **Verified in a browser (2026-10-01 19:10)**: the new header is live on `stock-pnl-web.pages.dev`, and a full journey — login, 庫存總覽, 總體經濟, 個股分析 — logged **no CSP violation, no blocked request and no console error**. The logged-in half ran against DEV by serving the production `dist/` locally with the exact same CSP header (the PROD site only accepts PROD accounts); 國際指數 rendered live quotes for 8 indices, which proves the Supabase and TWSE/TPEx origins still work under the tightened list.
 
 ### B3. `scratchpad/` in a public repo — closed on 2026-10-01
 

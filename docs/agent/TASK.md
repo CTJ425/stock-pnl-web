@@ -39,8 +39,12 @@
      (`localhost:9999`, `react.dev`, `discord.com`, `github.com`) are supabase-js defaults and error
      strings, not connection targets. TWSE/TPEx stay because `twMarketData.ts:171-173` falls back to a
      direct browser fetch when the Edge proxy fails. `wss:` deliberately omitted — nothing subscribes
-     to a realtime channel. ⏳ **Confirm on the deployed site with the console open**; a CSP mistake
-     fails silently and no test can catch it.
+     to a realtime channel. **Verified in a browser 2026-10-01 19:10**: the tightened header is live on
+     `stock-pnl-web.pages.dev`, and a full logged-in journey (login → 庫存總覽 → 總體經濟 → 個股分析)
+     produced **zero CSP violations, zero blocked requests and zero console errors**. The logged-in
+     half was driven against DEV by serving `dist/` locally with the exact production CSP header,
+     because the PROD site only accepts PROD accounts — 國際指數 rendered live quotes for 8 indices,
+     which exercises the Supabase and TWSE/TPEx origins end to end.
      (the build and tests cannot catch a CSP mistake)
   7. B3 ✅ **settled 2026-10-01 — measured, not assumed.** The leaked `CRON_SECRET` was exposed for
      **14.5 hours** (`04a2833` 2026-08-11 20:46 → `0b2bea9` 2026-08-12 11:04) and belonged to the
