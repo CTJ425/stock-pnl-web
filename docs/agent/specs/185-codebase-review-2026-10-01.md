@@ -10,16 +10,16 @@ Implemented in the working tree, **uncommitted and not deployed**; gates green (
 | ---- | ----- |
 | A1 split wizard | ✅ fixed — sells and stock dividends convert too |
 | A2 stale transactions on switch | ✅ fixed — `txWorkspaceId` in `WorkspaceContext` |
-| A3 partial batch commit | ✅ code · ⏳ **DDL not applied** (`schema.sql` §16) |
+| A3 partial batch commit | ✅ code + DDL applied to DEV and PROD, behaviour proven on DEV Postgres |
 | A4 0-row update | ✅ fixed — every Supabase update asks for the ids back |
-| B1 `stock-price` | ✅ validation (`symbols.ts`) · ⏳ **Edge not redeployed** · no per-user limit |
+| B1 `stock-price` | ✅ validation (`symbols.ts`), deployed DEV v25 + PROD · ⏳ **endpoint is still callable by anyone** (measured) |
 | B2 CSP | ⏳ open — needs a deployed-preview check |
 | B3 `scratchpad/` | ⏳ open — needs the secrets checked |
 | C1, C4, C5, C6 | ✅ fixed |
-| C3 split-log FK | ✅ SQL written · ⏳ **DDL not applied** |
+| C3 split-log FK | ✅ applied to DEV and PROD; cascade and orphan-reject proven on DEV |
 | C2 bond-ETF exemption | ⏳ open — needs the statute's end date |
 
-Never run against Postgres: the A3 RPC and the C3 FK. Not checked in a browser.
+Verified on 2026-10-01: the A3 RPC and the C3 FK were run against DEV Postgres (see each entry); the frontend changes were driven in a real browser in local mode. **Not** verified: a logged-in browser journey against DEV cloud — signup needs email confirmation and no DEV credentials were available.
 Re-verified 2026-10-01 16:10 Asia/Taipei: B1 was rewritten (its premise was wrong, see there); A2, A3, B3, C1, C2, C5, C6 and the dropped item were made more precise.
 
 ## Gates at review time
@@ -52,7 +52,8 @@ Re-verified 2026-10-01 16:10 Asia/Taipei: B1 was rewritten (its premise was wron
 - **Where**: `sources/supabase/schema.sql:1594` (RPC), `sources/src/services/dataProvider.ts:512` (count check), `sources/src/components/Transactions/batchUpdate.ts:33` (message).
 - **Failure**: one id in the batch no longer exists (deleted from another tab or device after this one loaded). The RPC updates every other row and commits; the client then throws, and `runBatchApply` shows 「批次更新失敗，共 N 筆均未變更」, which is false. Local state is not patched and, for the split wizard, `recordSplit` is skipped. After a reload every remaining row is already converted but there is no split-log row, so the duplicate-split warning cannot fire and re-running the wizard converts those rows a second time.
 - **Fix**: make the RPC raise (rolling the statement back) when the number of updated rows differs from the number of ids passed in, and keep the client check as a second line.
-- **Done**: the RPC compares against `jsonb_array_length` of the input (a duplicate id is a shortfall too) and raises `P0002`; the client check stays, worded as a possible partial update, and `batchUpdate.ts` no longer says "均未變更". **Takes effect only after the DDL is applied** — until then the client check is the only guard.
+- **Done**: the RPC compares against `jsonb_array_length` of the input (a duplicate id is a shortfall too) and raises `P0002`; the client check stays, worded as a possible partial update, and `batchUpdate.ts` no longer says "均未變更".
+- **Proven on DEV Postgres** against the real 181-row table, then restored: a batch where every id exists returns `updated=1` and applies; a batch carrying one unknown id raises `P0002` and leaves the good row at its earlier value; a batch repeating the same id does the same. The test row was set back to its original price/qty/fee and re-read to confirm.
 
 ### A4. Supabase `updateTransaction` treats 0 affected rows as success
 - **Where**: `sources/src/services/dataProvider.ts:482` (`LocalProvider.updateTransaction` at `:173` throws 「找不到要更新的交易」).
@@ -64,15 +65,24 @@ Re-verified 2026-10-01 16:10 Asia/Taipei: B1 was rewritten (its premise was wron
 
 ## B. Security and hardening
 
-### B1. `stock-price` rests entirely on the platform JWT check; no input validation, no per-user limit
-- **Corrected premise**: the first version said anyone holding the bundle's anon key could call it. **That is wrong.** The deployed PROD bundle (`stock-pnl-web.pages.dev`) carries an `sb_publishable_` key and no JWT-shaped string, and the local `.env` is the same kind. A publishable key is not a JWT, so the platform's `verify_jwt = true` (`supabase/config.toml:427-428`) rejects a request carrying only that key. A caller needs a signed-in session's JWT.
-- **What remains**:
-  1. The in-function check (`sources/supabase/functions/stock-price/index.ts:749`) only tests that a Bearer token is present, so the whole gate depends on the deploy flag. Deployed with `--no-verify-jwt` (the flag `stock-report` uses), it would be open. The deployed flag was not checked here.
-  2. Any account can call it, with no per-user rate limit (sign-up is enabled in the app; `config.toml` has `enable_signup = true`, the cloud setting was not checked). Each call can trigger Yahoo / MIS requests and service-role writes to `price_cache` and `stock_names`.
-  3. `symbols` is not validated: a non-object element throws into the 500 path, and `buildMisChannels` (`misParse.ts:50`) puts the ticker into the MIS URL unencoded.
-  4. The header comment says the front end calls it "with an anon JWT"; it sends the user's session JWT.
-- **Fix**: validate `symbols` (array length, market enum, ticker pattern) before use; consider a per-user limit like `stock-report`'s quota; correct the comment. Calling `getUser` in the function would only matter if the deploy flag ever changes.
-- **Done**: `symbols.ts` (`sanitizeSymbols` for `prices`, `isValidSymbol` → 400 for `intraday` / `daily`; market `TPE | US | IDX`, ticker `^[A-Za-z0-9.^=-]{1,16}$`, Taiwan codes `^[0-9A-Za-z]{1,8}$`) and the corrected header comment. **Open**: the per-user limit, and the Edge function has to be redeployed for any of this to apply.
+### B1. `stock-price` can be called by anyone who takes the key out of the bundle
+
+**Measured against deployed DEV on 2026-10-01, after two wrong readings. This is the settled version.**
+
+```
+no Authorization header            -> 401
+Bearer <sb_publishable_… from .env/bundle>  -> 200 + real quote data
+Bearer not-a-jwt                   -> 401
+```
+
+- **Where**: `sources/supabase/functions/stock-price/index.ts:749`, `supabase/config.toml:427-428`.
+- **History of this entry, so nobody re-derives it a fourth time**:
+  1. First reading: "anyone with the bundle's anon key can call it." **Right, for the wrong reason** (it assumed the key was a JWT).
+  2. Second reading: "the key is `sb_publishable_`, not a JWT, so `verify_jwt = true` rejects it." **Wrong** — inferred from the key's format without testing it. Supabase's platform gate accepts a publishable key as the anon role.
+  3. Measured: the publishable key returns 200. The key ships in the deployed bundle (`stock-pnl-web.pages.dev`), so the endpoint is effectively public.
+- **Impact**: anybody can drive Yahoo / MIS requests and service-role writes to `price_cache` and `stock_names` through this function, with no per-user limit. The in-function check only tests that *some* bearer token is present.
+- **Done (0.10.13)**: `symbols.ts` — `sanitizeSymbols` for `prices`, `isValidSymbol` → 400 for `intraday` / `daily`; market `TPE | US | IDX`, ticker `^[A-Za-z0-9.^=-]{1,16}$`, Taiwan codes `^[0-9A-Za-z]{1,8}$` because `buildMisChannels` puts them into the MIS URL unencoded. Verified live on DEV: an injection ticker and junk elements are dropped while a valid symbol in the same batch still answers; a bad `intraday` / `daily` symbol gets 400. The header comment was corrected.
+- **Still open, and this is the actual exposure**: the function does not identify the caller (no `getUser`) and has no per-user quota, so validation only narrows *what* an anonymous caller can ask for, not *that* they can ask. Closing it means `assertUser` plus a quota like `stock-report`'s — which changes who can use the app's quote path, so it is a product decision, not a cleanup.
 
 ### B2. CSP `connect-src` contains `https:`
 - **Where**: `sources/public/_headers`.
@@ -93,7 +103,7 @@ Re-verified 2026-10-01 16:10 Asia/Taipei: B1 was rewritten (its premise was wron
 | - | ----- | ---- |
 | C1 | `sources/src/hooks/useStockPrices.ts:64` | The 60 s poll ignores `document.visibilityState`. TW quotes expire after 60 s during the session (locked from 13:30 to 08:25) and US after 10 min, so a background tab keeps calling the Edge function through the TW session and every 10 min for US holdings. Skip the tick unless the tab is visible. |
 | C2 | `sources/src/utils/pnlEngine.ts:217` | The bond-ETF tax exemption in `sellTaxRate` has no date dimension, while the day-trade halving has `DAY_TRADE_TAX_SUNSET`. **Verify the exemption's end date** (recollection, not confirmed here: 2026-12-31). If it ends, a bond-ETF sell from then on would get 0 tax in the unrealized and break-even estimates, in the form's default tax rate (`TransactionForm.tsx:94,214`) and in `calculateFee`, and `splitFeeTax` would book the tax actually paid as brokerage fee. |
-| C3 | `sources/supabase/schema.sql:1567` | `tx_split_log.workspace_id` has no foreign key, so deleting a workspace leaves orphan rows (harmless to reads, which filter by workspace). Add `FOREIGN KEY (workspace_id, user_id) REFERENCES workspaces(id, user_id) ON DELETE CASCADE`. |
+| C3 | `sources/supabase/schema.sql:1567` | `tx_split_log.workspace_id` has no foreign key, so deleting a workspace leaves orphan rows (harmless to reads, which filter by workspace). ✅ Added (orphans deleted first; DEV and PROD both had 0). Proven on DEV with a throwaway workspace: the log row cascaded away on delete, and an insert naming a non-existent workspace is now rejected with 23503. |
 | C4 | `sources/src/services/dataProvider.ts:92` | Local mode only: `LocalProvider.readStore` returns an empty store on a parse or shape failure, and the next write overwrites the damaged data. Copy the raw string to a backup key first. |
 | C5 | `sources/src/utils/csv.ts` | Export has no `fee_rate` column, so an export/import round trip drops every row's recorded rate. `parseCsv` also enters quote mode on a `"` in the middle of an unquoted field and can swallow the rows after it; the app's own export quotes such fields, so only files from elsewhere are affected. |
 | C6 | `sources/src/context/WorkspaceContext.tsx:170` | Code hygiene, harmless today: `setCurrentId` is called inside the `setWorkspaces` updater, which StrictMode double-invokes in development. Move it outside. |
