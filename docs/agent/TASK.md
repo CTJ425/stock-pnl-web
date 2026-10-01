@@ -17,8 +17,10 @@
 ## 📋 Active Tasks
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
-- **Status**: ✅ DONE in code (2026-10-01), **uncommitted and unreleased**. vitest 2,697 pass / 7
-  skipped (+14), `npm run build` exit 0. No browser check yet.
+- **Status**: ✅ DONE — released as **0.10.11** (`d0077ec`), on `main` and `dev` (identical),
+  Release published by CI, CI green on both branches. vitest 2,697 pass / 7 skipped (+14),
+  `npm run build` and `typecheck:edge` exit 0. **No browser check** — the user asked to ship fast
+  and the change is covered by App-level tests that render the real form.
 - **Agent**: Claude
 - **Timestamp**: 2026-10-01 14:36:00 Asia/Taipei
 - **Why**: the dashboard read 79,523 against 玉山 App's 78,276. The 1,247 is entirely the sell-fee
@@ -39,7 +41,9 @@
      the old default does not count as a choice, so a workspace is never pinned to 現折. Persisted
      on save because the Edge holdings card reads `fee_rebate` from the row.
 - **Items**:
-  5. Commit to `dev`, run the gates, release ⏳ — not started.
+  5. ~~Commit to `dev`, run the gates, release~~ ✅ 0.10.11, 2026-10-01 14:45. No deploy was
+     needed: the diff touches no `sources/supabase/**`, so Edge and DDL are untouched and
+     Cloudflare Pages serves the new frontend from `main` on its own.
   6. User's own save ⏳: PROD 玉山證卷 → 「改」 on 「一直以來 3.8 折」 → 不打折, then 3.8 折 from
      2026-10-01. Under 月退 the recalculation uses 0.1425% for every date anyway, so this is about the
      record being true, not about today's numbers.

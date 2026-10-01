@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 184 code done (uncommitted).** 月退 now decides the fee that gets *recorded*, not just the estimate; the fee-rate base is editable; a moved 生效日 on a fresh workspace writes a segment instead of re-pricing the whole ledger.
-- Status: ✅ vitest 2,697 pass / 7 skipped, `npm run build` exit 0. Proven against the broker's app: 玉山 is **月退**, and 月退 + 3.8 折 makes the dashboard match 玉山 App to the dollar (78,276). ⏳ Not committed, not released, no browser check yet. ⏳ User's own step: fix PROD 玉山證卷's base (「一直以來 3.8 折」 → 不打折) so 10/1 之前的交易 keep the list price.
-- Timestamp: 2026-10-01 14:36:00 Asia/Taipei
+- Action: **Task 184 released as 0.10.11.** 月退 now decides the fee that gets *recorded*, not just the estimate; the fee-rate base is editable; a moved 生效日 on a fresh workspace writes a segment instead of re-pricing the whole ledger.
+- Status: ✅ `d0077ec` on `main` + `dev` (identical), Release 0.10.11 published by CI, CI green on both. Gates: vitest 2,697 pass / 7 skipped, `npm run build` + `typecheck:edge` exit 0. No deploy needed (no `sources/supabase/**` in the diff). ⏳ No browser check — shipped fast at the user's request. ⏳ User's own step: fix PROD 玉山證卷's base (「一直以來 3.8 折」 → 不打折) so 10/1 之前的交易 keep the list price.
+- Timestamp: 2026-10-01 14:48:00 Asia/Taipei
 
 ---
 ## 📅 Log: 2026-10-01 14:36:00 Asia/Taipei (Task 184 — 月退 bills the list price; fee-rate base is editable)
@@ -13,7 +13,7 @@
 - **Trap A — the chosen date was ignored on a workspace with no rate yet.** `WorkspaceFeeSettings.tsx:114` wrote the first rate as the base whatever date was picked, so "3.8 折 from 2026-10-02" re-priced every trade ever made. Now: date left at today → base (unchanged); date moved → `fee_rate = 0.001425` **plus** the segment, which says "before that day, list price".
 - **Trap B — a base that is already the discounted rate had no exit.** Saving the same rate from a date is not a change, so `normalizeFeeRateHistory` (`feeRateHistory.ts:67`) dropped it and the whole ledger stayed on the discount. The 費率變更紀錄 base row now has a 「改」 inline editor (`saveBase`), which also re-normalises the history against the new base. **This is exactly the state the user's PROD 玉山證卷 workspace is in** — it reads 「一直以來 3.8 折」 while DEV reads 「2026-10-01 起 3.8 折 / 之前 不打折」, because DEV already had 原價 as its base and PROD had no rate at all when 3.8 折 was first saved.
 - **月退 is now the default when a discount is picked** (user's call), 現折 at the list price. A stored value that merely repeats what the default would have been does **not** count as a choice (`rebateChosen`), so a workspace saved today at 原價 is not pinned to 現折 when a discount is negotiated later. The default is persisted on save, because the Edge holdings card reads `fee_rebate` from the row — a default only the form knew would make the nightly card disagree with the dashboard.
-- **Gates**: vitest **2,697 passed / 7 skipped (+14)**, `npm run build` exit 0. Not committed, not released, not verified in a browser yet.
+- **Gates**: vitest **2,697 passed / 7 skipped (+14)**, `npm run build` and `typecheck:edge` exit 0. **Released as 0.10.11** at the user's explicit「快點幫我合併到main」—— `142aa11` (fix) → `d0077ec` (release) → fast-forward to `main`, both branches at `d0077ec`, Release published by CI, CI success on both. **No deploy step ran and none was needed**: the diff touches no `sources/supabase/**`, so Edge and DDL are untouched and Cloudflare Pages serves the new frontend from `main`. **Not verified in a browser** — the ship skill's step-8 stop was pre-authorised by the user's instruction, so this went out on the test suite alone (the new 月退 cases do render the real 新增交易 form through `App`).
 - **Left for the user**: on PROD 玉山證卷, press 「改」 on 「一直以來 3.8 折」 → 不打折, then save 3.8 折 from 2026-10-01, so 10/1 之前的交易 keep the list price. Under 月退 the recalculation now uses 0.1425% for every date anyway, so this is about the record being true rather than about today's numbers.
 
 ---
