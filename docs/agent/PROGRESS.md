@@ -1,9 +1,18 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 183 — 股利專區.** The yearly report gained a 股利 section per market (totals, monthly bars, top-4 share, per-payment ledger), and 新增交易 offers a 二代健保 estimate for a TW cash dividend. The estimate is an input hint: it is stored in `fee_tax` on save and never recomputed on read.
-- Status: ✅ Code + tests green and browser-verified on `dev`, nothing committed yet. No schema change. ⚠️ Task 182's DDL is still unapplied in DEV and PROD — unrelated to this work but still open.
-- Timestamp: 2026-09-30 19:35:00 Asia/Taipei
+- Action: **Task 183 — 股利專區 + 二代健保自動試算.** The yearly report gained a 股利 section per market, and 代扣費用 for a TW cash dividend now fills itself and recomputes on every edit, exactly like 手續費. What is saved is still whatever stands in the field, and nothing recomputes it on read.
+- Status: ✅ Pushed to `dev` at 0.10.10-dev.2, CI green. No schema change. ⏳ Not deployed and not on `main` — both await the user. ⚠️ Task 182's DDL is still unapplied in DEV and PROD.
+- Timestamp: 2026-10-01 09:30:00 Asia/Taipei
+
+---
+## 📅 Log: 2026-10-01 09:30:00 Asia/Taipei (Task 183 — 二代健保改為自動填入，0.10.10-dev.2)
+- **User's call, and it is the right parity.** They asked for the premium to behave like 手續費: filled in without a button and recomputed on every edit until save. Checked what 手續費 actually does first rather than assuming — `TransactionForm.tsx` fills it from `calculateFee` and overwrites a hand-typed value whenever price/qty/unit/rate/tax/minFee/market/type/nature changes, with one exception: on an edit's first mount `untouchedFeeSig` holds the stored value until a core input moves. The dividend now follows the same path; the 帶入 button is gone and the hint keeps only the breakdown and the 「以券商通知書為準」 line.
+- **Regression I introduced and the test caught.** Adding `date` to the fee effect's signature without adding it to `untouchedFeeSig`'s initial signature made the two strings永不相等, so the "don't rewrite an opened record" guard released on the first run — **for every transaction type, not just dividends**. Opening any trade for edit would have silently recalculated its fee. Both lists must now be built identically, and `date` is included only for a cash dividend: unconditional inclusion would make editing a trade's date move its commission, which it has never done. Pinned by `TransactionForm.dividend.test.tsx` D8.
+- **Verified in the browser** (local mode): new 2 x 14,000 auto-fills **601**; qty to 15,000 → **643**; 每股股利 to 1 → **10** (15,000 is under the 20,000 起扣點, and the hint says so); typing **661** then changing qty overwrites it with **601**. Side-by-side with 手續費 on a BUY: 500 x 1,000 → **463**, typing **999** then changing qty to 2,000 → **926**. Same behaviour, as asked. Opening the stored 661 dividend keeps **661** and only moves to 643 after the qty edit.
+- **Gates**: vitest **2,683 passed / 7 skipped (+2)**, `npm run build` / `oxlint` / `typecheck:edge` exit 0. CI run 36802105283 green on `dev`.
+- **Shipped to `dev` only**: `cecf819` (feature) → `f57acfc` (0.10.10-dev.1) → `cd19976` (0.10.10-dev.2). **Nothing deployed, nothing on `main`.**
+- **Note on `npm run lint` locally**: the wrapper prints 「ESLint output (JSON parse failed)」 and exits 1 while `npx oxlint` exits 0 with no findings; CI's `npm run lint` passes. Local shell artefact, not a lint failure.
 
 ---
 ## 📅 Log: 2026-09-30 19:35:00 Asia/Taipei (Task 183 — 股利專區 + 二代健保試算提示)
@@ -15,14 +24,5 @@
 - **Design record**: `docs/design/dividend-section-mockup.html` (the approved comp) and `docs/design/dividend-data-flow.html` (why the value is stored, not recomputed), both also published as private artifacts.
 - **Deliberate departure from the reference the user showed.** Their broker app draws the per-stock split as a two-slice donut; a two-slice pie is not a comparison, so this is a 100pct stacked bar plus a ranked list. Identity colours come from `--chart-c1..4` (never 漲跌 red/green) and 其他 takes a neutral rather than a fifth hue, which would not have survived the colour-blind check the four passed.
 - **Not mine, noticed on the way**: Task 182's DDL is still unapplied in both environments; this work does not depend on it (no schema change at all).
-
----
-## 📅 Log: 2026-09-30 18:40:00 Asia/Taipei (Task 182 — 費率生效日)
-- **Problem, measured first.** On a seeded local-mode store (玉山, 6.5 折, three September trades) changing the discount to 3.8 折 made 批次重算 list every September row, pre-checked. Applying it rewrote history: 投入成本 450,417 → 450,244, 保本賣出價 904.39 → 903.69, 已實現 +22,720 → +23,075, and every row's `fee_rate` became 0.0005415. A second finding fell out of the same run: after a rate change the detail panel printed 「折扣後 0.0541% 目前採用」 beside a figure still computed at 0.0926% — the label read the workspace rate (`HoldingsLedger.tsx:105`), the figure read each lot's own (`pnlEngine.ts:991`). They only ever agreed because the rate had never changed.
-- **Shape.** `workspaces.fee_rate_history` JSONB, ascending `[{from, rate}]`; `fee_rate` keeps its meaning as the rate **before** the first segment, so a client or an Edge Function without the column still reads a real rate. One lookup — `utils/feeRateHistory.ts` `rateOn(history, base, date, fallback)` — with two callers that differ only in the date they pass. No new table: the data is read whole, written whole and never queried on its own, so a table would have cost an RLS policy and a join for nothing.
-- **What changed.** `proposeFeeCorrections` takes `rateFor(txDate)` instead of one rate and reports the rate it used per row (the wizard shows a 費率 column and writes it back to `transactions.fee_rate`). 新增交易's default follows the date field until the user types a rate of their own. `estimateUnrealized` / `breakEvenPrice` are now called with `overrideFeeRate: true` everywhere in the app and in the Edge card — a sell made today is charged today's rate — which is what removed the label/figure contradiction. 月退 is untouched by design: its figure is the 牌告 0.1425% one.
-- **Verified in the browser** (local mode, seeded 玉山): saving 3.8 折 effective 2026-10-01 while today is 2026-09-30 opens the recalculation wizard **empty** and moves no dashboard figure; the same save dated 2026-09-01 lists both rows at 「3.8 折」 and moves 折扣後 0.0926% +782,226 → 0.0541% +782,702 together with its label, while 牌告 stays +781,609 under both 現折 and 月退. The transaction form's default rate reads 0.00092625 on 2026-09-20 and 0.0005415 on 2026-10-05.
-- **Gates**: vitest 2,630 passed / 7 skipped (+44), `npm run build` and `oxlint` exit 0, `typecheck:edge` clean, edge engine re-synced. `scripts/lib/edgeConstants.test.mjs` now also compares Edge's re-stated `rateOn` against the web's, answer by answer.
-- **Not mine, noticed on the way**: at 390px the dashboard's `SPAN.stmt-pct` overflows (426 > 390) with the synthetic +173% seed figure — pre-existing and unrelated.
 
 ---

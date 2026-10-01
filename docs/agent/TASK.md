@@ -17,8 +17,8 @@
 ## 📋 Active Tasks
 
 ### Task 183: 股利專區 — the year's cash dividends under the yearly report
-- **Status**: 🔄 IN PROGRESS — feature complete: code, tests and browser verification all green.
-  **Remaining: commit to `dev`, then the usual release decision (the user's call).**
+- **Status**: 🔄 IN PROGRESS — on `dev` at **0.10.10-dev.2**, CI green (`cecf819` → `f57acfc` → `cd19976`).
+  **Remaining: the deploy decision (ship step 5) and the release decision (step 8) — both the user's.**
 - **Agent**: Claude
 - **Timestamp**: 2026-09-30 19:35:00 Asia/Taipei
 - **Why**: the user could already record a 現金股利, but nothing showed them a year of dividends,
@@ -28,10 +28,12 @@
   2. 逐筆明細帶「每股股利」欄，讓每一列自己可以驗算
   3. 個股占比只畫金額**前 4 大**，其餘折成灰色「其他」，固定排最後
   4. `tx_date` 就是**發放日**，不另加除息日欄位
-- **The rule that must not be reversed**: the 二代健保 figure is estimated at **write** time and
+- **The rule that must not be reversed**: the 二代健保 figure is computed at **write** time and
   stored in `fee_tax`. Nothing recomputes it on read — 衛福部 has a standing proposal to move
   dividends to an annual settlement, and a read-time formula would silently rewrite every
-  historical dividend the user already reconciled against a broker notice.
+  historical dividend the user already reconciled against a broker notice. Since 0.10.10-dev.2 the
+  field **fills itself and follows every edit**, exactly like 手續費 (the user's call); that is a
+  write-time behaviour and does not weaken the rule.
 - **Files**: `utils/nhiSupplement.ts`, `utils/dividendReport.ts`,
   `components/YearlyReport/DividendSection.tsx`, `YearlyPage.tsx` (wiring),
   `components/Transactions/TransactionForm.tsx` (the hint), `styles/dashboard.css`.
