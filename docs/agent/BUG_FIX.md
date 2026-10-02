@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-02 00:05:00 Asia/Taipei
+- Timestamp: 2026-10-02 10:00:00 Asia/Taipei
 
 ---
 
@@ -21,4 +21,36 @@
   3. A browser that typed a minimum fee in that window keeps using it for unrealized P&L and break-even on small positions and odd lots; another device, and the server-side Discord holdings card (Task 165 Phase 2), use the defaults 20 / 1.
 - **Impact**: at most the gap between the stale and the default minimum fee per row, only where the estimated sell fee equals the minimum.
 - **Status**: OPEN — found 2026-09-17 while checking docs/agent/specs/discord-holdings.md; accepted for Task 165 Phase 2 pending a user decision (clear the legacy keys, or persist minimum fees to `workspaces`).
+
+### BUG-098 — Backup restore ignores `transactions.seq` (found in the 0.10.15 review)
+- **Where**: `sources/supabase/functions/stock-report/adminHandlers.ts:575` (`handleAdminBackupRestore` upserts `select('*')` rows), `sources/scripts/restore.cjs` (no seq handling)
+- **Root Cause**: a 0.10.15+ backup carries `seq`, and the upsert writes it back without advancing `transactions_seq_seq`; into a recreated DB the next trade gets a *smaller* seq than restored same-day rows. A pre-0.10.15 backup has no seq, so `nextval` is assigned in upsert order = file order = random uuid order. `compareTxOrder` checks seq before `created_at`, so either way same-day order can scramble — BUG-089 returns after a disaster recovery.
+- **Fix direction**: after restoring transactions, `setval` past `MAX(seq)`; for rows without seq, assign it in `compareTxOrder` order (the schema.sql backfill already does exactly that).
+- **Status**: OPEN
+
+### BUG-099 — CSV import trusts file row order as `seq` (PLAUSIBLE, needs a real export)
+- **Where**: `sources/src/services/dataProvider.ts:531` (`addTransactions`), `src/utils/csv.ts` (no sort / order check)
+- **Root Cause**: `seq` follows the order rows are sent; a newest-first export reverses a same-day 買→賣→買, and seq now outranks BUG-049's opening-leg-first fallback, so a false 超賣 and wrong cost are possible.
+- **To settle**: check the row order of a real 玉山 / RON / 元大 export before choosing a fix (detect descending dates and reverse, or warn).
+- **Status**: OPEN — unverified
+
+### BUG-100 — Sell-form 當沖 detection counts 融資 lots
+- **Where**: `sources/src/components/Transactions/TransactionForm.tsx` `dayTradeContext` (`openLots` carry no `tx_nature`)
+- **Root Cause**: a same-day 融資 buy with no older stock makes `certain` true, so the sell is auto-labelled 現股當沖 with the reduced rate, although 資券當沖 gets no relief; the buy stays MARGIN. BUG-092 fixed the same thing in the wizard only. Read from code, not run.
+- **Status**: OPEN
+
+### BUG-101 — Sell-form labels a partly-matched buy row as 當沖
+- **Where**: `TransactionForm.tsx` `buyLegs` (labels every buy behind an open same-day lot)
+- **Root Cause**: buy 2,000 in one row, day-trade 1,000 → the whole row reads 當沖. Figures are right (the engine pairs by quantity) but the record overclaims, and 標記當沖 skips that date for good. `proposeDayTradeLabels` labels a buy only when fully matched; the form should follow it.
+- **Status**: OPEN
+
+### BUG-102 — Two lists sort same-day trades without `seq`
+- **Where**: `src/components/Dashboard/HoldingsLedger.tsx:481`, `src/components/Transactions/StockSplitModal.tsx:145`
+- **Root Cause**: both sort by `tx_date, created_at` instead of `compareTxOrder`, so after a bulk import they show a same-day sequence in uuid order while the engine uses seq. Display only.
+- **Status**: OPEN
+
+### BUG-103 — Two 0.10.15 paths fail badly if code runs ahead of the DDL
+- **Where**: `stock-report/discordHandlers.ts:332` (`HOLDINGS_TX_COLUMNS` selects and orders by `seq`, no degrade step); `schema.sql` `apply_transaction_updates` (an older RPC ignores `tx_nature` but returns the full count)
+- **Impact**: the nightly holdings card dies for every user, or 標記當沖 reports success while storing nothing. Both DBs have the DDL today (`verify_setup()` 10/10), so this only bites if the deploy order is ever reversed.
+- **Status**: OPEN (low urgency)
 

@@ -263,10 +263,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
    *
    * This is the same boundary `proposeDayTradeLabels` keeps: same-day date matching alone was
    * measured at 12 false positives out of 14 round trips, so a date may prompt but never decide.
+   *
+   * **New trades only (BUG-095).** `ledger` is the ledger *after* every saved row, so in edit mode
+   * it already includes the very sell being edited. FIFO has consumed whatever that sell closed,
+   * and an ordinary 現股 sell of the old shares leaves only today's lot open — which reads as
+   * "no older position" and used to flip the row to 當沖 the moment it was opened, halving the
+   * tax and rewriting `fee_tax` with nothing touched. An edit keeps the nature it was saved with;
+   * the 交易性質 drop-down is still there to change it.
    */
   const dayTradeContext = useMemo(() => {
     const clean = ticker.trim().toUpperCase().replace(/^TPE:/, '')
-    if (market !== 'TPE' || txType !== 'SELL' || !clean) return null
+    if (isEdit || market !== 'TPE' || txType !== 'SELL' || !clean) return null
     const holding = ledger.holdings.find((h) => h.market === 'TPE' && h.ticker === clean)
     const sameDayLots = holding?.openLots.filter((l) => l.date === date) ?? []
     const sameDayQty = sameDayLots.reduce((sum, l) => sum + l.qty, 0)
@@ -280,14 +287,16 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       (t) => lotIds.has(t.id) && (t.tx_nature == null || t.tx_nature === 'SPOT'),
     )
     return { sameDayQty, olderQty, certain: olderQty === 0, buyLegs }
-  }, [market, txType, ticker, date, ledger.holdings, transactions])
+  }, [isEdit, market, txType, ticker, date, ledger.holdings, transactions])
 
-  // Applies the halved rate through the same path the dropdown uses, so there is one rule.
+  // Goes through the same path the 交易性質 drop-down uses, so there is one rule — including
+  // BUG-094's: `updateTaxRateAuto` leaves a rate the user set alone. This used to reset
+  // `taxRateManual` first, and the effect below calls it with no user action at all, so typing a
+  // rate and then the ticker silently replaced the typed rate (BUG-096).
   const applyDayTrade = useCallback(
     (on: boolean) => {
       const next: TxNature = on ? 'DAY_TRADE' : 'SPOT'
       setNature(next)
-      taxRateManual.current = false
       updateTaxRateAuto(ticker, next)
     },
     [ticker, updateTaxRateAuto],
@@ -299,6 +308,32 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
    * next render — and so a 當沖 the user picked by hand is never relabelled by this effect.
    */
   const autoApplied = useRef(false)
+
+  /**
+   * What the 當沖 notices say about the tax (BUG-097). 證券交易稅條例 §2-2 sets 千分之1.5 for
+   * 上市或上櫃**股票** only, so an ETF day trade still pays 0.1% (and after the §2-2 sunset every
+   * day trade pays the ordinary rate): the notice must not promise a cut the rate field does not
+   * show. And since the label no longer re-prices a rate the user set (BUG-096), it says so when
+   * the field holds something else.
+   */
+  const dayTradeTaxNote = useMemo(() => {
+    if (!dayTradeContext) return null
+    const clean = ticker.trim().toUpperCase().replace(/^TPE:/, '')
+    const full = sellTaxRate(clean)
+    const dt = dayTradeTaxRate(clean, date)
+    const pct = (r: number) => `${parseFloat((r * 100).toFixed(4))}%`
+    const relief = dt < full
+    const expected = nature === 'DAY_TRADE' ? dt : full
+    const field = parseFloat(taxRate)
+    return {
+      labelled: relief ? `證交稅用當沖的 ${pct(dt)}。` : `這檔當沖沒有降稅，證交稅仍是 ${pct(full)}。`,
+      offer: relief
+        ? `如果你賣的是今天買的那批，那是當沖，證交稅只收 ${pct(dt)}。`
+        : `如果你賣的是今天買的那批，那是當沖；這檔當沖的證交稅不會降（仍是 ${pct(full)}），標成當沖是讓它先跟今天的買進沖銷再算成本。`,
+      manual:
+        Number.isFinite(field) && field !== expected ? `證交稅率欄是你自己設定的 ${pct(field)}，沒有跟著改。` : '',
+    }
+  }, [dayTradeContext, ticker, date, nature, taxRate])
   useEffect(() => {
     if (!dayTradeContext?.certain) {
       if (autoApplied.current && nature === 'DAY_TRADE') {
@@ -668,23 +703,26 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         )}
       </div>
 
-      {dayTradeContext && nature === 'DAY_TRADE' && (
+      {dayTradeContext && dayTradeTaxNote && nature === 'DAY_TRADE' && (
         <div className="notice" role="status">
           <span>
             {dayTradeContext.certain
-              ? `這檔今天才買進 ${dayTradeContext.sameDayQty.toLocaleString('en-US')} 股、之前沒有庫存，所以這筆已經記成當沖，證交稅用減半的算。`
-              : '這筆記成當沖了，證交稅用減半的算。'}
+              ? `這檔今天才買進 ${dayTradeContext.sameDayQty.toLocaleString('en-US')} 股、之前沒有庫存，所以這筆已經記成當沖。`
+              : '這筆記成當沖了。'}
+            {dayTradeTaxNote.labelled}
+            {dayTradeTaxNote.manual}
           </span>
           <button type="button" onClick={() => applyDayTrade(false)}>
             改回現股
           </button>
         </div>
       )}
-      {dayTradeContext && nature === 'SPOT' && (
+      {dayTradeContext && dayTradeTaxNote && nature === 'SPOT' && (
         <div className="notice" role="status">
           <span>
             今天這檔買進了 {dayTradeContext.sameDayQty.toLocaleString('en-US')} 股。
-            如果你賣的是今天買的那批，那是當沖，證交稅只收一半。
+            {dayTradeTaxNote.offer}
+            {dayTradeTaxNote.manual}
           </span>
           <button type="button" onClick={() => applyDayTrade(true)}>
             改成當沖

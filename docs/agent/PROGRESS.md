@@ -1,9 +1,20 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.15 released** — 當沖 end to end: BUG-089 to BUG-094 and Task 186 (`transactions.seq`). The dashboard, 已實現損益 and the edit form now agree with the broker to the dollar.
-- Status: ✅ Gates green (vitest 2,793 pass / 7 skipped; build / `typecheck:edge` / lint / engine-sync exit 0). DDL + `stock-report` on **DEV and PROD**, `verify_setup()` 10/10 on both, identical Edge sha. Release published by CI with the final body. ⏳ Cloudflare Pages frontend still building at the time of writing.
-- Timestamp: 2026-10-02 01:30:00 Asia/Taipei
+- Action: **0.10.16-dev.1 (uncommitted)** — fixed three regressions in Task 187's sell-form 當沖 detection (BUG-095/096/097) found by a review of the 0.10.15 cycle; six more findings filed as BUG-098..103.
+- Status: ✅ Gates green (vitest 2,796 pass / 7 skipped, build / lint exit 0). ⚠️ **The live site is still 0.10.14**: Cloudflare Pages reported `Deploy failed` for `8b67800` (0.10.15). Not committed or pushed yet — waiting on the user.
+- Timestamp: 2026-10-02 10:00:00 Asia/Taipei
+
+---
+## 📅 Log: 2026-10-02 10:00:00 Asia/Taipei (0.10.15 review → BUG-095/096/097 fixed, 0.10.16-dev.1)
+- **0.10.15 never reached the website.** The Cloudflare Pages check run on `8b67800` says `Deploy failed` (01:24:51 UTC, a minute after the push); the docs commit `d134e30` deployed fine, so the failure is specific to that build. Verified by fetching every chunk of `stock-pnl-web.pages.dev`: only `0.10.14`, none of Task 187's strings. The log needs a Cloudflare login. The previous entry's 「still building」 was wrong, and its timestamps are UTC labelled Asia/Taipei (commits were 01:2x UTC = 09:2x Taipei).
+- **Review of `89a33fe..HEAD`** (high effort, findings reproduced with throw-away App tests that were deleted afterwards). Three were fixed:
+  - **BUG-095**: editing a saved ordinary sell flipped it to 當沖 and changed its fee 734 → 485 (the edit-mode ledger already includes the sell). Detection now runs for new trades only.
+  - **BUG-096**: `applyDayTrade` cleared `taxRateManual`, re-introducing BUG-094 (typed 0.002 → 0.0015). Removed; one rule with the drop-down.
+  - **BUG-097**: ETF 當沖 notices said 減半 while the rate is 0.1% (§2-2 covers 股票 only); the fee dialog still said 「ETF 0.05%」. Copy now follows `dayTradeTaxRate`; grep sweep listed in `FIXED_BUG.md`.
+- **Tests**: three new App-level tests in `TransactionForm.fee.test.tsx`; each fails against the 0.10.15 form and passes now. Full suite 2,796 pass / 7 skipped; `npm run build` and lint exit 0.
+- **Version**: `0.10.16-dev.1` in `package.json` + lockfile, `version.ts`, `README.md`; CHANGELOG entry in zh-TW.
+- **Left open**: BUG-098 (restore ignores `seq`) is the sharpest; BUG-099 needs a real broker export; BUG-100..103 in `BUG_FIX.md`. Cloudflare redeploy of 0.10.15 is the user's.
 
 ---
 ## 📅 Log: 2026-10-02 01:30:00 Asia/Taipei (0.10.15 released — 當沖 end to end; Task 186 closed)
@@ -15,14 +26,3 @@
 - **Released**: 0.10.15 on `main` and `dev` (identical), Release published by CI with the final body, CI green. Gates: vitest 2,793 pass / 7 skipped, build / `typecheck:edge` / lint / engine-sync exit 0.
 - **Deployed**: DDL (`seq`, `day_trade_tax_estimate`, the `tx_nature`-carrying `apply_transaction_updates`, `verify_setup`) applied to **DEV and PROD**, `verify_setup()` 10/10 on both; `stock-report` deployed to both, identical bundle sha `968b24fa5509`. Verified against the live DEV ledger: 2303 均價 161.8185 / −2,066, 6182 −3,631, 總成本 456,693, 已實現 18,833 — all equal to the broker app.
 - **Left open**: the Cloudflare Pages frontend was still building at the time of writing (content check polling); a same-day round trip whose fee carries no halved-tax signature still cannot be auto-detected, and is now at least ordered correctly by `seq`.
-
-## 📅 Log: 2026-10-02 00:10:00 Asia/Taipei (BUG-089 + BUG-090 — the dashboard now matches RON to the dollar)
-- **The complaint was「手續費折扣差很多」; the折扣 turned out to be innocent.** Two independent defects were stacked on one screen, pulling in opposite directions: 2303 read 500 too pessimistic, 6182 195 too optimistic. Switching 現折/月退 or 每批/整筆 moved neither, which is what proved the fee口徑 was not the cause.
-- **BUG-089 — the 當沖 engine existed and had never run.** `computeLedger` nets a day trade out before the moving average sees it (`pnlEngine.ts:516-630`), but only when a leg of that date carries `tx_nature === 'DAY_TRADE'`. The RON workspace had **zero** such rows (55 `null` + 8 `'SPOT'`) while three sells carried a halved securities tax. With the mechanism off, 2026-09-22's 買 164.5 → 賣 166 → 買 163.5 fell through to the moving average, where BUG-049's tie-break (open legs first when `tx_date` *and* `created_at` tie, as a bulk import writes them) reordered it to 買、買、賣 — the two buys blended to 164.0695 and the sell removed that instead of the 164.5 lot. The leftover **500.5 was counted twice**: parked in 持股成本 and booked as realized profit.
-- **Fix: label them, don't guess them.** `hasDayTradeFeeSignature` + `proposeDayTradeLabels` (`utils/fees.ts`) and a「標記當沖」wizard. The detector is the one `proposeFeeCorrections` has trusted since Task 137 — it reads the **money**, not the calendar — plus a second condition, that same-day buys must *fully* cover the sell. This is why the earlier「同日配對 14 中 12 誤判」verdict does not apply: that measured date matching. On the real ledger it proposes exactly the three real day trades, skips the two full-tax same-day round trips, and on 09-22 pairs the 164.5 buy rather than the 163.5 lot that is still held.
-- **BUG-090 — a 玉山 measurement had been generalised to every broker.** BUG-087's halved 當沖 tax for a lot bought today was applied unconditionally; RON withholds the full 0.3% on a position opened the same morning. Now `workspaces.day_trade_tax_estimate` (NULL = true, so nothing reconciled against 玉山 moves), a radio pair in 手續費設定 that previews like the other fee choices, and the Edge card deciding **per workspace** — one nightly run serves brokers that disagree.
-- **Verified against the live DEV rows with SNAP-RON's own settings**: 2303 均價 **161.8185** / **-2,066**, 6182 **-3,631**, 總成本 **456,693**, 已實現 19,334 → **18,833**. Every figure identical to the broker screenshot (報酬 -5,697). Gates: vitest 2,784 pass / 7 skipped, build / `typecheck:edge` / lint / engine-sync exit 0.
-- **DEV data and DDL applied** (user authorised Supabase): `day_trade_tax_estimate` column, the updated `apply_transaction_updates` (it now carries `tx_nature` under the same key-presence rule as `fee_rate`), the six day-trade legs labelled, SNAP-RON set to the full tax rate. **PROD untouched** — it needs the same DDL at release time, and nothing ships it with a `main` push.
-- **The browser run earned its keep.** Driving「標記當沖」with Playwright (seeded local mode, the real 2303 ledger) showed the wizard proposing the three right pairs and writing six legs — and the dashboard still reading 投入成本 324,138 afterwards. `WorkspaceContext.updateTransactionsBatch` was patching local state with the fee fields only, dropping `tx_nature`, so the save was real and the screen was stale until a reload. Fixed; the same run then reads **323,637** with zero console errors.
-- **Left open**: the general same-day ordering problem (Task 186). Labelling fixes day trades; an unlabelled same-day sequence still depends on a `created_at` that a bulk import makes useless.
-

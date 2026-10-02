@@ -412,8 +412,9 @@ export function WorkspaceFeeSettings({
                 checked={dayTradeTax}
                 onChange={() => setDayTradeTax(true)}
               />
-              <b>當天用當沖稅率（減半）</b>
-              <span>當天買的那批先用 0.15%（ETF 0.05%）估，隔天恢復，例如玉山。</span>
+              <b>當天用當沖稅率</b>
+              {/* BUG-097: §2-2 lowers the rate for 股票 only; an ETF day trade still pays 0.1%. */}
+              <span>當天買的股票先用當沖的 0.15% 估，隔天恢復 0.3%，例如玉山。ETF 當沖沒有降稅，一直是 0.1%。</span>
             </label>
             <label className="fee-settings-radio">
               <input

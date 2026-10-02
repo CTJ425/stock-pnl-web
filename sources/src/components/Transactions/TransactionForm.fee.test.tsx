@@ -490,6 +490,110 @@ describe('TransactionForm 當沖偵測（Task 187）', () => {
     expect((f.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('485')
   })
 
+  /** Records one TW odd-lot trade through the real form; `nature` / `taxRate` are set before submit. */
+  async function addTrade(
+    user: ReturnType<typeof userEvent.setup>,
+    o: { sell?: boolean; date: string; ticker: string; name: string; price: number; qty: number; fee?: number },
+  ) {
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    const f = within(await screen.findByRole('dialog', { name: '新增交易紀錄' }))
+    if (o.sell) await user.selectOptions(f.getByLabelText('交易類型'), 'SELL')
+    const dateInput = f.getByLabelText('交易日期')
+    await user.clear(dateInput)
+    await user.type(dateInput, o.date)
+    await user.type(f.getByLabelText(/股票代號/), o.ticker)
+    await user.type(f.getByLabelText('股票名稱'), o.name)
+    await user.selectOptions(f.getByLabelText('股數單位'), '零股')
+    await user.type(f.getByLabelText('交易單價'), String(o.price))
+    await user.type(f.getByLabelText('交易股數'), String(o.qty))
+    if (o.fee !== undefined) {
+      const feeField = f.getByLabelText(/手續費 \/ 稅金/)
+      await user.clear(feeField)
+      await user.type(feeField, String(o.fee))
+    }
+    return f
+  }
+  async function submitTrade(user: ReturnType<typeof userEvent.setup>, f: ReturnType<typeof within>) {
+    await user.click(f.getByRole('button', { name: '確認送出' }))
+    await f.findByText(/成功新增交易紀錄/)
+    await user.click(f.getByRole('button', { name: '關閉' }))
+  }
+
+  // BUG-095: in edit mode the ledger already contains the sell being edited. Selling the *old*
+  // 1,000 shares consumes the old lot by FIFO, so only today's lot is left open — which used to
+  // read as "no older position" and flip the saved 現股 sell to 當沖 the moment it was opened.
+  it('BUG-095: 打開一筆普通賣出來編輯，不會被自動改成當沖、費用不變', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    await submitTrade(user, await addTrade(user, { date: '2026-05-05', ticker: '2303', name: '聯電', price: 100, qty: 1000, fee: 85 }))
+    await submitTrade(user, await addTrade(user, { date: TODAY, ticker: '2303', name: '聯電', price: 164.5, qty: 1000, fee: 70 }))
+    const sell = await addTrade(user, { sell: true, date: TODAY, ticker: '2303', name: '聯電', price: 166, qty: 1000 })
+    // An older position exists, so the new-sell form only offers: 現股, full tax 236 + 498.
+    expect((sell.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('SPOT')
+    expect((sell.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('734')
+    await submitTrade(user, sell)
+
+    let opened = false
+    for (const button of await screen.findAllByRole('button', { name: '編輯這筆交易' })) {
+      await user.click(button)
+      const f = within(await screen.findByRole('dialog', { name: '編輯交易紀錄' }))
+      if ((f.getByLabelText('交易類型') as HTMLSelectElement).value === 'SELL') {
+        opened = true
+        expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('SPOT')
+        expect((f.getByRole('spinbutton', { name: '證交稅率' }) as HTMLInputElement).value).toBe('0.003')
+        expect((f.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('734')
+        expect(f.queryByRole('button', { name: '改回現股' })).toBeNull()
+        break
+      }
+      await user.click(f.getByRole('button', { name: '關閉' }))
+    }
+    expect(opened).toBe(true)
+  })
+
+  // BUG-096: the automatic label goes through the same rule as the 交易性質 drop-down (BUG-094):
+  // a rate the user set survives a change of classification.
+  it('BUG-096: 先自己設定證交稅率再輸入代號，自動記成當沖也不會蓋掉它', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    await submitTrade(user, await addTrade(user, { date: TODAY, ticker: '2303', name: '聯電', price: 164.5, qty: 1000, fee: 70 }))
+
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    const f = within(await screen.findByRole('dialog', { name: '新增交易紀錄' }))
+    await user.selectOptions(f.getByLabelText('交易類型'), 'SELL')
+    const tax = f.getByRole('spinbutton', { name: '證交稅率' }) as HTMLInputElement
+    await user.clear(tax)
+    await user.type(tax, '0.002')
+    await user.type(f.getByLabelText(/股票代號/), '2303')
+
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('DAY_TRADE')
+    expect(tax.value).toBe('0.002')
+    expect(f.getByRole('status').textContent).toContain('你自己設定的 0.2%')
+    await user.click(f.getByRole('button', { name: '改回現股' }))
+    expect(tax.value).toBe('0.002')
+  })
+
+  // BUG-097: 證券交易稅條例 §2-2 sets 千分之1.5 for 上市或上櫃「股票」only and displaces §2 第一款
+  // (0.3%); an ETF is taxed under 第二款 (0.1%), which §2-2 does not touch. So an ETF day trade
+  // is still labelled — it decides how the cost is netted — but the notice must not promise a cut.
+  it('BUG-097: ETF 當天買賣記成當沖，提示寫稅率仍是 0.1%，不說減半', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    await submitTrade(user, await addTrade(user, { date: TODAY, ticker: '0050', name: '元大台灣50', price: 180, qty: 1000, fee: 70 }))
+    const f = await addTrade(user, { sell: true, date: TODAY, ticker: '0050', name: '元大台灣50', price: 181, qty: 1000 })
+
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('DAY_TRADE')
+    expect((f.getByRole('spinbutton', { name: '證交稅率' }) as HTMLInputElement).value).toBe('0.001')
+    const notice = f.getByRole('status').textContent ?? ''
+    expect(notice).toContain('這檔當沖沒有降稅，證交稅仍是 0.1%')
+    expect(notice).not.toMatch(/減半|一半|0\.05%/)
+  })
+
   it('同一天沒有買進就完全不出現', async () => {
     const user = userEvent.setup()
     const f = await sellForm(user, [['2026-05-05', 100, 2000, 85]])
