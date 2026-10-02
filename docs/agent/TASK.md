@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-02 16:05:00 Asia/Taipei
+- Timestamp: 2026-10-02 16:55:00 Asia/Taipei
 
 ---
 
@@ -17,7 +17,7 @@
 ## 📋 Active Tasks
 
 ### Task 190: Fee settings UX — broker presets and a sticky action bar (/impeccable)
-- **Status**: 🔄 IN PROGRESS — on `dev` as **0.10.22-dev.1**; not on `main`.
+- **Status**: 🔄 OPEN REMAINDER — released in **0.10.22** with BUG-109 (user asked for the `main` merge). Only item 3 is live.
 - **Agent**: Claude
 - **Timestamp**: 2026-10-02 16:05:00 Asia/Taipei
 - **Brief (user-confirmed 2026-10-02)**: no change to the four stored settings or any figure. 「你的券商 App 怎麼算」 is a
@@ -31,7 +31,7 @@
      `typecheck:edge` exit 0; detector clean; Playwright `verify-monthly-rebate-cost-e2e.cjs` (presets, bar text,
      phone bar above the bottom nav) and `verify-pnl-rounding-e2e.cjs` PASS at 1440 / 390~~ ✅
   3. Not looked at in a browser: the workspace-menu modal home and dark theme ⏳
-  4. User review on DEV, then release ⏳
+  4. ~~Released in 0.10.22 (frontend only)~~ ✅
 
 ### Task 189: 月退 cost on the list-price fee; sell-fee basis split off the rebate (A2)
 - **Status**: 🔄 OPEN REMAINDER — released as **0.10.21** (`99cbe50`, `main` = `dev`), DDL + Edge on DEV and PROD,
