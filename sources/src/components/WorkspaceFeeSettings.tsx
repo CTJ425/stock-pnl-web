@@ -78,14 +78,25 @@ export function WorkspaceFeeSettings({
   } = useWorkspace()
   const uid = useId()
   const today = useMemo(() => taipeiDateKey(new Date()), [])
-  const [history, setHistory] = useState<FeeRateSegment[]>(() => getFeeRateHistory(current?.id))
+  // The history as stored, and the draft the list edits. 「刪除」 and the base row's 「改」 used to
+  // write straight to the database, although the panel promises that nothing applies until 儲存
+  // and that 取消 restores the old settings — so a deleted period was gone for good the moment the
+  // button was pressed, on a production workspace with no way back (BUG-108). Both now edit the
+  // draft; `submit` writes it.
+  const [savedHistory, setSavedHistory] = useState<FeeRateSegment[]>(() => getFeeRateHistory(current?.id))
+  const [history, setHistory] = useState<FeeRateSegment[]>(savedHistory)
   useEffect(() => {
-    setHistory(getFeeRateHistory(current?.id))
+    const stored = getFeeRateHistory(current?.id)
+    setSavedHistory(stored)
+    setHistory(stored)
   }, [current?.id])
   // The rate before the first segment. Null means this workspace has never had one, which is the
   // only case where saving writes the base instead of opening a new period (see `submit`).
-  const base = getStoredFeeRate(current?.id) ?? current?.fee_rate ?? null
-  const savedRate = rateOn(history, base, today, DEFAULT_FEE_RATE)
+  const savedBase = getStoredFeeRate(current?.id) ?? current?.fee_rate ?? null
+  // The base row's unsaved value (null = untouched); `base` is what the list and the maths use.
+  const [baseDraft, setBaseDraft] = useState<number | null>(null)
+  const base = baseDraft ?? savedBase
+  const savedRate = rateOn(savedHistory, savedBase, today, DEFAULT_FEE_RATE)
   // Null means the user has never chosen, which is what lets the discount pick the default below.
   const savedRebate: FeeRebate | null = current?.fee_rebate ?? null
   // A stored value that is only what the default would have produced is not a decision the user
@@ -107,6 +118,8 @@ export function WorkspaceFeeSettings({
   const [baseEdit, setBaseEdit] = useState<string | null>(null)
   // Once the user picks a side themselves, the discount stops choosing for them.
   const rebateManual = useRef(false)
+  // Once the user picks a discount themselves, a history edit stops moving the select (see `followDraft`).
+  const choiceManual = useRef(false)
 
   const rate = choice === CUSTOM ? parseFloat(customInput) : Number(choice)
   const rateValid = Number.isFinite(rate) && rate >= 0 && rate < 1
@@ -135,37 +148,48 @@ export function WorkspaceFeeSettings({
   // Closing the form (saved or not) ends the preview; the dashboard falls back to the saved values.
   useEffect(() => () => onPreview?.(null), [onPreview])
 
-  const removeSegment = async (segFrom: string) => {
-    if (!current || saving) return
-    const next = withoutFeeRateFrom(history, base, segFrom)
-    setHistory(next)
-    setSaving(true)
-    await setWorkspaceFeeRateHistory(current.id, next)
-    setSaving(false)
+  /**
+   * The select is "the discount from this date on". After a history edit, leaving it on the old
+   * rate would make 儲存 see a change and open a new period from today — re-adding the very
+   * discount just deleted. So until the user picks one, it follows the draft's rate for today.
+   */
+  const followDraft = (draft: FeeRateSegment[], draftBase: number | null) => {
+    if (choiceManual.current) return
+    const r = rateOn(draft, draftBase, today, DEFAULT_FEE_RATE)
+    const common = COMMON_FEE_RATES.includes(r)
+    setChoice(common ? String(r) : CUSTOM)
+    setCustomInput(common ? '' : String(r))
   }
 
-  /** Rewrites the rate that applied before the first segment; see `baseEdit`. */
-  const saveBase = async () => {
-    if (!current || saving || baseEdit === null) return
+  const removeSegment = (segFrom: string) => {
+    const next = withoutFeeRateFrom(history, base, segFrom)
+    setHistory(next)
+    followDraft(next, base)
+  }
+
+  /** Rewrites the rate that applied before the first segment (in the draft); see `baseEdit`. */
+  const applyBase = () => {
+    if (baseEdit === null) return
     const next = Number(baseEdit)
     if (!Number.isFinite(next) || next < 0 || next >= 1) return
-    setSaving(true)
-    await setWorkspaceFeeRate(current.id, next)
+    setBaseDraft(next)
     // A segment that merely repeats the new base is no longer a change of agreement. Re-normalise
     // against it so the list keeps saying only what actually changed.
     const normalized = normalizeFeeRateHistory(history, next)
-    if (normalized.length !== history.length) {
-      setHistory(normalized)
-      await setWorkspaceFeeRateHistory(current.id, normalized)
-    }
-    setSaving(false)
+    setHistory(normalized)
     setBaseEdit(null)
+    followDraft(normalized, next)
   }
+
+  const baseChanged = baseDraft !== null && baseDraft !== savedBase
+  const historyChanged = JSON.stringify(history) !== JSON.stringify(savedHistory)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!current || !rateValid || !fromValid || saving) return
     setSaving(true)
+    if (baseChanged) await setWorkspaceFeeRate(current.id, baseDraft)
+    let nextHistory = history
     const rateChanged = rate !== rateBefore
     if (rateChanged) {
       if (base === null && history.length === 0 && from === today) {
@@ -181,17 +205,19 @@ export function WorkspaceFeeSettings({
         if (base === null && history.length === 0) {
           await setWorkspaceFeeRate(current.id, DEFAULT_FEE_RATE)
         }
-        const next = withFeeRateFrom(history, base ?? DEFAULT_FEE_RATE, from, rate)
-        setHistory(next)
-        await setWorkspaceFeeRateHistory(current.id, next)
+        nextHistory = withFeeRateFrom(history, base ?? DEFAULT_FEE_RATE, from, rate)
       }
+    }
+    if (JSON.stringify(nextHistory) !== JSON.stringify(savedHistory)) {
+      await setWorkspaceFeeRateHistory(current.id, nextHistory)
     }
     if (rebate !== savedRebate) await setWorkspaceFeeRebate(current.id, rebate)
     if (rounding !== (current.fee_rounding ?? 'lot')) await setWorkspaceFeeRounding(current.id, rounding)
     if (dayTradeTax !== (current.day_trade_tax_estimate ?? true))
       await setWorkspaceDayTradeTaxEstimate(current.id, dayTradeTax)
     setSaving(false)
-    onSaved?.({ rateChanged })
+    // An edited history or base re-prices past periods just as a new rate does.
+    onSaved?.({ rateChanged: rateChanged || historyChanged || baseChanged })
     onClose()
   }
 
@@ -212,7 +238,15 @@ export function WorkspaceFeeSettings({
       <div className="fee-settings-grid">
         <div className="field">
           <label htmlFor={`${uid}-rate`}>手續費折扣</label>
-          <select id={`${uid}-rate`} value={choice} autoFocus onChange={(e) => setChoice(e.target.value)}>
+          <select
+            id={`${uid}-rate`}
+            value={choice}
+            autoFocus
+            onChange={(e) => {
+              choiceManual.current = true
+              setChoice(e.target.value)
+            }}
+          >
             {COMMON_FEE_RATES.map((r) => (
               <option key={r} value={String(r)}>
                 {feeDiscountLabel(r)}（{formatFeeRatePct(r)}）
@@ -231,7 +265,10 @@ export function WorkspaceFeeSettings({
               max="0.99"
               value={customInput}
               placeholder="例如 0.0004275"
-              onChange={(e) => setCustomInput(e.target.value)}
+              onChange={(e) => {
+                choiceManual.current = true
+                setCustomInput(e.target.value)
+              }}
             />
           )}
           {hint?.discount && <span className="fee-rate-hint">{hint.discount}</span>}
@@ -272,7 +309,7 @@ export function WorkspaceFeeSettings({
                       type="button"
                       className="btn btn-sm"
                       disabled={saving}
-                      onClick={() => void removeSegment(seg.from)}
+                      onClick={() => removeSegment(seg.from)}
                     >
                       刪除
                     </button>
@@ -317,7 +354,7 @@ export function WorkspaceFeeSettings({
                           type="button"
                           className="btn btn-sm btn-primary"
                           disabled={saving}
-                          onClick={() => void saveBase()}
+                          onClick={applyBase}
                         >
                           確定
                         </button>
@@ -334,6 +371,11 @@ export function WorkspaceFeeSettings({
                   </li>
                 )}
               </ul>
+              {(historyChanged || baseChanged) && (
+                <span className="fee-rate-hint" role="status">
+                  變更紀錄改過了，按「儲存」才會生效；按「取消」就恢復原本的紀錄。
+                </span>
+              )}
               <div className="field-hint">
                 {history.length > 0 && '刪除一段，那段期間的交易就回到上一個折扣。'}
                 最後一列是更早之前的費率，按「改」可以修正它——例如以前沒打折，就改成「不打折」。

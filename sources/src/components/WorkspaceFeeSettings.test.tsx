@@ -224,9 +224,11 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
     await user.click(screen.getByRole('button', { name: '改' }))
     await user.selectOptions(screen.getByLabelText('更早之前的費率'), '0.001425')
     await user.click(screen.getByRole('button', { name: '確定' }))
-
-    expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.001425)
+    // BUG-108: 確定 only edits the draft; nothing is written until 儲存.
     expect(screen.getByText('不打折')).toBeTruthy()
+    expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.001425)
   })
 
   it('自訂的基準費率也看得到，不會開在空白選項', async () => {
@@ -276,9 +278,44 @@ describe('WorkspaceFeeSettings 費率生效日（Task 182）', () => {
       'stock-pnl-web/fee-rate-history/ws-1',
       JSON.stringify([{ from: '2020-01-01', rate: 0.0005415 }]),
     )
-    mount({ fee_rate: 0.00092625 }, R65)
+    const { onSaved } = mount({ fee_rate: 0.00092625 }, R65)
     await user.click(screen.getByRole('button', { name: '刪除' }))
+    // The select follows the draft to the rate now in force, so 儲存 does not re-open the period.
+    expect((screen.getByLabelText('手續費折扣') as HTMLSelectElement).value).toBe(R65)
+    expect(screen.getByRole('status').textContent).toMatch(/按「儲存」才會生效/)
+    expect(setWorkspaceFeeRateHistory).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRateHistory).toHaveBeenCalledTimes(1)
     expect(setWorkspaceFeeRateHistory).toHaveBeenCalledWith('ws-1', [])
+    expect(onSaved).toHaveBeenCalledWith({ rateChanged: true })
+  })
+
+  // BUG-108, reported on PROD: 刪除 wrote to the database at once, so closing without saving still
+  // lost the period, although the panel says 取消 restores the old settings.
+  it('刪除後按取消，什麼都不會寫入', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(
+      'stock-pnl-web/fee-rate-history/ws-1',
+      JSON.stringify([{ from: '2020-01-01', rate: 0.0005415 }]),
+    )
+    const { onClose } = mount({ fee_rate: 0.001425 }, '0.001425')
+    await user.click(screen.getByRole('button', { name: '刪除' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
+    expect(onClose).toHaveBeenCalled()
+    expect(setWorkspaceFeeRateHistory).not.toHaveBeenCalled()
+    expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
+    expect(setWorkspaceFeeRebate).not.toHaveBeenCalled()
+  })
+
+  it('改基準費率後按取消，同樣不寫入', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rate: 0.0005415 }, R38)
+    await user.click(screen.getByRole('button', { name: '改' }))
+    await user.selectOptions(screen.getByLabelText('更早之前的費率'), '0.001425')
+    await user.click(screen.getByRole('button', { name: '確定' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
+    expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
+    expect(setWorkspaceFeeRateHistory).not.toHaveBeenCalled()
   })
 })
 
