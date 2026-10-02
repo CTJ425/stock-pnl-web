@@ -105,7 +105,9 @@ const TARGET_URL = process.env.TEST_URL || 'http://10.8.22.99:5173/'
         const id = idMatch ? idMatch.replace(/^eq\./, '') : null
         const target = dbTransactions.find(t => t.id === id)
         if (target) Object.assign(target, payload)
-        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(target || payload) })
+        // PostgREST answers `.select()` with an array; since 0.10.13 the app treats an empty or
+        // missing array as "no row updated" (assertRowsAffected), so a bare object fails the save.
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(target ? [target] : []) })
       }
       if (method === 'DELETE') {
         const idMatch = url.searchParams.get('id')
