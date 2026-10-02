@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.16-dev.1 (uncommitted)** — fixed three regressions in Task 187's sell-form 當沖 detection (BUG-095/096/097) found by a review of the 0.10.15 cycle; six more findings filed as BUG-098..103.
-- Status: ✅ Gates green (vitest 2,796 pass / 7 skipped, build / lint exit 0). ⚠️ **The live site is still 0.10.14**: Cloudflare Pages reported `Deploy failed` for `8b67800` (0.10.15). Not committed or pushed yet — waiting on the user.
-- Timestamp: 2026-10-02 10:00:00 Asia/Taipei
+- Action: **0.10.16 released** — fixed three regressions in Task 187's sell-form 當沖 detection (BUG-095/096/097); six more review findings filed as BUG-098..103.
+- Status: ✅ Gates green (vitest 2,796 pass / 7 skipped, build / `typecheck:edge` exit 0). `main` = `dev` = `f282405`; Release 0.10.16 published by CI with the final body; Cloudflare Pages check success and the live bundle verified by content (`0.10.16`, BUG-097 copy present, old 「證交稅用減半的算」 absent). Frontend-only: no Edge or DDL to deploy. 0.10.15 reached the site only after the user's manual Cloudflare rebuild (2026-10-02).
+- Timestamp: 2026-10-02 11:13:25 Asia/Taipei
 
 ---
 ## 📅 Log: 2026-10-02 10:00:00 Asia/Taipei (0.10.15 review → BUG-095/096/097 fixed, 0.10.16-dev.1)
@@ -14,7 +14,8 @@
   - **BUG-097**: ETF 當沖 notices said 減半 while the rate is 0.1% (§2-2 covers 股票 only); the fee dialog still said 「ETF 0.05%」. Copy now follows `dayTradeTaxRate`; grep sweep listed in `FIXED_BUG.md`.
 - **Tests**: three new App-level tests in `TransactionForm.fee.test.tsx`; each fails against the 0.10.15 form and passes now. Full suite 2,796 pass / 7 skipped; `npm run build` and lint exit 0.
 - **Version**: `0.10.16-dev.1` in `package.json` + lockfile, `version.ts`, `README.md`; CHANGELOG entry in zh-TW.
-- **Left open**: BUG-098 (restore ignores `seq`) is the sharpest; BUG-099 needs a real broker export; BUG-100..103 in `BUG_FIX.md`. Cloudflare redeploy of 0.10.15 is the user's.
+- **Left open**: BUG-098 (restore ignores `seq`) is the sharpest; BUG-100..103 in `BUG_FIX.md`.
+- **BUG-099, user's decision (2026-10-02)**: no hidden trade-time field. Manual entry already orders by submit order (`seq`, then `created_at` = `NOW()` per row), which is what the user wants; only CSV import is exposed, and its fix (detect newest-first files and reverse or warn) is deferred — do not start it unasked.
 
 ---
 ## 📅 Log: 2026-10-02 01:30:00 Asia/Taipei (0.10.15 released — 當沖 end to end; Task 186 closed)
