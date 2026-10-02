@@ -61,6 +61,14 @@ export interface Workspace {
 }
 
 export interface Transaction {
+  /**
+   * The order the app was told about this trade, assigned by the database on insert
+   * (Task 186 / BUG-089). It is what breaks a same-day tie that `tx_date` and `created_at`
+   * cannot: a bulk import writes one `created_at` for every row, and without this the engine
+   * falls back to "opening legs first" and replays 買 → 賣 → 買 as 買、買、賣.
+   * Absent on a database that has not run that part of schema.sql, and on hand-built test rows.
+   */
+  seq?: number | null
   id: string
   workspace_id: string
   /** Transaction date, format YYYY-MM-DD*/

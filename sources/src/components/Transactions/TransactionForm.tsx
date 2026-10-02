@@ -13,6 +13,7 @@ import { Loader2 } from 'lucide-react'
 import { Spinner } from '../Common/Spinner'
 import { useConfirm } from '../Common/useConfirm'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { taipeiDateKey } from '../../utils/taipeiDate'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
@@ -28,11 +29,20 @@ import { isSupabaseConfigured } from '../../services/supabase'
 type Unit = '張' | '零股'
 
 /** Securities tax rate quick selection value (general/ETF/halved/tax-free)*/
-const TAX_PRESET_VALUES = ['0.003', '0.001', '0.0015', '0.0005', '0']
+const TAX_PRESET_VALUES = ['0.003', '0.001', '0.0015', '0']
 
+/**
+ * Today in **Asia/Taipei**, like every other "today" in this app (`taipeiDateKey`, BUG-087).
+ *
+ * It used to read the device's own calendar date. For a user in Taiwan that is the same day, so
+ * nothing looked wrong — but the market this form records trades on is TWSE, and the rest of the
+ * app already dates everything by Taipei. The two disagree for anyone whose machine is on another
+ * zone, including CI and any container on UTC: measured 2026-10-02 00:30 Taipei, the form offered
+ * 2026-10-01 while the dashboard's day had already turned, which both pre-dates a new trade and
+ * breaks the same-day 當沖 detection below (it compares the entered date against a lot's date).
+ */
 function todayStr(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return taipeiDateKey(new Date())
 }
 
 interface TransactionFormProps {
@@ -43,7 +53,7 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormProps) {
-  const { current, ledger } = useWorkspace()
+  const { current, ledger, transactions, updateTransactionsBatch } = useWorkspace()
   const confirm = useConfirm()
   const workspaceId = current?.id
   const isEdit = Boolean(initial)
@@ -95,7 +105,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // stored half-tax fee at the full rate, which lands in 持股成本 and 年度收益 alike.
   const [taxRate, setTaxRate] = useState(() =>
     initial
-      ? String(initial.tx_nature === 'DAY_TRADE' ? dayTradeTaxRate(initial.ticker) : sellTaxRate(initial.ticker))
+      ? String(
+          initial.tx_nature === 'DAY_TRADE'
+            ? dayTradeTaxRate(initial.ticker, initial.tx_date)
+            : sellTaxRate(initial.ticker),
+        )
       : '0.003',
   )
   const [fee, setFee] = useState(initial ? String(initial.fee_tax) : '0')
@@ -118,7 +132,16 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     () => ledger.holdings.filter((h) => h.qty > 0 && h.market === market),
     [ledger.holdings, market],
   )
-  const isSpotSell = txType === 'SELL' && (market !== 'TPE' || nature === 'SPOT')
+  /**
+   * A sell that disposes of shares this workspace actually holds, so the 庫存 drop-down applies.
+   *
+   * 當沖 counts (Task 187): a 現股當沖 sell disposes of 現股 bought the same day — the position is
+   * real and listing it is more useful here, not less. It was excluded only because the original
+   * rule lumped every non-現股 nature together; the nature that genuinely holds nothing is 融券,
+   * whose sell opens a short rather than closing a holding.
+   */
+  const isSpotSell =
+    txType === 'SELL' && (market !== 'TPE' || nature === 'SPOT' || nature === 'DAY_TRADE')
   const isShortCover = txType === 'BUY' && market === 'TPE' && nature === 'SHORT'
   // Task 166 EN-01: dividends carry no 交易性質 (tx_nature is submitted as null for both) and a
   // stock dividend's price is locked to 0, so neither field is shown for these two types.
@@ -218,10 +241,77 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     (nextTicker: string, nextNature: TxNature = nature) => {
       if (taxRateManual.current) return
       const clean = nextTicker.trim().toUpperCase().replace(/^TPE:/, '')
-      setTaxRate(String(nextNature === 'DAY_TRADE' ? dayTradeTaxRate(clean) : sellTaxRate(clean)))
+      // The 當沖 relief is dated (§2-2 runs to 2027-12-31), so it is judged on this trade's date.
+      setTaxRate(String(nextNature === 'DAY_TRADE' ? dayTradeTaxRate(clean, date) : sellTaxRate(clean)))
     },
-    [nature],
+    [nature, date],
   )
+
+  /**
+   * 現股當沖 detection for a TW sell (Task 187).
+   *
+   * Why the form and not the engine: 當沖 is a relationship between two trades, and at the moment
+   * the **buy** is recorded the answer does not exist yet. The sell is the first point where it
+   * can be known, so that is where the form asks — or decides, when there is nothing to decide.
+   *
+   * The rule is deliberately split, because the two cases are not equally certain:
+   * - **No shares of this ticker from before today** → the only thing this sell can be closing is
+   *   what was bought today. Applied automatically, with a notice saying so and a way back.
+   * - **An older position exists** → the user may well be selling the old shares, which is an
+   *   ordinary 現股賣出 at the full tax. Guessing here would write a securities tax the broker
+   *   never charged, so the form offers it and leaves the default alone.
+   *
+   * This is the same boundary `proposeDayTradeLabels` keeps: same-day date matching alone was
+   * measured at 12 false positives out of 14 round trips, so a date may prompt but never decide.
+   */
+  const dayTradeContext = useMemo(() => {
+    const clean = ticker.trim().toUpperCase().replace(/^TPE:/, '')
+    if (market !== 'TPE' || txType !== 'SELL' || !clean) return null
+    const holding = ledger.holdings.find((h) => h.market === 'TPE' && h.ticker === clean)
+    const sameDayLots = holding?.openLots.filter((l) => l.date === date) ?? []
+    const sameDayQty = sameDayLots.reduce((sum, l) => sum + l.qty, 0)
+    if (sameDayQty <= 0) return null
+    const olderQty = (holding?.openLots ?? [])
+      .filter((l) => l.date !== date)
+      .reduce((sum, l) => sum + l.qty, 0)
+    // The buy rows behind today's lots, so the pair can be labelled together on submit.
+    const lotIds = new Set(sameDayLots.map((l) => l.txId))
+    const buyLegs = transactions.filter(
+      (t) => lotIds.has(t.id) && (t.tx_nature == null || t.tx_nature === 'SPOT'),
+    )
+    return { sameDayQty, olderQty, certain: olderQty === 0, buyLegs }
+  }, [market, txType, ticker, date, ledger.holdings, transactions])
+
+  // Applies the halved rate through the same path the dropdown uses, so there is one rule.
+  const applyDayTrade = useCallback(
+    (on: boolean) => {
+      const next: TxNature = on ? 'DAY_TRADE' : 'SPOT'
+      setNature(next)
+      taxRateManual.current = false
+      updateTaxRateAuto(ticker, next)
+    },
+    [ticker, updateTaxRateAuto],
+  )
+
+  /**
+   * The automatic half: only for the certain case, only while the user has not taken the wheel.
+   * `autoApplied` remembers that *this form* set it, so clicking 改回現股 is not undone on the
+   * next render — and so a 當沖 the user picked by hand is never relabelled by this effect.
+   */
+  const autoApplied = useRef(false)
+  useEffect(() => {
+    if (!dayTradeContext?.certain) {
+      if (autoApplied.current && nature === 'DAY_TRADE') {
+        autoApplied.current = false
+        applyDayTrade(false)
+      }
+      return
+    }
+    if (nature !== 'SPOT' || autoApplied.current) return
+    autoApplied.current = true
+    applyDayTrade(true)
+  }, [dayTradeContext, nature, applyDayTrade])
+
 
   // Automatic conversion of handling fees (recalculated when enabled and dependent on changes; users can still manually modify field values).
   // Edit mode no longer re-estimates on open: the initial mount keeps `initial.fee_tax` as-is,
@@ -445,6 +535,30 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         qty: shares,
         fee_tax: feeVal,
       })
+      // Task 187: a 當沖 is a pair, so the buy leg gets the label too. The engine needs only one
+      // labelled leg, but a buy row still reading 現股 while its own sell reads 當沖 is a record
+      // that contradicts itself — and the 標記當沖 wizard skips a date that already has a label,
+      // so nothing would ever come back for it. Failure here is reported and nothing else:
+      // the sell is already saved, and the ledger is correct with one leg labelled.
+      if (nature === 'DAY_TRADE' && dayTradeContext && dayTradeContext.buyLegs.length > 0) {
+        try {
+          await updateTransactionsBatch(
+            dayTradeContext.buyLegs.map((b) => ({
+              id: b.id,
+              price: b.price,
+              qty: b.qty,
+              fee_tax: b.fee_tax,
+              fee_rate: b.fee_rate ?? null,
+              tx_nature: 'DAY_TRADE' as const,
+            })),
+          )
+        } catch (err) {
+          setMessage({
+            kind: 'error',
+            text: `賣出已存檔，但同一天那筆買進沒有標記成當沖：${err instanceof Error ? err.message : String(err)}`,
+          })
+        }
+      }
       if (isEdit) {
         // Edit mode: keep the content and let the caller close the window directly
         onDone?.()
@@ -462,6 +576,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       lastSearchedTicker.current = ''
       taxRateManual.current = false
       feeRateManual.current = false
+      autoApplied.current = false
       setTaxRate('0.003')
       setMessage({ kind: 'ok', text: '🎉 成功新增交易紀錄，Dashboard 與年度收益已同步更新！' })
       onDone?.()
@@ -535,10 +650,12 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 // nature feeds isSpotSell, so switching it hides the search drop-down.
                 // Without this the spinner keeps turning and stale results come back.
                 closeSuggestions()
-                // The rate follows 交易性質 as well as the ticker: 當沖 halves it (an ETF
-                // therefore gets 0.05%, not a hardcoded 0.15%), 融券賣出 pays the full rate and
-                // 資券當沖 does not qualify for the halving at all (BUG-091).
-                taxRateManual.current = false
+                // The rate follows 交易性質 as well as the ticker (BUG-091) — but only while the
+                // user has not set it themselves. `updateTaxRateAuto` returns early when
+                // `taxRateManual` is set, and that early return is the point: changing the
+                // classification of a trade is not a request to re-price it, so a rate typed or
+                // picked by hand survives (BUG-094). Resetting the flag here used to discard it,
+                // which was invisible on a 股票 (both sides land on 0.3%) and plain on an ETF.
                 updateTaxRateAuto(ticker, next)
               }}
             >
@@ -550,6 +667,30 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           </div>
         )}
       </div>
+
+      {dayTradeContext && nature === 'DAY_TRADE' && (
+        <div className="notice" role="status">
+          <span>
+            {dayTradeContext.certain
+              ? `這檔今天才買進 ${dayTradeContext.sameDayQty.toLocaleString('en-US')} 股、之前沒有庫存，所以這筆已經記成當沖，證交稅用減半的算。`
+              : '這筆記成當沖了，證交稅用減半的算。'}
+          </span>
+          <button type="button" onClick={() => applyDayTrade(false)}>
+            改回現股
+          </button>
+        </div>
+      )}
+      {dayTradeContext && nature === 'SPOT' && (
+        <div className="notice" role="status">
+          <span>
+            今天這檔買進了 {dayTradeContext.sameDayQty.toLocaleString('en-US')} 股。
+            如果你賣的是今天買的那批，那是當沖，證交稅只收一半。
+          </span>
+          <button type="button" onClick={() => applyDayTrade(true)}>
+            改成當沖
+          </button>
+        </div>
+      )}
 
       <div className="field" ref={tickerFieldRef}>
         <label htmlFor="tx-ticker">股票代號（台股 2330 / 美股 AAPL）</label>
@@ -879,14 +1020,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               >
                 <option value="0.003">一般 0.3%</option>
                 <option value="0.001">ETF 0.1%</option>
-                <option value="0.0015">當沖 0.15%</option>
-                <option value="0.0005">ETF 當沖 0.05%</option>
+                <option value="0.0015">股票當沖 0.15%</option>
                 <option value="0">免稅 0%</option>
                 {!TAX_PRESET_VALUES.includes(taxRate) && <option value="custom">自訂</option>}
               </select>
             </div>
             <div className="field-hint">
-              只有台股賣出才收；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅；選「當沖」會自動減半
+              只有台股賣出才收；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅。當沖降稅只適用股票（0.15%），ETF 當沖仍是 0.1%
             </div>
           </div>
         </div>

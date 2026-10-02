@@ -664,6 +664,24 @@ describe('proposeDayTradeLabels（找出漏標的現股當沖，BUG-089）', () 
     expect(out.map((p) => p.sell.id)).toEqual(['d2', 'g2'])
   })
 
+  it('有 seq 時，配到哪一筆買進由真實順序決定，不再看 id（Task 186）', () => {
+    // 同一天 買164.5 → 賣166 → 買163.5。沒有 seq 時這個選擇是 id 字串比大小的結果，
+    // 換個 id 就會配到還握在手上的 163.5，持股成本差 1,001 元。
+    const withSeq = (ids: [string, string, string]) =>
+      ronRows()
+        .filter((t) => ['g1', 'g2', 'g3'].includes(t.id))
+        .map((t) => {
+          const seq = t.id === 'g1' ? 1 : t.id === 'g2' ? 2 : 3
+          const id = t.id === 'g1' ? ids[0] : t.id === 'g2' ? ids[1] : ids[2]
+          return { ...t, id, seq }
+        })
+    for (const ids of [['a', 'b', 'c'], ['z', 'b', 'a'], ['r10', 'r9', 'r8']] as const) {
+      const out = proposeDayTradeLabels(withSeq([...ids] as [string, string, string]), opts)
+      expect(out).toHaveLength(1)
+      expect(out[0].buys.map((b) => b.price)).toEqual([164.5])
+    }
+  })
+
   it('配對當天最早的買進，不是價格比較近的那一批', () => {
     const out = proposeDayTradeLabels(ronRows(), opts)
     const sep22 = out.find((p) => p.sell.id === 'g2')!
@@ -736,10 +754,20 @@ describe('proposeDayTradeLabels（找出漏標的現股當沖，BUG-089）', () 
 
 describe('hasDayTradeFeeSignature', () => {
   const minFees = { whole: 20, odd: 1 }
-  it('免證交稅的債券 ETF 沒有半稅可言，永遠不是當沖訊號', () => {
-    // No tax to halve, so a low recorded fee says nothing about 當沖.
+  it('債券 ETF 免稅，當沖與否收的錢一樣，所以沒有訊號可認（BUG-093）', () => {
     expect(
       hasDayTradeFeeSignature({ price: 100, qty: 1000, ticker: '00679B', fee_tax: 42 }, 0.0004275, minFees),
+    ).toBe(false)
+  })
+
+  it('ETF 當沖沒有降稅，費用和一般賣出一樣，一樣認不出來（BUG-093）', () => {
+    // 0050 at 100 × 1,000: 手續費 42 + 稅 100 = 142, whether or not it was a day trade.
+    expect(
+      hasDayTradeFeeSignature({ price: 100, qty: 1000, ticker: '0050', fee_tax: 142 }, 0.0004275, minFees),
+    ).toBe(false)
+    // and the "half of 0.1%" figure the old code looked for is not a thing the broker ever charges
+    expect(
+      hasDayTradeFeeSignature({ price: 100, qty: 1000, ticker: '0050', fee_tax: 92 }, 0.0004275, minFees),
     ).toBe(false)
   })
   it('完整稅率的賣出不是當沖', () => {

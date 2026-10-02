@@ -329,7 +329,7 @@ export async function handleDiscordWebhook(body: GenerateReportRequestBody): Pro
  * `user_discord_settings` and `user_discord_send_log`. The webhook URL itself never leaves this
  * module as a return value — see spec §2.6.
  */
-export const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
+export const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, seq, created_at'
 
 /** Every workspace of the user, each with all of its transactions. BUG-066: page transactions
  * 1,000 rows at a time until a short page — PostgREST caps a single response at `max_rows`. */
@@ -370,6 +370,9 @@ export async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceI
         .select(HOLDINGS_TX_COLUMNS)
         .eq('workspace_id', ws.id)
         .order('tx_date', { ascending: true })
+        // Task 186: same key order as `compareTxOrder`, so the card's ledger and the browser's
+        // agree on a same-day sequence instead of each guessing from `created_at`.
+        .order('seq', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(from, from + 999)

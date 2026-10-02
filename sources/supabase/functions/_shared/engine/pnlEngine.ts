@@ -222,14 +222,33 @@ export function sellTaxRate(ticker: string): number {
   return 0.003
 }
 
+/** The 現股當沖 rate itself: a flat 千分之1.5, not "half of something" (BUG-093). */
+const DAY_TRADE_TAX_RATE = 0.0015
+
 /**
- * The securities tax a 現股當沖 sell of this ticker pays: half the normal rate, so a general stock
- * is 0.15%, an ETF 0.05% and a bond ETF still 0. Shared by `lotSellTaxRate` (the estimate for a lot
- * bought today) and by the transaction form (the rate a row recorded as 當沖 was actually charged),
- * because a hardcoded 0.0015 overtaxes every ETF day trade by three times (BUG-091).
+ * The securities tax a 現股當沖 sell of this ticker pays (BUG-093).
+ *
+ * 證券交易稅條例 §2-2: 「同一帳戶於同一營業日現款買進與現券賣出同種類同數量之上市或上櫃**股票**，
+ * 於出賣時，按每次交易成交價格依**千分之一點五**稅率課徵證券交易稅，**不適用第二條第一款規定**。」
+ *
+ * Two things that look like details and are not:
+ * - The relief is written for **股票**, and it displaces **§2 第一款** — the 0.3% stock rate. An
+ *   ETF, a TDR and a REIT are taxed under 第二款 (0.1%), which this article never touches, so a
+ *   day-traded ETF still pays **0.1%**. Halving the rate instead (the old `sellTaxRate / 2`) gave
+ *   0.05% and under-withheld every ETF day trade by half.
+ * - The figure is a **flat** 0.0015, not a ratio of the normal rate. It coincides with half of
+ *   0.3% for a stock and with nothing else.
+ *
+ * Not modelled: §2-2 says 上市或上櫃, so 興櫃 is excluded — this app carries no listing-venue
+ * field and cannot tell them apart.
  */
-export function dayTradeTaxRate(ticker: string): number {
-  return sellTaxRate(ticker) / 2
+export function dayTradeTaxRate(ticker: string, onDate?: string | null): number {
+  const rate = sellTaxRate(ticker)
+  // The relief is dated: §2-2 runs to 116-12-31. A 當沖 after it pays the ordinary rate again.
+  // `onDate` omitted means the caller has no date to judge by; it then assumes the relief applied,
+  // which is what every current caller without a date wants (a figure for a trade made now).
+  if (onDate && onDate > DAY_TRADE_TAX_SUNSET) return rate
+  return rate === 0.003 ? DAY_TRADE_TAX_RATE : rate
 }
 
 /**
@@ -256,8 +275,8 @@ export const DAY_TRADE_TAX_SUNSET = '2027-12-31'
  * column asks for it, and the app's own net figure and break-even stay at the full rate.
  */
 export function lotSellTaxRate(ticker: string, lotDate: string, today?: string | null): number {
-  if (!today || lotDate !== today || today > DAY_TRADE_TAX_SUNSET) return sellTaxRate(ticker)
-  return dayTradeTaxRate(ticker)
+  if (!today || lotDate !== today) return sellTaxRate(ticker)
+  return dayTradeTaxRate(ticker, today)
 }
 
 /** First correct the binary floating point error (for example, 114 is mistakenly stored as 113.99999999999999) and then round it to the nearest dollar.*/
@@ -274,8 +293,10 @@ export const BORROW_FEE_RATE = 0.0008
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 // BUG-049: when `tx_date` and `created_at` both tie (a single bulk import writes one
-// created_at for every row), the opening leg must sort before the closing leg so the
-// engine never sees a sell/cover before the position exists. STOCK_DIVIDEND also raises
+// created_at for every row) **and neither row carries a `seq`**, the opening leg must sort
+// before the closing leg so the engine never sees a sell/cover before the position exists.
+// This is a guess, and Task 186 added `seq` so it stops being the answer: a real same-day
+// 買 → 賣 → 買 is reordered to 買、買、賣 by this rule, which is what BUG-089 was. STOCK_DIVIDEND also raises
 // `qty` and pushes an OpenLot (Task 166), so it must count as an opening leg too, or a
 // same-day 股票股利 + 賣出 pair from a bulk import can process the sell first and produce
 // a false 超賣 warning and a wrong cost basis.
@@ -287,8 +308,15 @@ const isOpenLeg = (tx: Transaction) =>
  * (list sort, CSV export) that must agree with the engine's own processing order.
  */
 export function compareTxOrder(a: Transaction, b: Transaction): number {
+  const bySeq =
+    typeof a.seq === 'number' && typeof b.seq === 'number' && a.seq !== b.seq ? a.seq - b.seq : 0
   return (
     cmp(a.tx_date, b.tx_date) ||
+    // Task 186: `seq` is the order the trades were actually given to the app, so it answers the
+    // same-day question the fallbacks below only guess at. It is checked before `created_at`
+    // because a bulk import writes one `created_at` for every row — the tie this exists to break.
+    // Rows without it (a legacy database, a hand-built test ledger) fall through unchanged.
+    bySeq ||
     cmp(a.created_at, b.created_at) ||
     Number(isOpenLeg(b)) - Number(isOpenLeg(a)) ||
     cmp(a.id, b.id)
@@ -309,7 +337,7 @@ export function splitFeeTax(
   // silently overtax every ETF, TDR and REIT by three times. Let the compiler catch a caller
   // that forgets it instead.
   tx: Pick<Transaction, 'tx_type' | 'market' | 'ticker' | 'price' | 'qty' | 'fee_tax'> &
-    Pick<Partial<Transaction>, 'tx_nature'>,
+    Pick<Partial<Transaction>, 'tx_nature' | 'tx_date'>,
 ): { fee: number; tax: number; borrow: number } {
   const ticker = tx.ticker
   let tax = 0
@@ -331,15 +359,19 @@ export function splitFeeTax(
         borrow = 0
       }
     } else if (tx.tx_nature === 'DAY_TRADE') {
-      tax = Math.min(floorSafe((gross * sellTaxRate(ticker)) / 2), tx.fee_tax)
+      // BUG-093: the 當沖 rate, not half the normal one — an ETF day trade is still 0.1%.
+      // Judged on the row's own date, so a 當沖 recorded after the §2-2 sunset splits at the
+      // ordinary rate instead of reporting a tax the broker could no longer have charged.
+      tax = Math.min(floorSafe(gross * dayTradeTaxRate(ticker, tx.tx_date)), tx.fee_tax)
     } else {
       const stdTax = floorSafe(gross * sellTaxRate(ticker))
       if (tx.fee_tax >= stdTax) {
         tax = stdTax
       } else {
-        // 現股當沖減半: day-trade sells get half the standard tax rate
-        const halfTax = floorSafe((gross * sellTaxRate(ticker)) / 2)
-        tax = tx.fee_tax >= halfTax ? halfTax : tx.fee_tax
+        // An unlabelled row that cannot cover the standard tax may be a 現股當沖 (BUG-093:
+        // at the 當沖 rate, which only differs from the standard one for a 股票).
+        const dtTax = floorSafe(gross * dayTradeTaxRate(ticker, tx.tx_date))
+        tax = tx.fee_tax >= dtTax ? dtTax : tx.fee_tax
       }
     }
   }

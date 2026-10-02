@@ -89,6 +89,45 @@ CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(tx_date ASC);
 -- column existed, and every row on PROD until this migration runs, must keep inferring.
 -- 'SHORT' (融券, task 141) was added on 2026-09-02 and, unlike the other three, changes the
 -- ledger path: computeLedger opens a short position instead of consuming holdings.
+-- Task 186 / BUG-089: the order the rows were given to the app.
+--
+-- `tx_date` has day granularity and a bulk import writes one `created_at` for every row, so two
+-- trades made on the same day are indistinguishable to `compareTxOrder`, which then falls back to
+-- "opening legs first" (BUG-049's oversell guard). A real 買 → 賣 → 買 on one day is replayed as
+-- 買、買、賣, the moving average blends the two buys, and the sell removes the wrong cost. Measured
+-- on 2303: 均價 162.07 against the broker's 161.82, with the difference counted twice (持股成本 and
+-- 已實現損益 at once).
+--
+-- The database assigns it: a multi-row INSERT evaluates `nextval` per row in the order the client
+-- sent them, so a CSV import keeps the file's order without the client doing anything. It records
+-- **the order the app was told about the trades**, which for a broker export is the broker's own
+-- ordering — the best evidence of intraday sequence this data has.
+CREATE SEQUENCE IF NOT EXISTS transactions_seq_seq AS BIGINT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS seq BIGINT;
+ALTER TABLE transactions ALTER COLUMN seq SET DEFAULT nextval('transactions_seq_seq');
+
+-- Backfill, idempotent and behaviour-preserving: existing rows are numbered in exactly the order
+-- `compareTxOrder` already put them in (tx_date, created_at, opening leg first, id), so applying
+-- this script changes no figure. Only rows with no seq are touched, so re-running is a no-op.
+WITH ordered AS (
+    SELECT id,
+           row_number() OVER (
+             ORDER BY tx_date,
+                      created_at,
+                      CASE WHEN tx_nature = 'SHORT' THEN (tx_type = 'SELL')
+                           ELSE (tx_type IN ('BUY', 'STOCK_DIVIDEND')) END DESC,
+                      id
+           ) AS rn
+      FROM transactions
+     WHERE seq IS NULL
+)
+UPDATE transactions t SET seq = o.rn FROM ordered o WHERE t.id = o.id AND t.seq IS NULL;
+
+-- Keep the generator above anything the backfill wrote, or the next insert collides with it.
+SELECT setval('transactions_seq_seq', GREATEST((SELECT COALESCE(MAX(seq), 0) FROM transactions), 1));
+
+CREATE INDEX IF NOT EXISTS transactions_ws_date_seq_idx ON transactions (workspace_id, tx_date, seq);
+
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check

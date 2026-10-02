@@ -261,17 +261,26 @@ describe('buildHoldingRows — 當日買進的券商口徑用當沖稅率（BUG-
     expect(row.brokerDayTradeTax).toBe(false)
   })
 
-  it('ETF 的 0.1% 也一起減半，債券 ETF 的 0 還是 0', () => {
+  // BUG-093 corrects what 0.10.9 asserted here. §2-2 gives 千分之1.5 to 上市或上櫃**股票** and
+  // displaces **§2 第一款** (0.3%); an ETF is taxed under 第二款 (0.1%) and gets no relief, so a
+  // lot bought today reads exactly the same as any other day — and `brokerDayTradeTax` must say
+  // so, or the UI prints 「以當沖稅率估」over a figure that had no 當沖 rate applied to it.
+  it('ETF 當沖不降稅，所以今天買的那批和平常一樣；債券 ETF 的 0 還是 0', () => {
     const etf = holdingsOf([tx({ tx_date: '2026-09-29', ticker: '0050', price: 100, qty: 1000, fee_tax: 142 })])
     const [etfRow] = buildHoldingRows(etf, { 'TPE:0050': quote(100) }, 0.001425, undefined, 'lot', '2026-09-29')
-    // 100,000 − 100,142 − fee 142 − tax 50 (0.05%, half of the ETF 0.1%); full rate would be −384
-    expect(etfRow.brokerUnrealized).toBe(-334)
+    // 100,000 − 100,142 − fee 142 − tax 100 (0.1%, unchanged) = −384
+    expect(etfRow.brokerUnrealized).toBe(-384)
     expect(etfRow.unrealized).toBe(-384)
-    expect(etfRow.brokerDayTradeTax).toBe(true)
+    expect(etfRow.brokerDayTradeTax).toBe(false)
 
     const bond = holdingsOf([tx({ tx_date: '2026-09-29', ticker: '00679B', price: 30, qty: 1000, fee_tax: 42 })])
     const [bondRow] = buildHoldingRows(bond, { 'TPE:00679B': quote(30) }, 0.001425, undefined, 'lot', '2026-09-29')
     expect(bondRow.brokerDayTradeTax).toBe(false)
+
+    // 一般股票才會減半，標籤也才該出現
+    const stock = holdingsOf([tx({ tx_date: '2026-09-29', ticker: '6560', price: 32.6, qty: 1000, fee_tax: 46 })])
+    const [stockRow] = buildHoldingRows(stock, { 'TPE:6560': quote(32.4) }, 0.001425, undefined, 'lot', '2026-09-29')
+    expect(stockRow.brokerDayTradeTax).toBe(true)
   })
 })
 

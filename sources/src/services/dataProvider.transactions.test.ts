@@ -48,6 +48,9 @@ vi.mock('./supabase', () => ({
 import { SupabaseProvider } from './dataProvider'
 
 const FULL =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, seq, created_at'
+/** Task 186: the same list on a database that has not added `seq` yet. */
+const WITHOUT_SEQ =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
 const WITHOUT_FEE_RATE =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, created_at'
@@ -57,6 +60,7 @@ const LEGACY =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at'
 
 const missingColumn = { code: '42703', message: 'column transactions.fee_rate does not exist' }
+const missingSeqColumn = { code: '42703', message: 'column transactions.seq does not exist' }
 const missingTxNatureColumn = { code: '42703', message: 'column transactions.tx_nature does not exist' }
 const missingUnnamedColumn = { code: '42703', message: 'column transactions.unknown_thing does not exist' }
 
@@ -187,6 +191,15 @@ describe('SupabaseProvider.addTransactions', () => {
     expect('tx_nature' in third).toBe(false)
     expect('fee_rate' in third).toBe(false)
     expect(selects).toEqual([FULL, WITHOUT_FEE_RATE, LEGACY])
+  })
+
+  it('T9 掉回沒有 seq 的欄位清單（Task 186，前端先上線、DDL 還沒套）', async () => {
+    setResults([
+      { data: null, error: missingSeqColumn },
+      { data: [], error: null },
+    ])
+    await new SupabaseProvider().listTransactions('w1')
+    expect(selects).toEqual([FULL, WITHOUT_SEQ])
   })
 
   it('T5 does not retry when the first insert succeeds', async () => {

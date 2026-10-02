@@ -9,6 +9,7 @@ import type { Holding } from './pnlEngine'
 import {
   BORROW_FEE_RATE,
   compareTxOrder,
+  dayTradeTaxRate,
   estimateUnrealizedShort,
   floorSafe,
   sellTaxRate,
@@ -218,19 +219,24 @@ export function proposeFeeCorrections(
  * 361.9999999999999 from prior float arithmetic), so both sides are rounded before comparing.
  */
 export function hasDayTradeFeeSignature(
-  tx: Pick<Transaction, 'price' | 'qty' | 'ticker' | 'fee_tax'>,
+  tx: Pick<Transaction, 'price' | 'qty' | 'ticker' | 'fee_tax'> & Pick<Partial<Transaction>, 'tx_date'>,
   feeRate: number,
   minFees: { whole: number; odd: number },
 ): boolean {
   const gross = tx.price * tx.qty
   if (!(gross > 0)) return false
   const rate = sellTaxRate(tx.ticker)
-  if (!(rate > 0)) return false // a 0% bond ETF has no tax to halve, so the signature cannot exist
+  // Judged on the row's own date: after the §2-2 sunset there is no reduced rate to leave a trace.
+  const dtRate = dayTradeTaxRate(tx.ticker, tx.tx_date)
+  // BUG-093: the signature only exists where 當沖 is actually taxed differently — §2-2 displaces
+  // the 0.3% stock rate and nothing else. An ETF, a TDR, a REIT and a bond ETF pay the same tax
+  // either way, so their day trades leave no trace in the fee and cannot be detected from it.
+  if (!(rate > dtRate)) return false
   const stdTax = floorSafe(gross * rate)
-  const halfTax = floorSafe((gross * rate) / 2)
+  const dtTax = floorSafe(gross * dtRate)
   const minFee = tx.qty >= 1000 ? minFees.whole : minFees.odd
   const expFee = Math.max(minFee, floorSafe(gross * feeRate))
-  return tx.fee_tax < stdTax && Math.round(tx.fee_tax - halfTax) === Math.round(expFee)
+  return tx.fee_tax < stdTax && Math.round(tx.fee_tax - dtTax) === Math.round(expFee)
 }
 
 /** One 現股當沖 the ledger is not being told about (BUG-089). */

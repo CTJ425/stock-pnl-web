@@ -252,19 +252,56 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     expect(fee.value).toBe(before)
   })
 
-  it('F8b: ETF 的當沖稅率是 0.05%，不是寫死的 0.15%（BUG-091）', async () => {
+  // BUG-093: 證交稅條例 §2-2 把千分之1.5 寫給「上市或上櫃股票」，排除的是 §2 第一款的 0.3%。
+  // ETF 走第二款的 0.1%，這條沒碰到它，所以 ETF 當沖**沒有**降稅，稅率不動。
+  it('F8b: ETF 當沖仍是 0.1%，不是 0.15% 也不是 0.05%（BUG-093）', async () => {
     const user = userEvent.setup()
     const form = await openNewTransactionForm(user)
     await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
     await user.type(form.getByLabelText(/股票代號/), '0050')
     await user.type(form.getByLabelText('股票名稱'), '元大台灣50')
-    // 一般賣出 0.1%，選了當沖就該減半成 0.05% —— 寫死 0.0015 會把 ETF 當沖的稅多收三倍
     expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
     await user.selectOptions(form.getByLabelText('交易性質'), 'DAY_TRADE')
-    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.0005')
-    // 切回現股就回到全額
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
     await user.selectOptions(form.getByLabelText('交易性質'), 'SPOT')
     expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
+  })
+
+  // BUG-094: `taxRateManual` exists to mean "the user set this number". Changing 交易性質 is a
+  // change of classification, not a request to re-price, so it must not discard that number.
+  // On a 股票 the overwrite was invisible (現股 and a hand-set 0.3% are the same value); an ETF
+  // is where it shows, because the derived rate (0.1%) differs from what the user typed.
+  it('F8d: 手動設過的稅率，改交易性質時不會被蓋掉（BUG-094）', async () => {
+    const user = userEvent.setup()
+    const form = await openNewTransactionForm(user)
+    await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
+    await user.type(form.getByLabelText(/股票代號/), '0050')
+    await user.type(form.getByLabelText('股票名稱'), '元大台灣50')
+    await user.selectOptions(form.getByLabelText('交易性質'), 'DAY_TRADE')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
+
+    // 使用者自己把稅率改成一般 0.3%
+    await user.selectOptions(form.getByLabelText('證交稅率快選'), '0.003')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.003')
+
+    // 改回現股：分類變了，使用者設的數字不該跟著被推導掉
+    await user.selectOptions(form.getByLabelText('交易性質'), 'SPOT')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.003')
+
+    // 自動推導仍然可用：快選選回 ETF 0.1% 就回到那個值
+    await user.selectOptions(form.getByLabelText('證交稅率快選'), '0.001')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.001')
+  })
+
+  it('F8c: 一般股票當沖才降到 0.15%（BUG-093）', async () => {
+    const user = userEvent.setup()
+    const form = await openNewTransactionForm(user)
+    await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
+    await user.type(form.getByLabelText(/股票代號/), '2303')
+    await user.type(form.getByLabelText('股票名稱'), '聯電')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.003')
+    await user.selectOptions(form.getByLabelText('交易性質'), 'DAY_TRADE')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.0015')
   })
 
   it('F9: 美股沒有交易性質欄位', async () => {
@@ -374,5 +411,90 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     form = within(dialog)
     expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.00092625')
     expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('92')
+  })
+})
+
+// Task 187: 當沖 is a relationship between two trades, so at the moment the buy is recorded the
+// answer does not exist yet. The sell is the first point where it can be known — and only
+// sometimes for certain, which is why the form decides in one case and asks in the other.
+describe('TransactionForm 當沖偵測（Task 187）', () => {
+  const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+
+  // Each case builds its own ledger, and the local store survives a `cleanup()` — without this a
+  // later case still sees the earlier one's same-day buy and the detector fires when it should not.
+  beforeEach(() => {
+    cleanup()
+    window.localStorage.clear()
+  })
+
+  async function sellForm(user: ReturnType<typeof userEvent.setup>, buys: Array<[string, number, number, number]>) {
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    for (const [txDate, price, qty, fee] of buys) {
+      await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+      const dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+      const f = within(dialog)
+      const dateInput = f.getByLabelText('交易日期')
+      await user.clear(dateInput)
+      await user.type(dateInput, txDate)
+      await user.type(f.getByLabelText(/股票代號/), '2303')
+      await user.type(f.getByLabelText('股票名稱'), '聯電')
+      await user.selectOptions(f.getByLabelText('股數單位'), '零股')
+      await user.type(f.getByLabelText('交易單價'), String(price))
+      await user.type(f.getByLabelText('交易股數'), String(qty))
+      const feeField = f.getByLabelText(/手續費 \/ 稅金/)
+      await user.clear(feeField)
+      await user.type(feeField, String(fee))
+      await user.click(f.getByRole('button', { name: '確認送出' }))
+      await f.findByText(/成功新增交易紀錄/)
+      await user.click(f.getByRole('button', { name: '關閉' }))
+    }
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    const dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    const f = within(dialog)
+    await user.selectOptions(f.getByLabelText('交易類型'), 'SELL')
+    await user.type(f.getByLabelText(/股票代號/), '2303')
+    await user.selectOptions(f.getByLabelText('股數單位'), '零股')
+    await user.type(f.getByLabelText('交易單價'), '166')
+    await user.type(f.getByLabelText('交易股數'), '1000')
+    return f
+  }
+
+  it('之前沒有庫存、今天才買進：自動記成當沖，稅率減半，而且可以改回去', async () => {
+    const user = userEvent.setup()
+    const f = await sellForm(user, [[TODAY, 164.5, 1000, 70]])
+
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('DAY_TRADE')
+    expect((f.getByRole('spinbutton', { name: '證交稅率' }) as HTMLInputElement).value).toBe('0.0015')
+    // 166,000 以工作區預設費率 0.1425%：手續費 236 + 當沖半稅 249
+    expect((f.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('485')
+
+    await user.click(f.getByRole('button', { name: '改回現股' }))
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('SPOT')
+    // 全額稅：236 + 498
+    expect((f.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('734')
+    // 改回去之後不會被自動邏輯再搶走
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('SPOT')
+  })
+
+  it('有舊庫存時只提示，不自己決定（猜錯就寫進一個券商沒收過的稅）', async () => {
+    const user = userEvent.setup()
+    const f = await sellForm(user, [['2026-05-05', 100, 2000, 85], [TODAY, 164.5, 1000, 70]])
+
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('SPOT')
+    expect((f.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('734')
+
+    await user.click(f.getByRole('button', { name: '改成當沖' }))
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('DAY_TRADE')
+    expect((f.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('485')
+  })
+
+  it('同一天沒有買進就完全不出現', async () => {
+    const user = userEvent.setup()
+    const f = await sellForm(user, [['2026-05-05', 100, 2000, 85]])
+    expect(f.queryByRole('button', { name: '改成當沖' })).toBeNull()
+    expect(f.queryByRole('button', { name: '改回現股' })).toBeNull()
+    expect((f.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('SPOT')
   })
 })

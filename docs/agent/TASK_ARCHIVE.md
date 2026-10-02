@@ -6,6 +6,18 @@
 > **Items 7 (its ⏳ remainder), 10 and 12 were still open and stayed in `TASK.md`** under a slim
 > Task 185 entry; the numbering there is not renumbered. Everything else is below, verbatim.
 
+### Task 186: Persist the transaction import order so same-day sequences are not reordered
+- **Status**: ✅ DONE 2026-10-02 (pending release, 0.10.15-dev.3). DDL + backfill applied to **DEV**; PROD needs the same at release time.
+- **Agent**: Claude
+- **Timestamp**: 2026-10-02 01:20:00 Asia/Taipei
+- **Why**: `compareTxOrder` broke a `tx_date` + `created_at` tie by putting opening legs first (BUG-049's oversell guard). A bulk import writes one `created_at` for every row, so a real same-day 買 → 賣 → 買 was replayed as 買、買、賣 and the moving average removed a blended cost instead of the lot actually sold.
+- **Shape as built**: `transactions.seq BIGINT DEFAULT nextval(...)`. The database assigns it — a multi-row INSERT evaluates `nextval` per row in the order the client sent them, so a CSV import keeps the file's order with no client change. `compareTxOrder` prefers it: `tx_date` → `seq` → `created_at` → opening leg → `id`. Rows without it behave exactly as before.
+- **Backfill**: `row_number()` over the existing sort keys, so applying `schema.sql` changes no figure; only `seq IS NULL` rows are touched, so it is idempotent. The generator is then `setval` above the highest backfilled value.
+- **The one day the backfill could not know**: 2026-09-22 on 2303 (買164.5 / 賣166 / 買163.5). A behaviour-preserving backfill keeps the old wrong order by construction. The真實 order is recoverable from the broker's own 均價 161.82 — it implies the 164.5 lot was consumed — so that group was re-ranked by hand on DEV.
+- **Second defect this surfaced**: `proposeDayTradeLabels` chose the day-trade buy leg by the `id` string. On the real ledger, swapping two ids moved 持股成本 between 323,637 and 324,638. It now follows `seq`. The user's own run of the wizard had in fact labelled the wrong buy (163.5 instead of 164.5); corrected on DEV.
+- **Verified** against the live DEV rows: 2303 均價 161.8185 / 未實現 −2,066, 6182 −3,631, 總成本 456,693, 已實現 18,833 — all identical to the broker app.
+- **Also plumbed**: `verify.sql`, `models.ts`, the provider's column ladder (with a `seq` degrade step for a database that has not run the DDL), local mode assigning its own `seq`, and the Edge card selecting and ordering by it.
+
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
 - **Status**: ✅ DONE — released as **0.10.13** (`dd5a727`), on `main` and `dev` (identical), CI green
   on both, Release published by CI with the final body. Gates: vitest 2,762 pass / 7 skipped, build /

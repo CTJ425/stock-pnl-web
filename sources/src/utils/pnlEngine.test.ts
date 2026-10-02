@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { DAY_TRADE_TAX_SUNSET, compareTxOrder, computeLedger, estimateUnrealized, estimateUnrealizedShort, lotSellTaxRate, sellTaxRate, splitFeeTax } from './pnlEngine'
+import { DAY_TRADE_TAX_SUNSET, compareTxOrder, computeLedger, dayTradeTaxRate, estimateUnrealized, estimateUnrealizedShort, lotSellTaxRate, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 let seq = 0
 function tx(input: {
@@ -1167,10 +1167,23 @@ describe('lotSellTaxRate — 當日買進的批次減半（BUG-087）', () => {
     expect(lotSellTaxRate('2330', '', '2026-09-29')).toBe(0.003)
   })
 
-  it('ETF / TDR / REITs 的 0.1% 減半成 0.05%，免稅的債券 ETF 還是 0', () => {
-    expect(lotSellTaxRate('0050', '2026-09-29', '2026-09-29')).toBe(0.0005)
-    expect(lotSellTaxRate('9105', '2026-09-29', '2026-09-29')).toBe(0.0005)
+  // BUG-093 corrects what 0.10.9 asserted here. 證交稅條例 §2-2 gives 千分之1.5 to 上市或上櫃
+  // **股票** and displaces **§2 第一款** — the 0.3% stock rate. ETF / TDR / REIT are taxed under
+  // 第二款 (0.1%), which the article never touches, so their day trades get no relief at all.
+  // The old expectation (0.05%) was "half of whatever the normal rate is", which the statute
+  // never says; it under-withheld every ETF day trade by half.
+  it('ETF / TDR / REIT 當沖不降稅，仍是 0.1%；免稅的債券 ETF 還是 0', () => {
+    expect(lotSellTaxRate('0050', '2026-09-29', '2026-09-29')).toBe(0.001)
+    expect(lotSellTaxRate('9105', '2026-09-29', '2026-09-29')).toBe(0.001)
     expect(lotSellTaxRate('00679B', '2026-09-29', '2026-09-29')).toBe(0)
+  })
+
+  it('只有一般股票的當沖降到千分之1.5，而且是固定值不是比例', () => {
+    expect(dayTradeTaxRate('2330')).toBe(0.0015)
+    expect(dayTradeTaxRate('0050')).toBe(0.001)
+    expect(dayTradeTaxRate('00679B')).toBe(0)
+    // 不是 sellTaxRate / 2：ETF 若照比例會變成 0.0005
+    expect(dayTradeTaxRate('0050')).not.toBe(sellTaxRate('0050') / 2)
   })
 
   it('減半立法到 2027-12-31，之後回到全額', () => {
@@ -1198,5 +1211,84 @@ describe('estimateUnrealized — dayTradeDate 只影響當天買進的批次（B
   it('沒有 openLots 的合成部位不會被誤判成今天買的', () => {
     const synthetic: Holding = { ...h(), openLots: [] }
     expect(estimateUnrealized(synthetic, 32.4, 0.001425, undefined, true, 'lot', '2026-09-29')).toBe(-389)
+  })
+})
+
+// 證交稅條例 §2-2 runs to 民國116年12月31日 (2027-12-31). The relief is dated, so every figure
+// that depends on it has to be judged on the trade's own date — not just the dashboard estimate.
+describe('當沖降稅的落日（§2-2 至 2027-12-31）', () => {
+  it('落日當天仍降稅，隔天恢復原稅率', () => {
+    expect(dayTradeTaxRate('2330', '2027-12-31')).toBe(0.0015)
+    expect(dayTradeTaxRate('2330', '2028-01-03')).toBe(0.003)
+    // ETF 本來就沒降稅，落日前後都是 0.1%
+    expect(dayTradeTaxRate('0050', '2027-12-31')).toBe(0.001)
+    expect(dayTradeTaxRate('0050', '2028-01-03')).toBe(0.001)
+  })
+
+  it('費用拆解依交易自己的日期判斷，落日後的當沖用全額稅率拆', () => {
+    const base = { tx_type: 'SELL' as const, market: 'TPE' as const, ticker: '2344', price: 188.5, qty: 1000 }
+    // 188,500 → 全額稅 565、當沖稅 282
+    expect(splitFeeTax({ ...base, fee_tax: 700, tx_nature: 'DAY_TRADE', tx_date: '2027-12-31' }).tax).toBe(282)
+    expect(splitFeeTax({ ...base, fee_tax: 700, tx_nature: 'DAY_TRADE', tx_date: '2028-01-03' }).tax).toBe(565)
+  })
+})
+
+// Task 186 / BUG-089: `seq` is the order the app was told about the trades. Before it existed,
+// a same-day 買 → 賣 → 買 fell through to "opening legs first" and was replayed as 買、買、賣,
+// and which buy the sell consumed came down to a string comparison of ids.
+describe('compareTxOrder — seq 決定同日順序（Task 186）', () => {
+  const row = (id: string, tx_type: TxType, price: number, fee_tax: number, seq?: number): Transaction => ({
+    id,
+    workspace_id: 'w',
+    tx_date: '2026-09-22',
+    market: 'TPE',
+    ticker: '2303',
+    name: '聯電',
+    tx_type,
+    price,
+    qty: 1000,
+    fee_tax,
+    tx_nature: 'SPOT',
+    created_at: '2026-10-01T00:00:00Z', // one bulk import: every row ties
+    ...(seq === undefined ? {} : { seq }),
+  })
+  // 真實順序：買 164.5 → 賣 166 → 買 163.5，之後 9/23 再買 160
+  const later = (id: string, seq?: number): Transaction => ({ ...row(id, 'BUY', 160, 68, seq), tx_date: '2026-09-23' })
+
+  it('沒有 seq 時，兩筆買進都被排到賣出前面，成本混成一個誰都不是的數字（BUG-089）', () => {
+    const h = computeLedger([
+      row('a', 'BUY', 164.5, 70),
+      row('b', 'SELL', 166, 319),
+      row('c', 'BUY', 163.5, 69),
+      later('d'),
+    ]).holdings.find((x) => x.ticker === '2303')!
+    // 164.5 與 163.5 先混成均價 164.0695，賣出扣掉的是那個平均，多留 500.5
+    expect(h.cost).toBe(324137.5)
+    // 而 openLots 仍是 FIFO 的 163.5 + 160 = 323,637 —— 同一個部位的兩個數字互相矛盾
+    expect(h.openLots.reduce((sum, l) => sum + l.cost, 0)).toBe(323637)
+  })
+
+  it('有 seq 時，不管 id 怎麼排都得到券商那個答案', () => {
+    const build = (ids: [string, string, string, string]) =>
+      computeLedger([
+        row(ids[0], 'BUY', 164.5, 70, 1),
+        row(ids[1], 'SELL', 166, 319, 2),
+        row(ids[2], 'BUY', 163.5, 69, 3),
+        later(ids[3], 4),
+      ]).holdings.find((h) => h.ticker === '2303')!
+
+    for (const ids of [['a', 'b', 'c', 'd'], ['z', 'b', 'a', 'd'], ['r10', 'r9', 'r8', 'r7']] as const) {
+      const h = build([...ids] as [string, string, string, string])
+      // 賣出吃掉 164.5 那批，留下 163.5 與 160：163,569 + 160,068
+      expect(h.cost).toBe(323637)
+      expect(h.cost / h.qty).toBeCloseTo(161.8185, 4)
+      expect(h.openLots.map((l) => l.price)).toEqual([163.5, 160])
+    }
+  })
+
+  it('沒有 seq 的舊資料仍沿用原本的排序規則，不會因為這個欄位改變行為', () => {
+    const withoutSeq = [row('a', 'SELL', 166, 319), row('b', 'BUY', 164.5, 70)].sort(compareTxOrder)
+    // 開倉腿優先（BUG-049）：買仍排在賣前面
+    expect(withoutSeq.map((t) => t.tx_type)).toEqual(['BUY', 'SELL'])
   })
 })

@@ -16,23 +16,6 @@
 
 ## 📋 Active Tasks
 
-### Task 186: Persist the transaction import order so same-day sequences are not reordered
-- **Status**: 🔄 OPEN — the user takes this one. BUG-089's day trades are fixed by labelling
-  (`FIXED_BUG.md`), but that is the labelled case; this is the general one.
-- **Agent**: —
-- **Timestamp**: 2026-10-02 00:10:00 Asia/Taipei
-- **Why**: `compareTxOrder` (`sources/src/utils/pnlEngine.ts:278`) breaks a `tx_date` + `created_at`
-  tie by putting opening legs first (BUG-049, so a sell is never processed before the position
-  exists). A bulk import writes one `created_at` for every row, so a same-day 買→賣→買 is replayed
-  as 買、買、賣 and the moving average removes a blended cost instead of the lot that was actually
-  sold. The data as stored cannot recover the real intraday order, so no code-only fix is correct.
-- **Shape**: a sequence column on `transactions`, written with the CSV row order at import,
-  preferred by `compareTxOrder` over the `isOpenLeg` tie-break. Needs DDL + a backfill, so it is
-  **not** shipped by a `main` push (CLAUDE.md § Release workflow).
-- **Known limit of the current state**: an unlabelled same-day round trip whose fee does **not**
-  carry the halved-tax signature (a 融資/融券 leg, a broker that bills differently, a hand-typed
-  fee) is still reordered. 「標記當沖」cannot see those.
-
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
 - **Status**: 🔄 OPEN REMAINDER — the task itself shipped as **0.10.13** (`dd5a727`) and the entry is
   archived; only items 7, 10 and 12 below are still live. Full text, evidence and the completed items:

@@ -6,6 +6,31 @@
 
 ---
 
+### Bug ID: BUG-094 — 改交易性質會把使用者手動設的證交稅率丟掉（我在修 BUG-091 時種下的）
+- **Date**: found 2026-10-02 (user: 「手動改成一般0.3，手續費又會折半」), fixed the same day (pending release)
+- **Symptom**: a row marked 當沖; the user sets 證交稅率 to 一般 0.3% by hand; then changes 交易性質 back to 現股 — and the rate silently reverts to the derived one, taking the recorded fee with it. Measured on 0050: 0.003 / fee 346 → **0.001 / fee 144**.
+- **Why it hid on a 股票**: 現股 derives 0.003, which is also what the user typed, so the overwrite produced the same number and was invisible. Only a ticker whose derived rate differs from the typed one (an ETF at 0.1%) shows it.
+- **Root Cause**: **introduced by the BUG-091 fix earlier the same day.** That fix made the rate follow 交易性質, and to make the dropdown re-derive I added `taxRateManual.current = false` to its `onChange`. That flag's entire job is "the user set this number — do not touch it"; `updateTaxRateAuto` early-returns on it, and that early return is the feature. Clearing it threw away the user's input to make my own path work.
+- **Fix**: the dropdown no longer resets the flag; it just calls `updateTaxRateAuto(ticker, next)`, which honours it. Changing the classification of a trade is not a request to re-price it. The 「改成當沖」/「改回現股」notice buttons do still reset it, because their label promises the tax changes — that is an explicit re-pricing action, not a classification change.
+- **Evidence**: new test F8d — ETF marked 當沖 (0.001) → user picks 0.003 → switches to 現股 → stays **0.003**; picking ETF 0.1% from the preset still returns to 0.001, so the automatic path is not lost.
+- **Status**: ✅ FIXED (pending release) — found by the user, not by any test
+
+---
+
+### Bug ID: BUG-093 — 當沖稅率被當成「打對折」，但法條寫的是固定千分之1.5，而且只給股票
+- **Date**: found 2026-10-02 (user: 「0.05 好像有問題」), fixed the same day (pending release)
+- **Symptom**: a day-traded ETF was estimated — and offered in the form — at **0.05%** securities tax. The real rate is **0.1%**, the same as an ordinary ETF sell. Half the tax was missing.
+- **Root Cause**: every 當沖 rate in the codebase was written as `sellTaxRate(ticker) / 2`. 證券交易稅條例 §2-2 says something different: 「同一帳戶於同一營業日現款買進與現券賣出同種類同數量之上市或上櫃**股票**，於出賣時，按每次交易成交價格依**千分之一點五**稅率課徵證券交易稅，**不適用第二條第一款規定**。」 Two mistakes in one expression:
+  1. The relief is written for **股票** and displaces **§2 第一款**, the 0.3% stock rate. An ETF, TDR or REIT is taxed under 第二款 (0.1%), which the article never touches — **a day-traded ETF gets no relief at all**.
+  2. The figure is a **flat 0.0015**, not a ratio. It equals half of 0.3% for a stock by coincidence and nothing else.
+- **Where it was wrong**: `lotSellTaxRate` (the 券商 estimate, shipped in **0.10.9** with BUG-087, so this has been live), `splitFeeTax`'s `DAY_TRADE` branch and its inference ladder, `hasDayTradeFeeSignature`, and the 0.0005 preset added earlier the same day in `TransactionForm`.
+- **Fix**: one `dayTradeTaxRate(ticker)` = `sellTaxRate(ticker) === 0.003 ? 0.0015 : sellTaxRate(ticker)`, used by all of them. The fee-signature test now returns false when `sellTaxRate === dayTradeTaxRate`: where the tax does not change, a day trade leaves **no trace in the fee**, so 標記當沖 cannot and must not claim to detect an ETF day trade. The form's preset list drops `ETF 當沖 0.05%` and renames the other to 股票當沖 0.15%.
+- **Evidence**: 0.10.9's own test asserted `lotSellTaxRate('0050', today, today) === 0.0005` — the wrong assumption was pinned by a test, which is why nothing caught it. Corrected to 0.001, with the statute quoted beside it. New test asserts `dayTradeTaxRate('0050') !== sellTaxRate('0050') / 2`.
+- **Not modelled**: §2-2 says 上市或上櫃, so 興櫃 is excluded. This app has no listing-venue field and cannot tell them apart.
+- **Status**: ✅ FIXED (pending release) — found by the user questioning the number, not by any test
+
+---
+
 ### Bug ID: BUG-092 — 「標記當沖」會把融資／融券的同日來回改成當沖，抹掉使用者記錄的交易性質
 - **Date**: found 2026-10-02 while auditing BUG-089's edge cases, fixed the same day (pending release)
 - **Symptom**: a 融資 (MARGIN) buy + sell on one date, whose sell carries the halved-tax fee signature, is proposed by `proposeDayTradeLabels` and would be written back as `DAY_TRADE` — replacing MARGIN.
@@ -35,7 +60,7 @@
 - **Evidence**: on the real ledger the detector proposes exactly the three real day trades (2026-08-24, 09-18, 09-22) and **not** 07-13 or 07-27 (full-tax same-day round trips); on 09-22 it pairs the 164.5 buy, never the 163.5 lot that is still held. After labelling, `computeLedger` gives `cost` **323,637** / 均價 **161.8185** and `realized` **19,334 → 18,833**. Re-run against the live DEV rows with SNAP-RON's own settings: 2303 **-2,066**, 6182 **-3,631**, 總成本 **456,693** — every figure identical to the broker app's screenshot (報酬 -5,697).
 - **Caught only in a real browser**: `WorkspaceContext.updateTransactionsBatch` patched local state with the fee fields alone, so after「標記當沖」the dashboard kept showing 324,138 until a reload — the write had succeeded, the screen had not. It now follows the same key-presence rule as the provider and the RPC. The unit tests could not see this; the Playwright run could.
 - **Applied to DEV data 2026-10-01**: the six legs of those three round trips are labelled `DAY_TRADE` (the 09-22 BUY at 163.5 deliberately is not — that lot is still held). PROD not touched yet.
-- **Still open**: the general same-day ordering problem. `compareTxOrder` cannot recover the real intraday order when `created_at` ties, and the user is adding a transaction sequence column for that (see `TASK.md` Task 186). Labelling fixes the day trades; the sequence column is what fixes an unlabelled same-day sequence in general.
+- **Closed by Task 186 (2026-10-02)**: `transactions.seq`, assigned by the database on insert, now carries the order the app was told about the trades, and `compareTxOrder` prefers it over the "opening legs first" guess. That also removed a second defect found while verifying this one: when a date held two buys, which one the wizard paired with the day-trade sell came down to a **string comparison of transaction ids** — swapping two ids on the real ledger moved 持股成本 by 1,001 (323,637 ↔ 324,638). The pairing now follows the real order.
 - **Status**: ✅ FIXED in code, verified against live DEV data; release pending
 
 ---
@@ -80,6 +105,7 @@
 - **Root Cause**: **not a defect in this repo.** The broker estimates a lot bought *today* at the halved 現股當沖 securities tax (0.15%, ETF 0.05%); the engine has always withheld the full 0.3% (`estimateUnrealized` / `breakEvenPrice`, unchanged since 58a1a42). Three pieces of evidence: (a) E.SUN 庫存損益 on 2026-09-29 14:46 showed 6560 預估收入 32,306 = 32,400 − 46 − **48** (0.15%) while 2303 on the same screen used 0.3%; (b) every release tag 0.9.0 → 0.10.4 (78 tags, each recomputed in its own worktree with its own engine) gives −389 / 32.79 for this trade, so no version ever produced −340; (c) on 2026-09-30 the lot was no longer same-day and the broker showed **−587 / −1.8%** at price 32.2 — bit-for-bit the engine's own output (32,200 − 32,646 − fee 45 − tax 96), so the broker had gone back to 0.3% overnight. The switch is by **calendar day, not by the 13:30 close**: the 14:46 screenshot was already after the close and still halved.
 - **Fix (0.10.9-dev.1)**: `lotSellTaxRate(ticker, lotDate, today)` (`sources/src/utils/pnlEngine.ts`) halves a lot's sell tax while its buy date equals the Taipei calendar date, with a hard sunset at `DAY_TRADE_TAX_SUNSET = '2027-12-31'` (the statute's own expiry). `estimateUnrealized` takes a 7th `dayTradeDate` argument — passed in, never read from the clock, so a historical recompute stays reproducible. **Only the 券商 / 牌告 figure asks for it**: `buildHoldingRows(…, today)` feeds it to the posted-rate call alone, so `unrealized` and `breakEven` keep the full rate. `HoldingRow.brokerDayTradeTax` drives the labels (「含今天買進的股票，證交稅以當沖 0.15% 估算」in the 牌告 row, 「券商以當沖稅率估」in 個股分析), without which the figure would move overnight with no trade to explain it. Edge: `aggregateHoldings(…, today)` gets the run's Taipei calendar date (not `ymd`, which is the market day and points back at Friday on a weekend).
 - **Deliberately not done**: the app's own net figure and break-even stay at 0.3%. The halved rate is conditional on the position actually being day-traded, and on eligibility this app cannot see — 處置股 / 警示股 / 全額交割股 cannot be day-traded, and the account needs a 當沖同意書. Break-even answers "what price covers cost if I *don't* sell today", so a conditional rate would understate it.
+- **Superseded in part by BUG-093**: this entry's 「0.15%, ETF 0.05%」 is wrong — §2-2 gives a flat 千分之1.5 to 股票 only, so an ETF day trade stays at 0.1%.
 - **Unverified**: whether the broker applies this per lot within one ticker. The 2303-vs-6560 evidence is cross-ticker; buying more of an already-held position would settle it. The implementation is per lot.
 - **Status**: ✅ FIXED (0.10.9-dev.1) — broker caliber aligned; engine arithmetic was correct all along
 

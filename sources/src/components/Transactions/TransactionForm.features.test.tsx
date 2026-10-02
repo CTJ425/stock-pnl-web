@@ -32,7 +32,7 @@ describe('TransactionForm 新增交易表單改善測試', () => {
     expect(options).toEqual(['現股', '當沖', '融資', '融券'])
   })
 
-  it('2. 賣出時點選代號或名稱，可自動顯示現股庫存清單供選取；非現股（如當沖）不強制顯示庫存', async () => {
+  it('2. 賣出時點選代號或名稱，可自動顯示現股庫存清單供選取；融券賣出不列庫存', async () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByText('本機模式')
@@ -79,8 +79,13 @@ describe('TransactionForm 新增交易表單改善測試', () => {
     expect(nameDropdown.textContent).toContain('2330')
     expect(nameDropdown.textContent).toContain('台積電')
 
-    // 切換交易性質為「當沖」(DAY_TRADE)，持股選單不應顯示
+    // Task 187: 當沖 賣的就是今天買進的現股，所以庫存清單照常出現（這一行是刻意改過的行為）。
     await user.selectOptions(form.getByLabelText('交易性質'), 'DAY_TRADE')
+    await user.click(nameInput)
+    expect(await form.findByTestId('name-holdings-dropdown')).toBeTruthy()
+
+    // 真正不該列庫存的是融券賣出：它開的是空單，不是處分手上的持股。
+    await user.selectOptions(form.getByLabelText('交易性質'), 'SHORT')
     expect(form.queryByTestId('ticker-holdings-dropdown')).toBeNull()
     expect(form.queryByTestId('name-holdings-dropdown')).toBeNull()
   })

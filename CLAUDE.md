@@ -79,6 +79,70 @@ No `v` prefix. `main` = `x.x.x`; `dev` unfinished = `x.x.x-dev.N`.
 The files that carry the number: `version.syncFiles` in `.claude/release.config.json`.
 How to pick the next one: the **`versioning`** skill.
 
+**On `dev`, only `N` moves — and it moves every time.**
+
+- `x.y.z` is the **next official version**, not the current one. It is chosen once, when the first
+  change after a release lands, and then stays put through every `-dev.N` until the release commit
+  strips the suffix. Re-picking it mid-cycle is wrong.
+- **`dev` never carries a bare `x.y.z`.** A number without `-dev.N` means "this is released", and
+  on `dev` that is never true. Only `main` holds bare numbers.
+- One commit that changes behaviour = one `-dev.N`. Not one per session, not one per release.
+
+A full cycle, so the shape is unambiguous:
+
+```
+main 0.10.14          ← released
+dev  0.10.15-dev.1    ← first change after it; 0.10.15 is now fixed for this cycle
+dev  0.10.15-dev.2    ← next change
+dev  0.10.15-dev.3    ← next change
+main 0.10.15          ← release: the suffix is stripped, both branches end up here
+dev  0.10.16-dev.1    ← next cycle picks the next x.y.z, once
+```
+
+The **`ship`** skill owns this order end to end and the **`versioning`** skill owns the number
+itself; neither is optional, and neither decides the other's part.
+
+This was violated on 2026-10-02 — `c820676`, `e17b60d` and `aa1b361` all shipped as
+`0.10.15-dev.1`, so the footer version could not tell three different builds apart and the user
+had to notice it.
+
+Checklist for **every** commit to `dev` that changes behaviour, in this order:
+
+1. Bump `N` in **all** of `version.syncFiles` (`npm version <v> --no-git-tag-version
+   --allow-same-version` for `package.json`, so the lockfile moves too).
+2. Add or extend that version's `docs/agent/CHANGELOG.md` entry, in zh-TW.
+3. Commit the version files, the changelog and the code **together**, then push.
+4. `grep -R "<old version>" sources/package.json sources/src/version.ts README.md` must come back
+   empty before the push.
+
+Docs-only or test-only commits do not need a bump; anything a user could see does.
+
+## Changing a number that the law or a broker decides
+
+These four rules exist because each was broken in one session (2026-10-02) and the **user** caught
+three of them, every time by noticing a figure that disagreed with their broker statement.
+
+1. **A rate is a cited fact, never a derivation.** 手續費率, 證交稅率, 借券費率, 二代健保: before
+   changing one, find the statute or the broker's own charge and quote it in the code comment.
+   Never infer one rate from another — no `rate / 2`, no "the discount is probably half". The
+   當沖 rate looked like "half of 0.3%" for three releases; 證交稅條例 §2-2 actually says a **flat**
+   千分之1.5 for 上市或上櫃**股票** only, so the ETF figure was wrong by half (BUG-093).
+2. **Fix an assumption everywhere at once.** When one is wrong, `grep` for every expression of it
+   *before* editing, and list the hits in the bug record. `sellTaxRate(...) / 2` was in four
+   places; fixing one and adding a fifth is how the same defect ships twice.
+3. **Never clear a guard you did not write.** A flag like `taxRateManual`, `untouchedFeeSig` or
+   `feeRateManual` is there to protect something — usually the user's own input. If it blocks your
+   change, read what it defends and keep it. Clearing `taxRateManual` to make a new code path work
+   silently discarded a rate the user had typed (BUG-094).
+4. **A test is not evidence of a domain fact.** Two tests pinned the wrong ETF 當沖 rate, so the
+   suite stayed green while the number was wrong. When a test asserts a legal or broker figure,
+   verify the figure at its source and put the citation next to the assertion.
+
+**Say "I checked" only after checking.** A recommendation about how a defect must be fixed is a
+claim; read the code path end to end first. "There is no code-only fix" was asserted about BUG-089
+before `computeLedger` had been read — the 當沖 engine was already there, and the cheaper fix was
+the better one.
+
 ## Branches & envs
 
 | Env | Branch | Supabase |

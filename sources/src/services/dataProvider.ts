@@ -181,10 +181,15 @@ export class LocalProvider implements DataProvider {
   async addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]> {
     const store = readStore()
     const base = Date.now()
+    // Task 186: local mode assigns `seq` itself, so both storage modes order a same-day import
+    // the same way. The cloud side lets Postgres do it (`nextval` per row, in the order sent).
+    const nextSeq =
+      store.transactions.reduce((max, t) => (typeof t.seq === 'number' && t.seq > max ? t.seq : max), 0) + 1
     const created = txs.map((tx, i) => ({
       ...tx,
       id: newId(),
       workspace_id: workspaceId,
+      seq: nextSeq + i,
       // Ensure that the same batch import maintains the original order in millisecond increments (engine same-day transactions are sorted by created_at)
       created_at: new Date(base + i).toISOString(),
     }))
@@ -318,6 +323,9 @@ const WORKSPACE_COLUMNS_WITHOUT_REBATE = 'id, name, created_at, fee_rate'
 const WORKSPACE_COLUMNS_LEGACY = 'id, name, created_at'
 
 const TX_COLUMNS =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, seq, created_at'
+/** Without seq, for a database that has not run that part of schema.sql (Task 186). */
+const TX_COLUMNS_WITHOUT_SEQ =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
 /** Without fee_rate only, for a database that has tx_nature but has not run the fee_rate part of schema.sql. */
 const TX_COLUMNS_WITHOUT_FEE_RATE =
@@ -331,7 +339,7 @@ const TX_COLUMNS_LEGACY =
 
 const SPLIT_LOG_COLUMNS = 'id, workspace_id, market, ticker, cutoff_date, ratio_from, ratio_to, applied_at'
 
-type NewTxColumn = 'tx_nature' | 'fee_rate'
+type NewTxColumn = 'tx_nature' | 'fee_rate' | 'seq'
 /** null: nothing dropped (full column set). 'both': neither new column present. */
 type TxDegrade = NewTxColumn | 'both' | null
 
@@ -344,6 +352,9 @@ function missingTxColumn(error: { message?: string | null } | null): NewTxColumn
   const message = error?.message ?? ''
   if (message.includes('fee_rate')) return 'fee_rate'
   if (message.includes('tx_nature')) return 'tx_nature'
+  // Task 186: `seq` is read-only for the client (Postgres assigns it), so a database without it
+  // only needs the column dropped from the SELECT list — the rest of the row is unaffected.
+  if (message.includes('seq')) return 'seq'
   return null
 }
 
@@ -352,11 +363,17 @@ function missingTxColumn(error: { message?: string | null } | null): NewTxColumn
  * overload resolution needs the literal to type the response, otherwise it falls back to a
  * generic `GenericStringError[]` shape.
  */
-type TxColumnList = typeof TX_COLUMNS | typeof TX_COLUMNS_WITHOUT_FEE_RATE | typeof TX_COLUMNS_WITHOUT_TX_NATURE | typeof TX_COLUMNS_LEGACY
+type TxColumnList =
+  | typeof TX_COLUMNS
+  | typeof TX_COLUMNS_WITHOUT_SEQ
+  | typeof TX_COLUMNS_WITHOUT_FEE_RATE
+  | typeof TX_COLUMNS_WITHOUT_TX_NATURE
+  | typeof TX_COLUMNS_LEGACY
 
 /** Select column list to use for a given degrade step. */
 function txColumnsFor(degrade: TxDegrade): TxColumnList {
   if (degrade === null) return TX_COLUMNS
+  if (degrade === 'seq') return TX_COLUMNS_WITHOUT_SEQ
   if (degrade === 'fee_rate') return TX_COLUMNS_WITHOUT_FEE_RATE
   if (degrade === 'tx_nature') return TX_COLUMNS_WITHOUT_TX_NATURE
   return TX_COLUMNS_LEGACY
@@ -364,7 +381,9 @@ function txColumnsFor(degrade: TxDegrade): TxColumnList {
 
 /** Strips just the column named by `degrade` from a row (or both, for 'both'). No-op for null. */
 function stripTxRow<T extends Record<string, unknown>>(row: T, degrade: TxDegrade): Record<string, unknown> {
-  if (degrade === null) return row
+  // Task 186: `seq` is assigned by the database; a client that sent one would fight the sequence.
+  // It is never in a write payload, so a 'seq' degrade only affects the SELECT list.
+  if (degrade === 'seq' || degrade === null) return row
   if (degrade === 'both') {
     const { tx_nature: _tx_nature, fee_rate: _fee_rate, ...rest } = row
     return rest
