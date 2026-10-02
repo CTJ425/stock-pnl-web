@@ -660,6 +660,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             onChange={(e) => {
               const next = e.target.value as TxType
               setTxType(next)
+              // A new buy has no 當沖 option (see the 交易性質 select), so a 當沖 picked on a sell
+              // must not ride along hidden when the type flips to 買入.
+              if (!isEdit && next === 'BUY' && nature === 'DAY_TRADE') applyDayTrade(false)
               setShowTickerHoldings(false)
               setShowNameHoldings(false)
               closeSuggestions()
@@ -695,10 +698,18 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               }}
             >
               <option value="SPOT">{TX_NATURE_LABEL.SPOT}</option>
-              <option value="DAY_TRADE">{TX_NATURE_LABEL.DAY_TRADE}</option>
+              {/* 當沖 is only knowable at the sell, and saving a 當沖 sell labels today's buy legs
+                  with it (`buyLegs`), so a buy never needs to pick it. A row already saved as
+                  當沖 keeps the option, or editing it would show a value the list does not have. */}
+              {(txType !== 'BUY' || nature === 'DAY_TRADE') && (
+                <option value="DAY_TRADE">{TX_NATURE_LABEL.DAY_TRADE}</option>
+              )}
               <option value="MARGIN">{TX_NATURE_LABEL.MARGIN}</option>
               <option value="SHORT">{TX_NATURE_LABEL.SHORT}</option>
             </select>
+            {txType === 'BUY' && nature !== 'DAY_TRADE' && (
+              <div className="field-hint">當沖會在記賣出時自動判斷</div>
+            )}
           </div>
         )}
       </div>
@@ -1047,7 +1058,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 }}
               />
               <select
-                className="narrow-lg"
+                className="fit"
                 aria-label="證交稅率快選"
                 value={TAX_PRESET_VALUES.includes(taxRate) ? taxRate : 'custom'}
                 onChange={(e) => {

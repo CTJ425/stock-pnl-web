@@ -26,10 +26,57 @@ describe('TransactionForm 新增交易表單改善測試', () => {
     const natureSelect = form.getByLabelText('交易性質') as HTMLSelectElement
     expect(natureSelect.value).toBe('SPOT')
 
-    // 確認選項中沒有「未指定」，且包含現股、當沖、融資、融券（Task 141）
-    const options = Array.from(natureSelect.options).map((o) => o.text)
-    expect(options).not.toContain('未指定')
-    expect(options).toEqual(['現股', '當沖', '融資', '融券'])
+    // 確認選項中沒有「未指定」（Task 141）。買入不列「當沖」：當沖要到賣出才知道，存當沖賣出時
+    // 表單會把今天的買進一起標成當沖，所以買進時不用選。
+    const labels = () => Array.from(natureSelect.options).map((o) => o.text)
+    expect(labels()).not.toContain('未指定')
+    expect(labels()).toEqual(['現股', '融資', '融券'])
+    expect(form.getByText('當沖會在記賣出時自動判斷')).toBeTruthy()
+
+    await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
+    expect(labels()).toEqual(['現股', '當沖', '融資', '融券'])
+    expect(form.queryByText('當沖會在記賣出時自動判斷')).toBeNull()
+
+    // 賣出選了當沖再切回買入，不能留著一個清單裡已經沒有的值。
+    await user.selectOptions(natureSelect, 'DAY_TRADE')
+    await user.selectOptions(form.getByLabelText('交易類型'), 'BUY')
+    expect(natureSelect.value).toBe('SPOT')
+    expect(labels()).toEqual(['現股', '融資', '融券'])
+  })
+
+  it('1b. 編輯已存成當沖的買入，交易性質仍顯示當沖', async () => {
+    window.localStorage.setItem(
+      'stock-pnl-web/local-store-v1',
+      JSON.stringify({
+        workspaces: [{ id: 'ws-dt', name: '測試', created_at: '2026-01-01T00:00:00Z' }],
+        transactions: [
+          {
+            id: 'tx-dt-buy',
+            workspace_id: 'ws-dt',
+            tx_date: '2026-10-02',
+            market: 'TPE',
+            ticker: '2330',
+            name: '台積電',
+            tx_type: 'BUY',
+            tx_nature: 'DAY_TRADE',
+            price: 500,
+            qty: 1000,
+            fee_tax: 712,
+            created_at: '2026-10-02T01:00:00Z',
+          },
+        ],
+      }),
+    )
+    window.localStorage.setItem('stock-pnl-web/current-workspace', 'ws-dt')
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    const form = within(await screen.findByRole('dialog', { name: '編輯交易紀錄' }))
+    const natureSelect = form.getByLabelText('交易性質') as HTMLSelectElement
+    expect(natureSelect.value).toBe('DAY_TRADE')
+    expect(Array.from(natureSelect.options).map((o) => o.text)).toEqual(['現股', '當沖', '融資', '融券'])
   })
 
   it('2. 賣出時點選代號或名稱，可自動顯示現股庫存清單供選取；融券賣出不列庫存', async () => {

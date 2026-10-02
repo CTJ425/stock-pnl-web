@@ -307,8 +307,10 @@
   flex: 0 0 92px;
 }
 
-.field-row > .narrow-lg {
-  flex: 0 0 122px;
+/* Sized by its longest option (「股票當沖 0.15%」), not a fixed width: 122px clipped it. */
+.field-row > .fit {
+  flex: 0 0 auto;
+  width: auto;
 }
 
 /* Transaction form's quantity field: full row so the input isn't squeezed by the

@@ -91,9 +91,11 @@
 
 .watchlist-card-body {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 4px;
+  /* A 4-digit price (NT$1,265.00 +4.12%) is wider than a 136px card; the change drops to its own line instead of spilling out. */
+  gap: 0 4px;
   margin-top: 4px;
 }
 

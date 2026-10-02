@@ -776,8 +776,8 @@ a.hmenu-item {
     flex: 0 0 92px;
   }
 
-  .field-row > .narrow-lg {
-    flex: 0 0 122px;
+  .field-row > .fit {
+    flex: 0 0 auto;
   }
 
   .modal-overlay {
