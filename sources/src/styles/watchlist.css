@@ -11,18 +11,20 @@
   border-radius: var(--radius-sm, 6px);
   padding: 8px 8px;
   cursor: pointer;
-  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: background 0.16s ease, border-color 0.16s ease;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  /* Top-aligned: a 其他 card carries an extra industry line, and when a row stretches to it the
+     spare height stays at the bottom instead of pulling the price away from the name. */
+  justify-content: flex-start;
   min-height: 58px;
 }
 
+/* Flat, a band tint instead of a lift (DESIGN.md: shadows belong to floating layers only).
+   Not --row-hover: at night it equals the card's own layer-02 and the hover would vanish. */
 .watchlist-card:hover {
-  transform: translateY(-2px);
-  background: var(--surface-strong);
+  background: var(--cds-layer-accent-01);
   border-color: var(--border-strong);
-  box-shadow: var(--cds-shadow-modal);
 }
 
 .watchlist-card-head {
@@ -90,16 +92,19 @@
 }
 
 .watchlist-card-body {
+  /* Price and change on their own lines, always: every card has the same shape, and a
+     4-digit price (NT$1,265.00) never has to share a 136px card with the change. */
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  /* A 4-digit price (NT$1,265.00 +4.12%) is wider than a 136px card; the change drops to its own line instead of spilling out. */
-  gap: 0 4px;
+  flex-direction: column;
+  align-items: flex-start;
   margin-top: 4px;
 }
 
 .watchlist-card-price {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
   font-size: var(--type-body-01);
   font-weight: 700;
