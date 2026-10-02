@@ -103,6 +103,7 @@ function RowDetail({
   const name = displayStockName(h.market, h.ticker, h.name)
   const used: PnlBasis = row.brokerNotApplicable ? 'net' : basis
   const netLabel = currency === 'USD' ? '實際手續費' : feeRate >= DEFAULT_FEE_RATE ? `你的費率 ${formatFeeRatePct(feeRate)}` : `折扣後 ${formatFeeRatePct(feeRate)}`
+  const brokerCostDiffers = row.brokerCost !== null && Math.round(row.brokerCost) !== Math.round(h.cost)
   const rawRoi = row.rawUnrealized === null ? null : row.rawUnrealized / (isShort ? h.shortRawProceeds : h.rawCost)
   const methods = [
     { key: 'net' as const, label: netLabel, note: null, value: row.unrealized, roi: row.roi },
@@ -111,7 +112,14 @@ function RowDetail({
       label: `牌告 ${formatFeeRatePct(DEFAULT_FEE_RATE)}`,
       // BUG-087: this row's tax was halved because a lot was bought today. Without the note the
       // figure would change by itself tomorrow morning with no trade to explain it.
-      note: row.brokerDayTradeTax ? '含今天買進的股票，證交稅以當沖 0.15% 估算' : null,
+      // Task 189: under 月退 this figure's cost is the app's, not the 投入成本 shown beside it.
+      note:
+        [
+          brokerCostDiffers ? '月退：成本裡的買進手續費也用牌告算' : null,
+          row.brokerDayTradeTax ? '含今天買進的股票，證交稅以當沖 0.15% 估算' : null,
+        ]
+          .filter(Boolean)
+          .join('；') || null,
       value: row.brokerNotApplicable ? undefined : row.brokerUnrealized,
       roi: row.brokerNotApplicable ? undefined : row.brokerRoi,
     },
@@ -148,6 +156,15 @@ function RowDetail({
                 {fmtMoney(h.cost, currency)}
                 <small>未含費 {fmtMoney(h.rawCost, currency)}</small>
               </dd>
+              {brokerCostDiffers && row.brokerCost !== null && (
+                <>
+                  <dt>券商 App 成本</dt>
+                  <dd title="月退在交割時先扣全額手續費，券商 App 的成本含這筆錢">
+                    {fmtMoney(row.brokerCost, currency)}
+                    <small>含牌告手續費</small>
+                  </dd>
+                </>
+              )}
               <dt>平均成本</dt>
               <dd>
                 {fmtPrice(h.avgCost, currency)}

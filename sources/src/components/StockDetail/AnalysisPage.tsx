@@ -35,7 +35,7 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   // Today's rate (Task 182): these are estimates of a sell made now, not a re-pricing of the past.
   const feeRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
   // Same basis as 庫存總覽: derived from the workspace's fee settings (utils/pnlBasis).
-  const basis = pnlBasis(feeRate, current?.fee_rebate)
+  const basis = pnlBasis(feeRate, current?.fee_rebate, current?.sell_fee_basis)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   // Remembers what WatchSection handed over (ticker + name) so a stock added to the watchlist after
   // mount still resolves — the loaded `watchlist` copy below is not refreshed on every click.
@@ -78,10 +78,16 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const dayTradeToday = (current?.day_trade_tax_estimate ?? true) ? today : undefined
   const twRows = useMemo(
     () =>
-      buildHoldingRows(holdings, prices, feeRate, current?.id, current?.fee_rounding ?? 'lot', dayTradeToday).filter(
-        (r) => r.holding.currency === 'TWD',
-      ),
-    [holdings, prices, feeRate, current?.id, current?.fee_rounding, dayTradeToday],
+      buildHoldingRows(
+        holdings,
+        prices,
+        feeRate,
+        current?.id,
+        current?.fee_rounding ?? 'lot',
+        dayTradeToday,
+        current?.fee_rebate,
+      ).filter((r) => r.holding.currency === 'TWD'),
+    [holdings, prices, feeRate, current?.id, current?.fee_rounding, dayTradeToday, current?.fee_rebate],
   )
 
   type Entry =

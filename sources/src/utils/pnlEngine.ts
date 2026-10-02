@@ -21,6 +21,13 @@ export interface OpenLot {
   cost: number
   /** price * qty, reduced proportionally on a partial sell */
   rawCost: number
+  /**
+   * The quantity the buy was made with, never reduced by a partial sell. A 月退 broker charged
+   * the list-price fee on the whole original amount (with its minimum fee), so its share of a
+   * partly sold lot is that fee scaled by `qty / origQty` — see `monthlyRebateCostUplift`.
+   * Absent on hand-built lots, which then count as never partly sold.
+   */
+  origQty?: number
   /** Historical transaction fee rate if specified, used for per-lot unrealized selling fee estimation */
   feeRate?: number | null
 }
@@ -720,6 +727,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
             price: 0,
             cost: totalCost,
             rawCost: 0,
+            origQty: effQty,
             feeRate: inferTxFeeRate(tx),
           })
           y.count++
@@ -855,6 +863,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
               price: tx.price,
               cost: excessTotalCost,
               rawCost: excessGross,
+              origQty: excessQty,
               feeRate: inferTxFeeRate(tx),
             })
             ledger.warnings.push(
@@ -879,6 +888,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
             price: tx.price,
             cost: totalCost,
             rawCost: gross,
+            origQty: effQty,
             feeRate: inferTxFeeRate(tx),
           })
         } else {
@@ -1051,6 +1061,40 @@ export function estimateUnrealized(
     return Math.round(mktVal - holding.qty * holding.avgCost - fee - tax)
   }
   return mktVal - holding.qty * holding.avgCost
+}
+
+/**
+ * How much more a 月退 broker's app carries in this position's cost than the ledger does.
+ *
+ * Under 月退 the broker deducts the list-price fee at settlement and refunds the discount the
+ * next month (玉山: 「於次月13日退回折讓金」, esunsec.com.tw/campaign/trade-fee; 永豐: 「扣款時仍扣全額」,
+ * sinotrade.com.tw/richclub/dawhotou/campaign/faq). Its app's cost is what settlement took, so it
+ * holds the list-price buy fee, while the ledger records the discounted fee (RISK-022). Measured on
+ * 玉山 2026-10-02: 009828 10,000 @ 10.70, recorded fee 57, app cost 107,152 = 107,000 + 152.
+ *
+ * Per open lot: the list-price fee of the original buy (floored, with `minFeeFor(origQty)`) scaled
+ * to the shares still held, minus the fee share the lot carries. A lot whose recorded fee is
+ * already at or above that adds nothing — nothing here can explain a higher fee, so it is kept.
+ * Stock dividends (price 0) paid no brokerage fee and are skipped. TWD long lots only.
+ */
+export function monthlyRebateCostUplift(
+  holding: Holding,
+  listRate: number,
+  minFeeFor: (origQty: number) => number | undefined,
+): number {
+  if (holding.currency !== 'TWD' || !Array.isArray(holding.openLots)) return 0
+  let uplift = 0
+  for (const lot of holding.openLots) {
+    if (!(lot.price > 0) || !(lot.qty > 0)) continue
+    const origQty = lot.origQty !== undefined && lot.origQty >= lot.qty ? lot.origQty : lot.qty
+    let listFee = floorSafe(lot.price * origQty * listRate)
+    const minFee = minFeeFor(origQty)
+    if (minFee !== undefined && minFee > listFee) listFee = minFee
+    const listShare = (listFee * lot.qty) / origQty
+    const recordedShare = lot.cost - lot.rawCost
+    if (listShare > recordedShare) uplift += listShare - recordedShare
+  }
+  return uplift
 }
 
 /**

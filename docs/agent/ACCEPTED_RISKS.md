@@ -36,6 +36,9 @@ Newest first, in the order they stood in `BUG_FIX.md`.
   lands in the account.
 - **What would close it**: a 折讓金 income entry, shaped like the 現金股利 one (Task 183). Not
   opened — it needs a place in the yearly report too, and the user has not asked for it.
+- **Task 189 (0.10.21-dev.1)**: the dashboard's 券商 figure now carries the list-price buy fee in
+  cost under 月退, so it matches the app (玉山 009828 −610). The ledger itself still records the
+  discounted fee; this risk is unchanged.
 - **Status**: ACCEPTED — revisit only if the user starts reconciling this ledger against statements.
 
 

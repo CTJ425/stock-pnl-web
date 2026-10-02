@@ -6,14 +6,15 @@
  * moving-average cost, FIFO lots, fee and tax floored per lot (玉山) or once per position (元大) —
  * not against the app's own engine, so a regression in the engine cannot also move the expectation.
  *
- * Journey (元大-style workspace: 3折 0.0004275, 月退 → the dashboard withholds 牌告 0.1425%):
+ * Journey (元大-style workspace: 3折 0.0004275, 日退 + 牌告預扣 → the dashboard withholds 牌告 0.1425%
+ * on the recorded cost; Task 189 moved 元大 off 月退, which now also lifts the cost to the list fee):
  *   1. two seeded lots of 2303 (the 2026-09-29 PROD case) → −17,993 per lot
  *   2. 新增交易: buy a third lot through the form → figure follows the new lot
  *   3. 新增交易: sell one lot → FIFO drops the oldest lot, cost falls by the average
  *   4. fee panel: pick 整筆一起算 → figures preview before saving, tagged 預覽・尚未儲存
  *   5. 取消 → saved figures come back, nothing written
  *   6. 整筆一起算 + 儲存 → PATCH fee_rounding 'position', figures stay on the whole-position value
- *   7. preview 現折 → basis switches to the discounted rate, then 取消 restores 牌告
+ *   7. preview 折扣後 sell basis → basis switches to the discounted rate, then 取消 restores 牌告
  *
  * Supabase mode with every backend call mocked (same pattern as verify-fee-rate-e2e.cjs): run it
  * against a vite that has VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY set; no project is contacted.
@@ -97,8 +98,9 @@ const dbWorkspaces = [
     name: '捨去方式 E2E',
     created_at: '2026-09-01T00:00:00Z',
     fee_rate: WS_RATE,
-    fee_rebate: 'monthly',
+    fee_rebate: 'instant',
     fee_rounding: null,
+    sell_fee_basis: 'list',
     user_id: userId,
   },
 ]
@@ -283,8 +285,8 @@ async function openFeePanel(page) {
     if (await page.getByText('預覽・尚未儲存').isVisible()) throw new Error('6. preview tag shown after saving')
 
     await openFeePanel(page)
-    await page.getByRole('radio', { name: /現折/ }).check()
-    await expectRow(page, unrealized(pos, PRICE, WS_RATE, 'position'), '7. preview 現折 (折扣後 0.0427%)')
+    await page.getByRole('radio', { name: /^折扣後/ }).check()
+    await expectRow(page, unrealized(pos, PRICE, WS_RATE, 'position'), '7. preview 折扣後 sell basis (0.0427%)')
     const basis = await page.locator('.stmt-basis').innerText()
     if (!basis.includes('折扣後')) throw new Error(`7. basis line did not switch: "${basis}"`)
     await page.getByRole('button', { name: '取消' }).click()

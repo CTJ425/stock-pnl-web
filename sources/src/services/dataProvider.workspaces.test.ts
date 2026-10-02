@@ -46,16 +46,17 @@ beforeEach(() => {
 })
 
 describe('SupabaseProvider.listWorkspaces', () => {
-  it('D1 asks for fee_rate, fee_rate_history, fee_rebate and fee_rounding and returns the rows in one query', async () => {
+  it('D1 asks for every fee column and returns the rows in one query', async () => {
     setResults([{ data: rows, error: null }])
     const got = await new SupabaseProvider().listWorkspaces()
-    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate'])
+    expect(selects).toEqual(['id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis'])
     expect(got).toEqual(rows)
   })
 
   it('D2 steps down to the legacy columns when neither new column exists yet', async () => {
     const legacy = [{ id: 'w1', name: '我的投資組合', created_at: '2026-01-01T00:00:00Z' }]
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.sell_fee_basis does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.day_trade_tax_estimate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
@@ -65,6 +66,7 @@ describe('SupabaseProvider.listWorkspaces', () => {
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
@@ -77,6 +79,7 @@ describe('SupabaseProvider.listWorkspaces', () => {
 
   it('D5 keeps fee_rate when only fee_rebate is missing (frontend deployed before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.sell_fee_basis does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.day_trade_tax_estimate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
@@ -85,6 +88,7 @@ describe('SupabaseProvider.listWorkspaces', () => {
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
@@ -96,6 +100,7 @@ describe('SupabaseProvider.listWorkspaces', () => {
 
   it('D7 keeps fee_rebate when only fee_rounding is missing (BUG-088, frontend before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.sell_fee_basis does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.day_trade_tax_estimate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rounding does not exist' } },
@@ -103,6 +108,7 @@ describe('SupabaseProvider.listWorkspaces', () => {
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
@@ -113,15 +119,30 @@ describe('SupabaseProvider.listWorkspaces', () => {
 
   it('D8 keeps fee_rounding when only fee_rate_history is missing (Task 182, frontend before the migration)', async () => {
     setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.sell_fee_basis does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.day_trade_tax_estimate does not exist' } },
       { data: null, error: { code: '42703', message: 'column workspaces.fee_rate_history does not exist' } },
       { data: rows, error: null },
     ])
     const got = await new SupabaseProvider().listWorkspaces()
     expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate',
       'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding',
       'id, name, created_at, fee_rate, fee_rebate, fee_rounding',
+    ])
+    expect(got).toEqual(rows)
+  })
+
+  it('D9 keeps day_trade_tax_estimate when only sell_fee_basis is missing (Task 189, frontend before the migration)', async () => {
+    setResults([
+      { data: null, error: { code: '42703', message: 'column workspaces.sell_fee_basis does not exist' } },
+      { data: rows, error: null },
+    ])
+    const got = await new SupabaseProvider().listWorkspaces()
+    expect(selects).toEqual([
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis',
+      'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate',
     ])
     expect(got).toEqual(rows)
   })

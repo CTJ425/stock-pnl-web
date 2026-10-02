@@ -421,12 +421,29 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
       mockDiscounted({ fee_rate: 0.000399, fee_rebate: 'monthly' })
       const user = userEvent.setup()
       render(<DashboardPage onSelectTicker={vi.fn()} />)
-      expect(screen.getByTestId('holding-row-2303').textContent).toContain('-NT$11,111')
-      expect(screen.getByTestId('tw-subtotal').textContent).toContain('-NT$11,111')
-      expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 預扣/ })).toBeTruthy()
+      // Task 189: 月退 settlement took floor(135,500 × 0.1425%) = 193, not the recorded 58, and the
+      // app keeps that in cost: −11,111 − 135 = −11,246.
+      expect(screen.getByTestId('holding-row-2303').textContent).toContain('-NT$11,246')
+      expect(screen.getByTestId('tw-subtotal').textContent).toContain('-NT$11,246')
+      expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 計成本與預扣/ })).toBeTruthy()
       await user.click(screen.getByTestId('holding-row-2303'))
       expect(screen.getByTestId('method-list').textContent).toContain('目前採用')
+      expect(screen.getByTestId('method-list').textContent).toContain('月退：成本裡的買進手續費也用牌告算')
       expect(screen.getByTestId('method-net').textContent).not.toContain('目前採用')
+      expect(screen.getByText('券商 App 成本').nextElementSibling?.textContent).toContain('NT$135,693')
+    } finally {
+      localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
+    }
+  })
+
+  it('日退＋牌告預扣（元大）：成本照記錄的手續費，賣出用牌告', () => {
+    localStorage.setItem('stock-pnl-web/fee-rate/ws-1', '0.000399')
+    try {
+      mockDiscounted({ fee_rate: 0.000399, fee_rebate: 'instant', sell_fee_basis: 'list' })
+      render(<DashboardPage onSelectTicker={vi.fn()} />)
+      expect(screen.getByTestId('holding-row-2303').textContent).toContain('-NT$11,111')
+      expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 預扣/ })).toBeTruthy()
+      expect(screen.queryByText('券商 App 成本')).toBeNull()
     } finally {
       localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
     }

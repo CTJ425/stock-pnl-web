@@ -1,5 +1,58 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+## Archived 2026-10-02 16:30:00 Asia/Taipei — Task 184 (✅ DONE, rolled from TASK.md)
+
+### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
+- **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`19b4175`), on `main` and `dev`
+  (identical), both Releases published by CI, CI green. vitest 2,697 pass / 7 skipped,
+  `npm run build` and `typecheck:edge` exit 0. **Neither release was checked in a browser** — the
+  user asked to ship fast; the change is covered by App-level tests that render the real form.
+- **Reversed in 0.10.12, on the user's decision after seeing it**: 月退 no longer writes the
+  statutory rate into a transaction. A recorded fee is what the trade finally costs you, and
+  nothing here records the monthly refund, so the list price would leave that money outside the
+  ledger (~1,112 元 on their 1,258,800 position). The rebate still decides the dashboard headline,
+  and the 券商 column stays on 牌告 for every TWD row (`holdingRows.ts:111`), so both numbers remain
+  visible. `chargedFeeRate` is gone; see RISK-022 for the cost of this choice.
+- **Agent**: Claude
+- **Timestamp**: 2026-10-01 14:36:00 Asia/Taipei
+- **Why**: the dashboard read 79,523 against 玉山 App's 78,276. The 1,247 is entirely the sell-fee
+  rate (2303 matched to the dollar: 460 − 138 = 322), which proves 玉山 bills the statutory 0.1425%
+  and refunds the discount — **月退**. `fee_rebate` only reached `pnlBasis`, so 新增交易 and 批次重算
+  recorded the *discounted* fee: a number no settlement statement shows, and the discount never
+  comes back to that row.
+- **Shape**: `chargedFeeRate(rate, rebate)` in `utils/pnlBasis.ts`, derived from `pnlBasis` so they
+  cannot drift. Recording paths use it; estimates keep using `pnlBasis`.
+- **Done**:
+  1. `chargedFeeRate` wired into `TransactionForm`, `RecalcFeesModal` (+ 月退 hint) and `StockSplitModal`.
+  2. Trap A: a moved 生效日 on a workspace with no rate writes `fee_rate = 0.001425` **plus** the
+     segment, instead of making the discount the base and re-pricing the whole ledger.
+  3. Trap B: the 費率變更紀錄 base row has a 「改」 inline editor, the only exit when the base is
+     already the discounted rate (saving the same rate from a date is not a change, so the segment
+     was dropped). It re-normalises the history against the new base.
+  4. 月退 is the default once a discount is picked, 現折 at the list price; a stored value equal to
+     the new default does not count as a choice, so a workspace is never pinned to 現折. Persisted
+     on save because the Edge holdings card reads `fee_rebate` from the row.
+- **Items**:
+  5. ~~Commit to `dev`, run the gates, release~~ ✅ 0.10.11 (14:45) and 0.10.12 (15:38). No deploy
+     was needed for either: neither diff touches `sources/supabase/**`, so Edge and DDL are
+     untouched and Cloudflare Pages serves the new frontend from `main` on its own.
+  7. **Confirm 現折 vs 月退 from a settlement statement** ⏳ — the whole 月退 reading came from 玉山
+     App's *estimate* screen, never from an actual deduction. One buy's 交割金額 (0.1425% or
+     0.0541%?), or a 折讓金 credit on last month's statement, settles it. Since 0.10.12 a wrong
+     guess only mislabels the dashboard headline, so this is no longer urgent — but it is still
+     unproven, and the setting is one click either way.
+  6. User's own save ⏳: PROD 玉山證卷 → 「改」 on 「一直以來 3.8 折」 → 不打折, then 3.8 折 from
+     2026-10-01. Under 月退 the recalculation uses 0.1425% for every date anyway, so this is about the
+     record being true, not about today's numbers.
+- **Not done, named on purpose**: 最低手續費 still has no date dimension (`settings.ts:152`, global,
+  BUG-084), so a recalculation applies today's 20 元 / 1 元 to every date. Narrow (small odd lots
+  only) and only wrong if the broker's minimum changed with the agreement. **Nowhere records a
+  月退 折讓金** — 0.10.12 side-steps it by folding the discount into every trade, which assumes the
+  refund always arrives; a 現金收入 entry like 現金股利 would close it properly (RISK-022).
+- **Warn before any 批次重算 on a ledger built from broker statements**: since 0.10.12 the wizard
+  re-prices rows at the discounted rate, so rows entered or imported at the real (full) deduction
+  get overwritten with an estimate, moving 投入成本 and 已實現損益. The list is pre-checked.
+
 > **Archived 2026-10-01 23:10:00 Asia/Taipei at the user's request.** This supersedes the
 > IN PROGRESS snapshot of Task 185 that used to sit at the bottom of this file (and its
 > "completed sub-items" roll note) — that copy predated the 0.10.13 release and has been removed.

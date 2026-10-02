@@ -2,8 +2,8 @@
  * Per-user holdings aggregation and Discord card payload (Task 165 Phase 2).
  * Spec: docs/agent/specs/discord-holdings.md §2.3 / §2.4.
  */
-import { computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, type Holding, type Ledger } from '../_shared/engine/pnlEngine.ts'
-import type { Currency, FeeRebate, FeeRounding, Market, Transaction } from '../_shared/engine/models.ts'
+import { computeLedger, estimateUnrealized, estimateUnrealizedShort, monthlyRebateCostUplift, sellTaxRate, type Holding, type Ledger } from '../_shared/engine/pnlEngine.ts'
+import type { Currency, FeeRebate, FeeRounding, Market, SellFeeBasis, Transaction } from '../_shared/engine/models.ts'
 import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
 import type { HoldingQuote } from './holdingQuotes.ts'
 
@@ -25,6 +25,8 @@ export interface WorkspaceInput {
   fee_rounding?: FeeRounding | null
   /** NULL / absent = true (BUG-090), as on the dashboard: keeps the BUG-087 玉山 behaviour. */
   day_trade_tax_estimate?: boolean | null
+  /** NULL / absent = the pre-Task-189 rule (`defaultSellFeeBasis`), as on the dashboard. */
+  sell_fee_basis?: SellFeeBasis | null
   transactions: Transaction[]
 }
 
@@ -36,6 +38,8 @@ export interface WorkspaceLedger {
   feeRate: number
   rounding: FeeRounding
   basis: PnlBasis
+  /** Task 189: under 'monthly' the 券商 figure's cost carries the list-price buy fee. */
+  rebate: FeeRebate | null
   /**
    * BUG-090: whether this workspace's broker estimates a lot bought today at the halved 現股當沖
    * tax. Per workspace, not per run — the two brokers in use disagree, so one run's `today` cannot
@@ -93,16 +97,26 @@ export function buildLedgers(workspaces: WorkspaceInput[], today = ''): Workspac
       id: w.id,
       feeRate,
       rounding: w.fee_rounding === 'position' ? 'position' : 'lot',
-      basis: pnlBasis(feeRate, w.fee_rebate),
+      basis: pnlBasis(feeRate, w.fee_rebate, w.sell_fee_basis),
+      rebate: w.fee_rebate ?? null,
       dayTradeTax: w.day_trade_tax_estimate ?? true,
       ledger: computeLedger(w.transactions),
     }
   })
 }
 
-/** Same rule as `pnlBasis` in src/utils/pnlBasis.ts, re-stated because Edge cannot import src/. */
-export function pnlBasis(feeRate: number, rebate: FeeRebate | null | undefined): PnlBasis {
+/** Same rule as `defaultSellFeeBasis` in src/utils/pnlBasis.ts, re-stated because Edge cannot import src/. */
+export function defaultSellFeeBasis(feeRate: number, rebate: FeeRebate | null | undefined): PnlBasis {
   return rebate === 'monthly' && feeRate < DEFAULT_FEE_RATE ? 'list' : 'net'
+}
+
+/** Same rule as `pnlBasis` in src/utils/pnlBasis.ts, re-stated because Edge cannot import src/. */
+export function pnlBasis(
+  feeRate: number,
+  rebate: FeeRebate | null | undefined,
+  sellFeeBasis?: SellFeeBasis | null,
+): PnlBasis {
+  return sellFeeBasis ?? defaultSellFeeBasis(feeRate, rebate)
 }
 
 /** Every long or short key across every workspace, deduplicated. `ledger.holdings` is
@@ -412,10 +426,16 @@ export function aggregateHoldings(
         // Task 182: `overrideFeeRate` is true for the same reason as src/utils/holdingRows.ts —
         // a sell made today is charged today's rate, not the rate each lot was bought under.
         const net = close != null ? estimateUnrealized(h, close, l.feeRate, minFee, true, l.rounding) : null
-        // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden.
+        // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden,
+        // and under 月退 the list-price buy fee the app keeps in cost (Task 189).
+        const uplift =
+          l.rebate === 'monthly' ? monthlyRebateCostUplift(h, DEFAULT_FEE_RATE, (q) => minFeeFor(h.currency, q)) : 0
         const brokerUnrealized =
           close != null && h.currency === 'TWD'
-            ? estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding, l.dayTradeTax ? today : undefined)
+            ? Math.round(
+                estimateUnrealized(h, close, DEFAULT_FEE_RATE, minFee, true, l.rounding, l.dayTradeTax ? today : undefined) -
+                  uplift,
+              )
             : null
         // Each workspace leg follows its own basis before merging (`rowUnrealized` in src/utils/pnlBasis.ts).
         const unrealized = l.basis === 'list' && brokerUnrealized != null ? brokerUnrealized : net

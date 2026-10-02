@@ -5,8 +5,9 @@
  *   instead of a separate metadata strip. 今日損益 was removed 2026-09-28 at the owner's request.
  * - Both markets are combined in TWD when a USD rate is known; without one (local mode) the
  *   markets stay apart and the page says so, rather than guessing a conversion.
- * - 未實現淨損益 follows the workspace's fee settings (utils/pnlBasis): a 月退 broker's app withholds
- *   the statutory rate, a 現折 broker's the discounted rate. The basis line opens those settings
+ * - 未實現淨損益 follows the workspace's fee settings (utils/pnlBasis): the sell-fee basis says which
+ *   rate the broker app withholds, and under 月退 the posted-rate figure also carries the list-price
+ *   buy fee in cost, as the app does (Task 189). The basis line opens those settings
  *   in place; the three figures stay side by side under every row (HoldingsLedger).
  * - Only current positions count (the broker app's basis); realized history lives on 年度收益.
  */
@@ -191,13 +192,18 @@ export function DashboardPage({
   const rebate = draft?.rebate ?? savedRebate
   const rounding = draft?.rounding ?? savedRounding
   const dayTradeTax = draft?.dayTradeTax ?? savedDayTradeTax
+  // Task 189: null keeps the pre-split rule inside `pnlBasis`.
+  const savedSellBasis = current?.sell_fee_basis ?? null
+  const sellBasis = draft?.sellBasis ?? savedSellBasis
+  const savedBasis = pnlBasis(savedRate, savedRebate, savedSellBasis)
+  const basis = pnlBasis(feeRate, rebate, sellBasis)
   const previewing =
     draft !== null &&
     (draft.rate !== savedRate ||
       draft.rebate !== savedRebate ||
       draft.rounding !== savedRounding ||
-      draft.dayTradeTax !== savedDayTradeTax)
-  const basis = pnlBasis(feeRate, rebate)
+      draft.dayTradeTax !== savedDayTradeTax ||
+      basis !== savedBasis)
 
   const handleRefresh = () => {
     refresh()
@@ -210,8 +216,8 @@ export function DashboardPage({
   // 0.3% on a position opened the same morning, so passing the date would read 195 too optimistic.
   const today = dayTradeTax ? taipeiDateKey(new Date()) : undefined
   const rows = useMemo(
-    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding, today),
-    [holdings, prices, feeRate, current?.id, rounding, today],
+    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding, today, rebate),
+    [holdings, prices, feeRate, current?.id, rounding, today, rebate],
   )
   const tw = marketSums(rows.filter((r) => r.holding.currency === 'TWD'), 'TWD', basis, loading)
   const us = marketSums(rows.filter((r) => r.holding.currency === 'USD'), 'USD', basis, loading)
@@ -220,7 +226,7 @@ export function DashboardPage({
     ...(tw.rows.length > 0 ? [{ sums: tw, label: '台股' }] : []),
     ...(us.rows.length > 0 ? [{ sums: us, label: '美股' }] : []),
   ]
-  const basisText = basisLabel(basis, feeRate)
+  const basisText = basisLabel(basis, feeRate, rebate)
 
   return (
     <>

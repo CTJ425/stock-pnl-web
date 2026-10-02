@@ -29,6 +29,16 @@ ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rebate_values;
 ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rebate_values
     CHECK (fee_rebate IS NULL OR fee_rebate IN ('instant', 'monthly'));
 
+-- Which rate the broker app withholds as the sell fee on unrealized P&L (Task 189): 'list' (the
+-- posted 0.1425%, what 玉山 and 元大 both do) or 'net' (the workspace's discounted rate). Separate
+-- from fee_rebate since Task 189: that one now only says what settlement charged (月退 = the list
+-- price, which is also what a 月退 broker's app keeps in cost). NULL keeps the earlier rule
+-- (monthly + a discount = 'list'), so no workspace moves when this column arrives.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS sell_fee_basis TEXT;
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_sell_fee_basis_values;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_sell_fee_basis_values
+    CHECK (sell_fee_basis IS NULL OR sell_fee_basis IN ('list', 'net'));
+
 -- How the broker floors the estimated sell fee and tax on unrealized P&L (BUG-088): 'lot' floors
 -- each open lot on its own (玉山), 'position' floors the whole position once (元大). NULL reads as 'lot'.
 -- BUG-090: does this workspace's broker estimate a lot bought today at the halved 現股當沖 tax?

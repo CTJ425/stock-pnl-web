@@ -733,11 +733,17 @@ describe('aggregateHoldings — average cost, break-even and realized', () => {
 describe('workspace fee settings', () => {
   // PROD Ron的投資組合 (元大, BUG-088): 2303 1,000 @163.5 + 1,000 @160, cost 323,637, price 153.5.
   // 元大 shows −17,995 = 307,000 − floor(307,000 × 0.1425%) 437 − 921 − 323,637; per lot gives −17,993.
-  const ron = (id: string, fee_rebate: 'instant' | 'monthly' | null, fee_rounding: 'lot' | 'position' | null): WorkspaceInput => ({
+  const ron = (
+    id: string,
+    fee_rebate: 'instant' | 'monthly' | null,
+    fee_rounding: 'lot' | 'position' | null,
+    sell_fee_basis: 'list' | 'net' | null = null,
+  ): WorkspaceInput => ({
     id,
     fee_rate: 0.0004275,
     fee_rebate,
     fee_rounding,
+    sell_fee_basis,
     transactions: [
       tx({ ws: id, date: '2026-08-03', market: 'TPE', ticker: '2303', name: '聯電', type: 'BUY', price: 163.5, qty: 1000, fee: 69 }),
       tx({ ws: id, date: '2026-08-10', market: 'TPE', ticker: '2303', name: '聯電', type: 'BUY', price: 160, qty: 1000, fee: 68 }),
@@ -767,9 +773,28 @@ describe('workspace fee settings', () => {
     expect(rowOf([ron('w', null, null)]).unrealized).toBe(estimateUnrealized(h, 153.5, 0.0004275, 20))
   })
 
-  it('月退 + 整筆一起算 matches the 元大 figure; 月退 + 每一批 stays per lot', () => {
-    expect(rowOf([ron('w', 'monthly', 'position')]).unrealized).toBe(-17_995)
-    expect(rowOf([ron('w', 'monthly', 'lot')]).unrealized).toBe(-17_993)
+  // Task 189: a chosen sell basis wins over the rebate-derived default, in both directions.
+  it.each([
+    ['instant', 0.0004275, 'list', 'list'],
+    ['monthly', 0.0004275, 'net', 'net'],
+    ['monthly', 0.001425, 'list', 'list'],
+  ] as const)('pnlBasis(%s, %s, %s) → %s', (rebate, rate, sell, basis) => {
+    expect(pnlBasis(rate, rebate, sell)).toBe(basis)
+  })
+
+  // Task 189: 元大 charges the discount at settlement (日退), so its app's cost is the recorded one,
+  // while it still withholds the posted rate on the sell side.
+  it('日退 + 牌告 + 整筆一起算 matches the 元大 figure; 每一批 stays per lot', () => {
+    expect(rowOf([ron('w', 'instant', 'position', 'list')]).unrealized).toBe(-17_995)
+    expect(rowOf([ron('w', 'instant', 'lot', 'list')]).unrealized).toBe(-17_993)
+  })
+
+  // Task 189: under 月退 the app's cost holds the list-price buy fee settlement took:
+  // floor(163,500 × 0.1425%) 232 + floor(160,000 × 0.1425%) 228 − recorded 69 − 68 = 323 more.
+  it('月退 carries the list-price buy fee in the 券商 cost', () => {
+    const r = rowOf([ron('w', 'monthly', 'position')])
+    expect(r.unrealized).toBe(-17_995 - 323)
+    expect(r.brokerUnrealized).toBe(-17_995 - 323)
   })
 
   it('現折 + 整筆一起算 floors the discounted fee on the whole position', () => {
@@ -781,7 +806,7 @@ describe('workspace fee settings', () => {
   })
 
   it('sums each workspace leg on its own settings when one key spans workspaces', () => {
-    const r = rowOf([ron('a', 'monthly', 'position'), ron('b', 'instant', 'lot')])
+    const r = rowOf([ron('a', 'instant', 'position', 'list'), ron('b', 'instant', 'lot')])
     const [lb] = buildLedgers([ron('b', 'instant', 'lot')])
     expect(r.unrealized).toBe(-17_995 + estimateUnrealized(holdingOf(lb, 'TPE:2303'), 153.5, 0.0004275, 20))
   })

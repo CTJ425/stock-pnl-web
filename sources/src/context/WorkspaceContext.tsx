@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
-import type { FeeRateSegment, FeeRebate, FeeRounding, NewTransaction, Transaction, Workspace } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding, NewTransaction, SellFeeBasis, Transaction, Workspace } from '../types/models'
 import type { Ledger } from '../utils/pnlEngine'
 import { computeLedger } from '../utils/pnlEngine'
 import type { DataProvider, NewSplitLogEntry, SplitLogEntry, TxUpdate } from '../services/dataProvider'
@@ -57,6 +57,8 @@ export interface WorkspaceState {
   /** Persist how the broker floors the estimated sell fee and tax (BUG-088). */
   setWorkspaceFeeRounding: (id: string, rounding: FeeRounding) => Promise<void>
   setWorkspaceDayTradeTaxEstimate: (id: string, enabled: boolean) => Promise<void>
+  /** Persist which rate the broker app withholds as the sell fee (Task 189). */
+  setWorkspaceSellFeeBasis: (id: string, basis: SellFeeBasis) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -330,6 +332,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const setWorkspaceSellFeeBasis = useCallback(
+    async (id: string, basis: SellFeeBasis) => {
+      // Same failure handling as the rounding above: keep the old value and report through `error`.
+      try {
+        await provider.setWorkspaceSellFeeBasis(id, basis)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      }
+      setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, sell_fee_basis: basis } : w)))
+    },
+    [provider],
+  )
+
   const value = useMemo<WorkspaceState>(
     () => ({
       workspaces,
@@ -353,6 +369,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceFeeRebate,
       setWorkspaceFeeRounding,
       setWorkspaceDayTradeTaxEstimate,
+      setWorkspaceSellFeeBasis,
     }),
     [
       workspaces,
@@ -377,6 +394,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceFeeRebate,
       setWorkspaceFeeRounding,
       setWorkspaceDayTradeTaxEstimate,
+      setWorkspaceSellFeeBasis,
     ],
   )
 

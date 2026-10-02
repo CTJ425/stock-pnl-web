@@ -3,13 +3,14 @@
  *
  * One form, two homes (2026-09-26 redesign): the dashboard opens it in place from the
  * 未實現淨損益 basis line, and the workspace menu opens it in a modal. Both write the same
- * fields (plus the fee/tax flooring, BUG-088), and the dashboard derives its P&L basis from
- * them (utils/pnlBasis), so there is no second "basis" setting that could disagree with the fee rate.
+ * fields (plus the fee/tax flooring, BUG-088). Task 189 split the P&L basis off the rebate: the
+ * rebate says what settlement charged (a broker publishes it), the sell-fee basis what the app
+ * withholds on a sell (only the app shows it), and 元大 is 日退 yet withholds the posted rate.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
-import type { FeeRateSegment, FeeRebate, FeeRounding } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding, SellFeeBasis } from '../types/models'
 import { COMMON_FEE_RATES, DEFAULT_FEE_RATE } from '../utils/fees'
 import { describeTwFeeRate, feeDiscountLabel } from '../utils/feeRateHint'
 import {
@@ -18,7 +19,7 @@ import {
   withFeeRateFrom,
   withoutFeeRateFrom,
 } from '../utils/feeRateHistory'
-import { basisLabel, formatFeeRatePct, pnlBasis } from '../utils/pnlBasis'
+import { defaultSellFeeBasis, formatFeeRatePct, pnlBasis } from '../utils/pnlBasis'
 import { taipeiDateKey } from '../utils/taipeiDate'
 import { getFeeRateHistory, getStoredFeeRate } from '../utils/settings'
 
@@ -40,15 +41,21 @@ export interface FeeDraft {
   rounding: FeeRounding
   /** BUG-090: whether a lot bought today is estimated at the halved 現股當沖 tax. */
   dayTradeTax: boolean
+  /** Task 189: which rate the broker app withholds as the sell fee. */
+  sellBasis: SellFeeBasis
 }
 
-function explain(rate: number, rebate: FeeRebate): string {
-  const basis = pnlBasis(rate, rebate)
-  if (rate >= DEFAULT_FEE_RATE) return `沒有折扣，台股用${basisLabel(basis, rate)}賣出手續費，再扣證交稅。`
-  if (basis === 'list') {
-    return `月退制的券商 App 會先用全額預扣，所以台股用${basisLabel(basis, rate)}賣出手續費，再扣證交稅，數字才對得上 App。`
+function explain(rate: number, rebate: FeeRebate, sellBasis: SellFeeBasis): string {
+  const basis = pnlBasis(rate, rebate, sellBasis)
+  const list = formatFeeRatePct(DEFAULT_FEE_RATE)
+  const sell =
+    basis === 'list' || rate >= DEFAULT_FEE_RATE
+      ? `台股用牌告 ${list} 預扣賣出手續費，再扣證交稅`
+      : `台股用折扣後 ${formatFeeRatePct(rate)} 預扣賣出手續費，再扣證交稅`
+  if (basis === 'list' && rebate === 'monthly') {
+    return `${sell}；成本裡的買進手續費也用牌告 ${list} 算，因為月退在交割時先扣全額，券商 App 的成本就是這個數。`
   }
-  return `現折的券商 App 用折扣後的費率預扣，所以台股用${basisLabel(basis, rate)}賣出手續費，再扣證交稅。`
+  return `${sell}；成本用你記錄的手續費。`
 }
 
 export function WorkspaceFeeSettings({
@@ -75,6 +82,7 @@ export function WorkspaceFeeSettings({
     setWorkspaceFeeRebate,
     setWorkspaceFeeRounding,
     setWorkspaceDayTradeTaxEstimate,
+    setWorkspaceSellFeeBasis,
   } = useWorkspace()
   const uid = useId()
   const today = useMemo(() => taipeiDateKey(new Date()), [])
@@ -109,6 +117,16 @@ export function WorkspaceFeeSettings({
   const [from, setFrom] = useState(today)
   const [rebate, setRebate] = useState<FeeRebate>(savedRebate ?? defaultRebate(savedRate))
   const [rounding, setRounding] = useState<FeeRounding>(current?.fee_rounding ?? 'lot')
+  // Task 189: null means never chosen. Such a workspace starts from the rule the dashboard used
+  // before the split, so opening and saving the form does not move its figures.
+  const savedSellBasis: SellFeeBasis | null = current?.sell_fee_basis ?? null
+  const [sellBasis, setSellBasis] = useState<SellFeeBasis>(
+    savedSellBasis ?? defaultSellFeeBasis(savedRate, current?.fee_rebate),
+  )
+  // A workspace that has saved either setting before keeps its sell basis put while the rebate
+  // changes — they are separate facts now, and 元大 (日退, posted-rate sell) needs exactly that.
+  const sellBasisChosen = savedSellBasis !== null || savedRebate !== null
+  const sellManual = useRef(false)
   // BUG-090: null keeps the BUG-087 behaviour (玉山 halves the tax on a lot bought today).
   const [dayTradeTax, setDayTradeTax] = useState<boolean>(current?.day_trade_tax_estimate ?? true)
   const [saving, setSaving] = useState(false)
@@ -140,11 +158,18 @@ export function WorkspaceFeeSettings({
   }, [rate, rateValid, rebateChosen])
 
   useEffect(() => {
+    // A workspace that never saved fee settings keeps the pre-Task-189 pairing until the user picks:
+    // a discount refunded monthly withholds the posted rate, as 玉山 and 元大 both do.
+    if (sellManual.current || sellBasisChosen || !rateValid) return
+    setSellBasis(defaultSellFeeBasis(rate, rebate))
+  }, [rate, rateValid, rebate, sellBasisChosen])
+
+  useEffect(() => {
     // A future effective date changes nothing the dashboard shows today, so it previews the rate
     // still in force rather than one that has not started.
     const previewRate = futureFrom ? savedRate : rate
-    onPreview?.(rateValid ? { rate: previewRate, rebate, rounding, dayTradeTax } : null)
-  }, [onPreview, rate, rateValid, rebate, rounding, dayTradeTax, futureFrom, savedRate])
+    onPreview?.(rateValid ? { rate: previewRate, rebate, rounding, dayTradeTax, sellBasis } : null)
+  }, [onPreview, rate, rateValid, rebate, rounding, dayTradeTax, sellBasis, futureFrom, savedRate])
   // Closing the form (saved or not) ends the preview; the dashboard falls back to the saved values.
   useEffect(() => () => onPreview?.(null), [onPreview])
 
@@ -215,6 +240,7 @@ export function WorkspaceFeeSettings({
     if (rounding !== (current.fee_rounding ?? 'lot')) await setWorkspaceFeeRounding(current.id, rounding)
     if (dayTradeTax !== (current.day_trade_tax_estimate ?? true))
       await setWorkspaceDayTradeTaxEstimate(current.id, dayTradeTax)
+    if (sellBasis !== savedSellBasis) await setWorkspaceSellFeeBasis(current.id, sellBasis)
     setSaving(false)
     // An edited history or base re-prices past periods just as a new rate does.
     onSaved?.({ rateChanged: rateChanged || historyChanged || baseChanged })
@@ -398,8 +424,8 @@ export function WorkspaceFeeSettings({
                   setRebate('instant')
                 }}
               />
-              <b>現折</b>
-              <span>成交當下就用折扣後的費率收。</span>
+              <b>現折／日退</b>
+              <span>交割時就只扣折扣後的手續費。</span>
             </label>
             <label className="fee-settings-radio">
               <input
@@ -413,8 +439,47 @@ export function WorkspaceFeeSettings({
                 }}
               />
               <b>月退</b>
-              <span>先收全額 {formatFeeRatePct(DEFAULT_FEE_RATE)}，之後再退差額。</span>
+              <span>
+                交割時先扣全額 {formatFeeRatePct(DEFAULT_FEE_RATE)}，下個月再退差額，例如玉山、永豐。券商 App
+                的成本會含全額手續費。
+              </span>
             </label>
+            <div className="field-hint">看券商的手續費公告或交割明細：交割時扣的是全額就是月退。</div>
+          </fieldset>
+
+          <fieldset className="fee-settings-rebate">
+            <legend>券商 App 預扣賣出手續費用哪個費率</legend>
+            <label className="fee-settings-radio">
+              <input
+                type="radio"
+                name={`${uid}-sellbasis`}
+                value="list"
+                checked={sellBasis === 'list'}
+                onChange={() => {
+                  sellManual.current = true
+                  setSellBasis('list')
+                }}
+              />
+              <b>牌告 {formatFeeRatePct(DEFAULT_FEE_RATE)}</b>
+              <span>不管折扣多少都用全額估，例如玉山、元大。</span>
+            </label>
+            <label className="fee-settings-radio">
+              <input
+                type="radio"
+                name={`${uid}-sellbasis`}
+                value="net"
+                checked={sellBasis === 'net'}
+                onChange={() => {
+                  sellManual.current = true
+                  setSellBasis('net')
+                }}
+              />
+              <b>折扣後</b>
+              <span>用你的折扣費率估。</span>
+            </label>
+            <div className="field-hint">
+              券商通常不公告這一點，拿 App 上一檔股票的未實現損益對一下就知道。
+            </div>
           </fieldset>
 
           <fieldset className="fee-settings-rebate">
@@ -477,8 +542,8 @@ export function WorkspaceFeeSettings({
 
         <div className="fee-settings-result" aria-live="polite">
           <h3>總覽的未實現淨損益會這樣算</h3>
-          <p>{rateValid ? explain(rate, rebate) : '請輸入 0 到 1 之間的費率。'}</p>
-          <p className="field-hint">這個算法跟著手續費設定走，不需要另外選。不含費用的數字在每檔股票的明細裡都看得到。</p>
+          <p>{rateValid ? explain(rate, rebate, sellBasis) : '請輸入 0 到 1 之間的費率。'}</p>
+          <p className="field-hint">三種算法的數字在每檔股票的明細裡都看得到。</p>
           {onPreview && (
             <p className="field-hint">總覽的數字會跟著這裡的選擇先預覽；按「儲存」才會生效，按「取消」就回到原本的設定。</p>
           )}

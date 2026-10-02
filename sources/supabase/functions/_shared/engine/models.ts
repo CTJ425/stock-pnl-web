@@ -15,11 +15,20 @@ export type Currency = 'TWD' | 'USD'
 
 /**
  * How the broker hands back a fee discount (2026-09-26 redesign). `monthly` (月退) brokers
- * charge the full statutory rate at trade time and refund the difference later, so their apps
- * withhold the full rate on unrealized P&L; `instant` (現折) brokers charge the discounted rate
- * up front. Null / missing means never set, which reads as `instant` (the pre-redesign figure).
+ * charge the full statutory rate at settlement and refund the difference the next month (玉山,
+ * 永豐 per their own pages), so their apps keep the list-price buy fee in cost (Task 189);
+ * `instant` (現折 / 日退) brokers charge the discounted rate at settlement. Which rate the app
+ * withholds on a sell is a separate fact, `SellFeeBasis`. Null / missing reads as `instant`.
  */
 export type FeeRebate = 'instant' | 'monthly'
+
+/**
+ * Which rate the broker app withholds as the sell fee on Taiwan unrealized P&L (Task 189): `list`
+ * is the posted 0.1425% (玉山 and 元大 both, measured), `net` the workspace's discounted rate.
+ * Null / missing keeps the pre-Task-189 rule — `monthly` with a discount reads as `list` — so a
+ * workspace that was reconciled before this field existed does not move.
+ */
+export type SellFeeBasis = 'list' | 'net'
 
 /**
  * How the broker floors the estimated sell fee and tax on unrealized P&L (BUG-088). `lot`: each
@@ -53,6 +62,7 @@ export interface Workspace {
   fee_rate_history?: FeeRateSegment[] | null
   fee_rebate?: FeeRebate | null
   fee_rounding?: FeeRounding | null
+  sell_fee_basis?: SellFeeBasis | null
   /**
    * BUG-090: does this broker estimate a lot bought *today* at the halved 現股當沖 tax?
    * 玉山 does (that is what BUG-087 measured); RON does not — its app withheld the full 0.3% on a

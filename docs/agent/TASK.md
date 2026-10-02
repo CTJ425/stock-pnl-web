@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-01 17:30:00 Asia/Taipei
+- Timestamp: 2026-10-02 16:30:00 Asia/Taipei
 
 ---
 
@@ -15,6 +15,38 @@
 - Front end deploys from `main` via Cloudflare Pages; Edge Functions and DDL never travel with a push (see CLAUDE.md § Release workflow).
 
 ## 📋 Active Tasks
+
+### Task 189: 月退 cost on the list-price fee; sell-fee basis split off the rebate (A2)
+- **Status**: 🔄 IN PROGRESS — code on `dev` as **0.10.21-dev.1**; DEV DDL + Edge applied. PROD untouched.
+- **Agent**: Claude
+- **Timestamp**: 2026-10-02 16:30:00 Asia/Taipei
+- **Why**: 玉山 App showed 009828 at −610, the dashboard −515. 95 = floor(107,000 × 0.1425%) 152 − recorded 57:
+  a 月退 broker deducts the list fee at settlement, so its app's cost holds it. 元大 (BUG-088) keeps the
+  discounted fee in cost but withholds the posted rate on the sell — so 「月退」 could not keep meaning
+  「賣出用牌告」.
+- **Broker facts (2026-10-02 research)**: official — 玉山 月退, refund 次月13日, tiers by monthly volume
+  (6 / 5 / 3.8 折; Unicard 2.8 折 to 2027-03-31) (esunsec.com.tw/campaign/trade-fee); 永豐 「扣款時仍扣全額」,
+  refund 隔月16日前 (sinotrade.com.tw/richclub/dawhotou/campaign/faq); 台新 「單筆委託單，不同成交價，手續費分別
+  計算收取」 (tssco.com.tw/FeeCalculator). Third-party only — 元大 日退 (official page says only 「電子交易另有折扣」),
+  國泰/群益 日退, 富邦/凱基/元富 月退. App display rules (cost fee, sell rate, per-lot vs position flooring) are
+  published by no broker; only app comparisons show them.
+- **Shape**: `fee_rebate` = what settlement charged; new `workspaces.sell_fee_basis` ('list' | 'net', NULL =
+  the old rule `monthly && discount → list`). Under 'monthly' the 券商 figure's cost = ledger cost +
+  `monthlyRebateCostUplift` (per open lot: list fee of the original buy with min fee, × qty/origQty, minus the
+  lot's recorded fee share, clamped ≥ 0; `OpenLot.origQty` added). Recorded fees, realized P&L and RISK-022
+  unchanged. Discord card follows (its cost/ROI denominator still the ledger cost).
+- **Items**:
+  1. ~~Code, tests (2,817 pass), build / lint / `typecheck:edge`, edge-engine sync~~ ✅
+  2. ~~Playwright: `scripts/verify-monthly-rebate-cost-e2e.cjs` (−610 / −515 / −420, PATCH, 1440 + 390) and
+     `verify-pnl-rounding-e2e.cjs` moved to 元大 = 日退 + 牌告, both PASS~~ ✅
+  3. ~~DEV DDL `sell_fee_basis` + updated `verify.sql`; `verify_setup()` 10/10 PASS~~ ✅
+  4. DEV Edge `stock-report` deploy + ezbr check ⏳ (see PROGRESS)
+  5. User tests on DEV (http://10.8.22.84:5173, demo01@gmail.com) ⏳
+  6. After PROD ships: set Ron的投資組合 to 現折／日退 + 牌告 (it is 月退 today, so its cost would rise by the list
+     fee); 玉山證卷 stays 月退 + 牌告. User's own call in the UI ⏳
+  7. Unverified: whether a 月退 app lowers its cost after the monthly refund (screenshots only show the same
+     day); 融券 legs under 月退 were not changed ⏳
+  8. PROD: DDL + Edge + `main` — only on the user's explicit OK ⏳
 
 ### Task 188: UX / a11y follow-ups from the 2026-10-02 DEV E2E
 - **Status**: 🔄 OPEN — not started; pick up only when the user asks
@@ -55,57 +87,6 @@
      validates *what* can be asked, not *who* asks. Closing it means `assertUser` plus a per-user quota
      like `stock-report`'s, which changes who can use the quote path — a product decision, so it was
      deliberately not taken here.
-
-### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable
-- **Status**: ✅ DONE — released as **0.10.11** then **0.10.12** (`19b4175`), on `main` and `dev`
-  (identical), both Releases published by CI, CI green. vitest 2,697 pass / 7 skipped,
-  `npm run build` and `typecheck:edge` exit 0. **Neither release was checked in a browser** — the
-  user asked to ship fast; the change is covered by App-level tests that render the real form.
-- **Reversed in 0.10.12, on the user's decision after seeing it**: 月退 no longer writes the
-  statutory rate into a transaction. A recorded fee is what the trade finally costs you, and
-  nothing here records the monthly refund, so the list price would leave that money outside the
-  ledger (~1,112 元 on their 1,258,800 position). The rebate still decides the dashboard headline,
-  and the 券商 column stays on 牌告 for every TWD row (`holdingRows.ts:111`), so both numbers remain
-  visible. `chargedFeeRate` is gone; see RISK-022 for the cost of this choice.
-- **Agent**: Claude
-- **Timestamp**: 2026-10-01 14:36:00 Asia/Taipei
-- **Why**: the dashboard read 79,523 against 玉山 App's 78,276. The 1,247 is entirely the sell-fee
-  rate (2303 matched to the dollar: 460 − 138 = 322), which proves 玉山 bills the statutory 0.1425%
-  and refunds the discount — **月退**. `fee_rebate` only reached `pnlBasis`, so 新增交易 and 批次重算
-  recorded the *discounted* fee: a number no settlement statement shows, and the discount never
-  comes back to that row.
-- **Shape**: `chargedFeeRate(rate, rebate)` in `utils/pnlBasis.ts`, derived from `pnlBasis` so they
-  cannot drift. Recording paths use it; estimates keep using `pnlBasis`.
-- **Done**:
-  1. `chargedFeeRate` wired into `TransactionForm`, `RecalcFeesModal` (+ 月退 hint) and `StockSplitModal`.
-  2. Trap A: a moved 生效日 on a workspace with no rate writes `fee_rate = 0.001425` **plus** the
-     segment, instead of making the discount the base and re-pricing the whole ledger.
-  3. Trap B: the 費率變更紀錄 base row has a 「改」 inline editor, the only exit when the base is
-     already the discounted rate (saving the same rate from a date is not a change, so the segment
-     was dropped). It re-normalises the history against the new base.
-  4. 月退 is the default once a discount is picked, 現折 at the list price; a stored value equal to
-     the new default does not count as a choice, so a workspace is never pinned to 現折. Persisted
-     on save because the Edge holdings card reads `fee_rebate` from the row.
-- **Items**:
-  5. ~~Commit to `dev`, run the gates, release~~ ✅ 0.10.11 (14:45) and 0.10.12 (15:38). No deploy
-     was needed for either: neither diff touches `sources/supabase/**`, so Edge and DDL are
-     untouched and Cloudflare Pages serves the new frontend from `main` on its own.
-  7. **Confirm 現折 vs 月退 from a settlement statement** ⏳ — the whole 月退 reading came from 玉山
-     App's *estimate* screen, never from an actual deduction. One buy's 交割金額 (0.1425% or
-     0.0541%?), or a 折讓金 credit on last month's statement, settles it. Since 0.10.12 a wrong
-     guess only mislabels the dashboard headline, so this is no longer urgent — but it is still
-     unproven, and the setting is one click either way.
-  6. User's own save ⏳: PROD 玉山證卷 → 「改」 on 「一直以來 3.8 折」 → 不打折, then 3.8 折 from
-     2026-10-01. Under 月退 the recalculation uses 0.1425% for every date anyway, so this is about the
-     record being true, not about today's numbers.
-- **Not done, named on purpose**: 最低手續費 still has no date dimension (`settings.ts:152`, global,
-  BUG-084), so a recalculation applies today's 20 元 / 1 元 to every date. Narrow (small odd lots
-  only) and only wrong if the broker's minimum changed with the agreement. **Nowhere records a
-  月退 折讓金** — 0.10.12 side-steps it by folding the discount into every trade, which assumes the
-  refund always arrives; a 現金收入 entry like 現金股利 would close it properly (RISK-022).
-- **Warn before any 批次重算 on a ledger built from broker statements**: since 0.10.12 the wizard
-  re-prices rows at the discounted rate, so rows entered or imported at the real (full) deduction
-  get overwritten with an estimate, moving 投入成本 and 已實現損益. The list is pre-checked.
 
 ### Task 182: Fee rate as a fact with a validity period (玉山 3.8 折 from 2026-10-01)
 - **Status**: 🔄 IN PROGRESS — infrastructure complete (2026-10-01). DDL on DEV **and** PROD,

@@ -4,7 +4,7 @@
  * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
-import type { FeeRateSegment, FeeRebate, FeeRounding, Market, NewTransaction, Transaction, TxNature, Workspace } from '../types/models'
+import type { FeeRateSegment, FeeRebate, FeeRounding, Market, SellFeeBasis, NewTransaction, Transaction, TxNature, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 import { logClient } from './appLog'
@@ -66,6 +66,8 @@ export interface DataProvider {
   /** Persist how the workspace's broker floors the estimated sell fee and tax (BUG-088). */
   setWorkspaceFeeRounding(id: string, rounding: FeeRounding): Promise<void>
   setWorkspaceDayTradeTaxEstimate(id: string, enabled: boolean): Promise<void>
+  /** Persist which rate the broker app withholds as the sell fee (Task 189). */
+  setWorkspaceSellFeeBasis(id: string, basis: SellFeeBasis): Promise<void>
 }
 
 /* =========================================================
@@ -297,6 +299,15 @@ export class LocalProvider implements DataProvider {
       writeStore(store)
     }
   }
+
+  async setWorkspaceSellFeeBasis(id: string, basis: SellFeeBasis): Promise<void> {
+    const store = readStore()
+    const ws = store.workspaces.find((w) => w.id === id)
+    if (ws) {
+      ws.sell_fee_basis = basis
+      writeStore(store)
+    }
+  }
 }
 
 /* =========================================================
@@ -309,6 +320,9 @@ function client() {
 }
 
 const WORKSPACE_COLUMNS =
+  'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate, sell_fee_basis'
+/** Without sell_fee_basis, for a database that has not run that part of schema.sql (Task 189). */
+const WORKSPACE_COLUMNS_WITHOUT_SELL_BASIS =
   'id, name, created_at, fee_rate, fee_rate_history, fee_rebate, fee_rounding, day_trade_tax_estimate'
 /** Without day_trade_tax_estimate, for a database that has not run that part of schema.sql (BUG-090). */
 const WORKSPACE_COLUMNS_WITHOUT_DAY_TRADE =
@@ -449,6 +463,7 @@ export class SupabaseProvider implements DataProvider {
     // than break login (a frontend deploy can land before the migration).
     const columnSets = [
       WORKSPACE_COLUMNS,
+      WORKSPACE_COLUMNS_WITHOUT_SELL_BASIS,
       WORKSPACE_COLUMNS_WITHOUT_DAY_TRADE,
       WORKSPACE_COLUMNS_WITHOUT_HISTORY,
       WORKSPACE_COLUMNS_WITHOUT_ROUNDING,
@@ -652,5 +667,15 @@ export class SupabaseProvider implements DataProvider {
       .select('id')
     if (error) throw new Error(`儲存當沖稅率估算方式失敗：${error.message}`)
     assertRowsAffected(data, '儲存當沖稅率估算方式失敗：找不到這個工作區')
+  }
+
+  async setWorkspaceSellFeeBasis(id: string, basis: SellFeeBasis): Promise<void> {
+    const { data, error } = await client()
+      .from('workspaces')
+      .update({ sell_fee_basis: basis })
+      .eq('id', id)
+      .select('id')
+    if (error) throw new Error(`儲存賣出手續費預扣方式失敗：${error.message}`)
+    assertRowsAffected(data, '儲存賣出手續費預扣方式失敗：找不到這個工作區')
   }
 }

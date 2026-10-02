@@ -11,6 +11,7 @@ const {
   setWorkspaceFeeRebate,
   setWorkspaceFeeRounding,
   setWorkspaceDayTradeTaxEstimate,
+  setWorkspaceSellFeeBasis,
 } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   // Mirrors `saveWorkspaceFeeRate`, which writes the localStorage cache the form reads its base
@@ -22,6 +23,7 @@ const {
   setWorkspaceFeeRebate: vi.fn(async () => {}),
   setWorkspaceFeeRounding: vi.fn(async () => {}),
   setWorkspaceDayTradeTaxEstimate: vi.fn(async () => {}),
+  setWorkspaceSellFeeBasis: vi.fn(async () => {}),
 }))
 vi.mock('../context/WorkspaceContext', () => ({ useWorkspace }))
 
@@ -35,6 +37,7 @@ function mount(current: Record<string, unknown>, rate: string | null, onPreview?
     setWorkspaceFeeRebate,
     setWorkspaceFeeRounding,
     setWorkspaceDayTradeTaxEstimate,
+    setWorkspaceSellFeeBasis,
   })
   const onClose = vi.fn()
   const onSaved = vi.fn()
@@ -56,14 +59,19 @@ describe('WorkspaceFeeSettings', () => {
     expect(screen.getByText(/牌告 0.1425% 預扣/)).toBeTruthy()
   })
 
-  it('switching to 現折 previews the discounted rate and saves only the rebate', async () => {
+  // Task 189: the rebate and the sell-fee basis are separate facts. 元大 is 日退 and still withholds
+  // the posted rate, so switching the rebate of a saved workspace leaves the sell basis where it was.
+  it('switching to 現折 keeps the sell basis and pins it on save', async () => {
     const user = userEvent.setup()
     const { onClose, onSaved } = mount({ fee_rebate: 'monthly' }, '0.000399')
+    expect(screen.getByText(/成本裡的買進手續費也用牌告 0.1425% 算/)).toBeTruthy()
     await user.click(screen.getByRole('radio', { name: /現折/ }))
-    expect(screen.getByText(/折扣後 0.0399% 預扣/)).toBeTruthy()
+    expect((screen.getByRole('radio', { name: /牌告 0.1425%/ }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByText(/牌告 0.1425% 預扣賣出手續費，再扣證交稅；成本用你記錄的手續費/)).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '儲存' }))
     expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
     expect(setWorkspaceFeeRebate).toHaveBeenCalledWith('ws-1', 'instant')
+    expect(setWorkspaceSellFeeBasis).toHaveBeenCalledWith('ws-1', 'list')
     expect(onSaved).toHaveBeenCalledWith({ rateChanged: false })
     expect(onClose).toHaveBeenCalled()
   })
@@ -79,6 +87,16 @@ describe('WorkspaceFeeSettings', () => {
     // would make the nightly card disagree with the dashboard.
     expect(setWorkspaceFeeRebate).toHaveBeenCalledWith('ws-1', 'monthly')
     expect(onSaved).toHaveBeenCalledWith({ rateChanged: true })
+  })
+
+  it('a workspace that never saved fee settings pairs a discount with the posted sell rate (Task 189)', async () => {
+    const user = userEvent.setup()
+    mount({}, null)
+    expect((screen.getByRole('radio', { name: /^折扣後/ }) as HTMLInputElement).checked).toBe(true)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.000285')
+    expect((screen.getByRole('radio', { name: /牌告 0.1425%/ }) as HTMLInputElement).checked).toBe(true)
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceSellFeeBasis).toHaveBeenCalledWith('ws-1', 'list')
   })
 
   it('a stored rate outside the list opens as a custom rate', () => {
@@ -114,7 +132,7 @@ describe('WorkspaceFeeSettings', () => {
     const user = userEvent.setup()
     const onPreview = vi.fn()
     const { unmount } = mount({ fee_rebate: 'monthly' }, '0.0004275', onPreview)
-    const base = { rate: 0.0004275, rebate: 'monthly', rounding: 'lot', dayTradeTax: true }
+    const base = { rate: 0.0004275, rebate: 'monthly', rounding: 'lot', dayTradeTax: true, sellBasis: 'list' }
     expect(onPreview).toHaveBeenLastCalledWith(base)
     await user.click(screen.getByRole('radio', { name: /整筆一起算/ }))
     expect(onPreview).toHaveBeenLastCalledWith({ ...base, rounding: 'position' })
@@ -128,8 +146,18 @@ describe('WorkspaceFeeSettings', () => {
       rounding: 'position',
       dayTradeTax: false,
     })
+    // Task 189: so does the sell-fee basis.
+    await user.click(screen.getByRole('radio', { name: /^折扣後/ }))
+    expect(onPreview).toHaveBeenLastCalledWith({
+      ...base,
+      rate: 0.000285,
+      rounding: 'position',
+      dayTradeTax: false,
+      sellBasis: 'net',
+    })
     expect(setWorkspaceFeeRounding).not.toHaveBeenCalled()
     expect(setWorkspaceDayTradeTaxEstimate).not.toHaveBeenCalled()
+    expect(setWorkspaceSellFeeBasis).not.toHaveBeenCalled()
     unmount()
     expect(onPreview).toHaveBeenLastCalledWith(null)
   })

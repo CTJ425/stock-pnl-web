@@ -315,3 +315,52 @@ describe('未實現與保本價用今天的費率，不是買進那批的費率�
     expect(cheap.brokerUnrealized).toBe(dear.brokerUnrealized)
   })
 })
+
+/**
+ * Task 189: a 月退 broker deducts the list-price fee at settlement and its app keeps it in cost.
+ * Real case (玉山 App, 2026-10-02): 009828 10,000 @ 10.70, recorded fee 57 (3.8 折), price 10.68.
+ * The app showed −610 = 106,800 − 152 − 106 − 107,152; the recorded cost gives −515.
+ */
+describe('buildHoldingRows — 月退的券商成本含牌告手續費（Task 189）', () => {
+  const buy = () =>
+    holdingsOf([tx({ ticker: '009828', name: '中信台日韓PCB', tx_date: '2026-10-02', price: 10.7, qty: 10000, fee_tax: 57 })])
+
+  it('月退：券商口徑用 107,152 當成本，對上玉山 App 的 −610 / −0.57%', () => {
+    const [row] = buildHoldingRows(buy(), { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, 'monthly')
+    expect(row.brokerCost).toBe(107_152)
+    expect(row.brokerUnrealized).toBe(-610)
+    expect(row.brokerRoi).toBeCloseTo(-610 / 107_152, 10)
+    // The economic figure keeps the recorded cost.
+    expect(row.holding.cost).toBe(107_057)
+  })
+
+  it('日退（或沒設定）：券商口徑沿用記錄的成本 −515', () => {
+    for (const rebate of ['instant', undefined] as const) {
+      const [row] = buildHoldingRows(buy(), { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, rebate)
+      expect(row.brokerCost).toBeNull()
+      expect(row.brokerUnrealized).toBe(-515)
+    }
+  })
+
+  it('部分賣出後，剩下的股數按比例分攤原本那筆的牌告手續費', () => {
+    const holdings = holdingsOf([
+      tx({ ticker: '009828', tx_date: '2026-10-02', price: 10.7, qty: 10000, fee_tax: 57 }),
+      tx({ ticker: '009828', tx_date: '2026-10-03', tx_type: 'SELL', price: 10.8, qty: 4000, fee_tax: 66 }),
+    ])
+    const [row] = buildHoldingRows(holdings, { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, 'monthly')
+    // 6,000 left: list fee 152 × 0.6 = 91.2, recorded 57 × 0.6 = 34.2 → 57 more than the ledger.
+    expect(row.brokerCost as number).toBeCloseTo(row.holding.cost + 57, 6)
+  })
+
+  it('零股照最低手續費算；已經記成牌告的那筆不加；股票股利不加', () => {
+    const holdings = holdingsOf([
+      // 10 × 50 = 500 → floor(0.71) = 0 → odd-lot minimum 1; recorded 1 → nothing to add.
+      tx({ ticker: '2330', price: 50, qty: 10, fee_tax: 1 }),
+      // Already at the list price: floor(100,000 × 0.1425%) = 142.
+      tx({ ticker: '2330', price: 100, qty: 1000, fee_tax: 142 }),
+      tx({ ticker: '2330', tx_type: 'STOCK_DIVIDEND', price: 0, qty: 50, fee_tax: 10 }),
+    ])
+    const [row] = buildHoldingRows(holdings, { 'TPE:2330': quote(100) }, 0.0004275, undefined, 'lot', undefined, 'monthly')
+    expect(row.brokerCost).toBe(row.holding.cost)
+  })
+})
