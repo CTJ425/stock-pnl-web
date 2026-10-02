@@ -582,8 +582,8 @@
 - **Impact**: labels only — 庫存總覽, 個股分析, 年度收益 rows, Discord card. Every calculation keys on `ticker` / `market:ticker`, never the name. Name search (`txSearch.ts`, `TransactionForm` suggestions) uses `includes`, so typing 「台灣50」 does not find the 11 full-width rows.
 - **Fix options**: rename the rows on PROD/DEV (data, needs the user's OK); and/or NFKC-normalise names on save and import (Task 188 #9 suggested it); or label TW holdings from `stock_names` instead of the newest row.
 - **Fix (user chose data fix + official names, 2026-10-02)**: (1) data — PROD 11 rows, DEV 22 rows `0050` 「台灣５０」 → 「元大台灣50」 (the TWSE OpenAPI `STOCK_DAY_AVG_ALL` name, checked 2026-10-02), identity-guarded and count-checked; before-images in `~/stock-pnl-web-snapshots/2026-10-02-bug109/` (outside the repo); no full-width name left on either side. (2) code — `displayStockName` labels TPE codes with `twOfficialName` (the exchange list `getTwStockList` already loads; seeded from its cache even past the TTL, refreshed by `useTwOfficialNames` in AppShell); the row's name is the fallback for codes not on the list. Tests: `twMarketData.test.ts` N1–N3; Playwright `verify-monthly-rebate-cost-e2e.cjs` step 0 (row typed 「中信台日韓ＰＣＢ」 shows 「中信台日韓PCB」).
-- **Not covered**: the Discord holdings card (Edge) still labels with the newest row's name — fine for 0050 after the data fix; 00981A's two row names remain in the data.
-- **Status**: ✅ FIXED (0.10.22)
+- **Follow-up (0.10.23, user's request)**: the Discord card labels TW rows from the same two exchange lists (`stock-report/twNames.ts` `memoTwNames`, one fetch per run shared by every account; `aggregateHoldings(..., names)`; a failed list falls back to row names and the card still sends). Data: 00981A 「主動統一」 → 「主動統一台股增長」 on PROD (5) and DEV (10), before-images beside the 0050 ones; no TW code has two names left on either side. Tests: `twNames.test.ts`, `holdingsRun.test.ts` (official names, fallback).
+- **Status**: ✅ FIXED (0.10.22; card in 0.10.23)
 
 ### Bug ID: BUG-049 — 同日買賣排序不定，造成假性超賣警告與已實現損益虛增
 - **Date**: 2026-09-04, fixed in 0.9.31

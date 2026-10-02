@@ -45,6 +45,7 @@ import {
 } from './holdingsRun.ts'
 import { type MarginSummaryResponse, marginSummaryUrl } from './marketMargin.ts'
 import { fetchJson } from './twChips.ts'
+import { memoTwNames } from './twNames.ts'
 import { type MarketFile } from './twMarket.ts'
 import { type MacroFile } from './usMacro.ts'
 
@@ -255,6 +256,8 @@ export async function handleDiscordAccountTick(): Promise<Response> {
     claimMarketCopy,
     finishMarketCopy,
     loadWorkspaces: loadHoldingsWorkspaces,
+    // BUG-109: one fetch of the official TW names per tick, shared by every account in it.
+    loadTwNames: memoTwNames(fetchJson),
     fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
     claimHoldings: claimHoldingsDaily,
     finish: finishHoldingsSend,
@@ -504,6 +507,7 @@ export function holdingsDataDeps(): HoldingsDataDeps {
     now: () => new Date(),
     loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
     loadWorkspaces: loadHoldingsWorkspaces,
+    loadTwNames: memoTwNames(fetchJson),
     fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
     post: postDiscordWebhook,
     finish: finishHoldingsSend,

@@ -17,6 +17,7 @@ import {
   type LastSend,
 } from './holdingsRun.ts'
 import type { MarketDay } from './twMarket.ts'
+import { memoTwNames } from './twNames.ts'
 
 const NOW = new Date('2026-09-17T09:15:00.000Z') // Thu 17:15 Taipei
 const TODAY = '2026-09-17'
@@ -546,5 +547,32 @@ describe('missing quotes', () => {
     const rec = newRec()
     await runHoldingsDaily(runDeps(rec, { listEnabledUsers: async () => [{ userId: 'u1', webhookUrl: HOOK_1 }] }))
     expect(rec.logs.filter((l) => l.message === 'holdings quotes missing')).toEqual([])
+  })
+})
+
+// BUG-109: the card labels TW rows with the exchange's name; the row name is only the fallback.
+describe('official TW names on the holdings card', () => {
+  it('labels TW rows with the official name, fetching the lists once for the whole run', async () => {
+    const rec = newRec()
+    const urls: string[] = []
+    // The production loader (discordHandlers.ts): memoised per run, two list URLs.
+    const deps = runDeps(rec, {
+      loadTwNames: memoTwNames(async <T,>(url: string) => {
+        urls.push(url)
+        return [{ Code: '2330', Name: '台積電' }] as T
+      }),
+    })
+    const result = await runHoldingsDaily(deps)
+    expect(result.sent).toBe(2)
+    expect(urls).toHaveLength(2)
+    for (const p of rec.posts) expect(JSON.stringify(p.payload)).toContain('2330 台積電')
+  })
+
+  it('falls back to the transaction name when the list cannot be loaded', async () => {
+    const rec = newRec()
+    const deps = runDeps(rec, { loadTwNames: () => Promise.reject(new Error('TWSE down')) })
+    const result = await runHoldingsDaily(deps)
+    expect(result.sent).toBe(2)
+    expect(JSON.stringify(rec.posts[0].payload)).not.toContain('台積電')
   })
 })

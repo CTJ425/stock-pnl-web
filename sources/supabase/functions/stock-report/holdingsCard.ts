@@ -6,6 +6,7 @@ import { computeLedger, estimateUnrealized, estimateUnrealizedShort, monthlyReba
 import type { Currency, FeeRebate, FeeRounding, Market, SellFeeBasis, Transaction } from '../_shared/engine/models.ts'
 import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
 import type { HoldingQuote } from './holdingQuotes.ts'
+import type { TwNames } from './twNames.ts'
 
 // Re-stated from src/utils/fees.ts / src/utils/settings.ts (D6 keeps those files untouched;
 // a drift test in edgeConstants.test.mjs asserts these stay equal to the web's exports).
@@ -408,6 +409,11 @@ export function aggregateHoldings(
    * argument is the run's date, not a decision — the decision is each ledger's own.
    */
   today?: string,
+  /**
+   * BUG-109: the exchanges' names for TW codes. A TW row is labelled with it, the transaction's own
+   * name being the fallback for a code the lists do not carry. Omitted keeps the transaction names.
+   */
+  names?: TwNames,
 ): HoldingsSummary {
   const twdAcc = new Map<string, RowAcc>()
   const usdAcc = new Map<string, RowAcc>()
@@ -457,6 +463,12 @@ export function aggregateHoldings(
         const dayPnl = close != null && prevClose != null ? -h.shortQty * (close - prevClose) : null
         mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, brokerUnrealized, dayPnl, l.feeRate)
       }
+    }
+  }
+
+  if (names) {
+    for (const acc of twdAcc.values()) {
+      if (acc.market === 'TPE') acc.name = names.get(acc.ticker.toUpperCase()) ?? acc.name
     }
   }
 

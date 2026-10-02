@@ -16,6 +16,7 @@ import {
   type WorkspaceInput,
 } from './holdingsCard.ts'
 import { positionKey, type Market } from '../_shared/engine/models.ts'
+import type { TwNames } from './twNames.ts'
 import { dashDate, taipeiYmd } from './report.ts'
 import type { MarketDay } from './twMarket.ts'
 
@@ -46,6 +47,8 @@ export interface HoldingsDataDeps {
   fetchChart: ChartFetch
   post: (url: string, payload: DiscordPayload) => Promise<DiscordSendResult>
   finish: (userId: string, ymd: string, kind: HoldingsKind, outcome: HoldingsOutcome) => Promise<void>
+  /** BUG-109: the exchanges' names for TW codes (twNames.ts). Absent = transaction names. */
+  loadTwNames?: () => Promise<TwNames>
 }
 
 export interface HoldingsRunDeps extends HoldingsDataDeps {
@@ -110,7 +113,14 @@ async function quotesFor(quoteCache: ReturnType<typeof createQuoteCache>, keys: 
 /** The subset `runOneUser` actually needs — narrower than `HoldingsRunDeps` so the per-account
  * tick (accountTick.ts, Task 165 step 2f) can reuse this step without also carrying
  * `elapsedMs`/`listEnabledUsers`/`claimDaily`, which belong to the whole-run loop, not one user. */
-export type RunOneUserDeps = Pick<HoldingsDataDeps, 'now' | 'loadWorkspaces' | 'post' | 'finish'> & Pick<HoldingsRunDeps, 'log'>
+export type RunOneUserDeps = Pick<HoldingsDataDeps, 'now' | 'loadWorkspaces' | 'post' | 'finish' | 'loadTwNames'> &
+  Pick<HoldingsRunDeps, 'log'>
+
+/** The official names, or none when the loader is absent or fails (the card then uses row names). */
+async function twNamesOf(deps: Pick<HoldingsDataDeps, 'loadTwNames'>): Promise<TwNames | undefined> {
+  if (!deps.loadTwNames) return undefined
+  return deps.loadTwNames().catch(() => undefined)
+}
 
 /** One user's holdings card: gather → build → post → record. Shared by `runHoldingsDaily` (spec
  * §2.6) and the per-account tick (spec §5.2), so there is one implementation of it. */
@@ -128,7 +138,7 @@ export async function runOneUser(
     const quotes = await quotesFor(quoteCache, keys)
     // `ymd` is already the run's Taipei calendar date (`dashDate(taipeiYmd(now))` at both call
     // sites), so it serves as both the card's market day and the day-trade date (BUG-087).
-    const summary = aggregateHoldings(ledgers, quotes, ymd, ymd)
+    const summary = aggregateHoldings(ledgers, quotes, ymd, ymd, await twNamesOf(deps))
     const missing = summary.twd.missingCount + summary.usd.missingCount
     if (missing > 0) {
       const rows = summary.twd.rows.length + summary.usd.rows.length
@@ -289,7 +299,7 @@ export async function runHoldingsSettingsOp(
     const quotes = await quotesFor(quoteCache, keys)
     // Two different dates on purpose: `market.date` is the market day the card reports on (it can
     // be an earlier day), `ymd` is today in Taipei, which is what the day-trade rule keys off.
-    const summary = aggregateHoldings(ledgers, quotes, market.date, ymd)
+    const summary = aggregateHoldings(ledgers, quotes, market.date, ymd, await twNamesOf(deps))
     const missingQuotes = summary.twd.missingCount + summary.usd.missingCount
     const payload = buildHoldingsPayload(summary, { generatedAt: deps.now().toISOString(), preview: true })
 
