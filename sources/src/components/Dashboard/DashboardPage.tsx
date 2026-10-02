@@ -17,7 +17,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { useUsdTwdRate } from '../../hooks/useUsdTwdRate'
 import { buildHoldingRows } from '../../utils/holdingRows'
-import { basisLabel, pnlBasis } from '../../utils/pnlBasis'
+import { basisLabel, listPriceCost, pnlBasis } from '../../utils/pnlBasis'
 import { fmtMoney, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getFeeRateOn } from '../../utils/settings'
 import { taipeiDateKey } from '../../utils/taipeiDate'
@@ -197,13 +197,16 @@ export function DashboardPage({
   const sellBasis = draft?.sellBasis ?? savedSellBasis
   const savedBasis = pnlBasis(savedRate, savedRebate, savedSellBasis)
   const basis = pnlBasis(feeRate, rebate, sellBasis)
+  // An open fee panel always carries a sell basis, so it previews what saving would switch on.
+  const listCost = listPriceCost(rebate, sellBasis)
   const previewing =
     draft !== null &&
     (draft.rate !== savedRate ||
       draft.rebate !== savedRebate ||
       draft.rounding !== savedRounding ||
       draft.dayTradeTax !== savedDayTradeTax ||
-      basis !== savedBasis)
+      basis !== savedBasis ||
+      listCost !== listPriceCost(savedRebate, savedSellBasis))
 
   const handleRefresh = () => {
     refresh()
@@ -216,8 +219,8 @@ export function DashboardPage({
   // 0.3% on a position opened the same morning, so passing the date would read 195 too optimistic.
   const today = dayTradeTax ? taipeiDateKey(new Date()) : undefined
   const rows = useMemo(
-    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding, today, rebate),
-    [holdings, prices, feeRate, current?.id, rounding, today, rebate],
+    () => buildHoldingRows(holdings, prices, feeRate, current?.id, rounding, today, listCost),
+    [holdings, prices, feeRate, current?.id, rounding, today, listCost],
   )
   const tw = marketSums(rows.filter((r) => r.holding.currency === 'TWD'), 'TWD', basis, loading)
   const us = marketSums(rows.filter((r) => r.holding.currency === 'USD'), 'USD', basis, loading)
@@ -226,7 +229,7 @@ export function DashboardPage({
     ...(tw.rows.length > 0 ? [{ sums: tw, label: '台股' }] : []),
     ...(us.rows.length > 0 ? [{ sums: us, label: '美股' }] : []),
   ]
-  const basisText = basisLabel(basis, feeRate, rebate)
+  const basisText = basisLabel(basis, feeRate, listCost)
 
   return (
     <>

@@ -326,7 +326,7 @@ describe('buildHoldingRows — 月退的券商成本含牌告手續費（Task 18
     holdingsOf([tx({ ticker: '009828', name: '中信台日韓PCB', tx_date: '2026-10-02', price: 10.7, qty: 10000, fee_tax: 57 })])
 
   it('月退：券商口徑用 107,152 當成本，對上玉山 App 的 −610 / −0.57%', () => {
-    const [row] = buildHoldingRows(buy(), { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, 'monthly')
+    const [row] = buildHoldingRows(buy(), { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, true)
     expect(row.brokerCost).toBe(107_152)
     expect(row.brokerUnrealized).toBe(-610)
     expect(row.brokerRoi).toBeCloseTo(-610 / 107_152, 10)
@@ -334,9 +334,9 @@ describe('buildHoldingRows — 月退的券商成本含牌告手續費（Task 18
     expect(row.holding.cost).toBe(107_057)
   })
 
-  it('日退（或沒設定）：券商口徑沿用記錄的成本 −515', () => {
-    for (const rebate of ['instant', undefined] as const) {
-      const [row] = buildHoldingRows(buy(), { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, rebate)
+  it('日退（或舊工作區）：券商口徑沿用記錄的成本 −515', () => {
+    for (const listCost of [false, undefined]) {
+      const [row] = buildHoldingRows(buy(), { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, listCost)
       expect(row.brokerCost).toBeNull()
       expect(row.brokerUnrealized).toBe(-515)
     }
@@ -347,7 +347,7 @@ describe('buildHoldingRows — 月退的券商成本含牌告手續費（Task 18
       tx({ ticker: '009828', tx_date: '2026-10-02', price: 10.7, qty: 10000, fee_tax: 57 }),
       tx({ ticker: '009828', tx_date: '2026-10-03', tx_type: 'SELL', price: 10.8, qty: 4000, fee_tax: 66 }),
     ])
-    const [row] = buildHoldingRows(holdings, { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, 'monthly')
+    const [row] = buildHoldingRows(holdings, { 'TPE:009828': quote(10.68) }, 0.0005415, undefined, 'lot', undefined, true)
     // 6,000 left: list fee 152 × 0.6 = 91.2, recorded 57 × 0.6 = 34.2 → 57 more than the ledger.
     expect(row.brokerCost as number).toBeCloseTo(row.holding.cost + 57, 6)
   })
@@ -360,7 +360,7 @@ describe('buildHoldingRows — 月退的券商成本含牌告手續費（Task 18
       tx({ ticker: '2330', price: 100, qty: 1000, fee_tax: 142 }),
       tx({ ticker: '2330', tx_type: 'STOCK_DIVIDEND', price: 0, qty: 50, fee_tax: 10 }),
     ])
-    const [row] = buildHoldingRows(holdings, { 'TPE:2330': quote(100) }, 0.0004275, undefined, 'lot', undefined, 'monthly')
+    const [row] = buildHoldingRows(holdings, { 'TPE:2330': quote(100) }, 0.0004275, undefined, 'lot', undefined, true)
     expect(row.brokerCost).toBe(row.holding.cost)
   })
 })

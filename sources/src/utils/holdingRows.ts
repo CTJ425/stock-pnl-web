@@ -10,7 +10,7 @@ import { estimateUnrealized, estimateUnrealizedShort, lotSellTaxRate, monthlyReb
 import { breakEvenPrice, breakEvenPriceShort, DEFAULT_FEE_RATE } from './fees'
 import { getMinFee } from './settings'
 import { isClosed, tradeDateLabel, type PriceMap } from '../services/priceProxy'
-import type { FeeRebate, FeeRounding } from '../types/models'
+import type { FeeRounding } from '../types/models'
 
 export interface HoldingRow {
   /** Unique per row: a position with both legs emits two rows. `${holding.key}:${direction}` */
@@ -68,7 +68,7 @@ export interface HoldingRow {
   /**
    * Task 189: the cost a 月退 broker's app carries — the ledger cost plus the list-price buy fee
    * it deducted at settlement (`monthlyRebateCostUplift`). `brokerUnrealized` / `brokerRoi` are
-   * figured against it. Null when the workspace is not 月退, on a SHORT row and for USD.
+   * figured against it. Null unless `listCost`, on a SHORT row and for USD.
    */
   brokerCost: number | null
   /**
@@ -92,10 +92,10 @@ export function buildHoldingRows(
    */
   today?: string,
   /**
-   * Task 189: under 'monthly' the 券商 figure's cost carries the list-price buy fee, as a 月退
-   * broker's app does. Omitted keeps the recorded cost, the pre-Task-189 figure.
+   * Task 189: the 券商 figure's cost carries the list-price buy fee, as a 月退 broker's app does
+   * (`listPriceCost` in utils/pnlBasis decides). Omitted keeps the recorded cost.
    */
-  rebate?: FeeRebate | null,
+  listCost = false,
 ): HoldingRow[] {
   return holdings.flatMap((h) => {
     const quote = prices[h.key]
@@ -129,7 +129,7 @@ export function buildHoldingRows(
       const standardFeeRate = h.currency === 'TWD' ? DEFAULT_FEE_RATE : feeRate
       // Task 189: a 月退 broker's app keeps the list-price buy fee it deducted at settlement in cost.
       const brokerCost =
-        rebate === 'monthly' && h.currency === 'TWD'
+        listCost && h.currency === 'TWD'
           ? h.cost +
             monthlyRebateCostUplift(h, DEFAULT_FEE_RATE, (q) =>
               getMinFee(q >= 1000 ? 'whole' : 'odd', workspaceId),

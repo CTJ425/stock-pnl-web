@@ -1,5 +1,10 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-10-02 14:20:00 Asia/Taipei (0.10.20 — BUG-108)
+- **Report (PROD)**: 玉山證卷 had 「一直以來 不打折」 plus a later discount; the user pressed 刪除 without saving and the period was gone; 「折扣怎麼退給你」 then showed disabled.
+- **Root cause**: `removeSegment` / `saveBase` called `setWorkspaceFeeRateHistory` / `setWorkspaceFeeRate` on click, contradicting the panel copy. The disabled rebate group is a consequence (rate now list price → nothing to refund); `fee_rebate` is still `monthly` on PROD.
+- **PROD read-only check**: `fee_rate` 0.001425, `fee_rate_history` `[]`; 116 TW trades, `fee_rate` NULL, every buy's fee ≈ 0.1425% (月退 records list price), so the deleted period's start date cannot be inferred. Trades untouched. The user re-enters it; nothing was written to PROD by the agent.
+- **Fix**: draft (`history` / `savedHistory`, `baseDraft`) written by `submit`; status line when the list changed; the select follows the draft's rate for today until touched, so 儲存 does not re-add the deleted period from today. 4 new / updated tests fail on 0.10.19. Local-mode run: delete → 取消 → reload keeps the period.
 ## 📅 Log: 2026-10-02 13:30:00 Asia/Taipei (0.10.19 — BUG-104/105/106)
 - **User asked** to fix the three P1 findings and ship straight to `main`.
 - **BUG-104**: `summary.fees` is mixed-currency by design (GAS parity, synced to the Edge engine), so the fix lives in `YearlyPage.tsx`: per-currency sums over `ledger.yearly[*].tickers`. No engine change, no deploy.

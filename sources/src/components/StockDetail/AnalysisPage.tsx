@@ -14,7 +14,7 @@ import { useStockPrices } from '../../hooks/useStockPrices'
 import { buildHoldingRows } from '../../utils/holdingRows'
 import { taipeiDateKey } from '../../utils/taipeiDate'
 import { getFeeRateOn } from '../../utils/settings'
-import { pnlBasis, rowRoi, rowUnrealized } from '../../utils/pnlBasis'
+import { listPriceCost, pnlBasis, rowRoi, rowUnrealized } from '../../utils/pnlBasis'
 import { displayStockName } from '../../services/usStockNames'
 import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
 import { positionKey } from '../../types/models'
@@ -76,6 +76,7 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   // workspace's broker estimates a lot bought today at the halved 當沖 tax at all.
   const today = taipeiDateKey(new Date())
   const dayTradeToday = (current?.day_trade_tax_estimate ?? true) ? today : undefined
+  const listCost = listPriceCost(current?.fee_rebate, current?.sell_fee_basis)
   const twRows = useMemo(
     () =>
       buildHoldingRows(
@@ -85,9 +86,9 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
         current?.id,
         current?.fee_rounding ?? 'lot',
         dayTradeToday,
-        current?.fee_rebate,
+        listCost,
       ).filter((r) => r.holding.currency === 'TWD'),
-    [holdings, prices, feeRate, current?.id, current?.fee_rounding, dayTradeToday, current?.fee_rebate],
+    [holdings, prices, feeRate, current?.id, current?.fee_rounding, dayTradeToday, listCost],
   )
 
   type Entry =

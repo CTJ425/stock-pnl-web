@@ -791,10 +791,15 @@ describe('workspace fee settings', () => {
 
   // Task 189: under 月退 the app's cost holds the list-price buy fee settlement took:
   // floor(163,500 × 0.1425%) 232 + floor(160,000 × 0.1425%) 228 − recorded 69 − 68 = 323 more.
-  it('月退 carries the list-price buy fee in the 券商 cost', () => {
-    const r = rowOf([ron('w', 'monthly', 'position')])
+  it('月退 saved under the split carries the list-price buy fee in the 券商 cost', () => {
+    const r = rowOf([ron('w', 'monthly', 'position', 'list')])
     expect(r.unrealized).toBe(-17_995 - 323)
     expect(r.brokerUnrealized).toBe(-17_995 - 323)
+  })
+
+  // Regression guard: PROD Ron的投資組合 is exactly this (月退, 整筆, no sell basis) and matched 元大 on 0.10.20.
+  it('月退 with no sell basis saved keeps the 0.10.20 figure', () => {
+    expect(rowOf([ron('w', 'monthly', 'position')]).unrealized).toBe(-17_995)
   })
 
   it('現折 + 整筆一起算 floors the discounted fee on the whole position', () => {

@@ -38,8 +38,8 @@ export interface WorkspaceLedger {
   feeRate: number
   rounding: FeeRounding
   basis: PnlBasis
-  /** Task 189: under 'monthly' the 券商 figure's cost carries the list-price buy fee. */
-  rebate: FeeRebate | null
+  /** Task 189: the 券商 figure's cost carries the list-price buy fee (`listPriceCost`). */
+  listCost: boolean
   /**
    * BUG-090: whether this workspace's broker estimates a lot bought today at the halved 現股當沖
    * tax. Per workspace, not per run — the two brokers in use disagree, so one run's `today` cannot
@@ -98,11 +98,16 @@ export function buildLedgers(workspaces: WorkspaceInput[], today = ''): Workspac
       feeRate,
       rounding: w.fee_rounding === 'position' ? 'position' : 'lot',
       basis: pnlBasis(feeRate, w.fee_rebate, w.sell_fee_basis),
-      rebate: w.fee_rebate ?? null,
+      listCost: listPriceCost(w.fee_rebate, w.sell_fee_basis),
       dayTradeTax: w.day_trade_tax_estimate ?? true,
       ledger: computeLedger(w.transactions),
     }
   })
+}
+
+/** Same rule as `listPriceCost` in src/utils/pnlBasis.ts, re-stated because Edge cannot import src/. */
+export function listPriceCost(rebate: FeeRebate | null | undefined, sellFeeBasis: SellFeeBasis | null | undefined): boolean {
+  return rebate === 'monthly' && sellFeeBasis != null
 }
 
 /** Same rule as `defaultSellFeeBasis` in src/utils/pnlBasis.ts, re-stated because Edge cannot import src/. */
@@ -429,7 +434,7 @@ export function aggregateHoldings(
         // Same call as 庫存總覽's 券商 column (src/utils/holdingRows.ts): posted rate, lot rates overridden,
         // and under 月退 the list-price buy fee the app keeps in cost (Task 189).
         const uplift =
-          l.rebate === 'monthly' ? monthlyRebateCostUplift(h, DEFAULT_FEE_RATE, (q) => minFeeFor(h.currency, q)) : 0
+          l.listCost ? monthlyRebateCostUplift(h, DEFAULT_FEE_RATE, (q) => minFeeFor(h.currency, q)) : 0
         const brokerUnrealized =
           close != null && h.currency === 'TWD'
             ? Math.round(

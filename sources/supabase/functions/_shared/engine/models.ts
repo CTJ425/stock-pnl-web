@@ -25,8 +25,9 @@ export type FeeRebate = 'instant' | 'monthly'
 /**
  * Which rate the broker app withholds as the sell fee on Taiwan unrealized P&L (Task 189): `list`
  * is the posted 0.1425% (玉山 and 元大 both, measured), `net` the workspace's discounted rate.
- * Null / missing keeps the pre-Task-189 rule — `monthly` with a discount reads as `list` — so a
- * workspace that was reconciled before this field existed does not move.
+ * Null / missing is a workspace that has not saved its fee settings since the split: it keeps the
+ * pre-Task-189 figure exactly — `monthly` with a discount reads as `list`, and the cost stays as
+ * recorded even under `monthly` (see `listPriceCost`), so a reconciled workspace does not move.
  */
 export type SellFeeBasis = 'list' | 'net'
 

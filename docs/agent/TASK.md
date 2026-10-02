@@ -17,7 +17,7 @@
 ## 📋 Active Tasks
 
 ### Task 189: 月退 cost on the list-price fee; sell-fee basis split off the rebate (A2)
-- **Status**: 🔄 IN PROGRESS — code on `dev` as **0.10.21-dev.1**; DEV DDL + Edge applied. PROD untouched.
+- **Status**: 🔄 IN PROGRESS — code on `dev` as **0.10.21-dev.2**; DEV DDL + Edge applied. PROD untouched.
 - **Agent**: Claude
 - **Timestamp**: 2026-10-02 16:30:00 Asia/Taipei
 - **Why**: 玉山 App showed 009828 at −610, the dashboard −515. 95 = floor(107,000 × 0.1425%) 152 − recorded 57:
@@ -43,11 +43,24 @@
   4. ~~DEV Edge `stock-report` v40 from clean `8bd36d9`, `--no-verify-jwt`; ezbr 968b24fa… → b5f9b528…~~ ✅
   5. User tests on DEV (http://10.8.22.84:5173, demo01@gmail.com: workspaces Ivan = 月退 / list base + history,
      Ron = 月退 + 整筆, both `sell_fee_basis` NULL → Ron's 券商 figure now drops by the list fee until set to 日退) ⏳
-  6. After PROD ships: set Ron的投資組合 to 現折／日退 + 牌告 (it is 月退 today, so its cost would rise by the list
-     fee); 玉山證卷 stays 月退 + 牌告. User's own call in the UI ⏳
+  6. After PROD ships: nothing moves by itself. 玉山證卷 needs one 儲存 (月退 + 牌告) to show the app's cost; if Ron
+     ever re-saves, pick 現折／日退 + 牌告 (月退 would add the list fee to cost). Owners' own call in the UI ⏳
   7. Unverified: whether a 月退 app lowers its cost after the monthly refund (screenshots only show the same
      day); 融券 legs under 月退 were not changed ⏳
   8. PROD: DDL + Edge + `main` — only on the user's explicit OK ⏳
+  9. ~~PROD Ron的投資組合 snapshot → DEV demo01 「Ron」 (2026-10-02 06:31 UTC). PROD settings: 0.0004275, 月退,
+     整筆 (`position`), `day_trade_tax_estimate` false, no history; 65 rows, Σfee_tax 11,926, Σprice×qty 7,446,140 —
+     identical on DEV after the copy. Owner: matches the 元大 app on 0.10.20. Raw rows kept **outside the repo**
+     (public repo, another user's ledger): `~/stock-pnl-web-snapshots/2026-10-02-ron/` (+ DEV before-image)~~ ✅
+  10. **Regression found on that snapshot** — 2303 moves −1,070 → −1,393 at the same price (+323 = list fees
+     232 + 228 − recorded 69 + 68), 009828 −10 (list 30 vs recorded min-fee 20), 00685L unchanged (recorded 459 is
+     already the list fee). Cause: Task 189 applies the 月退 cost uplift to every `fee_rebate = monthly` workspace,
+     although Ron's is 月退 only because 0.10.20 needed it for the posted-rate sell; 元大 is 日退 and its app keeps
+     the recorded fee in cost. With 日退 + 牌告 the figures equal 0.10.20 exactly.
+     ~~Fixed in 0.10.21-dev.2 (user's choice: old workspaces do not move): `listPriceCost(rebate, sellFeeBasis)` —
+     the uplift needs 月退 **and** a saved `sell_fee_basis`. Re-run on the snapshot: 00685L / 009828 / 2303 under PROD's
+     settings = 0.10.20 to the dollar (−11,775 / 567 / −1,070 at avg-cost prices). Guards: holdingsCard + Dashboard
+     tests for 月退 + NULL. Consequence: a 玉山 workspace needs one 儲存 in 手續費設定 to show −610~~ ✅
 
 ### Task 188: UX / a11y follow-ups from the 2026-10-02 DEV E2E
 - **Status**: 🔄 OPEN — not started; pick up only when the user asks

@@ -5,12 +5,13 @@
  * 10.68. The app showed −610; the recorded cost gives −515. The oracle below is written from the
  * broker rules (fee and ETF tax floored, cost = gross + fee), not from the app's engine.
  *
- * Journey (玉山-style workspace: 0.0005415, 月退, sell basis never saved):
+ * Journey (玉山-style workspace: 0.0005415, 月退 + 牌告 saved under the split; a workspace with no
+ * sell basis saved keeps the 0.10.20 figure, which the unit tests pin):
  *   1. row reads −610, the expanded row shows 券商 App 成本 107,152 and the 月退 note
  *   2. fee panel: preview 現折／日退 → −515 (recorded cost, posted sell rate)
  *   3. preview 折扣後 sell basis → −420 and the basis line says 折扣後
  *   4. 取消 → −610, nothing written
- *   5. 現折／日退 + 儲存 → PATCH fee_rebate 'instant' and sell_fee_basis 'list', row −515
+ *   5. 現折／日退 + 儲存 → PATCH fee_rebate 'instant' only (牌告 already saved), row −515
  *
  * Supabase mode with every backend call mocked (same pattern as verify-pnl-rounding-e2e.cjs).
  *
@@ -70,7 +71,7 @@ const dbWorkspaces = [
     fee_rate: WS_RATE,
     fee_rebate: 'monthly',
     fee_rounding: null,
-    sell_fee_basis: null,
+    sell_fee_basis: 'list',
     user_id: userId,
   },
 ]
@@ -179,7 +180,7 @@ async function openFeePanel(page) {
       { width: 390, height: 844, tag: 'phone' },
     ]) {
       workspacePatches.length = 0
-      Object.assign(dbWorkspaces[0], { fee_rebate: 'monthly', sell_fee_basis: null })
+      Object.assign(dbWorkspaces[0], { fee_rebate: 'monthly', sell_fee_basis: 'list' })
       const page = await (await browser.newContext({ viewport: { width: vp.width, height: vp.height } })).newPage()
       page.on('pageerror', (e) => errors.push(String(e)))
       await installMocks(page)
@@ -216,10 +217,10 @@ async function openFeePanel(page) {
         await page.getByRole('button', { name: '儲存' }).click()
         await page.waitForTimeout(500)
         const patched = Object.assign({}, ...workspacePatches)
-        if (patched.fee_rebate !== 'instant' || patched.sell_fee_basis !== 'list') {
-          throw new Error(`5. expected fee_rebate=instant + sell_fee_basis=list, got ${JSON.stringify(workspacePatches)}`)
+        if (patched.fee_rebate !== 'instant' || 'sell_fee_basis' in patched) {
+          throw new Error(`5. expected only fee_rebate=instant, got ${JSON.stringify(workspacePatches)}`)
         }
-        await expectRow(page, EXPECT_INSTANT_LIST, '5. saved 日退 + 牌告, PATCH as expected')
+        await expectRow(page, EXPECT_INSTANT_LIST, '5. saved 日退 (牌告 kept), PATCH as expected')
       }
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       if (overflow > 0) throw new Error(`[${vp.tag}] page scrolls sideways by ${overflow}px`)

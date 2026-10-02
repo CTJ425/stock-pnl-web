@@ -32,8 +32,9 @@ ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rebate_values
 -- Which rate the broker app withholds as the sell fee on unrealized P&L (Task 189): 'list' (the
 -- posted 0.1425%, what 玉山 and 元大 both do) or 'net' (the workspace's discounted rate). Separate
 -- from fee_rebate since Task 189: that one now only says what settlement charged (月退 = the list
--- price, which is also what a 月退 broker's app keeps in cost). NULL keeps the earlier rule
--- (monthly + a discount = 'list'), so no workspace moves when this column arrives.
+-- price, which is also what a 月退 broker's app keeps in cost — applied only once this column is
+-- set). NULL keeps the 0.10.20 figure exactly (monthly + a discount = 'list', recorded cost), so no
+-- workspace moves until its owner saves the fee settings again.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS sell_fee_basis TEXT;
 ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_sell_fee_basis_values;
 ALTER TABLE workspaces ADD CONSTRAINT workspaces_sell_fee_basis_values

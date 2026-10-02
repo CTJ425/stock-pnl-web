@@ -14,6 +14,17 @@ import type { HoldingRow } from './holdingRows'
 
 export type PnlBasis = SellFeeBasis
 
+/**
+ * Whether the 券商 figure carries the list-price buy fee in cost (Task 189). Only a workspace that
+ * saved its fee settings under the split (`sell_fee_basis` set) and says 月退 gets it. A NULL basis
+ * is a workspace reconciled before the split, and it must not move by itself: PROD Ron的投資組合
+ * was 月退 only to get the posted-rate sell, while 元大 is 日退 and its app keeps the recorded fee
+ * (2303 would have moved −1,070 → −1,393 at the same price).
+ */
+export function listPriceCost(rebate: FeeRebate | null | undefined, sellFeeBasis: SellFeeBasis | null | undefined): boolean {
+  return rebate === 'monthly' && sellFeeBasis != null
+}
+
 /** What a workspace that never chose a sell-fee basis gets: the pre-Task-189 rule. */
 export function defaultSellFeeBasis(feeRate: number, rebate: FeeRebate | null | undefined): PnlBasis {
   return rebate === 'monthly' && feeRate < DEFAULT_FEE_RATE ? 'list' : 'net'
@@ -35,11 +46,11 @@ export function formatFeeRatePct(rate: number): string {
 }
 
 /**
- * The short phrase the dashboard prints under 未實現淨損益, e.g. 「牌告 0.1425% 預扣」. Under 月退 the
- * posted-rate figure also carries the list-price buy fee in cost (Task 189), and the phrase says so.
+ * The short phrase the dashboard prints under 未實現淨損益, e.g. 「牌告 0.1425% 預扣」. When the
+ * posted-rate figure also carries the list-price buy fee in cost (`listPriceCost`), it says so.
  */
-export function basisLabel(basis: PnlBasis, feeRate: number, rebate?: FeeRebate | null): string {
-  if (basis === 'list' && rebate === 'monthly') return `牌告 ${formatFeeRatePct(DEFAULT_FEE_RATE)} 計成本與預扣`
+export function basisLabel(basis: PnlBasis, feeRate: number, listCost = false): string {
+  if (basis === 'list' && listCost) return `牌告 ${formatFeeRatePct(DEFAULT_FEE_RATE)} 計成本與預扣`
   if (basis === 'list' || feeRate >= DEFAULT_FEE_RATE) return `牌告 ${formatFeeRatePct(DEFAULT_FEE_RATE)} 預扣`
   return `折扣後 ${formatFeeRatePct(feeRate)} 預扣`
 }

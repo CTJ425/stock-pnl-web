@@ -418,7 +418,7 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
   it('月退制的折扣工作區：主表、小計與算法說明都改用牌告口徑', async () => {
     localStorage.setItem('stock-pnl-web/fee-rate/ws-1', '0.000399')
     try {
-      mockDiscounted({ fee_rate: 0.000399, fee_rebate: 'monthly' })
+      mockDiscounted({ fee_rate: 0.000399, fee_rebate: 'monthly', sell_fee_basis: 'list' })
       const user = userEvent.setup()
       render(<DashboardPage onSelectTicker={vi.fn()} />)
       // Task 189: 月退 settlement took floor(135,500 × 0.1425%) = 193, not the recorded 58, and the
@@ -431,6 +431,21 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
       expect(screen.getByTestId('method-list').textContent).toContain('月退：成本裡的買進手續費也用牌告算')
       expect(screen.getByTestId('method-net').textContent).not.toContain('目前採用')
       expect(screen.getByText('券商 App 成本').nextElementSibling?.textContent).toContain('NT$135,693')
+    } finally {
+      localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
+    }
+  })
+
+  // Task 189 regression guard: PROD Ron的投資組合 is 月退 with no sell basis saved and matched the
+  // 元大 app on 0.10.20; it must not move until its owner saves the new settings.
+  it('月退但沒存過新設定的舊工作區：數字和 0.10.20 一樣，不加牌告成本', () => {
+    localStorage.setItem('stock-pnl-web/fee-rate/ws-1', '0.000399')
+    try {
+      mockDiscounted({ fee_rate: 0.000399, fee_rebate: 'monthly' })
+      render(<DashboardPage onSelectTicker={vi.fn()} />)
+      expect(screen.getByTestId('holding-row-2303').textContent).toContain('-NT$11,111')
+      expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 預扣/ })).toBeTruthy()
+      expect(screen.queryByText('券商 App 成本')).toBeNull()
     } finally {
       localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
     }
