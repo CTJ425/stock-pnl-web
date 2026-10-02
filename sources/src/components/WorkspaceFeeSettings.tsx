@@ -8,7 +8,8 @@
  * withholds on a sell (only the app shows it), and 元大 is 日退 yet withholds the posted rate.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useWorkspace } from '../context/WorkspaceContext'
 import type { FeeRateSegment, FeeRebate, FeeRounding, SellFeeBasis } from '../types/models'
 import { COMMON_FEE_RATES, DEFAULT_FEE_RATE } from '../utils/fees'
@@ -32,6 +33,50 @@ const CUSTOM = 'custom'
  */
 function defaultRebate(rate: number): FeeRebate {
   return Number.isFinite(rate) && rate < DEFAULT_FEE_RATE ? 'monthly' : 'instant'
+}
+
+/** How a broker app estimates unrealized P&L: the four settings a preset fills in. */
+interface Method {
+  rebate: FeeRebate
+  sellBasis: SellFeeBasis
+  rounding: FeeRounding
+  dayTradeTax: boolean
+}
+
+/**
+ * Brokers whose app was reconciled against this app to the dollar. A preset only fills the same four
+ * fields the radios below write; nothing new is stored, and the choice shown is derived from them.
+ * - 玉山: 月退 (official: 「於次月13日退回折讓金」, esunsec.com.tw/campaign/trade-fee); posted-rate sell,
+ *   per-lot flooring (BUG-088) and the halved 當沖 tax on a lot bought today (BUG-087), all from its app.
+ * - 元大: discount charged at settlement — its app keeps the recorded fee in cost (Task 189, PROD
+ *   Ron的投資組合); posted-rate sell and whole-position flooring (BUG-088); full tax on a lot bought
+ *   today (BUG-090).
+ */
+const BROKER_PRESETS: ReadonlyArray<{ key: string; label: string; method: Method }> = [
+  { key: 'esun', label: '玉山', method: { rebate: 'monthly', sellBasis: 'list', rounding: 'lot', dayTradeTax: true } },
+  { key: 'yuanta', label: '元大', method: { rebate: 'instant', sellBasis: 'list', rounding: 'position', dayTradeTax: false } },
+]
+const CUSTOM_BROKER = 'custom'
+
+function matchPreset(m: Method): string | null {
+  const hit = BROKER_PRESETS.find(
+    (p) =>
+      p.method.rebate === m.rebate &&
+      p.method.sellBasis === m.sellBasis &&
+      p.method.rounding === m.rounding &&
+      p.method.dayTradeTax === m.dayTradeTax,
+  )
+  return hit?.key ?? null
+}
+
+/** The four choices in one line, e.g. 「月退・賣出用牌告預扣・每一批分開算・當天買的用當沖稅率」. */
+function describeMethod(m: Method): string {
+  return [
+    m.rebate === 'monthly' ? '月退' : '現折／日退',
+    m.sellBasis === 'list' ? '賣出用牌告預扣' : '賣出用折扣後預扣',
+    m.rounding === 'lot' ? '每一批分開算' : '整筆一起算',
+    m.dayTradeTax ? '當天買的用當沖稅率' : '當天買的用完整稅率',
+  ].join('・')
 }
 
 /** The form's unsaved values, handed to the dashboard so its figures can be previewed before saving. */
@@ -63,6 +108,7 @@ export function WorkspaceFeeSettings({
   onSaved,
   showTitle = true,
   onPreview,
+  impact,
 }: {
   onClose: () => void
   /** Called after a save; `rateChanged` lets the caller offer to recalculate recorded fees. */
@@ -74,6 +120,11 @@ export function WorkspaceFeeSettings({
    * close), so the dashboard can recompute its figures as a preview. Must be a stable function.
    */
   onPreview?: (draft: FeeDraft | null) => void
+  /**
+   * The figure the change moves, saved → previewed (the dashboard passes it). It sits in the action
+   * bar, which stays on screen while the form scrolls, so the effect is visible at the moment of 儲存.
+   */
+  impact?: ReactNode
 }) {
   const {
     current,
@@ -127,6 +178,17 @@ export function WorkspaceFeeSettings({
   // changes — they are separate facts now, and 元大 (日退, posted-rate sell) needs exactly that.
   const sellBasisChosen = savedSellBasis !== null || savedRebate !== null
   const sellManual = useRef(false)
+  // The broker choice is derived from the four settings, never stored. A workspace that never saved
+  // any of them shows no broker picked, so a default that happens to equal 玉山 is not presented as
+  // the user's choice.
+  const methodSaved =
+    current?.fee_rebate != null ||
+    current?.sell_fee_basis != null ||
+    current?.fee_rounding != null ||
+    current?.day_trade_tax_estimate != null
+  const [methodTouched, setMethodTouched] = useState(false)
+  const [customPicked, setCustomPicked] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   // BUG-090: null keeps the BUG-087 behaviour (玉山 halves the tax on a lot bought today).
   const [dayTradeTax, setDayTradeTax] = useState<boolean>(current?.day_trade_tax_estimate ?? true)
   const [saving, setSaving] = useState(false)
@@ -138,6 +200,22 @@ export function WorkspaceFeeSettings({
   const rebateManual = useRef(false)
   // Once the user picks a discount themselves, a history edit stops moving the select (see `followDraft`).
   const choiceManual = useRef(false)
+
+  const method: Method = { rebate, sellBasis, rounding, dayTradeTax }
+  const broker = customPicked ? CUSTOM_BROKER : !methodSaved && !methodTouched ? null : (matchPreset(method) ?? CUSTOM_BROKER)
+  const showDetail = broker === CUSTOM_BROKER || detailOpen
+
+  const applyPreset = (m: Method) => {
+    rebateManual.current = true
+    sellManual.current = true
+    setRebate(m.rebate)
+    setSellBasis(m.sellBasis)
+    setRounding(m.rounding)
+    setDayTradeTax(m.dayTradeTax)
+    setMethodTouched(true)
+    setCustomPicked(false)
+    setDetailOpen(false)
+  }
 
   const rate = choice === CUSTOM ? parseFloat(customInput) : Number(choice)
   const rateValid = Number.isFinite(rate) && rate >= 0 && rate < 1
@@ -411,133 +489,205 @@ export function WorkspaceFeeSettings({
         </div>
 
         <div className="fee-settings-methods">
-          <fieldset className="fee-settings-rebate" disabled={noDiscount}>
-            <legend>折扣怎麼退給你</legend>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-rebate`}
-                value="instant"
-                checked={rebate === 'instant'}
-                onChange={() => {
-                  rebateManual.current = true
-                  setRebate('instant')
-                }}
-              />
-              <b>現折／日退</b>
-              <span>交割時就只扣折扣後的手續費。</span>
-            </label>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-rebate`}
-                value="monthly"
-                checked={rebate === 'monthly'}
-                onChange={() => {
-                  rebateManual.current = true
-                  setRebate('monthly')
-                }}
-              />
-              <b>月退</b>
-              <span>
-                交割時先扣全額 {formatFeeRatePct(DEFAULT_FEE_RATE)}，下個月再退差額，例如玉山、永豐。券商 App
-                的成本會含全額手續費。
-              </span>
-            </label>
-            <div className="field-hint">看券商的手續費公告或交割明細：交割時扣的是全額就是月退。</div>
-          </fieldset>
-
-          <fieldset className="fee-settings-rebate">
-            <legend>券商 App 預扣賣出手續費用哪個費率</legend>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-sellbasis`}
-                value="list"
-                checked={sellBasis === 'list'}
-                onChange={() => {
-                  sellManual.current = true
-                  setSellBasis('list')
-                }}
-              />
-              <b>牌告 {formatFeeRatePct(DEFAULT_FEE_RATE)}</b>
-              <span>不管折扣多少都用全額估，例如玉山、元大。</span>
-            </label>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-sellbasis`}
-                value="net"
-                checked={sellBasis === 'net'}
-                onChange={() => {
-                  sellManual.current = true
-                  setSellBasis('net')
-                }}
-              />
-              <b>折扣後</b>
-              <span>用你的折扣費率估。</span>
-            </label>
+          <fieldset className="fee-settings-broker">
+            <legend>你的券商 App 怎麼算</legend>
+            <div className="fee-broker-options">
+              {BROKER_PRESETS.map((p) => (
+                <label key={p.key} className="fee-broker-option">
+                  <input
+                    type="radio"
+                    name={`${uid}-broker`}
+                    value={p.key}
+                    checked={broker === p.key}
+                    onChange={() => applyPreset(p.method)}
+                  />
+                  {p.label}
+                </label>
+              ))}
+              <label className="fee-broker-option">
+                <input
+                  type="radio"
+                  name={`${uid}-broker`}
+                  value={CUSTOM_BROKER}
+                  checked={broker === CUSTOM_BROKER}
+                  onChange={() => {
+                    setCustomPicked(true)
+                    setMethodTouched(true)
+                  }}
+                />
+                其他券商／自訂
+              </label>
+            </div>
+            {broker !== CUSTOM_BROKER && (
+              <div className="fee-broker-summary">
+                <p>
+                  {broker === null && '還沒選券商，目前用：'}
+                  {describeMethod(method)}
+                </p>
+                <button
+                  type="button"
+                  className="fee-detail-toggle"
+                  aria-expanded={showDetail}
+                  aria-controls={`${uid}-detail`}
+                  onClick={() => setDetailOpen((v) => !v)}
+                >
+                  {showDetail ? '收起單項' : '改單項'}
+                  <ChevronDown size={14} aria-hidden="true" />
+                </button>
+              </div>
+            )}
             <div className="field-hint">
-              券商通常不公告這一點，拿 App 上一檔股票的未實現損益對一下就知道。
+              玉山、元大是拿 App 逐檔對過的算法。其他券商選「自訂」，再拿 App 上一檔股票的未實現損益對一下。
             </div>
           </fieldset>
 
-          <fieldset className="fee-settings-rebate">
-            <legend>分批買進時，預扣的費用怎麼算</legend>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-rounding`}
-                value="lot"
-                checked={rounding === 'lot'}
-                onChange={() => setRounding('lot')}
-              />
-              <b>每一批分開算</b>
-              <span>每批各自算手續費和證交稅再捨去零頭，例如玉山。</span>
-            </label>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-rounding`}
-                value="position"
-                checked={rounding === 'position'}
-                onChange={() => setRounding('position')}
-              />
-              <b>整筆一起算</b>
-              <span>同一檔股票合在一起算一次再捨去零頭，例如元大。</span>
-            </label>
-            <div className="field-hint">兩種算法每批最多差 1 元，選和你的券商 App 一樣的就好。</div>
-          </fieldset>
+          {showDetail && (
+            <div className="fee-settings-detail" id={`${uid}-detail`}>
+              <fieldset className="fee-settings-rebate" disabled={noDiscount}>
+                <legend>折扣怎麼退給你</legend>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-rebate`}
+                    value="instant"
+                    checked={rebate === 'instant'}
+                    onChange={() => {
+                      rebateManual.current = true
+                      setMethodTouched(true)
+                      setRebate('instant')
+                    }}
+                  />
+                  <b>現折／日退</b>
+                  <span>交割時就只扣折扣後的手續費。</span>
+                </label>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-rebate`}
+                    value="monthly"
+                    checked={rebate === 'monthly'}
+                    onChange={() => {
+                      rebateManual.current = true
+                      setMethodTouched(true)
+                      setRebate('monthly')
+                    }}
+                  />
+                  <b>月退</b>
+                  <span>
+                    交割時先扣全額 {formatFeeRatePct(DEFAULT_FEE_RATE)}，下個月再退差額，例如玉山、永豐。券商 App
+                    的成本會含全額手續費。
+                  </span>
+                </label>
+                <div className="field-hint">看券商的手續費公告或交割明細：交割時扣的是全額就是月退。</div>
+              </fieldset>
 
-          <fieldset className="fee-settings-rebate">
-            <legend>今天剛買進的股票，證交稅怎麼估</legend>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-daytradetax`}
-                value="half"
-                checked={dayTradeTax}
-                onChange={() => setDayTradeTax(true)}
-              />
-              <b>當天用當沖稅率</b>
-              {/* BUG-097: §2-2 lowers the rate for 股票 only; an ETF day trade still pays 0.1%. */}
-              <span>當天買的股票先用當沖的 0.15% 估，隔天恢復 0.3%，例如玉山。ETF 當沖沒有降稅，一直是 0.1%。</span>
-            </label>
-            <label className="fee-settings-radio">
-              <input
-                type="radio"
-                name={`${uid}-daytradetax`}
-                value="full"
-                checked={!dayTradeTax}
-                onChange={() => setDayTradeTax(false)}
-              />
-              <b>一律用完整稅率</b>
-              <span>不分買進日期都用 0.3%（ETF 0.1%），例如 RON。</span>
-            </label>
-            <div className="field-hint">
-              只影響「牌告」那個口徑的預估，不影響已經成交的手續費。選錯會讓當天買進的股票看起來比券商 App 樂觀。
+              <fieldset className="fee-settings-rebate">
+                <legend>券商 App 預扣賣出手續費用哪個費率</legend>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-sellbasis`}
+                    value="list"
+                    checked={sellBasis === 'list'}
+                    onChange={() => {
+                      sellManual.current = true
+                      setMethodTouched(true)
+                      setSellBasis('list')
+                    }}
+                  />
+                  <b>牌告 {formatFeeRatePct(DEFAULT_FEE_RATE)}</b>
+                  <span>不管折扣多少都用全額估，例如玉山、元大。</span>
+                </label>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-sellbasis`}
+                    value="net"
+                    checked={sellBasis === 'net'}
+                    onChange={() => {
+                      sellManual.current = true
+                      setMethodTouched(true)
+                      setSellBasis('net')
+                    }}
+                  />
+                  <b>折扣後</b>
+                  <span>用你的折扣費率估。</span>
+                </label>
+                <div className="field-hint">
+                  券商通常不公告這一點，拿 App 上一檔股票的未實現損益對一下就知道。
+                </div>
+              </fieldset>
+
+              <fieldset className="fee-settings-rebate">
+                <legend>分批買進時，預扣的費用怎麼算</legend>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-rounding`}
+                    value="lot"
+                    checked={rounding === 'lot'}
+                    onChange={() => {
+                      setMethodTouched(true)
+                      setRounding('lot')
+                    }}
+                  />
+                  <b>每一批分開算</b>
+                  <span>每批各自算手續費和證交稅再捨去零頭，例如玉山。</span>
+                </label>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-rounding`}
+                    value="position"
+                    checked={rounding === 'position'}
+                    onChange={() => {
+                      setMethodTouched(true)
+                      setRounding('position')
+                    }}
+                  />
+                  <b>整筆一起算</b>
+                  <span>同一檔股票合在一起算一次再捨去零頭，例如元大。</span>
+                </label>
+                <div className="field-hint">兩種算法每批最多差 1 元，選和你的券商 App 一樣的就好。</div>
+              </fieldset>
+
+              <fieldset className="fee-settings-rebate">
+                <legend>今天剛買進的股票，證交稅怎麼估</legend>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-daytradetax`}
+                    value="half"
+                    checked={dayTradeTax}
+                    onChange={() => {
+                      setMethodTouched(true)
+                      setDayTradeTax(true)
+                    }}
+                  />
+                  <b>當天用當沖稅率</b>
+                  {/* BUG-097: §2-2 lowers the rate for 股票 only; an ETF day trade still pays 0.1%. */}
+                  <span>當天買的股票先用當沖的 0.15% 估，隔天恢復 0.3%，例如玉山。ETF 當沖沒有降稅，一直是 0.1%。</span>
+                </label>
+                <label className="fee-settings-radio">
+                  <input
+                    type="radio"
+                    name={`${uid}-daytradetax`}
+                    value="full"
+                    checked={!dayTradeTax}
+                    onChange={() => {
+                      setMethodTouched(true)
+                      setDayTradeTax(false)
+                    }}
+                  />
+                  <b>一律用完整稅率</b>
+                  <span>不分買進日期都用 0.3%（ETF 0.1%），例如元大。</span>
+                </label>
+                <div className="field-hint">
+                  只影響「牌告」那個口徑的預估，不影響已經成交的手續費。選錯會讓當天買進的股票看起來比券商 App 樂觀。
+                </div>
+              </fieldset>
             </div>
-          </fieldset>
+          )}
         </div>
 
         <div className="fee-settings-result" aria-live="polite">
@@ -550,12 +700,19 @@ export function WorkspaceFeeSettings({
         </div>
       </div>
       <div className="fee-settings-actions">
-        <button type="submit" className="btn btn-primary" disabled={!rateValid || saving}>
-          {saving ? '儲存中…' : '儲存'}
-        </button>
-        <button type="button" className="btn" onClick={onClose}>
-          取消
-        </button>
+        {impact && (
+          <p className="fee-settings-impact" aria-live="polite">
+            {impact}
+          </p>
+        )}
+        <div className="fee-settings-buttons">
+          <button type="submit" className="btn btn-primary" disabled={!rateValid || saving}>
+            {saving ? '儲存中…' : '儲存'}
+          </button>
+          <button type="button" className="btn" onClick={onClose}>
+            取消
+          </button>
+        </div>
       </div>
     </form>
   )

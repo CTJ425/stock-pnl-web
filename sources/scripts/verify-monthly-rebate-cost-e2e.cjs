@@ -8,10 +8,11 @@
  * Journey (玉山-style workspace: 0.0005415, 月退 + 牌告 saved under the split; a workspace with no
  * sell basis saved keeps the 0.10.20 figure, which the unit tests pin):
  *   1. row reads −610, the expanded row shows 券商 App 成本 107,152 and the 月退 note
- *   2. fee panel: preview 現折／日退 → −515 (recorded cost, posted sell rate)
- *   3. preview 折扣後 sell basis → −420 and the basis line says 折扣後
+ *   2. fee panel opens on the 玉山 preset with the four settings folded; the action bar reads
+ *      −610 「儲存後不變」; preview 元大 → −515 (recorded cost, posted sell rate) and the bar reads −610 → −515
+ *   3. 改單項 → 折扣後 sell basis → −420, the preset turns into 自訂, the basis line says 折扣後
  *   4. 取消 → −610, nothing written
- *   5. 現折／日退 + 儲存 → PATCH fee_rebate 'instant' only (牌告 already saved), row −515
+ *   5. 元大 + 儲存 → PATCH fee_rebate 'instant', fee_rounding 'position', day_trade_tax_estimate false; row −515
  *
  * Supabase mode with every backend call mocked (same pattern as verify-pnl-rounding-e2e.cjs).
  *
@@ -166,7 +167,7 @@ async function expectRow(page, expected, label) {
 
 async function openFeePanel(page) {
   await page.locator('.stmt-basis').click()
-  await page.waitForSelector('text=分批買進時')
+  await page.waitForSelector('.fee-settings-broker')
 }
 
 ;(async () => {
@@ -201,11 +202,29 @@ async function openFeePanel(page) {
 
       await openFeePanel(page)
       await page.screenshot({ path: `${SHOT_DIR}/monthly-fee-panel-${vp.tag}.png`, fullPage: true })
+      if (vp.tag === 'phone') {
+        await page.locator('.fee-settings-broker').scrollIntoViewIfNeeded()
+        await page.screenshot({ path: `${SHOT_DIR}/fee-panel-phone-viewport.png` })
+        const bar = await page.locator('.fee-settings-actions').boundingBox()
+        const nav = await page.locator('.bottom-nav').boundingBox()
+        if (!bar || !nav || bar.y + bar.height > nav.y + 1) throw new Error(`phone: action bar ${JSON.stringify(bar)} under the bottom nav ${JSON.stringify(nav)}`)
+        console.log('  ✓ phone: action bar sits above the bottom nav while the form scrolls')
+      }
       if (vp.tag === 'desktop') {
-        await page.getByRole('radio', { name: /現折／日退/ }).check()
-        await expectRow(page, EXPECT_INSTANT_LIST, '2. preview 日退 + 牌告 (recorded cost)')
+        if (!(await page.getByRole('radio', { name: '玉山' }).isChecked())) throw new Error('2. 玉山 preset not shown')
+        if (await page.getByRole('radio', { name: /^月退/ }).count()) throw new Error('2. detail radios not folded')
+        const bar0 = await page.locator('.fee-settings-impact').innerText()
+        if (!bar0.includes('-NT$610') || !bar0.includes('儲存後不變')) throw new Error(`2. action bar: "${bar0}"`)
+        await page.getByText('元大', { exact: true }).click()
+        await expectRow(page, EXPECT_INSTANT_LIST, '2. preview 元大 preset (recorded cost)')
+        const bar1 = (await page.locator('.fee-settings-impact').innerText()).replace(/\s+/g, ' ')
+        if (!bar1.includes('-NT$610') || !bar1.includes('-NT$515')) throw new Error(`2. action bar: "${bar1}"`)
+        console.log(`  ✓ 2. action bar: ${bar1}`)
+        await page.screenshot({ path: `${SHOT_DIR}/fee-panel-yuanta-desktop.png`, fullPage: false })
+        await page.getByRole('button', { name: /改單項/ }).click()
         await page.getByRole('radio', { name: /^折扣後/ }).check()
         await expectRow(page, EXPECT_NET, '3. preview 折扣後 sell basis')
+        if (!(await page.getByRole('radio', { name: '其他券商／自訂' }).isChecked())) throw new Error('3. preset did not turn into 自訂')
         const b = await page.locator('.stmt-basis').innerText()
         if (!b.includes('折扣後')) throw new Error(`3. basis line did not switch: "${b}"`)
         await page.getByRole('button', { name: '取消' }).click()
@@ -213,14 +232,19 @@ async function openFeePanel(page) {
         if (workspacePatches.length) throw new Error(`4. 取消 wrote ${JSON.stringify(workspacePatches)}`)
 
         await openFeePanel(page)
-        await page.getByRole('radio', { name: /現折／日退/ }).check()
+        await page.getByText('元大', { exact: true }).click()
         await page.getByRole('button', { name: '儲存' }).click()
         await page.waitForTimeout(500)
         const patched = Object.assign({}, ...workspacePatches)
-        if (patched.fee_rebate !== 'instant' || 'sell_fee_basis' in patched) {
-          throw new Error(`5. expected only fee_rebate=instant, got ${JSON.stringify(workspacePatches)}`)
+        if (
+          patched.fee_rebate !== 'instant' ||
+          patched.fee_rounding !== 'position' ||
+          patched.day_trade_tax_estimate !== false ||
+          'sell_fee_basis' in patched
+        ) {
+          throw new Error(`5. unexpected PATCH ${JSON.stringify(workspacePatches)}`)
         }
-        await expectRow(page, EXPECT_INSTANT_LIST, '5. saved 日退 (牌告 kept), PATCH as expected')
+        await expectRow(page, EXPECT_INSTANT_LIST, '5. saved 元大, PATCH as expected')
       }
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       if (overflow > 0) throw new Error(`[${vp.tag}] page scrolls sideways by ${overflow}px`)

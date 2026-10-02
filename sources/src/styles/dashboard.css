@@ -361,9 +361,176 @@
 }
 
 .fee-settings-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-03) var(--sp-05);
+  margin-top: var(--sp-06);
+  padding: var(--sp-04) 0;
+  background: var(--cds-layer-02);
+  border-top: 1px solid var(--cds-border-subtle);
+}
+
+.modal .fee-settings-actions {
+  background: var(--cds-layer-01);
+}
+
+.fee-settings-buttons {
   display: flex;
   gap: var(--sp-03);
-  margin-top: var(--sp-06);
+  margin-left: auto;
+}
+
+/* Saved → previewed figure beside 儲存 (Task 189 redesign). */
+.fee-settings-impact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-02) var(--sp-03);
+  margin: 0;
+  font-size: var(--type-body-01);
+}
+
+.fee-impact-label {
+  color: var(--cds-text-secondary);
+}
+
+.fee-settings-impact b {
+  font-weight: 700;
+}
+
+.fee-impact-arrow {
+  align-self: center;
+  color: var(--cds-text-helper);
+}
+
+.fee-impact-same {
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+/* Broker presets: one choice fills the four settings below; 自訂 or 改單項 shows them. */
+.fee-settings-broker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fee-settings-broker legend {
+  padding: 0;
+  margin-bottom: var(--sp-03);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.fee-broker-options {
+  display: inline-flex;
+  max-width: 100%;
+  border: 1px solid var(--cds-border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.fee-broker-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--sp-05);
+  font-size: var(--type-body-01);
+  color: var(--cds-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.fee-broker-option + .fee-broker-option {
+  border-left: 1px solid var(--cds-border-strong);
+}
+
+.fee-broker-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fee-broker-option:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
+}
+
+.fee-broker-option:has(input:checked) {
+  background: var(--cds-layer-01);
+  color: var(--cds-text-primary);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--cds-interactive);
+}
+
+.fee-broker-option:has(input:focus-visible) {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
+.fee-broker-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-02) var(--sp-04);
+  margin-top: var(--sp-04);
+}
+
+.fee-broker-summary p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.fee-detail-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-02);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-link-primary);
+  cursor: pointer;
+}
+
+.fee-detail-toggle:hover {
+  color: var(--cds-link-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fee-detail-toggle svg {
+  transition: transform var(--cds-dur-moderate) var(--cds-ease-productive);
+}
+
+.fee-detail-toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.fee-settings-broker .field-hint {
+  margin-top: var(--sp-03);
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  color: var(--cds-text-helper);
+}
+
+.fee-settings-detail {
+  display: grid;
+  gap: var(--sp-05);
+  padding-top: var(--sp-05);
+  border-top: 1px solid var(--cds-border-subtle);
 }
 
 /* In the workspace-menu modal the three blocks stack. */
@@ -833,6 +1000,25 @@ table.hl-table {
     padding: var(--sp-05) 0 0;
     border-left: 0;
     border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  /* The bottom bar is fixed on phones: the action bar sticks just above it. */
+  .stmt-fee-panel .fee-settings-actions {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    margin-left: calc(-1 * var(--sp-05));
+    margin-right: calc(-1 * var(--sp-05));
+    padding: var(--sp-04) var(--sp-05);
+  }
+
+  .fee-broker-options {
+    display: flex;
+  }
+
+  .fee-broker-option {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 var(--sp-04);
   }
 
   .stmt-holdings {

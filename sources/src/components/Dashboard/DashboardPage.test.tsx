@@ -485,7 +485,10 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     await user.click(basis)
     expect(basis.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('heading', { name: '主要工作區的手續費設定' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /月退/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: '玉山' })).toBeTruthy()
+    // The action bar carries the figure the panel would move (Task 189 redesign).
+    expect(screen.getByText('台股未實現淨損益')).toBeTruthy()
+    expect(screen.getByText('儲存後不變')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '取消' }))
     expect(screen.queryByRole('heading', { name: '主要工作區的手續費設定' })).toBeNull()
   })

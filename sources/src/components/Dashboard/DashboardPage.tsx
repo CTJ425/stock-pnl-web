@@ -12,7 +12,7 @@
  * - Only current positions count (the broker app's basis); realized history lives on 年度收益.
  */
 import { Suspense, lazy, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, Inbox, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronDown, Inbox, RefreshCw } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { useUsdTwdRate } from '../../hooks/useUsdTwdRate'
@@ -223,6 +223,39 @@ export function DashboardPage({
     [holdings, prices, feeRate, current?.id, rounding, today, listCost],
   )
   const tw = marketSums(rows.filter((r) => r.holding.currency === 'TWD'), 'TWD', basis, loading)
+  // While the fee panel is open, the same total on the saved settings, so the panel's action bar can
+  // print saved → previewed next to 儲存 (the hero figure has scrolled away by then on a phone).
+  const savedToday = savedDayTradeTax ? taipeiDateKey(new Date()) : undefined
+  const savedListCost = listPriceCost(savedRebate, savedSellBasis)
+  const savedTwUnrealized = useMemo(() => {
+    if (draft === null) return null
+    const savedRows = buildHoldingRows(
+      holdings.filter((h) => h.currency === 'TWD'),
+      prices,
+      savedRate,
+      current?.id,
+      savedRounding,
+      savedToday,
+      savedListCost,
+    )
+    return marketSums(savedRows, 'TWD', savedBasis, loading).unrealized
+  }, [draft, holdings, prices, savedRate, current?.id, savedRounding, savedToday, savedListCost, savedBasis, loading])
+  const impact =
+    draft !== null && tw.rows.length > 0 ? (
+      <>
+        <span className="fee-impact-label">台股未實現淨損益</span>
+        <span className={pnlClass(savedTwUnrealized)}>{fmtSignedMoney(savedTwUnrealized, 'TWD')}</span>
+        {previewing && tw.unrealized !== savedTwUnrealized ? (
+          <>
+            <ArrowRight className="fee-impact-arrow" size={14} aria-hidden="true" />
+            <span className="sr-only">改成</span>
+            <b className={pnlClass(tw.unrealized)}>{fmtSignedMoney(tw.unrealized, 'TWD')}</b>
+          </>
+        ) : (
+          <span className="fee-impact-same">儲存後不變</span>
+        )}
+      </>
+    ) : null
   const us = marketSums(rows.filter((r) => r.holding.currency === 'USD'), 'USD', basis, loading)
   const usdTwd = useUsdTwdRate(tw.rows.length > 0 && us.rows.length > 0, refreshKey)
   const markets = [
@@ -263,6 +296,7 @@ export function DashboardPage({
         <div className="stmt-fee-panel" id="stmt-fee-panel">
           <WorkspaceFeeSettings
             onPreview={setDraft}
+            impact={impact}
             onClose={() => setFeeOpen(false)}
             onSaved={({ rateChanged }) => {
               if (rateChanged) setShowRecalc(true)

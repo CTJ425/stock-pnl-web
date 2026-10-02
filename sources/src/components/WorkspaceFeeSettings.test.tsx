@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { WorkspaceFeeSettings } from './WorkspaceFeeSettings'
 
@@ -27,7 +27,16 @@ const {
 }))
 vi.mock('../context/WorkspaceContext', () => ({ useWorkspace }))
 
-function mount(current: Record<string, unknown>, rate: string | null, onPreview?: (d: unknown) => void) {
+/**
+ * Mounts the form. The four 「券商 App 怎麼算」 radio groups sit behind 改單項 when the settings match a
+ * broker preset (or were never saved); `expand` opens them, which is what most tests below exercise.
+ */
+function mount(
+  current: Record<string, unknown>,
+  rate: string | null,
+  onPreview?: (d: unknown) => void,
+  expand = true,
+) {
   if (rate === null) localStorage.removeItem('stock-pnl-web/fee-rate/ws-1')
   else localStorage.setItem('stock-pnl-web/fee-rate/ws-1', rate)
   useWorkspace.mockReturnValue({
@@ -42,6 +51,8 @@ function mount(current: Record<string, unknown>, rate: string | null, onPreview?
   const onClose = vi.fn()
   const onSaved = vi.fn()
   const view = render(<WorkspaceFeeSettings onClose={onClose} onSaved={onSaved} onPreview={onPreview} />)
+  const toggle = screen.queryByRole('button', { name: /改單項/ })
+  if (expand && toggle) fireEvent.click(toggle)
   return { onClose, onSaved, unmount: view.unmount }
 }
 
@@ -423,3 +434,68 @@ describe('WorkspaceFeeSettings 當沖稅率估算（BUG-090）', () => {
     expect(setWorkspaceDayTradeTaxEstimate).toHaveBeenCalledWith('ws-1', false)
   })
 })
+
+// Task 189 redesign: the broker presets only fill the same four fields; nothing new is stored.
+describe('WorkspaceFeeSettings 券商預設', () => {
+  beforeEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    localStorage.removeItem('stock-pnl-web/fee-rate-history/ws-1')
+  })
+
+  it('一個工作區從沒存過設定時，不替使用者選券商，四項收起來', () => {
+    mount({}, '0.0004275', undefined, false)
+    for (const name of ['玉山', '元大', '其他券商／自訂']) {
+      expect((screen.getByRole('radio', { name }) as HTMLInputElement).checked).toBe(false)
+    }
+    expect(screen.getByText(/還沒選券商，目前用：月退・賣出用牌告預扣/)).toBeTruthy()
+    expect(screen.queryByRole('radio', { name: /^月退/ })).toBeNull()
+  })
+
+  it('存過的設定對得上就顯示那家券商（PROD 玉山證卷／Ron的投資組合的樣子）', () => {
+    mount({ fee_rebate: 'monthly', sell_fee_basis: 'list' }, '0.0005415', undefined, false)
+    expect((screen.getByRole('radio', { name: '玉山' }) as HTMLInputElement).checked).toBe(true)
+    cleanup()
+    mount(
+      { fee_rebate: 'instant', sell_fee_basis: 'list', fee_rounding: 'position', day_trade_tax_estimate: false },
+      '0.0004275',
+      undefined,
+      false,
+    )
+    expect((screen.getByRole('radio', { name: '元大' }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByText('現折／日退・賣出用牌告預扣・整筆一起算・當天買的用完整稅率')).toBeTruthy()
+  })
+
+  it('選元大會填好四項並一起存', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rebate: 'monthly' }, '0.0004275', undefined, false)
+    await user.click(screen.getByRole('radio', { name: '元大' }))
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRebate).toHaveBeenCalledWith('ws-1', 'instant')
+    expect(setWorkspaceSellFeeBasis).toHaveBeenCalledWith('ws-1', 'list')
+    expect(setWorkspaceFeeRounding).toHaveBeenCalledWith('ws-1', 'position')
+    expect(setWorkspaceDayTradeTaxEstimate).toHaveBeenCalledWith('ws-1', false)
+    expect(setWorkspaceFeeRate).not.toHaveBeenCalled()
+  })
+
+  it('改單項後不再符合券商，就變成自訂並保持展開', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rebate: 'monthly', sell_fee_basis: 'list' }, '0.0005415', undefined, false)
+    await user.click(screen.getByRole('button', { name: /改單項/ }))
+    await user.click(screen.getByRole('radio', { name: /整筆一起算/ }))
+    expect((screen.getByRole('radio', { name: '其他券商／自訂' }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.queryByRole('button', { name: /改單項|收起單項/ })).toBeNull()
+    expect(screen.getByRole('radio', { name: /整筆一起算/ })).toBeTruthy()
+  })
+
+  it('選自訂就展開四項，數值不變', async () => {
+    const user = userEvent.setup()
+    const onPreview = vi.fn()
+    mount({ fee_rebate: 'monthly', sell_fee_basis: 'list' }, '0.0005415', onPreview, false)
+    const before = onPreview.mock.lastCall?.[0]
+    await user.click(screen.getByRole('radio', { name: '其他券商／自訂' }))
+    expect(screen.getByRole('radio', { name: /^月退/ })).toBeTruthy()
+    expect(onPreview.mock.lastCall?.[0]).toEqual(before)
+  })
+})
+
