@@ -40,8 +40,9 @@
   2. ~~Playwright: `scripts/verify-monthly-rebate-cost-e2e.cjs` (−610 / −515 / −420, PATCH, 1440 + 390) and
      `verify-pnl-rounding-e2e.cjs` moved to 元大 = 日退 + 牌告, both PASS~~ ✅
   3. ~~DEV DDL `sell_fee_basis` + updated `verify.sql`; `verify_setup()` 10/10 PASS~~ ✅
-  4. DEV Edge `stock-report` deploy + ezbr check ⏳ (see PROGRESS)
-  5. User tests on DEV (http://10.8.22.84:5173, demo01@gmail.com) ⏳
+  4. ~~DEV Edge `stock-report` v40 from clean `8bd36d9`, `--no-verify-jwt`; ezbr 968b24fa… → b5f9b528…~~ ✅
+  5. User tests on DEV (http://10.8.22.84:5173, demo01@gmail.com: workspaces Ivan = 月退 / list base + history,
+     Ron = 月退 + 整筆, both `sell_fee_basis` NULL → Ron's 券商 figure now drops by the list fee until set to 日退) ⏳
   6. After PROD ships: set Ron的投資組合 to 現折／日退 + 牌告 (it is 月退 today, so its cost would rise by the list
      fee); 玉山證卷 stays 月退 + 牌告. User's own call in the UI ⏳
   7. Unverified: whether a 月退 app lowers its cost after the monthly refund (screenshots only show the same
