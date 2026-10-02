@@ -1,10 +1,16 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.19 released** — the three P1 findings of the DEV E2E fixed: BUG-104 (年度收益 fee line split by currency), BUG-105 (oversell asks before saving), BUG-106 (dividend 配發股數 counts in 股, total shown above submit).
-- Status: ✅ `main` = `dev` = `5199ff0` (+ docs); Release 0.10.19 published by CI, all four check runs success; both sites serve 0.10.19, verified by content over every lazy chunk (new strings present, 「台美股合計）」 absent). Gates: vitest 2,804 pass / 7 skipped, build / `typecheck:edge` / lint exit 0. Frontend-only: engine and Edge untouched.
-- Timestamp: 2026-10-02 13:30:00 Asia/Taipei
+- Action: **0.10.20 released** — BUG-108: in the fee settings, 「刪除」 a rate period and the base row's 「改」 now edit a draft that only 儲存 writes (they used to write on click, which cost the user a discount period on PROD).
+- Status: ✅ `main` = `dev` = `efc53e4` (+ docs); Release 0.10.20 published by CI, all four check runs success; live site serves 0.10.20 (only version string in the bundle) with the new draft hint. Gates: vitest 2,806 pass / 7 skipped, build / `typecheck:edge` / lint exit 0. Frontend-only.
+- Timestamp: 2026-10-02 14:20:00 Asia/Taipei
 
+---
+## 📅 Log: 2026-10-02 14:20:00 Asia/Taipei (0.10.20 — BUG-108)
+- **Report (PROD)**: 玉山證卷 had 「一直以來 不打折」 plus a later discount; the user pressed 刪除 without saving and the period was gone; 「折扣怎麼退給你」 then showed disabled.
+- **Root cause**: `removeSegment` / `saveBase` called `setWorkspaceFeeRateHistory` / `setWorkspaceFeeRate` on click, contradicting the panel copy. The disabled rebate group is a consequence (rate now list price → nothing to refund); `fee_rebate` is still `monthly` on PROD.
+- **PROD read-only check**: `fee_rate` 0.001425, `fee_rate_history` `[]`; 116 TW trades, `fee_rate` NULL, every buy's fee ≈ 0.1425% (月退 records list price), so the deleted period's start date cannot be inferred. Trades untouched. The user re-enters it; nothing was written to PROD by the agent.
+- **Fix**: draft (`history` / `savedHistory`, `baseDraft`) written by `submit`; status line when the list changed; the select follows the draft's rate for today until touched, so 儲存 does not re-add the deleted period from today. 4 new / updated tests fail on 0.10.19. Local-mode run: delete → 取消 → reload keeps the period.
 ---
 ## 📅 Log: 2026-10-02 13:30:00 Asia/Taipei (0.10.19 — BUG-104/105/106)
 - **User asked** to fix the three P1 findings and ship straight to `main`.
@@ -14,10 +20,3 @@
 - **Tests**: 2 (BUG-104) + 2 (BUG-105) + 2 (BUG-106) new tests fail on 0.10.18 and pass now; screenshots of the dialog and the dividend total checked at 1280 / 390 in local mode.
 - **User decision**: Ron's 00685L 2026-06-23 buy fee (459, list price) is intentional; discuss later, do not touch (Task 188 item 9).
 - **Left open**: BUG-107 (count breakdown, low) and Task 188 (UX / a11y items).
----
-## 📅 Log: 2026-10-02 12:52:00 Asia/Taipei (0.10.18 + DEV E2E report)
-- **0.10.18**: shaped with the user via /impeccable — price and change always on their own lines, 其他-group cards keep the industry line under the name, content top-aligned; hover is a band tint (`--cds-layer-accent-01` + `--border-strong`) instead of lift + shadow. `--row-hover` was rejected because at night it equals the card's own `layer-02`. Detector clean; checked in Playwright at 375 / 1280, light and dark.
-- **DEV E2E** (user request; account demo01, `dev.stock-pnl-web.pages.dev`, which builds from `dev` and talks to DEV `zyebva…`): Playwright scripts in the session scratchpad, not committed. All writes happened in a throw-away workspace 「E2E測試區」, deleted afterwards with its 11 trades; watchlist back to 0/30; Ivan / Ron / D read only (Ivan 投入成本 NT$1,176,770 unchanged); theme back to 跟隨系統; password unchanged (the wrong-current-password case used the same new password); Discord not saved.
-- **Result**: 127 pass / 7 warn / 1 fail / 3 info. Every fee, tax, 當沖, ETF, dividend-withholding and realized-P&L figure matched a hand calculation (fees floor to the dollar, as `fees.test.ts` pins). Defects filed: BUG-104 (年度收益 TWD+USD fee sum), BUG-105 (oversell saves silently), BUG-106 (dividend 配發股數 defaults to 張), BUG-107 (count breakdown). UX / a11y items in Task 188.
-- **Report**: https://claude.ai/artifact/GytThoezGWdHSAfQKBQFXg
-- **Not tested**: signup submit, reset-password mail, real password change, Discord save/test push, admin (demo01 is not admin), local mode (no entry in the cloud build), real broker CSV, multi-device / session expiry.

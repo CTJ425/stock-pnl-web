@@ -6,6 +6,13 @@
 
 ---
 
+### Bug ID: BUG-108 — Fee settings: 「刪除」 a rate period and the base row's 「改」 wrote to the database at once (reported on PROD 2026-10-02)
+- **Date**: reported 2026-10-02 on PROD, fixed in 0.10.20
+- **Where**: `sources/src/components/WorkspaceFeeSettings.tsx` `removeSegment` / `saveBase` (called `setWorkspaceFeeRateHistory` / `setWorkspaceFeeRate` on click)
+- **Root Cause**: the panel says changes apply only on 儲存 and 取消 restores them, but both buttons committed immediately. The user deleted a discount period on PROD 玉山證卷 without saving; `fee_rate_history` is now `[]` (base 0.001425, `fee_rebate` still `monthly`). Recorded fees are untouched (all 116 TW trades carry list-price fees and `fee_rate` NULL), so the lost period cannot be reconstructed from the data — the user has to re-enter the discount and its start date.
+- **Fix**: draft state (`history` vs `savedHistory`, `baseDraft`), written by `submit`; a status line says the list changed and needs 儲存. The discount select follows the draft's rate for today until the user touches it, otherwise 儲存 would re-open the deleted period from today. Tests: `WorkspaceFeeSettings.test.tsx` (4 fail on 0.10.19). Checked in local mode: delete → 取消 → reload keeps the period.
+- **Status**: ✅ FIXED (0.10.20, `efc53e4`; live site verified by content). PROD data repair is the user's: re-enter the discount and its start date in 玉山證卷's fee settings.
+
 ### Bug ID: BUG-106 — Dividend forms defaulted 配發股數 to 張
 - **Date**: found 2026-10-02 in the DEV E2E, fixed in 0.10.19
 - **Root Cause**: the unit select kept the trade default (張) for DIVIDEND / STOCK_DIVIDEND while the label said 股數 and dividend notices state shares: 2000 typed → 2,000,000 sh stored (cash dividend 6,000,000, 代扣 126,610); 100 typed for a stock dividend → 100,000 sh.
