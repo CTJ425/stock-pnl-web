@@ -6,6 +6,24 @@
 
 ---
 
+### Bug ID: BUG-106 — Dividend forms defaulted 配發股數 to 張
+- **Date**: found 2026-10-02 in the DEV E2E, fixed in 0.10.19
+- **Root Cause**: the unit select kept the trade default (張) for DIVIDEND / STOCK_DIVIDEND while the label said 股數 and dividend notices state shares: 2000 typed → 2,000,000 sh stored (cash dividend 6,000,000, 代扣 126,610); 100 typed for a stock dividend → 100,000 sh.
+- **Fix**: `TransactionForm.tsx` type onChange — new TW trades switch to 零股 for dividend types and back to 張 for trades through `convertUnit`, so a number already typed keeps its meaning; `dividendSummary` prints 「配息總額 NT$6,000（2,000 股 × 每股 3）」 / 「共配發 100 股」 above the submit button (`.tx-dividend-total`). Edit mode untouched. Tests: `TransactionForm.features.test.tsx` BUG-106 (both fail on 0.10.18).
+- **Status**: ✅ FIXED (0.10.19)
+
+### Bug ID: BUG-105 — A spot sell larger than the position saved with no warning
+- **Date**: found 2026-10-02 in the DEV E2E, fixed in 0.10.19
+- **Root Cause**: the form never compared the sell with the position; the engine then costs the excess at 0 (`pnlEngine.ts:895-898`) and the dashboard only reports 「發現 N 筆資料異常」 afterwards. A wrong 張/零股 unit was enough (1,000 sh held, 500,000 sold).
+- **Fix**: `oversoldNotice` in `TransactionForm.tsx` replays `computeLedger` with the candidate row (edit: replaces the saved row, keeping its `seq` / `created_at`; new: after every saved row) and asks only when a 超賣 / 超額回補 warning appears that `ledger.warnings` did not already have. The dialog states the position just before the row and the row's quantity, not the engine string — with a same-day buy the engine nets the 當沖 part first and says 「賣出 4000 股，但當時持有僅 0 股」 for a 5,000-share sell. Asks, does not block (out-of-order CSV histories). Three fee tests that sell with no position now answer the dialog (`confirmOversell`). Tests: `TransactionForm.features.test.tsx` BUG-105 (two fail on 0.10.18; the in-position case passes on both by design).
+- **Status**: ✅ FIXED (0.10.19)
+
+### Bug ID: BUG-104 — 年度收益 summary added TWD and USD fees together
+- **Date**: found 2026-10-02 in the DEV E2E, fixed in 0.10.19
+- **Root Cause**: the card printed `summary.fees` / `feesBrokerage` / `feesTax`, which the engine sums across currencies on purpose (documented as mirroring the GAS KPI; the engine is also synced to the Edge copy). TW 1,858 + US$0.8 showed as 1,858.8.
+- **Fix**: `YearlyPage.tsx` sums `ledger.yearly[*].tickers[*].fees / feesTax` per `yt.currency` (`feesByCurrency`) and prints 「台股手續費與稅 NT$…（手續費…・交易稅…[・借券費…]）」 plus 「美股手續費 US$…」 when there is any. Borrow is TW-only (`splitFeeTax` charges it on TPE SHORT sells), so `summary.feesBorrow` stays on the TW line. Engine and Edge untouched — no deploy. Tests: `YearlyPage.test.tsx` BUG-104 (both fail on 0.10.18).
+- **Status**: ✅ FIXED (0.10.19)
+
 ### Bug ID: BUG-097 — ETF 當沖 notices promised a halved tax; the fee dialog still said 「ETF 0.05%」
 - **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16
 - **Root Cause**: Task 187's two form notices hard-coded 「證交稅用減半的算」/「證交稅只收一半」, and BUG-090's radio copy said 「0.15%（ETF 0.05%）」. 證券交易稅條例 §2-2 lowers the rate to 千分之1.5 for 上市或上櫃**股票** only (BUG-093), so an ETF day trade still pays 0.1%. Reproduced: 0050 bought and sold today → nature DAY_TRADE, rate field 0.001, notice said 減半. The BUG-093 sweep fixed code, not copy (CLAUDE.md rule 2).

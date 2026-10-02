@@ -30,7 +30,7 @@
   6. 個股分析: no free search (holdings + watchlist only); US holdings absent with no note ⏳
   7. Tablet 768px: tx table 840px scrolls sideways; input text 14px triggers iPad zoom (16px rule is ≤720px only) ⏳
   8. Missing `fundamental/{ticker}.json` logs a 400 in the console (2454, 2317) ⏳
-  9. Data: Ivan's 0050 name is full-width 「台灣５０」 (NFKC on save); Ron's 00685L 2026-06-23 buy fee 459 vs recalculated 137 — ask the user ⏳
+  9. Data: Ivan's 0050 name is full-width 「台灣５０」 (NFKC on save); Ron's 00685L 2026-06-23 buy fee 459 vs recalculated 137 — **intentional per the user (2026-10-02); to be discussed later, do not "fix" it** ⏳
 
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
 - **Status**: 🔄 OPEN REMAINDER — the task itself shipped as **0.10.13** (`dd5a727`) and the entry is

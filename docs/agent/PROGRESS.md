@@ -1,10 +1,19 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.18 released** (watchlist card: name / price / change one per line, flat hover) and a full **DEV E2E** run (138 checks) published as a report artifact; four new bugs BUG-104..107 and Task 188.
-- Status: ✅ `main` = `dev` = `627e2e6` (+ docs); Release 0.10.18 published by CI, all four check runs success; live bundle on both `stock-pnl-web.pages.dev` and `dev.stock-pnl-web.pages.dev` verified by content. Gates: vitest 2,797 pass / 7 skipped, build / `typecheck:edge` exit 0. Frontend-only.
-- Timestamp: 2026-10-02 12:52:00 Asia/Taipei
+- Action: **0.10.19 released** — the three P1 findings of the DEV E2E fixed: BUG-104 (年度收益 fee line split by currency), BUG-105 (oversell asks before saving), BUG-106 (dividend 配發股數 counts in 股, total shown above submit).
+- Status: ✅ `main` = `dev` = `5199ff0` (+ docs); Release 0.10.19 published by CI, all four check runs success; both sites serve 0.10.19, verified by content over every lazy chunk (new strings present, 「台美股合計）」 absent). Gates: vitest 2,804 pass / 7 skipped, build / `typecheck:edge` / lint exit 0. Frontend-only: engine and Edge untouched.
+- Timestamp: 2026-10-02 13:30:00 Asia/Taipei
 
+---
+## 📅 Log: 2026-10-02 13:30:00 Asia/Taipei (0.10.19 — BUG-104/105/106)
+- **User asked** to fix the three P1 findings and ship straight to `main`.
+- **BUG-104**: `summary.fees` is mixed-currency by design (GAS parity, synced to the Edge engine), so the fix lives in `YearlyPage.tsx`: per-currency sums over `ledger.yearly[*].tickers`. No engine change, no deploy.
+- **BUG-105**: `oversoldNotice` replays `computeLedger` with the candidate row and asks only on a *new* 超賣 / 超額回補 warning (compared with the saved `ledger.warnings`, so re-saving an already-oversold row does not ask). The dialog uses the position just before the row; the engine's own string reads 「持有僅 0 股」 when a same-day buy is netted first. Three fee tests that sell with no position now answer the dialog.
+- **BUG-106**: dividend types switch the unit to 零股 (back to 張 for trades) through `convertUnit`; `dividendSummary` above the submit button.
+- **Tests**: 2 (BUG-104) + 2 (BUG-105) + 2 (BUG-106) new tests fail on 0.10.18 and pass now; screenshots of the dialog and the dividend total checked at 1280 / 390 in local mode.
+- **User decision**: Ron's 00685L 2026-06-23 buy fee (459, list price) is intentional; discuss later, do not touch (Task 188 item 9).
+- **Left open**: BUG-107 (count breakdown, low) and Task 188 (UX / a11y items).
 ---
 ## 📅 Log: 2026-10-02 12:52:00 Asia/Taipei (0.10.18 + DEV E2E report)
 - **0.10.18**: shaped with the user via /impeccable — price and change always on their own lines, 其他-group cards keep the industry line under the name, content top-aligned; hover is a band tint (`--cds-layer-accent-01` + `--border-strong`) instead of lift + shadow. `--row-hover` was rejected because at night it equals the card's own `layer-02`. Detector clean; checked in Playwright at 375 / 1280, light and dark.
@@ -12,11 +21,3 @@
 - **Result**: 127 pass / 7 warn / 1 fail / 3 info. Every fee, tax, 當沖, ETF, dividend-withholding and realized-P&L figure matched a hand calculation (fees floor to the dollar, as `fees.test.ts` pins). Defects filed: BUG-104 (年度收益 TWD+USD fee sum), BUG-105 (oversell saves silently), BUG-106 (dividend 配發股數 defaults to 張), BUG-107 (count breakdown). UX / a11y items in Task 188.
 - **Report**: https://claude.ai/artifact/GytThoezGWdHSAfQKBQFXg
 - **Not tested**: signup submit, reset-password mail, real password change, Discord save/test push, admin (demo01 is not admin), local mode (no entry in the cloud build), real broker CSV, multi-device / session expiry.
----
-## 📅 Log: 2026-10-02 11:35:00 Asia/Taipei (0.10.17 — 當沖 option on buys, two layout overflows)
-- **User asked** whether 當沖 still needs to be in 交易性質 now that the sell form detects it, plus two layout bugs from screenshots. The user chose the recommended shape and asked to ship straight through to `main`.
-- **當沖 on buys**: hidden for new 買入 (`TransactionForm.tsx` 交易性質 select), with the hint 「當沖會在記賣出時自動判斷」. Reason: the answer only exists at the sell, and saving a 當沖 sell already labels today's buy legs (`buyLegs`, submit path). Kept for sells (older-position case is the user's call; also the way back from a wrong auto-label) and for an edited row already saved as 當沖. Switching a new trade SELL(當沖) → BUY resets it to SPOT via `applyDayTrade(false)`, so the `taxRateManual` guard is respected.
-- **Tax quick-pick clipped**: the select had a fixed 122px (`.narrow-lg`, only user). Replaced by `.field-row > .fit` (`flex: 0 0 auto; width: auto`) — 166px at 375px wide, 160px on desktop.
-- **Watchlist card overflow (3037 欣興 NT$1,265.00 +4.12%)**: `.watchlist-card-body` could not wrap inside a 136px-min card. Now `flex-wrap: wrap`. Reproduced in Playwright with the real CSS: old CSS overflows the 欣興 card only, new CSS neither card.
-- **Tests**: features test 1 now asserts BUY → 現股/融資/融券 + hint, SELL → four options, SELL(當沖) → BUY resets to SPOT; new 1b asserts an edited 當沖 buy keeps the option.
-- **Version**: `0.10.17-dev.1` (`df9a111`) then release `0.10.17` (`b28a32a`), fast-forwarded to `main`.
