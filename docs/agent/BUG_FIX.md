@@ -58,3 +58,9 @@
 - **Where**: `YearlyPage.tsx:433-434`
 - **Root Cause**: 「11」 broken down as 買入 6・賣出 3・股利 1 = 10; the stock dividend is counted in the total but not in any part.
 - **Status**: OPEN (low)
+
+### BUG-108 — Fee settings: 「刪除」 a rate period and the base row's 「改」 wrote to the database at once (reported on PROD 2026-10-02)
+- **Where**: `sources/src/components/WorkspaceFeeSettings.tsx` `removeSegment` / `saveBase` (called `setWorkspaceFeeRateHistory` / `setWorkspaceFeeRate` on click)
+- **Root Cause**: the panel says changes apply only on 儲存 and 取消 restores them, but both buttons committed immediately. The user deleted a discount period on PROD 玉山證卷 without saving; `fee_rate_history` is now `[]` (base 0.001425, `fee_rebate` still `monthly`). Recorded fees are untouched (all 116 TW trades carry list-price fees and `fee_rate` NULL), so the lost period cannot be reconstructed from the data — the user has to re-enter the discount and its start date.
+- **Fix**: draft state (`history` vs `savedHistory`, `baseDraft`), written by `submit`; a status line says the list changed and needs 儲存. The discount select follows the draft's rate for today until the user touches it, otherwise 儲存 would re-open the deleted period from today. Tests: `WorkspaceFeeSettings.test.tsx` (4 fail on 0.10.19). Checked in local mode: delete → 取消 → reload keeps the period.
+- **Status**: FIXED on `dev` as 0.10.20-dev.1 (`88f4d25`), DEV site verified by content; **waiting for the user's OK to release to `main`**. PROD data repair is the user's (re-enter the period via the form).
