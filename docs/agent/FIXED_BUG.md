@@ -7,23 +7,23 @@
 ---
 
 ### Bug ID: BUG-097 — ETF 當沖 notices promised a halved tax; the fee dialog still said 「ETF 0.05%」
-- **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16-dev.1
+- **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16
 - **Root Cause**: Task 187's two form notices hard-coded 「證交稅用減半的算」/「證交稅只收一半」, and BUG-090's radio copy said 「0.15%（ETF 0.05%）」. 證券交易稅條例 §2-2 lowers the rate to 千分之1.5 for 上市或上櫃**股票** only (BUG-093), so an ETF day trade still pays 0.1%. Reproduced: 0050 bought and sold today → nature DAY_TRADE, rate field 0.001, notice said 減半. The BUG-093 sweep fixed code, not copy (CLAUDE.md rule 2).
 - **Sweep**: `grep -rn "減半\|一半\|0\.05%"` over non-test `src`. Fixed: `TransactionForm.tsx` both notices, `WorkspaceFeeSettings.tsx:416`. Left as correct: `QuoteTab.tsx:401` and `HoldingsLedger.tsx:114` (shown only when `brokerDayTradeTax`, which requires `lotSellTaxRate < sellTaxRate`, i.e. a stock), `MarkDayTradesModal.tsx:84` and `TransactionsPage.tsx:358` (the wizard never proposes an ETF — `hasDayTradeFeeSignature` returns false when `rate <= dtRate`).
 - **Fix**: `dayTradeTaxNote` in `TransactionForm.tsx` words the notice from `sellTaxRate` / `dayTradeTaxRate` on the trade's date; the radio copy names 0.15% for stocks and 0.1% for ETFs. Test: `TransactionForm.fee.test.tsx` BUG-097 (citation next to the assertion).
-- **Status**: ✅ FIXED (0.10.16-dev.1)
+- **Status**: ✅ FIXED (0.10.16)
 
 ### Bug ID: BUG-096 — Task 187 cleared `taxRateManual`, re-introducing BUG-094 in the same release
-- **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16-dev.1
+- **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16
 - **Root Cause**: `applyDayTrade` reset `taxRateManual.current = false` before `updateTaxRateAuto`, and the auto-apply effect calls it with no user action. Reproduced: type 證交稅率 0.002, then the ticker of a same-day buy → nature DAY_TRADE, rate **0.0015**. 改回現股 / 改成當沖 did the same. Violates CLAUDE.md rule 3.
 - **Fix**: the reset is gone; `applyDayTrade` now goes through `updateTaxRateAuto` exactly like the 交易性質 drop-down, which already returns early on a manual rate (BUG-094). The notice says 「證交稅率欄是你自己設定的 X%，沒有跟著改」 when the field disagrees with the statutory rate. Test: BUG-096.
-- **Status**: ✅ FIXED (0.10.16-dev.1)
+- **Status**: ✅ FIXED (0.10.16)
 
 ### Bug ID: BUG-095 — opening a saved ordinary sell for edit flipped it to 當沖 and rewrote its fee
-- **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16-dev.1
+- **Date**: found 2026-10-02 in the 0.10.15 review, fixed in 0.10.16
 - **Root Cause**: Task 187's `dayTradeContext` reads `ledger.holdings`, which in edit mode already includes the sell being edited. Old 1,000 + today's 1,000, sell 1,000 today as 現股: FIFO consumes the old lot, only today's lot stays open, `olderQty === 0` → `certain`. Reproduced: the edit dialog opened with nature DAY_TRADE, rate 0.0015, fee **485** instead of the saved **734**; saving would have stored the halved fee and relabelled the buy leg.
 - **Fix**: `dayTradeContext` returns null when `isEdit`, so neither the auto-apply nor the submit-time buy-leg labelling runs on an edit. The 交易性質 drop-down still changes the nature by hand. Test: BUG-095.
-- **Status**: ✅ FIXED (0.10.16-dev.1)
+- **Status**: ✅ FIXED (0.10.16)
 
 ### Bug ID: BUG-094 — 改交易性質會把使用者手動設的證交稅率丟掉（我在修 BUG-091 時種下的）
 - **Date**: found 2026-10-02 (user: 「手動改成一般0.3，手續費又會折半」), fixed the same day (pending release)
