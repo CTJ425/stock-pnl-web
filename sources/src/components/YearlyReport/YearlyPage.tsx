@@ -384,6 +384,19 @@ export function YearlyPage() {
   const { ledger } = useWorkspace()
   const { summary } = ledger
   const [query, setQuery] = useState('')
+  // BUG-104: `summary.fees` is mixed-currency on purpose (it mirrors the old GAS KPI and the Edge
+  // copy of the engine), so this card cannot print it. Sum the per-ticker figures instead: each
+  // ticker carries its own currency, and these are the same numbers the two sections below add up.
+  const feesByCurrency = useMemo(() => {
+    const acc: Record<Currency, { fees: number; tax: number }> = { TWD: { fees: 0, tax: 0 }, USD: { fees: 0, tax: 0 } }
+    for (const year of ledger.years) {
+      for (const yt of Object.values(ledger.yearly[year].tickers)) {
+        acc[yt.currency].fees += yt.fees
+        acc[yt.currency].tax += yt.feesTax
+      }
+    }
+    return acc
+  }, [ledger])
 
   if (ledger.years.length === 0) {
     return (
@@ -397,6 +410,8 @@ export function YearlyPage() {
   }
 
   const fmtPlain = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  // Borrow fees exist only on TW 融券 sells (`splitFeeTax`), so the whole of it belongs to the TW line.
+  const { TWD: tw, USD: us } = feesByCurrency
   return (
     <>
       {/* Lifetime totals over every trade: not filtered by the search below. */}
@@ -434,9 +449,11 @@ export function YearlyPage() {
               {summary.dividendCount > 0 && <>・股利 {fmtQty(summary.dividendCount)}</>}
             </span>
             <span title="交易稅是依稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）回推的估計值">
-              手續費與稅 {fmtPlain(summary.fees)}（手續費 {fmtPlain(summary.feesBrokerage)}・交易稅{' '}
-              {fmtPlain(summary.feesTax)}，台美股合計）
+              台股手續費與稅 {fmtMoney(tw.fees, 'TWD')}（手續費 {fmtPlain(tw.fees - tw.tax - summary.feesBorrow)}・交易稅{' '}
+              {fmtPlain(tw.tax)}
+              {summary.feesBorrow > 0 && <>・借券費 {fmtPlain(summary.feesBorrow)}</>}）
             </span>
+            {us.fees > 0 && <span>美股手續費 {fmtMoney(us.fees, 'USD')}</span>}
           </div>
         </div>
       </section>

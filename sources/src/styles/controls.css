@@ -675,3 +675,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
   gap: 12px;
   margin-top: 16px;
 }
+
+/* BUG-106: the dividend total read before saving, at body size beside the submit button. */
+.tx-dividend-total {
+  margin: 0 0 var(--sp-04);
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}

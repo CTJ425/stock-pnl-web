@@ -11,6 +11,15 @@ import userEvent from '@testing-library/user-event'
 import App from '../../App'
 
 /** Every localStorage key the workspace fee defaults live under. */
+/**
+ * These fee tests record a sell with no shares behind it, which since BUG-105 asks first
+ * (「超過當時的庫存」). The question is not what they test, so answer it and carry on.
+ */
+async function confirmOversell(user: ReturnType<typeof userEvent.setup>) {
+  const ask = await screen.findByRole('dialog', { name: '超過當時的庫存' })
+  await user.click(within(ask).getByRole('button', { name: '仍要存檔' }))
+}
+
 function storedFeeKeys(): string[] {
   const keys: string[] = []
   for (let i = 0; i < window.localStorage.length; i += 1) {
@@ -162,6 +171,7 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     await user.type(tax, '0.0015')
     expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('362')
     await user.click(form.getByRole('button', { name: '確認送出' }))
+    await confirmOversell(user)
     await form.findByText(/成功新增交易紀錄/)
     await user.click(form.getByRole('button', { name: '關閉' }))
 
@@ -234,6 +244,7 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.0015')
 
     await user.click(form.getByRole('button', { name: '確認送出' }))
+    await confirmOversell(user)
     await form.findByText(/成功新增交易紀錄/)
     await user.click(form.getByRole('button', { name: '關閉' }))
 

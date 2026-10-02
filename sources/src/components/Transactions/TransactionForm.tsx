@@ -15,13 +15,14 @@ import { useConfirm } from '../Common/useConfirm'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { taipeiDateKey } from '../../utils/taipeiDate'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
-import { TX_NATURE_LABEL } from '../../types/models'
+import { TX_NATURE_LABEL, positionKey } from '../../types/models'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
 import { DEFAULT_WIRE_FEE, estimateWithholding } from '../../utils/nhiSupplement'
 import type { Holding } from '../../utils/pnlEngine'
-import { dayTradeTaxRate, sellTaxRate } from '../../utils/pnlEngine'
+import { compareTxOrder, computeLedger, dayTradeTaxRate, sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRateOn, getMinFee } from '../../utils/settings'
 import { describeTwFeeRate } from '../../utils/feeRateHint'
+import { fmtMoney } from '../../utils/formatters'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
 import { isSupabaseConfigured } from '../../services/supabase'
@@ -402,6 +403,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     return { gross, ...estimateWithholding(gross, date, DEFAULT_WIRE_FEE) }
   }, [isCashDividend, market, price, date, getActualShares])
 
+  const dividendSummary = useMemo(() => {
+    if (!isCashDividend && !isStockDividend) return null
+    const shares = getActualShares()
+    if (!(shares > 0)) return null
+    const sh = shares.toLocaleString('en-US')
+    if (isStockDividend) return `共配發 ${sh} 股`
+    const perShare = parseFloat(price) || 0
+    if (!(perShare > 0)) return null
+    return `配息總額 ${fmtMoney(perShare * shares, market === 'US' ? 'USD' : 'TWD')}（${sh} 股 × 每股 ${perShare}）`
+  }, [isCashDividend, isStockDividend, price, market, getActualShares])
+
   // Market Switch: U.S. Stocks Mandate “Odd Lot” Units
   const handleMarketChange = (next: Market) => {
     setMarket(next)
@@ -510,6 +522,39 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     return () => document.removeEventListener('click', onClick)
   }, [closeSuggestions])
 
+  /**
+   * What to ask about when this row would oversell (BUG-105); null when it would not.
+   * The engine decides *whether* — a 超賣 / 超額回補 warning that was not in the saved ledger —
+   * but its wording is not for this dialog: with a same-day buy it nets the 當沖 part first and
+   * reports "賣出 4000 股，但當時持有僅 0 股" for a 5,000-share sell. So the numbers shown are
+   * the position just before this row, and the row's own quantity.
+   */
+  const oversoldNotice = (payload: NewTransaction): string | null => {
+    if (payload.tx_type !== 'SELL' && payload.tx_type !== 'BUY') return null
+    // Edit keeps the row's own place in the day (`seq`, `created_at`); a new row goes after every
+    // saved one, which is where the database will put it.
+    const maxSeq = transactions.reduce((m, t) => (typeof t.seq === 'number' && t.seq > m ? t.seq : m), 0)
+    const candidate: Transaction = {
+      ...(initial ?? { id: '__pending__', workspace_id: current?.id ?? '', created_at: new Date().toISOString(), seq: maxSeq + 1 }),
+      ...payload,
+    } as Transaction
+    const others = initial ? transactions.filter((t) => t.id !== initial.id) : transactions
+    // Compared with the ledger as saved (the edited row's old version included), so re-saving a row
+    // that was already oversold, unchanged, does not ask again.
+    const before = new Set(ledger.warnings)
+    const added = computeLedger([...others, candidate]).warnings.filter((w) => !before.has(w))
+    if (added.length === 0) return null
+    const pos = computeLedger(others.filter((t) => compareTxOrder(t, candidate) < 0)).positions[
+      positionKey(payload.market, payload.ticker)
+    ]
+    const fmt = (n: number) => n.toLocaleString('en-US')
+    const isCover = payload.tx_type === 'BUY' // only a 融券回補 can add a warning on a buy
+    const held = isCover ? (pos?.shortQty ?? 0) : (pos?.qty ?? 0)
+    return isCover
+      ? `${payload.tx_date} 當時 ${payload.ticker} 的空單是 ${fmt(held)} 股，這筆要回補 ${fmt(payload.qty)} 股。超出的部分會當成現股買進。`
+      : `${payload.tx_date} 當時 ${payload.ticker} 持有 ${fmt(held)} 股，這筆要賣 ${fmt(payload.qty)} 股，多了 ${fmt(payload.qty - held)} 股。超出的部分成本會以 0 計算，已實現損益會因此算多。`
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
@@ -556,20 +601,37 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       if (!ok) return
     }
 
+    const payload: NewTransaction = {
+      tx_date: date,
+      market,
+      ticker: cleanTicker,
+      name: name.trim() || cleanTicker,
+      tx_type: txType,
+      tx_nature: isCashDividend || isStockDividend ? null : market === 'TPE' ? nature : undefined,
+      fee_rate: feeRate !== '' && !Number.isNaN(parseFloat(feeRate)) ? parseFloat(feeRate) : undefined,
+      price: p,
+      qty: shares,
+      fee_tax: feeVal,
+    }
+
+    // BUG-105: selling more than the position (or covering more than the short) used to save with
+    // no word, and the engine then costs the excess at 0 — realized P&L inflated by the whole sale.
+    // A wrong 張/零股 unit is enough to do it. The engine already knows how to spot this, so replay
+    // the ledger with this row in it and ask about any warning that was not there before. It asks
+    // rather than blocks: an out-of-order CSV history can be oversold for a while on purpose.
+    const oversold = oversoldNotice(payload)
+    if (oversold) {
+      const ok = await confirm({
+        title: '超過當時的庫存',
+        message: `${oversold}\n\n如果是單位選錯（張／零股），請取消後修改。`,
+        confirmLabel: '仍要存檔',
+      })
+      if (!ok) return
+    }
+
     setBusy(true)
     try {
-      await onSubmit({
-        tx_date: date,
-        market,
-        ticker: cleanTicker,
-        name: name.trim() || cleanTicker,
-        tx_type: txType,
-        tx_nature: isCashDividend || isStockDividend ? null : market === 'TPE' ? nature : undefined,
-        fee_rate: feeRate !== '' && !Number.isNaN(parseFloat(feeRate)) ? parseFloat(feeRate) : undefined,
-        price: p,
-        qty: shares,
-        fee_tax: feeVal,
-      })
+      await onSubmit(payload)
       // Task 187: a 當沖 is a pair, so the buy leg gets the label too. The engine needs only one
       // labelled leg, but a buy row still reading 現股 while its own sell reads 當沖 is a record
       // that contradicts itself — and the 標記當沖 wizard skips a date that already has a label,
@@ -663,6 +725,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               // A new buy has no 當沖 option (see the 交易性質 select), so a 當沖 picked on a sell
               // must not ride along hidden when the type flips to 買入.
               if (!isEdit && next === 'BUY' && nature === 'DAY_TRADE') applyDayTrade(false)
+              // BUG-106: a dividend notice states shares (配發 2,000 股), so a dividend counts in
+              // 零股; left on 張, typing 2000 recorded 2,000,000 shares. Trades go back to 張.
+              // convertUnit rewrites a number already typed, so its meaning survives the switch.
+              if (!isEdit && market === 'TPE') {
+                const want: Unit = next === 'DIVIDEND' || next === 'STOCK_DIVIDEND' ? '零股' : '張'
+                if (unit !== want) convertUnit(want)
+              }
               setShowTickerHoldings(false)
               setShowNameHoldings(false)
               closeSuggestions()
@@ -1130,6 +1199,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         )}
       </div>
 
+      {/* BUG-106: the total is what a wrong unit gets wrong by 1,000×, so it sits next to the
+          button at body size, where it is read before saving, not in the hint under the fee. */}
+      {dividendSummary && (
+        <p className="tx-dividend-total" data-testid="dividend-total">
+          {dividendSummary}
+        </p>
+      )}
       <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
         {busy ? '寫入中…' : isEdit ? '儲存變更' : '確認送出'}
       </button>

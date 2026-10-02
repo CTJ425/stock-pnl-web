@@ -116,3 +116,26 @@ describe('YearlyPage 搜尋', () => {
     expect(within(yearTable()).queryByText(/2330（/)).toBeNull()
   })
 })
+
+describe('YearlyPage 歷年手續費（BUG-104）', () => {
+  it('台股與美股的手續費分開列，不把台幣和美元加在一起', async () => {
+    const us: Transaction = { ...tx('2026-09-05', 'BUY', 200, 10, 0.8), market: 'US', ticker: 'AAPL', name: 'Apple' }
+    renderWith([
+      tx('2026-09-01', 'BUY', 1000, 1000, 399),
+      // 賣 500 股：手續費 219 + 證交稅 1,650 = 1,869
+      tx('2026-09-15', 'SELL', 1100, 500, 1869),
+      us,
+    ])
+    // 台股 399 + 1,869 = 2,268，其中交易稅 1,650、手續費 618；美股另列 US$0.80
+    expect(await screen.findByText(/台股手續費與稅 NT\$2,268（手續費 618・交易稅 1,650/)).toBeTruthy()
+    expect(screen.getByText('美股手續費 US$0.80')).toBeTruthy()
+    // 混幣別的舊數字（2,268.8）不能再出現
+    expect(screen.queryByText(/2,268\.8/)).toBeNull()
+  })
+
+  it('沒有美股交易時不顯示美股手續費', async () => {
+    renderWith([tx('2026-09-01', 'BUY', 1000, 1000, 399)])
+    expect(await screen.findByText(/台股手續費與稅 NT\$399/)).toBeTruthy()
+    expect(screen.queryByText(/美股手續費/)).toBeNull()
+  })
+})
