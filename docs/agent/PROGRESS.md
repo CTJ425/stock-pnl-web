@@ -10,7 +10,7 @@
 - **Snapshot**: PROD Ron的投資組合 (65 rows, settings 0.0004275 / 月退 / 整筆 / 當沖稅 false) copied over DEV demo01 「Ron」; Σfee_tax 11,926 and Σprice×qty 7,446,140 equal on both. Raw rows and the DEV before-image are outside the repo: `~/stock-pnl-web-snapshots/2026-10-02-ron/`. Owner says 0.10.20 matches the 元大 app.
 - **Regression (user report: 聯電 off)**: dev.1 lifted the cost of every 月退 workspace; on the snapshot 2303 went −1,070 → −1,393, 009828 −10. Ron is 月退 only for the posted-rate sell; 元大 is 日退.
 - **Fix (user's choice)**: `listPriceCost` — the uplift needs 月退 and a saved `sell_fee_basis`; NULL = the 0.10.20 figure. Snapshot re-run equals 0.10.20 on all three holdings.
-- **Verified**: vitest 2,819 pass / 7 skipped; build / lint / `typecheck:edge` exit 0; both Playwright scripts PASS. DEV Edge redeployed (see TASK 189).
+- **Verified**: vitest 2,819 pass / 7 skipped; build / lint / `typecheck:edge` exit 0; both Playwright scripts PASS. DEV Edge `stock-report` v41 from clean `36b2ed0`, ezbr b5f9b528… → c3e280bd0730…, verify_jwt false.
 - **Left**: user test on DEV (玉山 workspace needs one 儲存 to show −610); PROD only on explicit OK.
 ---
 ## 📅 Log: 2026-10-02 16:30:00 Asia/Taipei (Task 189, 0.10.21-dev.1 on DEV)
