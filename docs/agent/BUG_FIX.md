@@ -13,14 +13,6 @@
 > session start and returned nothing. `grep` that file before you "discover" one of them again.
 > Fixed bugs are in `FIXED_BUG.md`. Only things that still need doing belong here.
 
-### BUG-109 — 0050 shows 「台灣５０」: the holding name is the newest row's name, and an import brought the broker's spelling
-- **Where**: `sources/src/utils/pnlEngine.ts:557-560` (`pos.name` / `yt.name` = the last row in date order whose name is not the ticker), shared with the Edge card via `_shared/engine`.
-- **Root cause (data, not a release)**: PROD 玉山證卷 got its 0050 rows from one bulk import at 2026-09-30 14:27:28 Asia/Taipei — 11 rows named 「台灣５０」 (full-width digits, U+FF15 U+FF10, the broker export's spelling). The hand-entered DIVIDEND row is 「元大台灣50」. Whichever is newest by `tx_date` wins, so the label flips when a row's date moves; today the newest is 2026-09-16 BUY → 「台灣５０」. DEV carries the same rows (Ivan, SNAP-Ivan正式: 22). `git log -p` since 2026-09-20 over `pnlEngine.ts`, `csv.ts`, `dataProvider.ts` shows no change to name handling; the rule is from the initial commit.
-- **Same pattern elsewhere**: 00981A has 「主動統一」 and 「主動統一台股增長」 (PROD 2 workspaces). No other ticker has two names; 「台灣５０」 is the only full-width name.
-- **Impact**: labels only — 庫存總覽, 個股分析, 年度收益 rows, Discord card. Every calculation keys on `ticker` / `market:ticker`, never the name. Name search (`txSearch.ts`, `TransactionForm` suggestions) uses `includes`, so typing 「台灣50」 does not find the 11 full-width rows.
-- **Fix options**: rename the rows on PROD/DEV (data, needs the user's OK); and/or NFKC-normalise names on save and import (Task 188 #9 suggested it); or label TW holdings from `stock_names` instead of the newest row.
-- **Status**: OPEN — cause confirmed 2026-10-02, waiting for the user's choice.
-
 ### BUG-084 — Stale per-workspace 最低手續費 in localStorage still drives estimates, with no UI to see or change it
 - **Where**: `sources/src/utils/settings.ts` (`getMinFee`), `sources/src/utils/holdingRows.ts:80-81,119-121`
 - **Root Cause Analysis**:

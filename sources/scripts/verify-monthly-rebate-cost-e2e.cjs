@@ -84,7 +84,8 @@ const dbTransactions = [
     tx_date: '2026-10-02',
     market: 'TPE',
     ticker: '009828',
-    name: '中信台日韓PCB',
+    // BUG-109: a broker-export spelling (full-width) on the row; the page must show the exchange's name.
+    name: '中信台日韓ＰＣＢ',
     tx_type: 'BUY',
     price: BUY.price,
     qty: BUY.qty,
@@ -131,6 +132,13 @@ async function installMocks(page) {
   // Playwright tries the most recently registered route first: the catch-alls go before the specific ones.
   await page.route('**/functions/v1/**', (route) => json(route, {}))
   await page.route('**/storage/v1/**', (route) => json(route, {}, 404))
+  // The official TW list (vite dev proxies /api/twse and /api/tpex), source of the labels (BUG-109).
+  await page.route('**/api/twse/**', (route) =>
+    json(route, [{ Code: '009828', Name: '中信台日韓PCB', ClosingPrice: '10.68' }]),
+  )
+  await page.route('**/api/tpex/**', (route) =>
+    json(route, [{ SecuritiesCompanyCode: '6488', CompanyName: '環球晶', Close: '500' }]),
+  )
   await page.route('**/functions/v1/stock-price', (route) =>
     json(route, {
       prices: {
@@ -191,6 +199,14 @@ async function openFeePanel(page) {
       console.log(`[${vp.tag}]`)
 
       if (vp.tag === 'desktop') await expectRow(page, EXPECT_MONTHLY, '1. 月退 row (玉山 App −610)')
+      await page.waitForFunction(
+        () => document.querySelector('[data-testid="holding-row-009828"]')?.textContent?.includes('中信台日韓PCB'),
+        null,
+        { timeout: 15000 },
+      )
+      const rowText = await page.getByTestId('holding-row-009828').innerText()
+      if (rowText.includes('ＰＣＢ')) throw new Error(`0. row still shows the row's own name: ${rowText}`)
+      console.log('  ✓ 0. row labelled with the official name 中信台日韓PCB, not the row\'s 「中信台日韓ＰＣＢ」')
       await page.getByTestId('holding-row-009828').click()
       const detail = await page.locator('.hl-detail-body').first().innerText()
       if (!detail.includes('券商 App 成本') || !detail.includes('NT$107,152')) throw new Error(`1. app cost missing: ${detail}`)

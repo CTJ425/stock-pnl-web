@@ -5,6 +5,7 @@
  *   Can work offline even when Edge Function is unavailable)
  */
 import type { Market } from '../types/models'
+import { twOfficialName } from './twMarketData'
 
 export interface UsZhEntry {
   symbol: string
@@ -159,8 +160,10 @@ export function searchUsZhNames(
     .map(({ symbol, name }) => ({ symbol, name, market: 'US' as const }))
 }
 
-/** Display layer name: U.S. stocks give priority to Chinese translations, and the rest (including Taiwan stocks) maintain their original names.*/
+/** Display layer name: U.S. stocks give priority to Chinese translations; Taiwan stocks use the exchange's official short name (BUG-109).*/
 export function displayStockName(market: Market, ticker: string, name: string): string {
   if (market === 'US') return usZhName(ticker) ?? name
-  return name
+  // BUG-109: the exchange's own name, not whatever the newest transaction happened to be typed or
+  // imported as; that name stays the fallback for a code the official list does not carry.
+  return twOfficialName(ticker) ?? name
 }

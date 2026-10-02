@@ -167,3 +167,37 @@ describe('getTwStockList 部分來源失敗', () => {
     expect(String(call?.[2])).toContain('HTTP 200')
   })
 })
+
+// BUG-109: holdings are labelled with the exchange's name; the list is where it comes from.
+describe('官方股名（BUG-109）', () => {
+  it('N1: 抓到清單後就能用代號查到官方名稱，並通知訂閱者', async () => {
+    vi.stubGlobal('fetch', mockFetch({ twse: 'ok', tpex: 'ok' }))
+    const mod = await freshModule()
+    const listener = vi.fn()
+    mod.subscribeTwNames(listener)
+    expect(mod.twOfficialName('3037')).toBeUndefined()
+    await mod.getTwStockList()
+    expect(mod.twOfficialName('3037')).toBe('欣興')
+    expect(mod.twOfficialName('6488')).toBe('環球晶')
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('N2: 過期的快取仍拿來當名稱（名稱不會半小時就變），不用等網路', async () => {
+    window.localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ at: 0, rows: [{ symbol: '0050', name: '元大台灣50', close: 100 }] }),
+    )
+    const mod = await freshModule()
+    expect(mod.twOfficialName('0050')).toBe('元大台灣50')
+    expect(mod.twOfficialName('9999')).toBeUndefined()
+  })
+
+  it('N3: 顯示名稱優先用官方名稱，清單沒有的代號才用交易上的名稱', async () => {
+    const mod = await freshModule()
+    mod.rememberTwNames([{ symbol: '0050', name: '元大台灣50', close: null }])
+    const { displayStockName } = await import('./usStockNames')
+    // Real case: PROD 玉山證卷 imported 0050 as 「台灣５０」 (full-width digits) on 2026-09-30.
+    expect(displayStockName('TPE', '0050', '台灣５０')).toBe('元大台灣50')
+    expect(displayStockName('TPE', '7777', '興櫃某某')).toBe('興櫃某某')
+  })
+})

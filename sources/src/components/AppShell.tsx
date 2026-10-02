@@ -28,6 +28,7 @@ import { TransactionForm } from './Transactions/TransactionForm'
 import { UserMenu } from './UserMenu'
 import { formatViewHash, parseViewHash, type ViewRoute } from './viewRoute'
 import { WorkspaceControls } from './WorkspaceControls'
+import { useTwOfficialNames } from '../hooks/useTwOfficialNames'
 
 /**
  * Route-level split points. Only the dashboard (the first paint) and the shell ship in the entry
@@ -223,6 +224,8 @@ export function AppShell() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
   const narrow = useNarrowScreen()
+  // BUG-109: TW labels come from the exchange's list; this re-renders the pages once it arrives.
+  useTwOfficialNames()
 
   // Administrator entrance: It is determined that auth needs to be made once, so it is added asynchronously. If you make a mistake, there will only be one less menu item.
   // Does not affect any existing functions (the real control is on the Edge Function side)

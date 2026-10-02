@@ -26,7 +26,7 @@ const REQUIRED: Record<string, number> = {
   'feeSettings.ts': 4,
   'priceProxy.ts': 4,
   'reportsBucket.ts': 1,
-  'twMarketData.ts': 3,
+  'twMarketData.ts': 4, // + seedOfficialNames (BUG-109)
 }
 
 function stripComments(src: string): string {

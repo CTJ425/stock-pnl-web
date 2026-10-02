@@ -60,6 +60,53 @@ function writeCache(rows: TwStockRow[]): void {
   }
 }
 
+/**
+ * Official short names (symbol → name) from the last full list seen (BUG-109). A holding used to be
+ * labelled with the newest transaction's name, so a broker export's spelling (玉山's 「台灣５０」 for
+ * 0050) or an older name replaced the stock's real name whenever its row became the newest. Labels
+ * now come from this map, and the transaction's own name is only the fallback for a code the list
+ * does not carry (興櫃, delisted). Seeded from the cached list even past its TTL: a name outlives the
+ * 30-minute price freshness the TTL is for.
+ */
+let officialNames: Map<string, string> = seedOfficialNames()
+let namesVersion = 0
+const nameListeners = new Set<() => void>()
+
+function seedOfficialNames(): Map<string, string> {
+  try {
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(CACHE_KEY)
+    const rows = raw ? (JSON.parse(raw) as CacheShape).rows : null
+    return Array.isArray(rows) ? new Map(rows.map((r) => [r.symbol, r.name])) : new Map()
+  } catch (err) {
+    logClient('warn', 'seedOfficialNames', err instanceof Error ? err.message : String(err), {})
+    return new Map()
+  }
+}
+
+/** Replaces the official names and tells subscribers; called with every freshly fetched list. */
+export function rememberTwNames(rows: TwStockRow[]): void {
+  officialNames = new Map(rows.map((r) => [r.symbol, r.name]))
+  namesVersion += 1
+  for (const listener of nameListeners) listener()
+}
+
+/** The exchange's short name for a TW code, or undefined when the list does not carry it. */
+export function twOfficialName(ticker: string): string | undefined {
+  return officialNames.get(ticker.trim().toUpperCase())
+}
+
+/** `useSyncExternalStore` pair: a component re-renders once the names arrive. */
+export function subscribeTwNames(listener: () => void): () => void {
+  nameListeners.add(listener)
+  return () => {
+    nameListeners.delete(listener)
+  }
+}
+
+export function twNamesVersion(): number {
+  return namesVersion
+}
+
 function toNumber(value: unknown): number | null {
   const n = Number(String(value ?? '').replace(/,/g, ''))
   return Number.isFinite(n) && n > 0 ? n : null
@@ -176,6 +223,7 @@ export async function getTwStockList(): Promise<TwStockRow[]> {
       throw new Error('台股清單載入失敗（Edge Function 與官方端點皆無回應）')
     }
     writeCache(rows)
+    rememberTwNames(rows)
     return rows
   })()
 
