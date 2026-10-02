@@ -1,5 +1,24 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+
+## Archived 2026-10-02 18:12:59 Asia/Taipei — Task 190 completed sub-items
+
+### Task 190 — completed sub-items (rolled from TASK.md 2026-10-02 18:12:59)
+  1. ~~`WorkspaceFeeSettings` + `dashboard.css` + `DashboardPage` impact line; DESIGN.md fee-settings entry~~ ✅
+  2. ~~vitest 2,824 pass / 7 skipped (5 new preset tests; `mount` opens 改單項 for the old radio tests); build / lint /
+     `typecheck:edge` exit 0; detector clean; Playwright `verify-monthly-rebate-cost-e2e.cjs` (presets, bar text,
+     phone bar above the bottom nav) and `verify-pnl-rounding-e2e.cjs` PASS at 1440 / 390~~ ✅
+  4. ~~Released in 0.10.22 (frontend only)~~ ✅
+  5. ~~「折扣怎麼退給你」 open at 不打折; a preset keeps its 月退／日退 when the discount changes~~ ✅
+  6. ~~Dashboard 「手續費折扣未設定」 marker (user chose only this of four layers: 批次重算 block, offer after
+     新增交易, dashboard marker, ask at creation); saving unset at 不打折 stores the base~~ ✅
+  - Item 5 detail: `WorkspaceFeeSettings` dropped `disabled={noDiscount}`; the rebate auto-default skips while the fields
+    match a preset (`onPreset`). Item 6 detail: `DashboardPage` `feeUnset` (no stored rate, `fee_rate` or history);
+    `submit` writes the base when saved unset. Verified: vitest 2,837; build / `typecheck:edge` / lint; detector clean;
+    Playwright fee-rate / monthly-rebate / pnl-rounding PASS + a local-mode journey at 1440 / 390 (stamp, 月退 enabled
+    at 不打折, 玉山 survives discount changes, save clears the stamp, reload). `verify-fee-rate-e2e.cjs` PATCH mock fixed
+    (`0196c97`) — it had failed since 0.10.13 on 0.10.23 too.
+
 ## Archived 2026-10-02 16:30:00 Asia/Taipei — Task 184 (✅ DONE, rolled from TASK.md)
 
 ### Task 184: 月退 decides the recorded fee, and the fee-rate base is editable

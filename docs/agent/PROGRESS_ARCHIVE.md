@@ -1,5 +1,11 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-10-02 16:45:27 Asia/Taipei (Task 190 item 5 — rebate choice open at the list price)
+- **Ask**: drop the grey-out on 折扣怎麼退給你, let the user pick every option; 玉山 / 元大 presets unchanged.
+- **Done**: `WorkspaceFeeSettings.tsx` — removed `disabled={noDiscount}`; the rebate auto-default effect now also skips while the four fields match a preset (`onPreset`), so a saved 玉山 at 不打折 stays 月退 and a 元大 moved to a discount stays 日退 (both failed without the guard). Test 'no discount disables…' replaced; 3 preset tests added.
+- **Verified**: vitest 2,835 pass / 7 skipped; build; lint exit 0. Not looked at in a browser.
+- **Engine at 不打折**: 玉山 preset adds `monthlyRebateCostUplift` = list fee − recorded fee per lot = 0 when fees were recorded at 0.1425% with the same min fee; sell basis list = net. Only the label reads 「牌告 0.1425% 計成本與預扣」.
+---
 ## 📅 Log: 2026-10-02 17:25:00 Asia/Taipei (0.10.23 — BUG-109 follow-up: Discord card names)
 - **Card**: `stock-report/twNames.ts` loads the TWSE + TPEx lists once per run; `aggregateHoldings` labels TW rows with them, row names as fallback (a TPEx outage on PROD happened once in 14 days of `twlist` logs — such a run only falls back for OTC codes).
 - **Data**: 00981A 「主動統一」 → 「主動統一台股增長」, PROD 5 / DEV 10 rows, guarded and count-checked; no TW code has two names on either side.

@@ -1,20 +1,19 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 190 items 5–6 — rebate choice open at 不打折; dashboard marks a workspace whose discount was never set.
-- Status: 🔄 uncommitted on `dev` (no version bump yet); 0.10.23 is the last release (`main` = `dev` before this change).
-- Timestamp: 2026-10-02 17:00:32 Asia/Taipei
+- Action: **0.10.24 released** — dashboard marks a workspace whose fee discount was never set; 「折扣怎麼退給你」 open at 不打折.
+- Status: ✅ `main` = `dev` (see git log); frontend only.
+- Timestamp: 2026-10-02 18:12:59 Asia/Taipei
 
+---
+## 📅 Log: 2026-10-02 18:12:59 Asia/Taipei (0.10.24 — fee onboarding marker + rebate open at 不打折)
+- **Release**: `2e68462` feature + `0196c97` E2E mock fix; gates green (vitest 2,837 pass / 7 skipped, build, `typecheck:edge`); frontend only — no DDL, no Edge. User authorized the `main` merge in advance.
+- **E2E**: `verify-fee-rate-e2e` (after the mock fix), `verify-monthly-rebate-cost-e2e`, `verify-pnl-rounding-e2e` PASS; local-mode journey 1440 / 390 PASS.
+- **Left**: Task 190 item 3; `.stmt-pct` overflow at 390px with a 7-digit hero figure (pre-existing).
 ---
 ## 📅 Log: 2026-10-02 17:00:32 Asia/Taipei (Task 190 item 6 — 「手續費折扣未設定」 on the dashboard)
 - **Ask** (/impeccable): a new workspace has no prompt to set the discount; trades typed at 3 折, figures on 不打折, 批次重算 out of step.
 - **Done**: user picked only the dashboard marker. `DashboardPage.tsx` stamp + basis text while unset (no stored rate, `fee_rate` or history); `WorkspaceFeeSettings.submit` stores 不打折 as the base when saved unset; `dashboard.css` shares the `.stmt-preview` stamp; DESIGN.md fee-settings line.
 - **Verified**: vitest 2,837 pass / 7 skipped; build; lint; detector clean; Playwright local mode 1440 + 390 light/dark, saving clears the stamp. New save test fails without the change.
 - **Seen, not fixed**: at 390px a 7-digit hero figure pushes `.stmt-pct` past the viewport (scrollWidth 426, same with a rate set — pre-existing).
----
-## 📅 Log: 2026-10-02 16:45:27 Asia/Taipei (Task 190 item 5 — rebate choice open at the list price)
-- **Ask**: drop the grey-out on 折扣怎麼退給你, let the user pick every option; 玉山 / 元大 presets unchanged.
-- **Done**: `WorkspaceFeeSettings.tsx` — removed `disabled={noDiscount}`; the rebate auto-default effect now also skips while the four fields match a preset (`onPreset`), so a saved 玉山 at 不打折 stays 月退 and a 元大 moved to a discount stays 日退 (both failed without the guard). Test 'no discount disables…' replaced; 3 preset tests added.
-- **Verified**: vitest 2,835 pass / 7 skipped; build; lint exit 0. Not looked at in a browser.
-- **Engine at 不打折**: 玉山 preset adds `monthlyRebateCostUplift` = list fee − recorded fee per lot = 0 when fees were recorded at 0.1425% with the same min fee; sell basis list = net. Only the label reads 「牌告 0.1425% 計成本與預扣」.
 ---
