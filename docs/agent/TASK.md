@@ -16,6 +16,22 @@
 
 ## 📋 Active Tasks
 
+### Task 188: UX / a11y follow-ups from the 2026-10-02 DEV E2E
+- **Status**: 🔄 OPEN — not started; pick up only when the user asks
+- **Agent**: Claude
+- **Timestamp**: 2026-10-02 12:52:00 Asia/Taipei
+- **Source**: E2E report artifact https://claude.ai/artifact/GytThoezGWdHSAfQKBQFXg (138 checks: 127 pass / 7 warn / 1 fail / 3 info). Numeric defects are BUG-104..107.
+- **Items**:
+  1. Mobile touch targets < 44px: watch-card × 16×16, header 新增交易 32×40 / 工作區 103×36 / 帳號 32×32, bottom nav 60×39 ⏳
+  2. Watch card nests a button inside `role=button` (axe nested-interactive, serious) ⏳
+  3. 年度收益 `.dim` cells fail AA contrast (axe, 3 nodes) ⏳
+  4. 新增工作區 with a blank name: 建立 does nothing and says nothing (`WorkspaceControls.tsx` submit early-return) ⏳
+  5. Login error shows raw Supabase English (「Invalid login credentials」) ⏳
+  6. 個股分析: no free search (holdings + watchlist only); US holdings absent with no note ⏳
+  7. Tablet 768px: tx table 840px scrolls sideways; input text 14px triggers iPad zoom (16px rule is ≤720px only) ⏳
+  8. Missing `fundamental/{ticker}.json` logs a 400 in the console (2454, 2317) ⏳
+  9. Data: Ivan's 0050 name is full-width 「台灣５０」 (NFKC on save); Ron's 00685L 2026-06-23 buy fee 459 vs recalculated 137 — ask the user ⏳
+
 ### Task 185: Fix the findings of the 2026-10-01 codebase review
 - **Status**: 🔄 OPEN REMAINDER — the task itself shipped as **0.10.13** (`dd5a727`) and the entry is
   archived; only items 7, 10 and 12 below are still live. Full text, evidence and the completed items:

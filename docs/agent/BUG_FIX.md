@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-02 10:00:00 Asia/Taipei
+- Timestamp: 2026-10-02 12:52:00 Asia/Taipei
 
 ---
 
@@ -54,3 +54,25 @@
 - **Impact**: the nightly holdings card dies for every user, or 標記當沖 reports success while storing nothing. Both DBs have the DDL today (`verify_setup()` 10/10), so this only bites if the deploy order is ever reversed.
 - **Status**: OPEN (low urgency)
 
+### BUG-104 — 年度收益 summary adds TWD and USD fees together (found in the 2026-10-02 DEV E2E)
+- **Where**: `sources/src/components/YearlyReport/YearlyPage.tsx:437-438` (`summary.fees` / `feesBrokerage` / `feesTax` accumulated across currencies)
+- **Root Cause**: the 「手續費與稅（…台美股合計）」 line sums per-year totals of both markets with no FX and no currency. Reproduced: TW fees 1,858 + AAPL US$0.8 shown as 1,858.8. Violates PRODUCT.md "TW and US figures are computed and shown separately".
+- **Fix direction**: one figure per currency (or TW only, US noted separately).
+- **Status**: OPEN
+
+### BUG-105 — Spot sell larger than the position saves with no warning (2026-10-02 DEV E2E)
+- **Where**: `sources/src/components/Transactions/TransactionForm.tsx` submit path (no position check)
+- **Root Cause**: holding 1,000 sh of 2330, a sell of 500,000 sh (unit left on 張) saved; holding 2,100 sh of 2303, a sell of 5,000 sh saved. The engine costs the oversold part at 0 (`pnlEngine.ts:895-898`), inflating realized P&L; the dashboard only shows 「發現 N 筆資料異常」 afterwards.
+- **Fix direction**: warn in the form and require a second confirm (do not hard-block: CSV ordering cases must still save).
+- **Status**: OPEN
+
+### BUG-106 — Dividend forms default 配發股數 to 張 (2026-10-02 DEV E2E)
+- **Where**: `TransactionForm.tsx` unit select (`aria-label="股數單位"`) for DIVIDEND / STOCK_DIVIDEND
+- **Root Cause**: the label says 股數 but the unit defaults to 張, and dividend notices state shares: typing 2000 stored 2,000,000 sh (cash dividend 6,000,000, 代扣 126,610); typing 100 for a stock dividend stored 100,000 sh.
+- **Fix direction**: default 零股 for dividend types, or relabel to 配發張數; show 配息總額 prominently above submit.
+- **Status**: OPEN
+
+### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)
+- **Where**: `YearlyPage.tsx:433-434`
+- **Root Cause**: 「11」 broken down as 買入 6・賣出 3・股利 1 = 10; the stock dividend is counted in the total but not in any part.
+- **Status**: OPEN (low)

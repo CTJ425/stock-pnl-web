@@ -1,5 +1,17 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-10-02 10:00:00 Asia/Taipei (0.10.15 review → BUG-095/096/097 fixed, 0.10.16-dev.1)
+- **0.10.15 never reached the website.** The Cloudflare Pages check run on `8b67800` says `Deploy failed` (01:24:51 UTC, a minute after the push); the docs commit `d134e30` deployed fine, so the failure is specific to that build. Verified by fetching every chunk of `stock-pnl-web.pages.dev`: only `0.10.14`, none of Task 187's strings. The log needs a Cloudflare login. The previous entry's 「still building」 was wrong, and its timestamps are UTC labelled Asia/Taipei (commits were 01:2x UTC = 09:2x Taipei).
+- **Review of `89a33fe..HEAD`** (high effort, findings reproduced with throw-away App tests that were deleted afterwards). Three were fixed:
+  - **BUG-095**: editing a saved ordinary sell flipped it to 當沖 and changed its fee 734 → 485 (the edit-mode ledger already includes the sell). Detection now runs for new trades only.
+  - **BUG-096**: `applyDayTrade` cleared `taxRateManual`, re-introducing BUG-094 (typed 0.002 → 0.0015). Removed; one rule with the drop-down.
+  - **BUG-097**: ETF 當沖 notices said 減半 while the rate is 0.1% (§2-2 covers 股票 only); the fee dialog still said 「ETF 0.05%」. Copy now follows `dayTradeTaxRate`; grep sweep listed in `FIXED_BUG.md`.
+- **Tests**: three new App-level tests in `TransactionForm.fee.test.tsx`; each fails against the 0.10.15 form and passes now. Full suite 2,796 pass / 7 skipped; `npm run build` and lint exit 0.
+- **Version**: `0.10.16-dev.1` in `package.json` + lockfile, `version.ts`, `README.md`; CHANGELOG entry in zh-TW.
+- **Left open**: BUG-098 (restore ignores `seq`) is the sharpest; BUG-100..103 in `BUG_FIX.md`.
+- **BUG-099, user's decision (2026-10-02)**: no hidden trade-time field. Manual entry already orders by submit order (`seq`, then `created_at` = `NOW()` per row), which is what the user wants; only CSV import is exposed, and its fix (detect newest-first files and reverse or warn) is deferred — do not start it unasked.
+- **Released as 0.10.16** (`f282405`, 11:13): Release body by CI, Cloudflare Pages success, live bundle verified by content.
+
 ## 📅 Log: 2026-10-02 01:30:00 Asia/Taipei (0.10.15 released — 當沖 end to end; Task 186 closed)
 - **The complaint was「手續費折扣差很多」and the discount was innocent.** Three independent defects were stacked on one screen: a same-day ordering guess, a tax rate derived by analogy, and an edit form that discarded the user's own input. Six bugs (089–094) and one task closed.
 - **BUG-089 root cause, closed properly (Task 186).** `tx_date` has day granularity and a bulk import writes one `created_at` per row, so `compareTxOrder` fell back to "opening legs first" and replayed 買→賣→買 as 買、買、賣. `transactions.seq`, assigned by Postgres on insert (`nextval` per row, in the order sent), is now the tiebreak. The backfill is `row_number()` over the existing sort keys, so applying `schema.sql` changes no figure; rows without `seq` behave exactly as before.
