@@ -1,18 +1,20 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.23 released** — Discord holdings card uses the exchanges' TW names; 00981A data fixed (BUG-109 follow-up).
-- Status: ✅ `main` = `dev` (see git log); frontend only; PROD data fix applied and checked.
-- Timestamp: 2026-10-02 17:25:00 Asia/Taipei
+- Action: Task 190 items 5–6 — rebate choice open at 不打折; dashboard marks a workspace whose discount was never set.
+- Status: 🔄 uncommitted on `dev` (no version bump yet); 0.10.23 is the last release (`main` = `dev` before this change).
+- Timestamp: 2026-10-02 17:00:32 Asia/Taipei
 
 ---
-## 📅 Log: 2026-10-02 17:25:00 Asia/Taipei (0.10.23 — BUG-109 follow-up: Discord card names)
-- **Card**: `stock-report/twNames.ts` loads the TWSE + TPEx lists once per run; `aggregateHoldings` labels TW rows with them, row names as fallback (a TPEx outage on PROD happened once in 14 days of `twlist` logs — such a run only falls back for OTC codes).
-- **Data**: 00981A 「主動統一」 → 「主動統一台股增長」, PROD 5 / DEV 10 rows, guarded and count-checked; no TW code has two names on either side.
-- **Release**: gates green (2,832 pass / 7 skipped, build, `typecheck:edge`, lint); DEV Edge v42 (ezbr 320d932279f8…); PROD Edge deployed after the `main` push (see TASK / git log).
-- **Not verified**: a real card send with the new names — the preview needs an admin session.
+## 📅 Log: 2026-10-02 17:00:32 Asia/Taipei (Task 190 item 6 — 「手續費折扣未設定」 on the dashboard)
+- **Ask** (/impeccable): a new workspace has no prompt to set the discount; trades typed at 3 折, figures on 不打折, 批次重算 out of step.
+- **Done**: user picked only the dashboard marker. `DashboardPage.tsx` stamp + basis text while unset (no stored rate, `fee_rate` or history); `WorkspaceFeeSettings.submit` stores 不打折 as the base when saved unset; `dashboard.css` shares the `.stmt-preview` stamp; DESIGN.md fee-settings line.
+- **Verified**: vitest 2,837 pass / 7 skipped; build; lint; detector clean; Playwright local mode 1440 + 390 light/dark, saving clears the stamp. New save test fails without the change.
+- **Seen, not fixed**: at 390px a 7-digit hero figure pushes `.stmt-pct` past the viewport (scrollWidth 426, same with a rate set — pre-existing).
 ---
-## 📅 Log: 2026-10-02 16:55:00 Asia/Taipei (0.10.22 — BUG-109 + Task 190)
-- **BUG-109**: 0050 read 「台灣５０」 — a 2026-09-30 bulk import's spelling, shown because a holding takes the newest row's name. Data fixed on PROD (11) and DEV (22) to the TWSE name 「元大台灣50」 (before-images outside the repo); TW labels now come from the exchange list (`twOfficialName`), row name as fallback. Details: FIXED_BUG.md BUG-109.
-- **Release**: gates green (`npm test` 2,827 pass / 7 skipped, build, `typecheck:edge`, lint); ships Task 190's fee-settings redesign too. Frontend only — no DDL, no Edge.
-- **Left**: Task 190 item 3 (modal + dark theme unseen); Discord card still uses row names (00981A has two in the data).
+## 📅 Log: 2026-10-02 16:45:27 Asia/Taipei (Task 190 item 5 — rebate choice open at the list price)
+- **Ask**: drop the grey-out on 折扣怎麼退給你, let the user pick every option; 玉山 / 元大 presets unchanged.
+- **Done**: `WorkspaceFeeSettings.tsx` — removed `disabled={noDiscount}`; the rebate auto-default effect now also skips while the four fields match a preset (`onPreset`), so a saved 玉山 at 不打折 stays 月退 and a 元大 moved to a discount stays 日退 (both failed without the guard). Test 'no discount disables…' replaced; 3 preset tests added.
+- **Verified**: vitest 2,835 pass / 7 skipped; build; lint exit 0. Not looked at in a browser.
+- **Engine at 不打折**: 玉山 preset adds `monthlyRebateCostUplift` = list fee − recorded fee per lot = 0 when fees were recorded at 0.1425% with the same min fee; sell basis list = net. Only the label reads 「牌告 0.1425% 計成本與預扣」.
+---

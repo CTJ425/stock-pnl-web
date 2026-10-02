@@ -32,6 +32,16 @@
      phone bar above the bottom nav) and `verify-pnl-rounding-e2e.cjs` PASS at 1440 / 390~~ ✅
   3. Not looked at in a browser: the workspace-menu modal home and dark theme ⏳
   4. ~~Released in 0.10.22 (frontend only)~~ ✅
+  5. User, 2026-10-02 16:45: 「折扣怎麼退給你」 no longer greyed out at 不打折 (every option is the user's); the
+     discount no longer re-picks the rebate while the fields match 玉山／元大. Code + tests done, vitest 2,835 pass,
+     build / lint green; **uncommitted, no `-dev.N` bump yet**, not seen in a browser ⏳
+  6. User, 2026-10-02 (/impeccable onboard): a new workspace silently runs on 不打折, so someone who opened at 3 折
+     records 3 折 in 新增交易 while the total withholds the list price and 批次重算 proposes raising every fee. Of four
+     layers offered (block 批次重算 while unset / offer the typed rate after 新增交易 / dashboard marker / ask at
+     workspace creation) the user chose **only the dashboard marker**: `DashboardPage` shows 「手續費折扣未設定」 + 「台股先用
+     不打折 0.1425% 預扣・設定折扣」 while no rate, base or history is stored; `WorkspaceFeeSettings.submit` now writes the
+     base when such a workspace is saved at 不打折. vitest 2,837 pass, build / lint / detector clean; Playwright
+     screenshots 1440 + 390, light + dark, save clears the stamp. **Uncommitted** with item 5 ⏳
 
 ### Task 189: 月退 cost on the list-price fee; sell-fee basis split off the rebate (A2)
 - **Status**: 🔄 OPEN REMAINDER — released as **0.10.21** (`99cbe50`, `main` = `dev`), DDL + Edge on DEV and PROD,

@@ -17,9 +17,10 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { useUsdTwdRate } from '../../hooks/useUsdTwdRate'
 import { buildHoldingRows } from '../../utils/holdingRows'
-import { basisLabel, listPriceCost, pnlBasis } from '../../utils/pnlBasis'
+import { basisLabel, formatFeeRatePct, listPriceCost, pnlBasis } from '../../utils/pnlBasis'
 import { fmtMoney, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
-import { getFeeRateOn } from '../../utils/settings'
+import { DEFAULT_FEE_RATE } from '../../utils/fees'
+import { getFeeRateHistory, getFeeRateOn, getStoredFeeRate } from '../../utils/settings'
 import { taipeiDateKey } from '../../utils/taipeiDate'
 import { WorkspaceFeeSettings, type FeeDraft } from '../WorkspaceFeeSettings'
 import { HoldingsLedger } from './HoldingsLedger'
@@ -47,6 +48,7 @@ function StatementTotals({
   feeOpen,
   onToggleFee,
   previewing = false,
+  feeUnset = false,
 }: {
   tw: MarketSums
   us: MarketSums
@@ -59,6 +61,8 @@ function StatementTotals({
   onToggleFee: () => void
   /** The figures use unsaved fee settings from the open panel. */
   previewing?: boolean
+  /** The workspace never saved a discount, so the TW figures run on the list price by default. */
+  feeUnset?: boolean
 }) {
   const hasTw = tw.rows.length > 0
   const hasUs = us.rows.length > 0
@@ -111,16 +115,21 @@ function StatementTotals({
         )}
         <div className="stmt-sub">
           {hasTw ? (
-            <button
-              type="button"
-              className="stmt-basis"
-              aria-expanded={feeOpen}
-              aria-controls="stmt-fee-panel"
-              onClick={onToggleFee}
-            >
-              台股依{basisText}
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
+            <span className="stmt-basis-line">
+              {feeUnset && <span className="stmt-unset">手續費折扣未設定</span>}
+              <button
+                type="button"
+                className="stmt-basis"
+                aria-expanded={feeOpen}
+                aria-controls="stmt-fee-panel"
+                onClick={onToggleFee}
+              >
+                {feeUnset
+                  ? `台股先用不打折 ${formatFeeRatePct(DEFAULT_FEE_RATE)} 預扣・設定折扣`
+                  : `台股依${basisText}`}
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
+            </span>
           ) : (
             <span>已扣買進手續費；美股不預扣賣出費用</span>
           )}
@@ -184,6 +193,13 @@ export function DashboardPage({
   // Task 182: a sell made now is charged the rate in force today, whatever rate the lots were
   // bought under — so every forward-looking figure on this page asks for today's rate.
   const savedRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
+  // A new workspace has no rate until its owner saves one, and the figures then fall back to the
+  // list price. Someone who opened the account at a discount would not know that, record trades at
+  // 3 折 in 新增交易, and read a total withheld at the full rate — so the basis line says it.
+  const feeUnset =
+    getStoredFeeRate(current?.id) === null &&
+    current?.fee_rate == null &&
+    getFeeRateHistory(current?.id).length === 0
   const savedRebate = current?.fee_rebate ?? 'instant'
   const savedRounding = current?.fee_rounding ?? 'lot'
   // BUG-090: null means "not set" and keeps the BUG-087 behaviour (玉山 halves it, RON does not).
@@ -289,6 +305,7 @@ export function DashboardPage({
           feeOpen={feeOpen}
           onToggleFee={() => setFeeOpen((v) => !v)}
           previewing={previewing}
+          feeUnset={feeUnset && !previewing}
         />
       )}
 

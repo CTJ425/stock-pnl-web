@@ -212,7 +212,9 @@ describe('App（本機模式煙霧測試）', () => {
     // USD rate, so the headline is the TW figure and says so), and the column head points at footnote 3.
     await waitFor(() => expect(container.querySelector('.stmt-totals')).toBeTruthy())
     expect(screen.getByRole('heading', { level: 2, name: /^未實現淨損益（台股）/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 預扣/ })).toBeTruthy()
+    // A local workspace that never saved a discount says so beside the basis link.
+    expect(screen.getByRole('button', { name: /台股先用不打折 0.1425% 預扣/ })).toBeTruthy()
+    expect(screen.getByText('手續費折扣未設定')).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: /未實現淨損益/ })).toBeTruthy()
     expect(container.querySelector('.stmt-notes')?.textContent).toContain('再扣證交稅')
   })

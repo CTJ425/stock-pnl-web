@@ -204,6 +204,7 @@ export function WorkspaceFeeSettings({
   const method: Method = { rebate, sellBasis, rounding, dayTradeTax }
   const broker = customPicked ? CUSTOM_BROKER : !methodSaved && !methodTouched ? null : (matchPreset(method) ?? CUSTOM_BROKER)
   const showDetail = broker === CUSTOM_BROKER || detailOpen
+  const onPreset = broker !== null && broker !== CUSTOM_BROKER
 
   const applyPreset = (m: Method) => {
     rebateManual.current = true
@@ -220,7 +221,6 @@ export function WorkspaceFeeSettings({
   const rate = choice === CUSTOM ? parseFloat(customInput) : Number(choice)
   const rateValid = Number.isFinite(rate) && rate >= 0 && rate < 1
   const fromValid = /^\d{4}-\d{2}-\d{2}$/.test(from)
-  const noDiscount = rateValid && rate >= DEFAULT_FEE_RATE
   const hint = choice === CUSTOM ? describeTwFeeRate(rate) : null
   // What this workspace charged on the chosen date, before this form's unsaved change.
   const rateBefore = fromValid ? rateOn(history, base, from, DEFAULT_FEE_RATE) : savedRate
@@ -231,9 +231,11 @@ export function WorkspaceFeeSettings({
     // and refunds the difference), and that is also the only setting under which the dashboard
     // agrees with the broker's app. So picking a discount defaults to 月退 and dropping back to the
     // list price defaults to 現折 — until the user touches the radios, or had already chosen once.
-    if (rebateManual.current || rebateChosen || !rateValid) return
+    // A broker preset (picked now or saved) is a choice too: changing the discount must not move
+    // 玉山 or 元大 off its 月退／日退, at the list price included (the user, 2026-10-02).
+    if (rebateManual.current || rebateChosen || onPreset || !rateValid) return
     setRebate(defaultRebate(rate))
-  }, [rate, rateValid, rebateChosen])
+  }, [rate, rateValid, rebateChosen, onPreset])
 
   useEffect(() => {
     // A workspace that never saved fee settings keeps the pre-Task-189 pairing until the user picks:
@@ -310,6 +312,11 @@ export function WorkspaceFeeSettings({
         }
         nextHistory = withFeeRateFrom(history, base ?? DEFAULT_FEE_RATE, from, rate)
       }
+    }
+    // A workspace that never had a rate and is saved at the list price is a decision too: without
+    // a stored base it would read 「手續費折扣未設定」 on the dashboard for good.
+    if (!rateChanged && base === null && nextHistory.length === 0) {
+      await setWorkspaceFeeRate(current.id, rate)
     }
     if (JSON.stringify(nextHistory) !== JSON.stringify(savedHistory)) {
       await setWorkspaceFeeRateHistory(current.id, nextHistory)
@@ -543,7 +550,7 @@ export function WorkspaceFeeSettings({
 
           {showDetail && (
             <div className="fee-settings-detail" id={`${uid}-detail`}>
-              <fieldset className="fee-settings-rebate" disabled={noDiscount}>
+              <fieldset className="fee-settings-rebate">
                 <legend>折扣怎麼退給你</legend>
                 <label className="fee-settings-radio">
                   <input

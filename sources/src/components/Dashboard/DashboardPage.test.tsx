@@ -476,11 +476,25 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     }
   })
 
+  // A new workspace has no rate until its owner saves one; someone who opened the account at
+  // 3 折 must see that the total is withheld at the list price by default, not by their choice.
+  it('從沒存過折扣的工作區：說明列標出「手續費折扣未設定」，存過就消失', () => {
+    mockDiscounted()
+    const { unmount } = render(<DashboardPage onSelectTicker={vi.fn()} />)
+    expect(screen.getByText('手續費折扣未設定')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /台股先用不打折 0.1425% 預扣・設定折扣/ })).toBeTruthy()
+    unmount()
+    mockDiscounted({ fee_rate: 0.001425 })
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    expect(screen.queryByText('手續費折扣未設定')).toBeNull()
+    expect(screen.getByRole('button', { name: /台股依牌告 0.1425% 預扣/ })).toBeTruthy()
+  })
+
   it('算法說明就地打開這個工作區的手續費設定', async () => {
     mockDiscounted()
     const user = userEvent.setup()
     render(<DashboardPage onSelectTicker={vi.fn()} />)
-    const basis = screen.getByRole('button', { name: /台股依/ })
+    const basis = screen.getByRole('button', { name: /台股先用不打折/ })
     expect(basis.getAttribute('aria-expanded')).toBe('false')
     await user.click(basis)
     expect(basis.getAttribute('aria-expanded')).toBe('true')

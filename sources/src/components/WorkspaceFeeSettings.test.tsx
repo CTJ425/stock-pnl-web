@@ -110,15 +110,32 @@ describe('WorkspaceFeeSettings', () => {
     expect(setWorkspaceSellFeeBasis).toHaveBeenCalledWith('ws-1', 'list')
   })
 
+  // Without a stored base the dashboard would keep saying 「手續費折扣未設定」 for a broker that
+  // really charges the list price.
+  it('a workspace with no rate saved at 不打折 records it', async () => {
+    const user = userEvent.setup()
+    mount({}, null)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.001425')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRate).toHaveBeenCalledWith('ws-1', 0.001425)
+    expect(setWorkspaceFeeRateHistory).not.toHaveBeenCalled()
+  })
+
   it('a stored rate outside the list opens as a custom rate', () => {
     mount({}, '0.0004')
     expect((screen.getByLabelText('手續費折扣') as HTMLSelectElement).value).toBe('custom')
     expect((screen.getByLabelText('自訂手續費率') as HTMLInputElement).value).toBe('0.0004')
   })
 
-  it('no discount disables the rebate choice', () => {
+  // The user, 2026-10-02: every choice stays the user's, including 月退 at the list price.
+  it('no discount leaves the rebate choice open', async () => {
+    const user = userEvent.setup()
     mount({}, '0.001425')
-    expect(screen.getByRole('radio', { name: /月退/ }).matches(':disabled')).toBe(true)
+    const monthly = screen.getByRole('radio', { name: /月退/ }) as HTMLInputElement
+    expect(monthly.matches(':disabled')).toBe(false)
+    await user.click(monthly)
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRebate).toHaveBeenCalledWith('ws-1', 'monthly')
   })
 
   it('fee/tax flooring defaults to per lot and saves only when changed (BUG-088)', async () => {
@@ -486,6 +503,37 @@ describe('WorkspaceFeeSettings 券商預設', () => {
     expect((screen.getByRole('radio', { name: '其他券商／自訂' }) as HTMLInputElement).checked).toBe(true)
     expect(screen.queryByRole('button', { name: /改單項|收起單項/ })).toBeNull()
     expect(screen.getByRole('radio', { name: /整筆一起算/ })).toBeTruthy()
+  })
+
+  // The user, 2026-10-02: a preset's 月退／日退 is not re-chosen by the discount, list price included.
+  it('存過的玉山改成不打折，仍是玉山（月退）', async () => {
+    const user = userEvent.setup()
+    mount({ fee_rebate: 'monthly', sell_fee_basis: 'list' }, '0.0005415', undefined, false)
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.001425')
+    expect((screen.getByRole('radio', { name: '玉山' }) as HTMLInputElement).checked).toBe(true)
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRebate).not.toHaveBeenCalled()
+  })
+
+  it('不打折的元大改成有折扣，仍是元大（日退）', async () => {
+    const user = userEvent.setup()
+    mount(
+      { fee_rebate: 'instant', sell_fee_basis: 'list', fee_rounding: 'position', day_trade_tax_estimate: false },
+      '0.001425',
+      undefined,
+      false,
+    )
+    await user.selectOptions(screen.getByLabelText('手續費折扣'), '0.0005415')
+    expect((screen.getByRole('radio', { name: '元大' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('不打折也能選玉山，存成月退', async () => {
+    const user = userEvent.setup()
+    mount({}, '0.001425', undefined, false)
+    await user.click(screen.getByRole('radio', { name: '玉山' }))
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(setWorkspaceFeeRebate).toHaveBeenCalledWith('ws-1', 'monthly')
+    expect(setWorkspaceSellFeeBasis).toHaveBeenCalledWith('ws-1', 'list')
   })
 
   it('選自訂就展開四項，數值不變', async () => {
