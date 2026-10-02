@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-02 16:30:00 Asia/Taipei
+- Timestamp: 2026-10-02 15:25:00 Asia/Taipei
 
 ---
 
@@ -17,7 +17,8 @@
 ## 📋 Active Tasks
 
 ### Task 189: 月退 cost on the list-price fee; sell-fee basis split off the rebate (A2)
-- **Status**: 🔄 IN PROGRESS — code on `dev` as **0.10.21-dev.2**; DEV DDL + Edge applied. PROD untouched.
+- **Status**: 🔄 OPEN REMAINDER — released as **0.10.21** (`99cbe50`, `main` = `dev`), DDL + Edge on DEV and PROD,
+  PROD settings of 玉山證卷 / Ron的投資組合 set and checked. Only items 7 and 11 are live.
 - **Agent**: Claude
 - **Timestamp**: 2026-10-02 16:30:00 Asia/Taipei
 - **Why**: 玉山 App showed 009828 at −610, the dashboard −515. 95 = floor(107,000 × 0.1425%) 152 − recorded 57:
@@ -41,13 +42,17 @@
      `verify-pnl-rounding-e2e.cjs` moved to 元大 = 日退 + 牌告, both PASS~~ ✅
   3. ~~DEV DDL `sell_fee_basis` + updated `verify.sql`; `verify_setup()` 10/10 PASS~~ ✅
   4. ~~DEV Edge `stock-report` v40 from clean `8bd36d9`, `--no-verify-jwt`; ezbr 968b24fa… → b5f9b528…~~ ✅
-  5. User tests on DEV (http://10.8.22.84:5173, demo01@gmail.com: workspaces Ivan = 月退 / list base + history,
-     Ron = 月退 + 整筆, both `sell_fee_basis` NULL → Ron's 券商 figure now drops by the list fee until set to 日退) ⏳
-  6. After PROD ships: nothing moves by itself. 玉山證卷 needs one 儲存 (月退 + 牌告) to show the app's cost; if Ron
-     ever re-saves, pick 現折／日退 + 牌告 (月退 would add the list fee to cost). Owners' own call in the UI ⏳
+  5. ~~User tested on DEV and asked for the release~~ ✅
+  6. ~~PROD settings set by SQL on the user's request (each UPDATE gated on the old values): Ron的投資組合 → 現折／日退
+     + 牌告 (`sell_fee_basis` list), 玉山證卷 → 月退 + 牌告. Before/after on PROD data and the same `price_cache`
+     quotes (2026-10-02 06:52 UTC): 玉山 0050 61,528 / 2303 16,137 / 6560 −886 (= the 玉山 app screenshot),
+     Ron 00685L −8,901 / 009828 −71 / 2303 −2,066 — identical to the dollar and the ROI before and after; transactions
+     untouched. Before-image + figures: `~/stock-pnl-web-snapshots/2026-10-02-prod-before/` (outside the repo)~~ ✅
   7. Unverified: whether a 月退 app lowers its cost after the monthly refund (screenshots only show the same
      day); 融券 legs under 月退 were not changed ⏳
-  8. PROD: DDL + Edge + `main` — only on the user's explicit OK ⏳
+  8. ~~PROD: DDL with identity guard, `verify_setup()` 10/10 PASS; Edge `stock-report` v25 (ezbr 968b24fa… →
+     c3e280bd0730…, same bundle as DEV v41); `main` pushed, CI + Release 0.10.21 by CI; live bundle carries
+     `sell_fee_basis` / 「計成本與預扣」~~ ✅
   9. ~~PROD Ron的投資組合 snapshot → DEV demo01 「Ron」 (2026-10-02 06:31 UTC). PROD settings: 0.0004275, 月退,
      整筆 (`position`), `day_trade_tax_estimate` false, no history; 65 rows, Σfee_tax 11,926, Σprice×qty 7,446,140 —
      identical on DEV after the copy. Owner: matches the 元大 app on 0.10.20. Raw rows kept **outside the repo**
@@ -61,6 +66,9 @@
      the uplift needs 月退 **and** a saved `sell_fee_basis`. Re-run on the snapshot: 00685L / 009828 / 2303 under PROD's
      settings = 0.10.20 to the dollar (−11,775 / 567 / −1,070 at avg-cost prices). Guards: holdingsCard + Dashboard
      tests for 月退 + NULL. Consequence: a 玉山 workspace needs one 儲存 in 手續費設定 to show −610~~ ✅
+  11. Ron的投資組合 00685L is never discounted (user, 2026-10-02; recorded 459 = list). The workspace has one rate, so
+     新增交易 pre-fills 00685L at 3 折 and 批次重算 would propose lowering 459 — both need a manual override until a
+     per-ticker rate exists. Not built; same item as Task 188 #9 ⏳
 
 ### Task 188: UX / a11y follow-ups from the 2026-10-02 DEV E2E
 - **Status**: 🔄 OPEN — not started; pick up only when the user asks
