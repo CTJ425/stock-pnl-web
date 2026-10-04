@@ -31,7 +31,7 @@ describe('marketSession — 台灣 (TW)', () => {
   })
 
   it('08:59 台北尚未開盤', () => {
-    expect(marketSession('TW', new Date('2026-09-15T00:59:00Z'))).toBe('closed')
+    expect(marketSession('TW', new Date('2026-09-15T00:59:00Z'))).toBe('preopen')
   })
 
   it('13:29 仍在盤中，13:30 收盤', () => {

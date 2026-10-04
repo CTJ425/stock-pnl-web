@@ -12,13 +12,15 @@
 
 export type MarketRegion = 'TW' | 'JP' | 'KR' | 'US'
 /**
- * `closed` is a trading day outside its hours (已收盤); `holiday` is a day the market does not trade at
- * all —— a local weekend, or a `ClosedDates` entry (休市, 0.10.26).
+ * On a trading day: `preopen` before the open (未開盤), `closed` after the close (已收盤). `holiday` is a
+ * day the market does not trade at all —— a local weekend, or a `ClosedDates` entry (休市). The last two
+ * states were split out of `closed` in 0.10.26 at the owner's request.
  */
-export type SessionState = 'open' | 'break' | 'closed' | 'holiday'
+export type SessionState = 'preopen' | 'open' | 'break' | 'closed' | 'holiday'
 
 /** The badge text for each state, shared by the 國際指數 list and the index detail. */
 export const SESSION_LABELS: Record<SessionState, string> = {
+  preopen: '未開盤',
   open: '盤中',
   break: '午休',
   closed: '已收盤',
@@ -139,7 +141,8 @@ export function marketSession(region: MarketRegion, now: Date, closedDates?: Clo
   if (closedDates?.[region]?.has(localDateKey(rule.timeZone, now))) return 'holiday'
   const { weekday, minutes } = localParts(rule.timeZone, now)
   if (!WEEKDAYS.has(weekday)) return 'holiday'
-  if (minutes < rule.openMin || minutes >= rule.closeMin) return 'closed'
+  if (minutes < rule.openMin) return 'preopen'
+  if (minutes >= rule.closeMin) return 'closed'
   if (
     rule.breakStartMin !== null &&
     rule.breakEndMin !== null &&

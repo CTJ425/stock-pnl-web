@@ -100,13 +100,13 @@ describe('GlobalIndices — 休市標籤', () => {
     for (const r of ['TW', 'JP', 'KR', 'US']) expect(screen.getByTestId(`gix-session-${r}`).textContent).toBe('休市')
   })
 
-  it('台股國慶日補假：台灣休市，日本已收盤，美股開盤前只是已收盤', async () => {
+  it('台股國慶日補假：台灣休市，日本已收盤，美股是未開盤', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-10-09T16:00:00+08:00'))
     render(<GlobalIndices onSelect={() => {}} closedDates={{ TW: new Set(['2026-10-09']) }} />)
     await screen.findByTestId('gix-card-^TWII')
     expect(screen.getByTestId('gix-session-TW').textContent).toBe('休市')
     expect(screen.getByTestId('gix-session-JP').textContent).toBe('已收盤')
-    expect(screen.getByTestId('gix-session-US').textContent).toBe('已收盤')
+    expect(screen.getByTestId('gix-session-US').textContent).toBe('未開盤')
   })
 })

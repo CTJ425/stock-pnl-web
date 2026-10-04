@@ -11,7 +11,7 @@ describe('marketSession — 日本 (JP)', () => {
   })
 
   it('08:59 JST 尚未開盤', () => {
-    expect(marketSession('JP', new Date('2026-09-14T23:59:00Z'))).toBe('closed')
+    expect(marketSession('JP', new Date('2026-09-14T23:59:00Z'))).toBe('preopen')
   })
 
   it('11:30 JST 進入午休', () => {
@@ -49,7 +49,7 @@ describe('marketSession — 美國 (US) 夏令時間 EDT', () => {
   })
 
   it('09:29 ET 尚未開盤', () => {
-    expect(marketSession('US', new Date('2026-09-15T13:29:00Z'))).toBe('closed')
+    expect(marketSession('US', new Date('2026-09-15T13:29:00Z'))).toBe('preopen')
   })
 
   it('15:59 ET 仍在盤中，16:00 ET 收盤', () => {
@@ -64,7 +64,7 @@ describe('marketSession — 美國 (US) 冬令時間 EST', () => {
   })
 
   it('13:30 UTC 在冬令時間只是 08:30 ET，尚未開盤', () => {
-    expect(marketSession('US', new Date('2026-01-15T13:30:00Z'))).toBe('closed')
+    expect(marketSession('US', new Date('2026-01-15T13:30:00Z'))).toBe('preopen')
   })
 })
 
