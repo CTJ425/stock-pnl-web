@@ -2,6 +2,24 @@
 
 
 
+### Task 194 — completed work (rolled from TASK.md 2026-10-05 00:41:08 Asia/Taipei, released as 0.10.30)
+
+#### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
+- **Status**: 🔄 OPEN REMAINDER — code on `dev` as **0.10.30-dev.7** (treemap removed, in-place details, top-5 stocks per group; small optimisations in dev.6; layout B in dev.5; page `50c1765` in dev.4, admin button `de3b1c8` in dev.3); DEV `stock-report` v48 `f4b0e9fb7ae6…` (v46 `5977623f…` → v47 `9e1d2e11…` → v48), `verify_jwt` false kept. Nothing on `main`, nothing on PROD.
+- **Agent**: Claude
+- **Timestamp**: 2026-10-05 00:15:21 Asia/Taipei
+- **Spec**: docs/agent/specs/194-login-remember-and-sector-flow.md
+- **Done**: items 1–3 (code, tests, DEV Edge deploy) — vitest 3,041 pass / 7 skipped, build, `typecheck:edge`, lint, engine sync; login page and the new card screenshotted at 1180/390 px, light and dark, no overflow or console errors.
+- **Items**:
+  4. DEV has **no `market/sector_flow.json` yet**. The 手動更新 tab now has a 「類股資金流向」 row (`sync-sector-flow`, dev.3): the user presses it on the DEV site (admin login), then 總經 → 台股市場 shows the card. Without it the first weekday chips round (Mon 2026-10-05 from ~16:30 Taipei) produces it. The agent could not fire it itself (needs `CRON_SECRET`; borrowing it from the cron command was refused by the permission classifier — do not retry that route). Real-data run of the same code on 2026-10-02 worked locally (41 rows, 19.7 KB, 估算 103.2 億 vs 公布 104.2 億) ⏳
+  4a. 資金流向 is its own page; layout **B chosen by the user from three artboard designs** (dev.5), then (dev.7, user: 「把方塊圖取消掉…點選圓餅圖或表格…買超主力列出 top5」, 「直接做B」, 「其他…依你建議」): the **treemap is gone**; a ring slice, a legend row or a table row opens that sector's detail **in place** under it (one at a time; sentence, 外資/投信/自營商/合計, 成交 share, top-5 buyers or sellers by the side of the figure and **ranked by the chosen group** — Edge now stores per-group top-5 lists, newest day only: file ≈ 75 KB for the day, 122 KB for 7 days raw); 其他 opens the folded sectors; default is everything closed; a link `#/sector-flow/<code>` opens under the legend row, or in the table (opened) when the sector has no slice. Checked in a real browser against the real 2026-10-02 output at 1280/390 px, light and dark; found and fixed a real bug there (the ring-centre overlay's corners caught clicks meant for the ring). **Not seen on the DEV site** — it has no data file yet (item 4) ⏳
+  5. Real-browser check on the DEV site with a real login: 保持登入 across a close/reopen on iOS Safari and Windows, the 7-day cap (not exercised; unit-tested only), the card on the live 總經 → 台股市場 page ⏳
+  6. ~~Admin-run job for `sync-sector-flow`~~ ✅ (dev.3, `de3b1c8`)
+  8. Free-tier optimisations (RISK-023): ✅ on DEV (dev.6) — probe schedule narrowed, `cron-history-prune` added, sector-flow file 7 days; DEV `stock-report` redeployed. ⏳ **PROD**: needs the user's OK — `cron.alter_job` on `source-probe`, the prune job, and the `stock-report` Edge deploy (also the sector-flow cap). First real confirmation on DEV: probe ticks in `source_probe_tick` between 12:00 and 23:30 on Mon 2026-10-05, none outside
+  7. Release: PROD needs the Edge deploy (`stock-report`, no DDL) with explicit OK; changelog 0.10.30 is still 「開發中」 and must be final before the `main` push ⏳
+
+
+
 ### Task 193 — completed sub-items (rolled from TASK.md 2026-10-04 15:53:11)
   1. ~~B1 — H1 CSV 取代 / H2 REVOKE `take_warm_quota` / H3 `netOpenTickers`~~ ✅ (`986daa5`, BUG-113)
   2. ~~B3 — M11–M14 + Edge lows~~ ✅ (`6a3db30`, BUG-114)
