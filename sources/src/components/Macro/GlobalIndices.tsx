@@ -14,6 +14,7 @@ import {
   openRegions,
   marketSession,
   SESSION_HOURS,
+  SESSION_LABELS,
   type ClosedDates,
   type MarketRegion,
   type SessionState,
@@ -46,11 +47,6 @@ const REGION_LABELS: Record<MarketRegion, string> = {
   JP: '日本',
   KR: '韓國',
   US: '美國',
-}
-const SESSION_LABELS: Record<SessionState, string> = {
-  open: '盤中',
-  break: '午休',
-  closed: '已收盤',
 }
 
 const POLL_INTERVAL_MS = 60 * 1000
@@ -223,7 +219,9 @@ export function GlobalIndices({
                     {region !== 'TW' ? `・台北 ${hours.taipei}` : ''}
                   </span>
                 </div>
-                <span className="badge">{SESSION_LABELS[session]}</span>
+                <span className="badge" data-testid={`gix-session-${region}`}>
+                  {SESSION_LABELS[session]}
+                </span>
               </div>
               <div className="gix-rows">
                 {INDICES.filter((i) => i.region === region).map((def) => (

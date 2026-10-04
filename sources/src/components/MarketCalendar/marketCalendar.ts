@@ -120,3 +120,11 @@ export function closedNote(today: string): string | null {
   const when = daysBetween(today, next.ymd) === 1 ? '明天' : `${fmtMonthDay(next.ymd)}（${weekdayOf(next.ymd)}）`
   return `${when}休市（${next.name}）`
 }
+
+/** Screen-reader and tooltip text of one calendar cell */
+export function dayLabel(d: DayInfo): string {
+  const base = `${fmtMonthDay(d.ymd)}（${weekdayOf(d.ymd)}）`
+  if (d.kind === 'holiday') return `${base} 休市：${d.name}`
+  if (d.kind === 'weekend') return `${base} 休市：週末`
+  return `${base} 開市`
+}

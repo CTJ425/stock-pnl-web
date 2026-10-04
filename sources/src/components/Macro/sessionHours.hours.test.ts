@@ -40,7 +40,7 @@ describe('marketSession — 台灣 (TW)', () => {
   })
 
   it('週六休市', () => {
-    expect(marketSession('TW', new Date('2026-09-19T03:00:00Z'))).toBe('closed')
+    expect(marketSession('TW', new Date('2026-09-19T03:00:00Z'))).toBe('holiday')
   })
 
   it('台股盤中時 openRegions 以 TW 為首', () => {

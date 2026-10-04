@@ -11,16 +11,28 @@
  */
 
 export type MarketRegion = 'TW' | 'JP' | 'KR' | 'US'
-export type SessionState = 'open' | 'break' | 'closed'
+/**
+ * `closed` is a trading day outside its hours (已收盤); `holiday` is a day the market does not trade at
+ * all —— a local weekend, or a `ClosedDates` entry (休市, 0.10.26).
+ */
+export type SessionState = 'open' | 'break' | 'closed' | 'holiday'
+
+/** The badge text for each state, shared by the 國際指數 list and the index detail. */
+export const SESSION_LABELS: Record<SessionState, string> = {
+  open: '盤中',
+  break: '午休',
+  closed: '已收盤',
+  holiday: '休市',
+}
 
 /**
  * Known non-trading dates per region, keyed by the region's own local calendar date
  * ('YYYY-MM-DD'). Optional and additive: when a region has no entry (or the caller passes
  * nothing at all), the weekday+clock rule below is the only source of truth for that region.
  *
- * TW is the only region a caller can populate today (from `market/daily.json`, see
- * `MacroPage.tsx`) — we hold no holiday calendar for JP/KR/US, so those always fall back to
- * the plain weekday+clock rule.
+ * TW is the only region a caller can populate today (from `TW_HOLIDAYS`, see `MacroPage.tsx`) —
+ * we hold no holiday calendar for JP/KR/US, so their national holidays read as 已收盤, and only
+ * their weekends as 休市.
  */
 export type ClosedDates = Partial<Record<MarketRegion, ReadonlySet<string>>>
 
@@ -124,9 +136,9 @@ function localDateKey(timeZone: string, now: Date): string {
 /** Session state of `region` at instant `now` (local time of that market, DST-aware). */
 export function marketSession(region: MarketRegion, now: Date, closedDates?: ClosedDates): SessionState {
   const rule = RULES[region]
-  if (closedDates?.[region]?.has(localDateKey(rule.timeZone, now))) return 'closed'
+  if (closedDates?.[region]?.has(localDateKey(rule.timeZone, now))) return 'holiday'
   const { weekday, minutes } = localParts(rule.timeZone, now)
-  if (!WEEKDAYS.has(weekday)) return 'closed'
+  if (!WEEKDAYS.has(weekday)) return 'holiday'
   if (minutes < rule.openMin || minutes >= rule.closeMin) return 'closed'
   if (
     rule.breakStartMin !== null &&

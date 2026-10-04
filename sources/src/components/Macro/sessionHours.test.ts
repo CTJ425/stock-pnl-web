@@ -70,16 +70,27 @@ describe('marketSession — 美國 (US) 冬令時間 EST', () => {
 
 describe('marketSession — 週末以當地星期判斷', () => {
   it('台北週六凌晨，日韓皆休市', () => {
-    expect(marketSession('JP', new Date('2026-09-19T01:00:00Z'))).toBe('closed')
-    expect(marketSession('KR', new Date('2026-09-19T01:00:00Z'))).toBe('closed')
+    expect(marketSession('JP', new Date('2026-09-19T01:00:00Z'))).toBe('holiday')
+    expect(marketSession('KR', new Date('2026-09-19T01:00:00Z'))).toBe('holiday')
   })
 
   it('UTC 已是週一 00:30，但紐約仍是週日晚上 → 休市', () => {
-    expect(marketSession('US', new Date('2026-09-21T00:30:00Z'))).toBe('closed')
+    expect(marketSession('US', new Date('2026-09-21T00:30:00Z'))).toBe('holiday')
   })
 
   it('UTC 週六 13:30 對應紐約週六 09:30 → 休市', () => {
-    expect(marketSession('US', new Date('2026-09-19T13:30:00Z'))).toBe('closed')
+    expect(marketSession('US', new Date('2026-09-19T13:30:00Z'))).toBe('holiday')
+  })
+
+  it('台北週六早上，紐約還是週五晚上 → 美股只是已收盤，不是休市', () => {
+    expect(marketSession('US', new Date('2026-09-19T01:00:00Z'))).toBe('closed')
+  })
+
+  it('ClosedDates 列的日子整天都是休市（台股國慶日補假 2026-10-09）', () => {
+    const closed = { TW: new Set(['2026-10-09']) }
+    expect(marketSession('TW', new Date('2026-10-09T02:00:00Z'), closed)).toBe('holiday')
+    expect(marketSession('TW', new Date('2026-10-09T08:00:00Z'), closed)).toBe('holiday')
+    expect(marketSession('JP', new Date('2026-10-09T02:00:00Z'), closed)).toBe('open')
   })
 })
 

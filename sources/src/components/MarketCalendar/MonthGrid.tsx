@@ -2,14 +2,7 @@
  * One ruled month of the TW market calendar, and the legend that reads it. Shared by the admin
  * 開休市日 page and the 總經 台股 disclosure, so both draw the same `TW_HOLIDAYS`.
  */
-import { WEEKDAYS, fmtMonthDay, monthWeeks, weekdayOf, type DayInfo } from './marketCalendar'
-
-export function dayLabel(d: DayInfo): string {
-  const base = `${fmtMonthDay(d.ymd)}（${weekdayOf(d.ymd)}）`
-  if (d.kind === 'holiday') return `${base} 休市：${d.name}`
-  if (d.kind === 'weekend') return `${base} 休市：週末`
-  return `${base} 開市`
-}
+import { WEEKDAYS, dayLabel, monthWeeks } from './marketCalendar'
 
 export function MonthGrid({ year, month, today }: { year: number; month: number; today: string }) {
   return (

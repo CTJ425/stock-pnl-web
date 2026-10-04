@@ -87,3 +87,26 @@ describe('GlobalIndices — 點擊下鑽', () => {
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
 })
+
+/** 0.10.26: a day the market does not trade reads 休市, not 已收盤. The holiday's name is in the footnote. */
+describe('GlobalIndices — 休市標籤', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('週日：台日韓美都是休市', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-10-04T10:00:00+08:00'))
+    render(<GlobalIndices onSelect={() => {}} />)
+    await screen.findByTestId('gix-card-^TWII')
+    for (const r of ['TW', 'JP', 'KR', 'US']) expect(screen.getByTestId(`gix-session-${r}`).textContent).toBe('休市')
+  })
+
+  it('台股國慶日補假：台灣休市，日本已收盤，美股開盤前只是已收盤', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-10-09T16:00:00+08:00'))
+    render(<GlobalIndices onSelect={() => {}} closedDates={{ TW: new Set(['2026-10-09']) }} />)
+    await screen.findByTestId('gix-card-^TWII')
+    expect(screen.getByTestId('gix-session-TW').textContent).toBe('休市')
+    expect(screen.getByTestId('gix-session-JP').textContent).toBe('已收盤')
+    expect(screen.getByTestId('gix-session-US').textContent).toBe('已收盤')
+  })
+})

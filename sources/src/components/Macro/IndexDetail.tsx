@@ -12,18 +12,13 @@ import { INDEX_TREND_RANGES, indexTrendSource } from './indexTrend'
 import {
   marketSession,
   SESSION_HOURS,
+  SESSION_LABELS,
   type MarketRegion,
-  type SessionState,
 } from './sessionHours'
 import { pnlClass } from '../../utils/formatters'
 import type { IndexQuote } from '../../services/indexQuotes'
 import type { IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
 
-const SESSION_LABELS: Record<SessionState, string> = {
-  open: '盤中',
-  break: '午休',
-  closed: '已收盤',
-}
 
 const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' })
 
