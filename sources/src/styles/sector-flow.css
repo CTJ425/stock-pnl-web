@@ -1,0 +1,389 @@
+/* ---------- 資金流向 ----------
+ * A treemap: red tiles are institutional buying, green tiles selling (the market's own convention,
+ * --up / --down), deeper = more, area = turnover. The signed number is always written somewhere —
+ * on the tile, in the detail panel, or in the table — so colour never carries the sign alone.
+ * Corners stay square: a ruled sheet, not a card wall.
+ */
+.sf-page {
+  padding: 18px 20px;
+  margin-top: 18px;
+}
+
+.rpt-section-head h2.sf-title {
+  flex: 0 0 auto;
+  font-size: var(--type-heading-03);
+}
+
+.sf-summary {
+  margin-top: 12px;
+}
+
+.sf-summary p {
+  margin: 0 0 4px;
+  font-size: var(--type-body-01);
+  line-height: 1.6;
+  color: var(--cds-text-primary);
+}
+
+/* How to read the picture, one line. */
+.sf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-01);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+.sf-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius);
+}
+
+.sf-swatch-buy {
+  background: color-mix(in srgb, var(--up) 45%, var(--cds-layer-01));
+}
+
+.sf-swatch-sell {
+  background: color-mix(in srgb, var(--down) 45%, var(--cds-layer-01));
+}
+
+/* ----- picture + detail ----- */
+.sf-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+}
+
+.sf-treemap {
+  position: relative;
+  width: 100%;
+  container-type: inline-size;
+  background: var(--cds-layer-01);
+}
+
+.sf-tile,
+.sf-parent-head {
+  appearance: none;
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--cds-layer-01);
+  border-radius: 0;
+  color: var(--cds-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sf-tile:hover,
+.sf-parent-head:hover {
+  border-color: var(--cds-text-primary);
+}
+
+.sf-tile:focus-visible,
+.sf-parent-head:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.sf-tile-selected {
+  border-color: var(--cds-text-primary);
+  outline: 2px solid var(--cds-text-primary);
+  outline-offset: -3px;
+  z-index: 1;
+}
+
+.sf-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 6px;
+  line-height: 1.25;
+}
+
+.sf-tile-name {
+  font-size: clamp(11px, 1.45cqw, 14px);
+  font-weight: 600;
+}
+
+.sf-tile-figure {
+  font-size: clamp(11px, 1.3cqw, 13px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 半導體: a header strip on top, its four sub-sectors below. */
+.sf-parent {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.sf-parent-head {
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.sf-parent-head .sf-tile-name,
+.sf-parent-head .sf-tile-figure {
+  font-size: 13px;
+}
+
+.sf-parent-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* ----- detail panel ----- */
+.sf-detail {
+  padding: 4px 0;
+  min-width: 0;
+}
+
+.sf-detail-guide {
+  margin: 0 0 8px;
+  font-size: var(--type-body-01);
+  line-height: 1.6;
+  color: var(--cds-text-primary);
+}
+
+.sf-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sf-detail-title {
+  font-size: var(--type-heading-03);
+}
+
+.sf-detail-sub {
+  margin-top: 2px;
+}
+
+.sf-detail-sentence {
+  margin: 10px 0;
+  font-size: var(--type-body-01);
+  line-height: 1.6;
+  color: var(--cds-text-primary);
+}
+
+.sf-detail-groups {
+  margin: 0 0 8px;
+  border-top: 1px solid var(--cds-text-primary);
+}
+
+.sf-detail-groups > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  font-size: var(--type-body-01);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-detail-groups dt {
+  color: var(--ink-secondary);
+}
+
+.sf-detail-groups dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sf-detail-total dt {
+  color: var(--cds-text-primary);
+  font-weight: 600;
+}
+
+.sf-detail-movers h4 {
+  margin: 12px 0 4px;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.sf-detail-movers ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sf-detail-movers li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  font-size: var(--type-body-01);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- table ----- */
+.sf-table-title {
+  margin-top: 22px;
+}
+
+.sector-flow-table .sf-name {
+  white-space: normal;
+  min-width: 9em;
+  font-weight: 500;
+}
+
+.sector-flow-table .sf-child .sf-name {
+  padding-left: 28px;
+  font-weight: 400;
+}
+
+.sector-flow-table .sf-row-selected td {
+  background: var(--cds-layer-selected-01, var(--cds-layer-hover-01));
+}
+
+.sf-movers {
+  margin-top: 2px;
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.sf-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 0 4px 0 0;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sf-toggle:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+.sf-bar-head,
+.sf-bar-cell {
+  width: 34%;
+  min-width: 120px;
+}
+
+.sf-bar {
+  position: relative;
+  height: 12px;
+}
+
+/* The zero line the bars grow from. */
+.sf-bar::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  bottom: -6px;
+  width: 1px;
+  background: var(--cds-border-strong);
+}
+
+.sf-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.sf-buy {
+  left: 50%;
+  background: var(--up);
+}
+
+.sf-sell {
+  right: 50%;
+  background: var(--down);
+}
+
+/* ----- the link card in 台股市場 ----- */
+.sf-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  margin-top: 18px;
+}
+
+.sf-link .hint {
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .sf-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .sf-page {
+    padding: 14px 12px;
+  }
+
+  .sf-tile-name {
+    font-size: 12px;
+  }
+
+  .sf-tile-figure {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 560px) {
+  .sf-share {
+    display: none;
+  }
+
+  .sf-bar-head,
+  .sf-bar-cell {
+    width: 38%;
+    min-width: 104px;
+  }
+
+  .sector-flow-table .sf-name {
+    min-width: 6.5em;
+    max-width: 9em;
+  }
+
+  /* One line per row on a phone: the names behind a number are a glance, not a paragraph. */
+  .sf-movers {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}

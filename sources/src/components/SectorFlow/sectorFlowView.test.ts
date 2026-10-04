@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { SectorFlowDay, SectorFlowRow } from '../../services/sectorFlowProxy'
-import { WEEK_DAYS, buildView, reconciliationGap, signedBillion, summarize, toneOf, windowLabel, windowOf } from './sectorFlowView'
+import {
+  WEEK_DAYS,
+  buildView,
+  leadClause,
+  reconciliationGap,
+  signedBillion,
+  summarize,
+  toneOf,
+  windowLabel,
+  windowOf,
+} from './sectorFlowView'
 
 const E8 = 1e8
 
@@ -192,5 +202,37 @@ describe('signedBillion / toneOf', () => {
     expect(signedBillion(0.02 * E8)).toBe('0.0 億')
     expect(toneOf(-0.02 * E8)).toBe(0)
     expect(toneOf(-0.2 * E8)).toBe(-0.2 * E8)
+  })
+})
+
+describe('groups', () => {
+  it('carries all four investor figures on every row, summed over the window, whichever group is shown', () => {
+    const a = day('2026-10-01', [row('28', 'x', 10, { foreignTwd: 7 * E8, trustTwd: 2 * E8, dealerTwd: 1 * E8 })])
+    const b = day('2026-10-02', [row('28', 'x', 4, { foreignTwd: 1 * E8, trustTwd: 1 * E8, dealerTwd: 2 * E8 })])
+    for (const metric of ['total', 'foreign', 'trust', 'dealer'] as const) {
+      const r = buildView([a, b], 'week', metric)!.sectors[0]
+      expect(r.groups).toEqual({ foreignTwd: 8 * E8, trustTwd: 3 * E8, dealerTwd: 3 * E8, totalTwd: 14 * E8 })
+    }
+  })
+})
+
+describe('leadClause', () => {
+  const g = (foreign: number, trust: number, dealer: number) => ({
+    foreignTwd: foreign * E8,
+    trustTwd: trust * E8,
+    dealerTwd: dealer * E8,
+    totalTwd: (foreign + trust + dealer) * E8,
+  })
+  it('names the group that moved most in the direction of the total', () => {
+    expect(leadClause(g(-77.3, 1, 6.4))).toBe('外資賣超 77.3 億')
+    expect(leadClause(g(5, 20, -3))).toBe('投信買超 20.0 億')
+  })
+  it('does not credit a group that went the other way', () => {
+    // 外資 sold the most, but the total is a buy led by 自營商.
+    expect(leadClause(g(-5, 1, 30))).toBe('自營商買超 30.0 億')
+  })
+  it('says nothing when the total is flat or the leader rounds to zero', () => {
+    expect(leadClause(g(0, 0, 0))).toBeNull()
+    expect(leadClause({ foreignTwd: 1e6, trustTwd: 0, dealerTwd: 0, totalTwd: 1e6 })).toBeNull()
   })
 })

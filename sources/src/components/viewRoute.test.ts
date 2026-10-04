@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatViewHash, parseViewHash } from './viewRoute'
 
-const VIEWS = ['dashboard', 'analysis', 'transactions'] as const
+const VIEWS = ['dashboard', 'analysis', 'transactions', 'sector-flow'] as const
 
 describe('parseViewHash', () => {
   it('reads a page and an optional ticker', () => {
@@ -15,6 +15,13 @@ describe('parseViewHash', () => {
     expect(parseViewHash('#/macro', VIEWS)).toBeNull()
     // Supabase auth redirect: must stay untouched for auth-js.
     expect(parseViewHash('#access_token=abc&type=recovery', VIEWS)).toBeNull()
+  })
+
+  it('carries a sector code, including a semiconductor part with a colon', () => {
+    expect(parseViewHash('#/sector-flow', VIEWS)).toEqual({ view: 'sector-flow' })
+    expect(parseViewHash('#/sector-flow/24', VIEWS)).toEqual({ view: 'sector-flow', ticker: '24' })
+    expect(parseViewHash('#/sector-flow/24%3Adesign', VIEWS)).toEqual({ view: 'sector-flow', ticker: '24:design' })
+    expect(formatViewHash({ view: 'sector-flow', ticker: '24:design' })).toBe('#/sector-flow/24%3Adesign')
   })
 
   it('survives a malformed escape in the ticker', () => {

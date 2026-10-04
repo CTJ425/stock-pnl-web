@@ -7,6 +7,7 @@ import { Fragment, Suspense, lazy, useCallback, useEffect, useState } from 'reac
 import {
   ArrowRightLeft,
   CalendarRange,
+  Coins,
   Globe,
   LayoutDashboard,
   LineChart,
@@ -44,6 +45,9 @@ const TransactionsPage = lazy(() =>
   loadChunk(() => import('./Transactions/TransactionsPage')).then((m) => ({ default: m.TransactionsPage })),
 )
 const MacroPage = lazy(() => loadChunk(() => import('./Macro/MacroPage')).then((m) => ({ default: m.MacroPage })))
+const SectorFlowPage = lazy(() =>
+  loadChunk(() => import('./SectorFlow/SectorFlowPage')).then((m) => ({ default: m.SectorFlowPage })),
+)
 const FxPage = lazy(() => loadChunk(() => import('./Fx/FxPage')).then((m) => ({ default: m.FxPage })))
 const AdminConsolePage = lazy(() =>
   loadChunk(() => import('./Admin/AdminConsolePage')).then((m) => ({ default: m.AdminConsolePage })),
@@ -55,7 +59,7 @@ const DiscordMySettings = lazy(() =>
 /** Same markup as the workspace-loading placeholder, so a split page does not flash a different shape. */
 const PAGE_FALLBACK = <div className="glass empty-state section">載入中…</div>
 
-type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
+type Tab = 'dashboard' | 'analysis' | 'macro' | 'sector-flow' | 'fx' | 'yearly' | 'transactions'
 
 /** Pages other than pagination. The management background is not on the paging bar and is entered through the user menu (see `UserMenu`)*/
 type View = Tab | 'admin' | 'discord'
@@ -92,6 +96,7 @@ const ALL_TABS: Array<{
   { id: 'yearly', label: '年度收益', short: '年度', group: 'holding', icon: CalendarRange },
   { id: 'transactions', label: '交易紀錄', short: '紀錄', group: 'holding', icon: NotebookPen },
   { id: 'macro', label: '總體經濟', short: '總經', group: 'market', icon: Globe },
+  { id: 'sector-flow', label: '資金流向', short: '資金', group: 'market', icon: Coins },
   { id: 'fx', label: '外幣匯率', short: '匯率', group: 'market', icon: ArrowRightLeft },
 ]
 
@@ -104,7 +109,7 @@ const ALL_TABS: Array<{
  * The empty state says "It will be automatically added after the daily schedule is completed" - that is false in local mode.
  * It will never be replenished, and keeping it will only keep the user waiting for something that will never come.
  */
-const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx']
+const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'sector-flow', 'fx']
 
 const TABS = isReportConfigured
   ? ALL_TABS
@@ -322,6 +327,7 @@ export function AppShell() {
                 <Suspense fallback={PAGE_FALLBACK}>
                   {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
                   {view === 'macro' && <MacroPage focus={route.ticker} />}
+                  {view === 'sector-flow' && <SectorFlowPage focus={route.ticker} />}
                   {view === 'fx' && <FxPage />}
                   {view === 'yearly' && <YearlyPage />}
                   {view === 'transactions' && <TransactionsPage />}

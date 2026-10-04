@@ -11,6 +11,7 @@
 @import './styles/stock-detail.css'; /* Individual stock analysis page and the self-drawn SVG charts */
 @import './styles/fx.css'; /* Foreign currency exchange rate page */
 @import './styles/macro.css'; /* Macro page: 國際指數, indicator chips and rows, sparklines */
+@import './styles/sector-flow.css'; /* 資金流向 page: treemap, detail panel, ranking table; the link card in 台股市場 */
 @import './styles/stock-chips.css'; /* Stock detail 三大法人 matrix (after macro: it overrides .mac-spark inside the matrix) */
 @import './styles/market-calendar.css'; /* TW market calendar grid shared by admin and 總經 */
 @import './styles/admin.css'; /* Admin console: layout, role switch, schedule, probe list, logs, probe war room */

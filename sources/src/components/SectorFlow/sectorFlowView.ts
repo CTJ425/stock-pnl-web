@@ -4,7 +4,7 @@
  * Kept apart from the component so the arithmetic is testable without a DOM.
  */
 import type { SectorFlowDay, SectorFlowRow, SectorTopStock } from '../../services/sectorFlowProxy'
-import { fmtBillionSigned, toBillion } from '../../utils/formatters'
+import { fmtBillion, fmtBillionSigned, toBillion } from '../../utils/formatters'
 
 export type Metric = 'total' | 'foreign' | 'trust' | 'dealer'
 export type Range = 'day' | 'week'
@@ -19,10 +19,20 @@ export const METRIC_LABEL: Record<Metric, string> = {
   dealer: '自營商',
 }
 
+/** What each investor group did in the window, whichever one the screen is currently showing. */
+export interface Groups {
+  foreignTwd: number
+  trustTwd: number
+  dealerTwd: number
+  totalTwd: number
+}
+
 export interface ViewRow {
   code: string
   name: string
+  /** The figure for the chosen investor group (see `Metric`). */
   netTwd: number
+  groups: Groups
   turnoverTwd: number
   /** Share of the market's turnover; null when the window has none. */
   turnoverShare: number | null
@@ -47,8 +57,8 @@ export interface FlowView {
   reconciliation: { estimateTwd: number; officialTwd: number } | null
 }
 
-const pick = (r: SectorFlowRow, metric: Metric): number =>
-  metric === 'total' ? r.totalTwd : metric === 'foreign' ? r.foreignTwd : metric === 'trust' ? r.trustTwd : r.dealerTwd
+const pickGroup = (g: Groups, metric: Metric): number =>
+  metric === 'total' ? g.totalTwd : metric === 'foreign' ? g.foreignTwd : metric === 'trust' ? g.trustTwd : g.dealerTwd
 
 /** The last `range` days of the file, oldest first. */
 export function windowOf(days: SectorFlowDay[], range: Range): SectorFlowDay[] {
@@ -61,16 +71,28 @@ export function buildView(days: SectorFlowDay[], range: Range, metric: Metric): 
   const newest = win[win.length - 1]
   const marketTurnover = win.reduce((s, d) => s + d.marketTurnoverTwd, 0)
 
-  const sums = new Map<string, { row: SectorFlowRow; net: number; turnover: number }>()
+  const sums = new Map<string, { row: SectorFlowRow; groups: Groups; turnover: number }>()
   for (const d of win) {
     for (const r of d.rows) {
       const cur = sums.get(r.code)
       if (cur) {
-        cur.net += pick(r, metric)
+        cur.groups.foreignTwd += r.foreignTwd
+        cur.groups.trustTwd += r.trustTwd
+        cur.groups.dealerTwd += r.dealerTwd
+        cur.groups.totalTwd += r.totalTwd
         cur.turnover += r.turnoverTwd
       } else {
         // `row` only supplies the fallback name and `parent`; the newest day's row is used for the rest.
-        sums.set(r.code, { row: r, net: pick(r, metric), turnover: r.turnoverTwd })
+        sums.set(r.code, {
+          row: r,
+          groups: {
+            foreignTwd: r.foreignTwd,
+            trustTwd: r.trustTwd,
+            dealerTwd: r.dealerTwd,
+            totalTwd: r.totalTwd,
+          },
+          turnover: r.turnoverTwd,
+        })
       }
     }
   }
@@ -79,12 +101,14 @@ export function buildView(days: SectorFlowDay[], range: Range, metric: Metric): 
   const toRow = (code: string): ViewRow => {
     const s = sums.get(code)!
     const latest = newestRows.get(code)
-    const side = s.net >= 0 ? 'buy' : 'sell'
+    const net = pickGroup(s.groups, metric)
+    const side = net >= 0 ? 'buy' : 'sell'
     const stocks = range === 'day' && latest ? (side === 'buy' ? latest.topBuy : latest.topSell) : []
     return {
       code,
       name: latest?.name ?? s.row.name,
-      netTwd: s.net,
+      netTwd: net,
+      groups: s.groups,
       turnoverTwd: s.turnover,
       turnoverShare: marketTurnover > 0 ? s.turnover / marketTurnover : null,
       movers: stocks.length > 0 ? { side, stocks } : null,
@@ -192,4 +216,21 @@ export function reconciliationGap(r: { estimateTwd: number; officialTwd: number 
   if (Math.abs(r.officialTwd) < 1e6) return null
   const pct = ((r.estimateTwd - r.officialTwd) / Math.abs(r.officialTwd)) * 100
   return `差 ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`
+}
+
+/**
+ * The investor group that moved most in the direction the total points to, as a short clause
+ * ("外資賣超 77.3 億"); null when the total is flat or the groups cancel so that none leads.
+ */
+export function leadClause(g: Groups): string | null {
+  if (g.totalTwd === 0) return null
+  const sign = g.totalTwd > 0 ? 1 : -1
+  const parts: Array<[string, number]> = [
+    ['外資', g.foreignTwd],
+    ['投信', g.trustTwd],
+    ['自營商', g.dealerTwd],
+  ]
+  const lead = parts.filter(([, v]) => Math.sign(v) === sign).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0]
+  if (!lead || Math.abs(toBillion(lead[1]) ?? 0) < 0.05) return null
+  return `${lead[0]}${sign > 0 ? '買超' : '賣超'} ${fmtBillion(toBillion(Math.abs(lead[1])))}`
 }
