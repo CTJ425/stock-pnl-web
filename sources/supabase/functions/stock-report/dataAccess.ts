@@ -22,11 +22,18 @@ export const REPORTS_BUCKET = 'reports'
 export async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
   // BUG-066: this scans every user's transactions with no paging, so it silently truncated
   // past PostgREST's max_rows (1000). `id` (UUID PRIMARY KEY) is a total order to page on.
-  const { data, error } = await pagedSelect<{ ticker: string; name: string; tx_type: string; qty: number }>(
+  const { data, error } = await pagedSelect<{
+    ticker: string
+    name: string
+    tx_type: string
+    qty: number
+    user_id: string
+    workspace_id: string
+  }>(
     (from, to) =>
       db
         .from('transactions')
-        .select('ticker, name, tx_type, qty')
+        .select('ticker, name, tx_type, qty, user_id, workspace_id')
         .eq('market', 'TPE')
         .order('id', { ascending: true })
         .range(from, to),

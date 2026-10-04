@@ -36,6 +36,9 @@ const MATCH_LABEL: Record<ImportMatch, string> = {
   similar: '帳上已有（費用不同）',
 }
 
+/** BUY / SELL — the only rows 取代 deletes and rewrites (see `replaceScope`). */
+const isTradeRow = (r: NewTransaction) => r.tx_type === 'BUY' || r.tx_type === 'SELL'
+
 const PREVIEW_LIMIT = 8
 /** Debounce for the paste textarea: parsing a large paste on every keystroke is wasted work*/
 const PARSE_DEBOUNCE_MS = 250
@@ -63,20 +66,25 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
   const exactCount = matches.filter((m) => m === 'exact').length
   const similarCount = matches.filter((m) => m === 'similar').length
   const knownCount = exactCount + similarCount
+  // 取代 replaces trades only: `replaceScope` deletes BUY / SELL, so a dividend row in the file
+  // would be added next to the dividend already on the ledger (Task 193 H1). The range and the
+  // markets it deletes from are therefore taken from the rows that are actually written.
+  const tradeRows = useMemo(() => (parsed ? parsed.rows.filter((r) => isTradeRow(r)) : []), [parsed])
+  const skippedDividends = parsed ? parsed.rows.length - tradeRows.length : 0
   const replace = useMemo(
-    () => (parsed && mode === 'replace' ? replaceScope(parsed.rows, existing) : null),
-    [parsed, existing, mode],
+    () => (parsed && mode === 'replace' ? replaceScope(tradeRows, existing) : null),
+    [parsed, tradeRows, existing, mode],
   )
-  // 取代 writes the file whole; the duplicate check does not apply because the rows it would
+  // 取代 writes the trades whole; the duplicate check does not apply because the rows it would
   // have skipped are exactly the ones being deleted first.
   const importRows = useMemo(
     () =>
       parsed
         ? mode === 'replace'
-          ? parsed.rows
+          ? tradeRows
           : parsed.rows.filter((_, i) => includeDups || matches[i] === 'new')
         : [],
-    [parsed, matches, includeDups, mode],
+    [parsed, tradeRows, matches, includeDups, mode],
   )
 
   const pickFile = async (file: File | undefined) => {
@@ -189,12 +197,19 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                 <div className="notice notice-warn" style={{ marginTop: 10 }}>
                   {/* `.notice` lays its children out in a row, so both lines go in one child. */}
                   <div>
-                    {replace.ids.length > 0
-                      ? `將先刪除 ${replace.from} ～ ${replace.to} 之間現有的 ${replace.ids.length} 筆買進 / 賣出，再寫入這份檔案的 ${parsed.rows.length} 筆。`
-                      : `這段期間（${replace.from} ～ ${replace.to}）目前沒有買賣紀錄，會直接寫入 ${parsed.rows.length} 筆。`}
+                    {importRows.length === 0
+                      ? '這份檔案只有股利列，取代匯入不會寫入任何東西。'
+                      : replace.ids.length > 0
+                        ? `將先刪除 ${replace.from} ～ ${replace.to} 之間現有的 ${replace.ids.length} 筆買進 / 賣出，再寫入這份檔案的 ${importRows.length} 筆買賣。`
+                        : `這段期間（${replace.from} ～ ${replace.to}）目前沒有買賣紀錄，會直接寫入 ${importRows.length} 筆。`}
                     <div style={{ marginTop: 3 }}>
                       現金股利與股票股利不會被刪除；這段期間以外的紀錄也不會動到。刪除後無法復原。
                     </div>
+                    {skippedDividends > 0 && (
+                      <div style={{ marginTop: 3 }}>
+                        檔案裡的 {skippedDividends} 筆股利不會寫入（取代只處理買賣，避免股利重複）；要補股利請改用「只補上新的交易」。
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -226,7 +241,15 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                     {parsed.rows.slice(0, PREVIEW_LIMIT).map((row, i) => (
                       <tr
                         key={i}
-                        style={mode === 'merge' && matches[i] !== 'new' ? { color: 'var(--ink-muted)' } : undefined}
+                        style={
+                          mode === 'merge'
+                            ? matches[i] !== 'new'
+                              ? { color: 'var(--ink-muted)' }
+                              : undefined
+                            : !isTradeRow(row)
+                              ? { color: 'var(--ink-muted)' }
+                              : undefined
+                        }
                       >
                         <td>{row.tx_date}</td>
                         <td>{MARKET_LABEL[row.market]}</td>
@@ -236,7 +259,7 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
                         <td className="num">{row.price}</td>
                         <td className="num">{row.qty}</td>
                         <td className="num">{row.fee_tax}</td>
-                        <td>{mode === 'merge' ? MATCH_LABEL[matches[i]] : ''}</td>
+                        <td>{mode === 'merge' ? MATCH_LABEL[matches[i]] : isTradeRow(row) ? '' : '不寫入'}</td>
                       </tr>
                     ))}
                   </tbody>

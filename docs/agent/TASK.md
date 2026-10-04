@@ -16,6 +16,19 @@
 
 ## 📋 Active Tasks
 
+### Task 193: Codebase review 2026-10-04 — fix the findings (B1–B4)
+- **Status**: 🔄 IN PROGRESS — report done; user chose all four batches and "cite the source before touching the ETN rate".
+- **Agent**: Claude
+- **Timestamp**: 2026-10-04 14:07:46 Asia/Taipei
+- **Spec**: docs/agent/specs/193-codebase-review-2026-10-04.md
+- **Items** (order B1 → B3 → B2 → B4; one `-dev.N` per commit, first one opens 0.10.29):
+  1. B1 — H1 CSV 取代 skips dividend rows · H2 `REVOKE take_warm_quota FROM anon, authenticated` · H3 `netOpenTickers` dividends + per-user netting ⏳
+  2. B3 — M13 release titles without a shell · M14 `restore.cjs` `-f` files · M11 `generate` meter · M12 `app_log` size checks · Edge lows ⏳
+  3. B2 — M1/M2 form · M3 ETN rate (cite first) · M4–M10 quote and chart display ⏳
+  4. B4 — M15–M19 performance · dead code, duplicate helpers, stale comments ⏳
+  5. PROD DDL (H2, M12) and PROD Edge (`stock-report`, `stock-price`) — only on explicit OK ⏳
+  6. Two Release titles already damaged by backticks (0.9.35, 0.9.33) — ask before `gh release edit` ⏳
+
 ### Task 192: Discord 持股日報 — one message, one section per workspace
 - **Status**: 🔄 OPEN REMAINDER — released as **0.10.27**; `stock-report` DEV v43 / PROD v27, both `92e139e7ab55…`. Only item 5 is live.
 - **Agent**: Claude

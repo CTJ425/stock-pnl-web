@@ -585,6 +585,13 @@
 - **Note**: A second minimum-fee check added during implementation was removed after `route:reviewer` found it discarded recoverable rates: an **unclamped** fee can equal a minimum fee by coincidence, because `calculateFee` clamps only when `minFee > fee`. Measured: gross 100,000, `fee_tax` 15, minimum fee 15, real rate `0.00015` forced to `0.001425`. A clamp always inflates `fee / gross`, so the ratio cap covers the clamp case on its own.
 
 ## 🐛 Historical Bug Fixes
+### Bug ID: BUG-113 — Task 193 B1: 取代 import duplicates dividends · `take_warm_quota` open to anon · nightly whitelist drops dividend payers
+- **Date**: 2026-10-04, found by the codebase review (`specs/193-codebase-review-2026-10-04.md`); fixed in 0.10.29-dev.1
+- **H1 Root Cause**: `replaceScope` deletes BUY/SELL only, but `CsvImportModal` wrote `parsed.rows` whole in 取代 mode, so the file's 現金股利/股票股利 rows landed beside the ones already on the ledger (the app's own export contains them). **Fix**: 取代 writes `tradeRows` only, the deleted range/markets come from those rows, the preview says how many dividend rows were left out. Tests: 3 in `CsvImportModal.test.tsx` (failed before).
+- **H2 Root Cause**: `schema.sql` revoked EXECUTE from `PUBLIC` only; Supabase default privileges grant `anon`/`authenticated` by name, so a SECURITY DEFINER function taking a `user_id` argument was callable with the publishable key (DEV: `has_function_privilege('anon', …)` = true). **Fix**: `REVOKE … FROM PUBLIC, anon, authenticated`; `verify_setup()` gained "definer functions not browser-callable", an all-tables RLS check and `tx_split_log` in the table list (11 rows now). Applied to DEV 2026-10-04 (guarded by the DEV cron predicate); **PROD pending**.
+- **H3 Root Cause**: `netOpenTickers` treated every non-BUY row as a sell, so a 現金股利 row (qty = shares paid on) cancelled the holding, and it netted across all users and workspaces. **Fix**: BUY/STOCK_DIVIDEND +, SELL −, DIVIDEND ignored, netted per (user, workspace, ticker); `heldTwTickers` selects `user_id, workspace_id`. Grep for the same rule found no other copy. Tests: 3 in `batchTickers.test.ts` (2 failed before).
+- **Status**: ✅ FIXED in code (0.10.29-dev.1); `stock-report` DEV deploy and PROD DDL/Edge: see Task 193.
+
 ### Bug ID: BUG-111 — 「頁面發生錯誤」 on a tab switch after a deploy (stale lazy chunk)
 - **Date**: 2026-10-04, reported by the user; fixed in 0.10.28
 - **Where**: every `lazy(() => import(...))` — `sources/src/components/AppShell.tsx:41-53`, `WorkspaceControls.tsx`, `Dashboard/DashboardPage.tsx`; fallback UI `ErrorBoundary.tsx`

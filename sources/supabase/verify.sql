@@ -41,7 +41,7 @@ BEGIN
            ('batch_run_log'),('backup_run_log'),('admin_run_log'),
            ('source_probe_log'),('source_probe_tick'),
            ('app_log'),('app_secrets'),('discord_send_log'),
-           ('user_discord_settings'),('user_discord_send_log')
+           ('user_discord_settings'),('user_discord_send_log'),('tx_split_log')
   ), missing AS (
     SELECT string_agg(t, ', ' ORDER BY t) AS m FROM want
      WHERE t NOT IN (SELECT table_name FROM information_schema.tables
@@ -143,15 +143,33 @@ BEGIN
     FROM net._http_response WHERE created > now() - interval '6 hours';
 
   -- ---- RLS ----------------------------------------------------------------
+  -- Every ordinary table in `public`, not a hand-kept list: a table added later without RLS is
+  -- readable through PostgREST with the publishable key, so it must fail here by itself.
   RETURN QUERY
   SELECT 'row level security',
          CASE WHEN count(*) FILTER (WHERE NOT c.relrowsecurity) = 0 THEN 'PASS' ELSE 'FAIL' END,
-         count(*) FILTER (WHERE NOT c.relrowsecurity) || ' user table(s) without RLS'
+         COALESCE(string_agg(c.relname, ', ' ORDER BY c.relname) FILTER (WHERE NOT c.relrowsecurity),
+                  'all ' || count(*) || ' public tables have RLS')
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-   WHERE n.nspname = 'public'
-     AND c.relname IN ('workspaces','transactions','user_settings','tw_watchlist',
-                        'app_secrets','discord_send_log',
-                        'user_discord_settings','user_discord_send_log');
+   WHERE n.nspname = 'public' AND c.relkind IN ('r','p');
+
+  -- ---- SECURITY DEFINER functions callable from the browser ---------------
+  -- A definer function runs with its owner's rights, so anon/authenticated EXECUTE on one is a
+  -- privilege escalation unless the body checks auth.uid() itself (Task 193 H2: take_warm_quota).
+  -- Event-trigger functions (Supabase's rls_auto_enable) cannot be called over RPC and are skipped.
+  RETURN QUERY
+  WITH exposed AS (
+    SELECT p.proname
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.prosecdef
+       AND p.prorettype <> 'event_trigger'::regtype
+       AND (has_function_privilege('anon', p.oid, 'EXECUTE')
+            OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+  )
+  SELECT 'definer functions not browser-callable',
+         CASE WHEN count(*) = 0 THEN 'PASS' ELSE 'FAIL' END,
+         COALESCE(string_agg(proname, ', ' ORDER BY proname), 'none exposed to anon/authenticated')
+    FROM exposed;
 END
 $fn$;
 

@@ -384,8 +384,11 @@ BEGIN
 END;
 $$;
 
--- service_role only (Edge Function). Anon/authenticated must not bump their own counter.
-REVOKE ALL ON FUNCTION take_warm_quota(uuid, text, int) FROM PUBLIC;
+-- service_role only (Edge Function). Anon/authenticated must not bump anyone's counter: the function is
+-- SECURITY DEFINER and takes the user id as an argument, so any caller could spend another user's quota
+-- (Task 193 H2). Revoking from PUBLIC alone is not enough — Supabase's default privileges grant EXECUTE on
+-- new public functions to anon and authenticated by name, and that grant survives a PUBLIC revoke.
+REVOKE ALL ON FUNCTION take_warm_quota(uuid, text, int) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION take_warm_quota(uuid, text, int) TO service_role;
 
 

@@ -54,6 +54,17 @@
 - **Impact**: the nightly holdings card dies for every user, or 標記當沖 reports success while storing nothing. Both DBs have the DDL today (`verify_setup()` 10/10), so this only bites if the deploy order is ever reversed.
 - **Status**: OPEN (low urgency)
 
+### BUG-112 — Task 193 review items deferred (need a decision or data, not fixed this round)
+- **Where / what** (details in `specs/193-codebase-review-2026-10-04.md` §3):
+  - public `reports` bucket answers 200/404 per `daily/<code>.json`, so anyone can enumerate the held/watched TW tickers (`schema.sql:407-409`) — accept as a RISK or move to signed URLs;
+  - `TW_HOLIDAYS` covers 2026 only (`quoteWindow.ts:83-103`); from 2027-01-01 the BUG-110 guard falls back to weekends;
+  - `discordRun.ts:111` the 17:30 summary records `skipped/no-market-day` and never retries that day;
+  - `stock-price/index.ts:732` applies the Taipei 13:30 cutoff to US daily bars;
+  - `index.ts:2786` uncapped `Promise.all` in `readFundamentalSnapshot` (with RISK-002);
+  - latent: `fees.ts:237` day-trade signature at 0% rate, `WorkspaceContext.tsx:191-199` add during a workspace switch, `StockSplitModal.tsx:196-203` inferred rate stored as recorded, `FundamentalTab.tsx:330` TTM EPS needs four newest quarters, `DiscordMySettings.tsx:201-235` two quick time saves overwrite each other;
+  - CI `e2e-dev.yml` runs `npx wait-on` unpinned (not a devDependency).
+- **Status**: OPEN — found 2026-10-04 (Task 193).
+
 ### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)
 - **Where**: `YearlyPage.tsx:433-434`
 - **Root Cause**: 「11」 broken down as 買入 6・賣出 3・股利 1 = 10; the stock dividend is counted in the total but not in any part.

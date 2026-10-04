@@ -149,4 +149,48 @@ describe('CsvImportModal 取代模式', () => {
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  // Task 193 H1: 取代 deletes BUY / SELL only, so a dividend row in the file used to be written next to
+  // the dividend already on the ledger — once more on every re-import.
+  describe('取代 does not write dividend rows', () => {
+    const WITH_DIVIDENDS = [
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金',
+      '2024-01-10,TPE,2330,台積電,買入,500,1000,712',
+      '2024-07-15,TPE,2330,台積電,現金股利,2.2,1000,10',
+      '2024-08-01,TPE,2330,台積電,股票股利,0,50,0',
+    ].join('\r\n')
+
+    it('sends only the BUY / SELL rows and says how many dividends were left out', async () => {
+      const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+      render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[]} />)
+      await paste(WITH_DIVIDENDS)
+      await userEvent.click(await screen.findByLabelText(/以這個檔案取代這段期間/))
+      expect(await screen.findByText(/檔案裡的 2 筆股利不會寫入/)).toBeTruthy()
+      await userEvent.click(await screen.findByRole('button', { name: /取代匯入 1 筆/ }))
+      await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+      expect(onImport.mock.calls[0][0].map((r) => r.tx_type)).toEqual(['BUY'])
+    })
+
+    it('takes the deleted range from the written trades, not from the dividend dates', async () => {
+      const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+      const lateTrade: Transaction = { ...existingTsmc, id: 'x2', tx_date: '2024-09-01' }
+      render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc, lateTrade]} />)
+      await paste(WITH_DIVIDENDS)
+      await userEvent.click(await screen.findByLabelText(/以這個檔案取代這段期間/))
+      await userEvent.click(await screen.findByRole('button', { name: /取代匯入 1 筆/ }))
+      await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+      // The file's only trade is on 2024-01-10, so the 2024-09-01 trade must survive.
+      expect(onImport.mock.calls[0][1]).toEqual(['x1'])
+    })
+
+    it('writes nothing when the file holds only dividends', async () => {
+      const onImport = vi.fn(async (_rows: NewTransaction[], _ids: string[]) => {})
+      render(<CsvImportModal onClose={() => {}} onImport={onImport} existing={[existingTsmc]} />)
+      await paste(WITH_DIVIDENDS.split('\r\n').filter((_, i) => i !== 1).join('\r\n'))
+      await userEvent.click(await screen.findByLabelText(/以這個檔案取代這段期間/))
+      expect(await screen.findByText(/只有股利列/)).toBeTruthy()
+      expect(screen.getByRole('button', { name: /取代匯入 0 筆/ })).toHaveProperty('disabled', true)
+      expect(onImport).not.toHaveBeenCalled()
+    })
+  })
 })

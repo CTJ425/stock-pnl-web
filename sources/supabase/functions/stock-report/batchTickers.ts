@@ -46,6 +46,8 @@ export interface HeldTxRow {
   name?: unknown
   tx_type?: unknown
   qty?: unknown
+  user_id?: unknown
+  workspace_id?: unknown
 }
 
 /**
@@ -62,16 +64,27 @@ export interface HeldTxRow {
  * empties the whole whitelist and 403s every ticker.
  */
 export function netOpenTickers(rows: readonly HeldTxRow[]): BatchTicker[] {
-  const acc = new Map<string, { net: number; name: string }>()
+  // One ledger = one (user, workspace, ticker). Netting across ledgers would let one account's
+  // SELL cancel another account's position, and a user's short in one workspace cancel a long in
+  // another. Rows without the two ids (tests, old callers) share a single ledger.
+  const ledgers = new Map<string, number>()
+  const names = new Map<string, string>()
   for (const row of rows) {
     const ticker = String(row.ticker ?? '').trim()
     if (!TICKER_RE.test(ticker)) continue
     const qty = Number(row.qty) || 0
-    const delta = row.tx_type === 'BUY' ? qty : -qty
-    const prev = acc.get(ticker) ?? { net: 0, name: '' }
-    acc.set(ticker, { net: prev.net + delta, name: String(row.name ?? '').trim() || prev.name })
+    // DIVIDEND's qty is the share count the cash was paid on — it moves no shares. STOCK_DIVIDEND
+    // adds shares, like the ledger engine's own opening-leg rule (pnlEngine `isOpenLeg`).
+    let delta = 0
+    if (row.tx_type === 'BUY' || row.tx_type === 'STOCK_DIVIDEND') delta = qty
+    else if (row.tx_type === 'SELL') delta = -qty
+    const ledger = `${String(row.user_id ?? '')}|${String(row.workspace_id ?? '')}|${ticker}`
+    ledgers.set(ledger, (ledgers.get(ledger) ?? 0) + delta)
+    names.set(ticker, String(row.name ?? '').trim() || names.get(ticker) || '')
   }
-  return [...acc.entries()]
-    .filter(([, v]) => v.net !== 0)
-    .map(([ticker, v]) => ({ ticker, name: v.name }))
+  const open = new Set<string>()
+  for (const [ledger, net] of ledgers) {
+    if (net !== 0) open.add(ledger.slice(ledger.lastIndexOf('|') + 1))
+  }
+  return [...names.entries()].filter(([ticker]) => open.has(ticker)).map(([ticker, name]) => ({ ticker, name }))
 }

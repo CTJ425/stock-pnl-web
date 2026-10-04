@@ -97,4 +97,40 @@ describe('netOpenTickers', () => {
       { ticker: '2330', name: '台積電' },
     ])
   })
+
+  // Task 193 H3: a DIVIDEND row's qty is the share count the dividend was paid on, not a sale.
+  it('does not count a cash dividend as a sell', () => {
+    const dividend = { ticker: '2330', name: '', tx_type: 'DIVIDEND', qty: 1000 }
+    expect(netOpenTickers([buy('2330', 1000, '台積電'), dividend])).toEqual([
+      { ticker: '2330', name: '台積電' },
+    ])
+  })
+
+  it('counts a stock dividend as shares received', () => {
+    const bonus = { ticker: '2330', name: '', tx_type: 'STOCK_DIVIDEND', qty: 50 }
+    // BUY 1000, SELL 1000 leaves nothing; the 50 bonus shares are still held.
+    expect(netOpenTickers([buy('2330', 1000), sell('2330', 1000), bonus])).toEqual([
+      { ticker: '2330', name: '' },
+    ])
+  })
+
+  it('nets per user and workspace: one account cannot cancel another\'s position', () => {
+    const own = (user_id: string, workspace_id: string, tx_type: string) => ({
+      ticker: '2330',
+      name: '',
+      tx_type,
+      qty: 1000,
+      user_id,
+      workspace_id,
+    })
+    expect(netOpenTickers([own('u1', 'w1', 'BUY'), own('u2', 'w2', 'SELL')])).toEqual([
+      { ticker: '2330', name: '' },
+    ])
+    // The same user's two workspaces are separate ledgers too.
+    expect(netOpenTickers([own('u1', 'w1', 'BUY'), own('u1', 'w2', 'SELL')])).toEqual([
+      { ticker: '2330', name: '' },
+    ])
+    // A position closed inside its own workspace still drops out.
+    expect(netOpenTickers([own('u1', 'w1', 'BUY'), own('u1', 'w1', 'SELL')])).toEqual([])
+  })
 })
