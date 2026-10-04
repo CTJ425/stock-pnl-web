@@ -16,6 +16,18 @@
 
 ## 📋 Active Tasks
 
+### Task 191: TW market holiday calendar — weekday-holiday guard + calendar for admin and users
+- **Status**: 🔄 IN PROGRESS — `0.10.26-dev.2` on `dev` (`373e76f`, `b24d47d`); DEV `stock-price` v27 deployed
+- **Agent**: Claude
+- **Timestamp**: 2026-10-04 10:45:41 Asia/Taipei
+- **Why**: BUG-110 follow-up — MIS can serve test-session matches on any closed day; next weekday holiday is 2026-10-09.
+- **Items**:
+  1. ~~`TW_HOLIDAYS` guard in `quoteWindow.ts`, `stock-price`, `priceProxy.ts`; tests~~ ✅
+  2. ~~Admin 開休市日 tab; dashboard 「今天/明天休市」 note; 總經 台灣 line + disclosure; `MacroPage` on `twIsClosedDay`~~ ✅
+  3. User reviews on `dev.stock-pnl-web.pages.dev` ⏳
+  4. Release 0.10.26: `ship` step 8 OK from user → merge `main`, deploy PROD `stock-price`, verify — **before 2026-10-09** ⏳
+  5. On 2026-10-09: confirm PROD/DEV `price_cache` holds no `trade_date = 20261009` rows and the dashboard shows 「今天休市（國慶日）」 ⏳
+
 ### Task 190: Fee settings UX — broker presets and a sticky action bar (/impeccable)
 - **Status**: 🔄 OPEN REMAINDER — released in **0.10.22**; items 5–6 in **0.10.24**. Only item 3 is live.
 - **Agent**: Claude
@@ -189,5 +201,5 @@
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**
 - **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
-- **What to do**: Update `RELEASE_CALENDAR` in `macroCalendar.ts` with next year's dates.
+- **What to do**: Update `RELEASE_CALENDAR` in `macroCalendar.ts` with next year's dates. Also add next year to `TW_HOLIDAYS` / `TW_HOLIDAY_YEARS` in `stock-price/quoteWindow.ts` from `https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&date=<YYYY>0101` — leave out 「開始交易日」/「最後交易日」 markers and weekend days; an uncovered year loses the holiday guard (Task 191). Edge deploy needed (PROD + DEV).
 - **Why manual**: BLS schedule page returns 403, so it cannot be synced automatically. `sources/scripts/find-release-dates.py` cross-checks dates against ALFRED vintages.

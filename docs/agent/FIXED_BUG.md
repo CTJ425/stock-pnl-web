@@ -12,6 +12,7 @@
 - **Fix (0.10.25-dev.1)**: `quoteWindow.ts` `twIsWeekend` / `twIsWeekendDate`; weekends are never a session, locks end at the next weekday 08:25 (`msUntilResume`, `twMaxTtlMs`); `stock-price/index.ts` skips MIS on Sat/Sun and ignores weekend-dated `price_cache` rows; `priceProxy.ts` `isFresh` and the stale fallback drop weekend-dated quotes. PROD's 13 weekend-dated rows deleted 2026-10-04 09:18.
 - **Not covered**: a test session on a weekday national holiday (needs a holiday calendar). A ticker first fetched on a weekend comes from Yahoo with `industry = null` (BUG-085's known limit, now hit on every weekend cache miss) — watchlist falls back to `stockCategory.ts` until Monday.
 - **Verification**: gates green (`npm test` 2,844 pass / 7 skipped, build, `typecheck:edge`, lint); 8 new/changed tests fail on the old code. `stock-price` deployed from clean tree (`34f9b21` / `7a63001`): DEV v26 and PROD v16, both `ezbr_sha256` `b085cd6e4186…`. Live Sunday calls: DEV and PROD return Friday 10/02 closes for all 14 tickers (e.g. 0050 112.8, 2603 240, 4958 561), matching the `y` field MIS itself reported; PROD `price_cache` weekend-dated rows = 0. Pages serves 0.10.25.
+- **Follow-up**: the weekday-holiday gap is closed by `TW_HOLIDAYS` in 0.10.26 (Task 191).
 - **Status**: ✅ FIXED (0.10.25)
 
 ---
