@@ -1,11 +1,20 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.29 released** — Task 193 (codebase review: 3 High, 19 Medium fixed). 0.10.28 (BUG-111) and 0.10.27 (Task 192) earlier today.
-- Status: ✅ `main` = `dev` (`f4d8420`); PROD DDL applied and PROD Edge deployed (equal to DEV); Release 0.10.29 by CI, body correct; production serves the build. Left: Task 193 item 6 (two damaged Release titles, 0.7.25 Release), Task 192 item 5, Task 191 item 5.
-- Timestamp: 2026-10-04 15:53:11 Asia/Taipei
+- Action: **0.10.30-dev.2 on `dev`** — Task 194: show password, keep sign-in 7 days, 類股資金流向 (sector money flow). Not released.
+- Status: ✅ code + tests + DEV Edge deploy (`stock-report` v47); ⏳ no sector-flow file on DEV yet (needs the cron secret or Monday's chips round), ⏳ real-login browser check, ⏳ release. Earlier open: Task 193 item 6, Task 192 item 5, Task 191 item 5.
+- Timestamp: 2026-10-04 17:41:06 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-10-04 17:41:06 Asia/Taipei (Task 194 — password reveal, 7-day sign-in, sector flow, 0.10.30-dev.2)
+- **Ask**: (1) show the password on sign-in / confirm / change; (2) option to stay signed in 7 days — per browser (iOS and Windows both used), capped at 7; (3) research whether the day's money flow can be fetched and whether it goes to IC design or elsewhere. User then chose: flow = 法人淨買超金額 + 成交佔比, web only, build it, DEV Supabase authorised.
+- **Found**: sign-in already persisted indefinitely (supabase-js default localStorage, no timebox in the repo; cloud Auth settings not checked). Sector flow: nothing upstream publishes it, but T86 + TPEx 3insti + industry lists + MI_INDEX give it; official industry code has one 半導體業 bucket, the IC 設計 split comes from the TPEx value-chain site. Net shares x VWAP reconciles to BFI82U within 0.9% on 2026-10-02 (closing price: +10%).
+- **Done**: `fba5b8d` 0.10.30-dev.1 (`PasswordField`, `authPersistence`), `0e86921` 0.10.30-dev.2 (`twSectorFlow`, `sectorFlowSync`, `sync-sector-flow`, `SectorFlowSection`). Spec: `specs/194-login-remember-and-sector-flow.md`.
+- **Verified**: vitest 3,041 pass / 7 skipped (+77), build, `typecheck:edge`, lint, engine sync; Playwright screenshots of the login page and the card at 1180/390 px light+dark (fixture = the real 2026-10-02 output; the 近 5 日 view used a scaled copy as a second day); real TWSE/TPEx run of `syncSectorFlow` locally. DEV: `stock-report` v46 → v47 `9e1d2e111016…` from clean `0e86921`, `verify_jwt` false; `sync-sector-flow` without a secret → 401, unknown action → 400.
+- **Not verified**: any real file on DEV; a real login or the 7-day cap in a browser; PROD has none of this.
+- **Blocked**: firing `sync-sector-flow` on DEV needs `CRON_SECRET`; a DO block that clones the `source-probe` cron command to borrow it was denied by the permission classifier and was not retried.
+- **Left**: Task 194 items 4–7.
 ## 📅 Log: 2026-10-04 15:07:11 Asia/Taipei (Task 193 — codebase review fixes, released 0.10.29)
 - **Ask**: full review of the codebase for hidden defects and optimisations; user chose all four areas, report first, then fixed B1–B4 and "cite the source before touching the ETN rate". Report: `specs/193-codebase-review-2026-10-04.md`.
 - **Found / fixed** (BUG-113…116; `dev` only, nothing on `main`): H1 取代 CSV import duplicated dividends; H2 `take_warm_quota` executable by `anon` (DEV query proved it; now 401); H3 nightly whitelist counted dividends as sells and netted across users (DEV: 2609 was kept although closed). B3: release-script titles ran through a shell, `restore.cjs` argv limit (E2BIG at 128 KiB, proven), `generate` meter 150/day, `app_log_size_check`. B2: edit-mode min fee, rate carry-over, ETN 0.1% (§2 款二 + 金管會 107-07-02 via 證交所), watched-stock quote/seed/polling, `1y` by date, fallback-quote TTL, monthly 全部 wording, intraday errors reach callers, 國際指數 per-ticker guard. B4: hidden-tab polling, 5-min refresh throttle, hover isolation, Fx refresh in place, war-room retire rule from the server plan, dead code and duplicates, cache bounds.
@@ -14,10 +23,3 @@
 - **Browser run** (test subagent, report only; main session judged): Playwright on the deployed DEV site (serves 0.10.29-dev.4, login page, no errors, no horizontal scroll at 390 px), local mode (M1/M2/H1/ETN/fee dialog/page switching) and cloud mode with all Supabase traffic mocked (M4/M6/M8/M10/M15/M18/M19). All PASS; M5 refreshes every 1–2 min (poll tick vs TTL, pre-existing design → BUG-112). Three small defects found and fixed in dev.5 (toast prefix, CSV preview heading, monthly 資料月份). Not verified: anything with a real login or the real Edge; PROD has none of the DDL or Edge changes.
 - **Released** (2026-10-04 15:53:11, user: 「如果都沒問題，直接幫我合併到main，如果遇到supabase等相關問題直接幫我合併上去」): release commit `f4d8420`, `main` fast-forwarded; gates verbatim (vitest 2,944 / build / `typecheck:edge` / lint / engine sync); PROD DDL via `--project-ref` with the PROD cron predicate guard, `verify_setup()` 11/11 PASS; PROD Edge from the clean commit, ezbr identical to DEV, `verify_jwt` flags kept (true/false/false); Release 0.10.29 created by CI; production content check found this release's strings.
 - **Left**: repair the 0.9.35 / 0.9.33 Release titles (ask first; not covered by the user's authorization); `0.7.25` Release still fails to create in CI (`gh release create … --target 5550979…`, stderr not read — the repaired script now fails here instead of mangling the title). Deferred items: BUG-112.
-## 📅 Log: 2026-10-04 12:42:09 Asia/Taipei (BUG-111 — 頁面發生錯誤 on tab switch, 0.10.28-dev.1)
-- **Ask**: 「切換的時候很常出現頁面發生錯誤」.
-- **Root cause**: stale tab after a deploy requests old hashed lazy chunks; Pages returns index.html (200 text/html) → dynamic import fails → root ErrorBoundary. PROD `app_log` render errors (30 d) are all this, each from a client one release behind.
-- **Done**: `src/utils/chunkReload.ts` `loadChunk` around all 9 dynamic imports — reload once (30 s sessionStorage guard), else rethrow.
-- **Verified**: vitest 2,884 pass / 7 skipped (+5 `chunkReload.test.ts`); build; `typecheck:edge`. Playwright, local-mode prod builds behind a Pages-style fallback: before → 頁面發生錯誤 reproduced; after → one reload, 年度收益 renders; permanently broken chunk → one reload then ErrorBoundary.
-- **Released** (2026-10-04 12:49:25, user OK): 0.10.28 fast-forwarded to `main` `7ec1ffe`; Pages production bundle carries `chunk-reload-at`; Release 0.10.28 by CI.
-- **Left**: watch PROD `app_log` — `dynamically imported module` render rows should stop from clients ≥ 0.10.28.
