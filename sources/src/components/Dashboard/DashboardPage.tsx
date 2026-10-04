@@ -25,6 +25,7 @@ import { taipeiDateKey } from '../../utils/taipeiDate'
 import { WorkspaceFeeSettings, type FeeDraft } from '../WorkspaceFeeSettings'
 import { HoldingsLedger } from './HoldingsLedger'
 import { WatchSection } from './WatchSection'
+import { closedNote, taipeiToday } from '../MarketCalendar/marketCalendar'
 import { asOfLabel, combine, marketSums, type Combined, type MarketSums } from './dashboardSums'
 
 const RecalcFeesModal = lazy(() =>
@@ -49,6 +50,8 @@ function StatementTotals({
   onToggleFee,
   previewing = false,
   feeUnset = false,
+  closedNote = null,
+  onOpenCalendar,
 }: {
   tw: MarketSums
   us: MarketSums
@@ -63,6 +66,10 @@ function StatementTotals({
   previewing?: boolean
   /** The workspace never saved a discount, so the TW figures run on the list price by default. */
   feeUnset?: boolean
+  /** 「今天休市（國慶日）」 / 「明天休市（…）」 beside the quote time, TW holders only (0.10.26) */
+  closedNote?: string | null
+  /** Opens 總經's 台股開休市 calendar; absent in local mode, where 總經 is hidden */
+  onOpenCalendar?: () => void
 }) {
   const hasTw = tw.rows.length > 0
   const hasUs = us.rows.length > 0
@@ -83,6 +90,18 @@ function StatementTotals({
           未實現淨損益{scope}
           {previewing && <span className="stmt-preview">預覽・尚未儲存</span>}
           {asOf && <span className="stmt-asof">{asOf}</span>}
+          {hasTw && closedNote && (
+            <span className="stmt-asof">
+              {asOf && '・'}
+              {onOpenCalendar ? (
+                <button type="button" className="stmt-closed" onClick={onOpenCalendar} title="看台股開休市日">
+                  {closedNote}
+                </button>
+              ) : (
+                closedNote
+              )}
+            </span>
+          )}
           <button
             type="button"
             className="stmt-refresh"
@@ -177,10 +196,12 @@ export function DashboardPage({
   onSelectTicker,
   onAddTransaction,
   onGoToTransactions,
+  onOpenCalendar,
 }: {
   onSelectTicker?: (ticker: string, name: string) => void
   onAddTransaction?: () => void
   onGoToTransactions?: () => void
+  onOpenCalendar?: () => void
 } = {}) {
   const { ledger, current, transactions = [] } = useWorkspace()
   const holdings = ledger.holdings
@@ -306,6 +327,8 @@ export function DashboardPage({
           onToggleFee={() => setFeeOpen((v) => !v)}
           previewing={previewing}
           feeUnset={feeUnset && !previewing}
+          closedNote={closedNote(taipeiToday())}
+          onOpenCalendar={onOpenCalendar}
         />
       )}
 

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MarketCalendarSection } from './MarketCalendarSection'
-import { holidaysOf, monthWeeks, nextHoliday, nextTradingDay, taipeiToday } from './marketCalendar'
+import { holidaysOf, monthWeeks, nextHoliday, nextTradingDay, taipeiToday } from '../MarketCalendar/marketCalendar'
 
 /** Taipei wall clock → Date (Taiwan is fixed +8) */
 const taipei = (ymd: string, hms = '10:00:00') => new Date(`${ymd}T${hms}+08:00`)

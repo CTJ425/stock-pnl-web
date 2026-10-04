@@ -1,6 +1,7 @@
 /**
- * Day lookups for the admin 開休市日 calendar. Every answer comes from `quoteWindow.ts` —— the same
- * `TW_HOLIDAYS` the quote path uses —— so the calendar shows exactly what decides whether MIS is asked.
+ * Day lookups for the TW market calendar (admin 開休市日, the 總經 台股 line, the dashboard stamp).
+ * Every answer comes from `quoteWindow.ts` —— the same `TW_HOLIDAYS` the quote path uses —— so what a
+ * page says about today is exactly what decides whether MIS is asked.
  */
 import {
   TW_HOLIDAYS,
@@ -101,4 +102,21 @@ export function monthWeeks(year: number, month: number): Array<Array<DayInfo | n
 /** `20261009` → `10月9日` */
 export function fmtMonthDay(ymd: string): string {
   return `${Number(ymd.slice(4, 6))}月${Number(ymd.slice(6, 8))}日`
+}
+
+/**
+ * The dashboard's 休市 qualifier: today when today is a closed weekday, otherwise the next weekday when
+ * it is a `TW_HOLIDAYS` day. Weekends say nothing —— nobody wonders why Saturday's price did not move.
+ */
+export function closedNote(today: string): string | null {
+  const t = dayInfo(today)
+  if (t.kind === 'holiday') return `今天休市（${t.name}）`
+  if (t.kind === 'weekend') return null
+  let d = toUtc(today)
+  do d = new Date(d.getTime() + DAY_MS)
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6)
+  const next = dayInfo(fromUtc(d))
+  if (next.kind !== 'holiday') return null
+  const when = daysBetween(today, next.ymd) === 1 ? '明天' : `${fmtMonthDay(next.ymd)}（${weekdayOf(next.ymd)}）`
+  return `${when}休市（${next.name}）`
 }

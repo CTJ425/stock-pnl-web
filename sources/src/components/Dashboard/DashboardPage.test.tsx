@@ -728,3 +728,44 @@ describe('DashboardPage — 當日買進的牌告口徑標註當沖稅率（BUG-
     expect(list.textContent).not.toContain('當沖')
   })
 })
+
+/** 0.10.26: the quote time says why prices do not move. 2026-10-09 (Fri) is the 國慶日 make-up holiday. */
+describe('DashboardPage — 台股休市提示', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    cleanup()
+  })
+
+  it('休市當天在報價時間旁寫「今天休市（國慶日）」，點了打開開休市日曆', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-10-09T10:00:00+08:00'))
+    mockWorkspace()
+    const onOpenCalendar = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<DashboardPage onOpenCalendar={onOpenCalendar} />)
+    await user.click(screen.getByRole('button', { name: '今天休市（國慶日）' }))
+    expect(onOpenCalendar).toHaveBeenCalledOnce()
+  })
+
+  it('休市前一天寫「明天休市」；本機模式沒有總經頁時只是文字', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-10-08T10:00:00+08:00'))
+    mockWorkspace()
+    render(<DashboardPage />)
+    expect(screen.getByText(/明天休市（國慶日）/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /休市/ })).toBeNull()
+  })
+
+  it('平常日不顯示，只持有美股也不顯示', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-10-05T10:00:00+08:00'))
+    mockWorkspace()
+    render(<DashboardPage onOpenCalendar={vi.fn()} />)
+    expect(screen.queryByText(/休市/)).toBeNull()
+    cleanup()
+    vi.setSystemTime(new Date('2026-10-09T10:00:00+08:00'))
+    mockWorkspace(TXS.filter((t) => t.market === 'US'))
+    render(<DashboardPage onOpenCalendar={vi.fn()} />)
+    expect(screen.queryByText(/休市/)).toBeNull()
+  })
+})

@@ -1,0 +1,186 @@
+/* =========================================================
+   TW market calendar, shared (MarketCalendar/MonthGrid.tsx, 0.10.26)
+   Used by the admin 開休市日 page and the 總經 台股 disclosure. A closed weekday is the one
+   filled cell; today is the one ruling-blue ring. Neither uses market red/green — a holiday
+   is not a price move.
+   ========================================================= */
+.mcal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-05);
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-secondary);
+}
+
+.mcal-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-03);
+}
+
+.mcal-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--cds-border-subtle);
+}
+
+.mcal-swatch.mcal-weekend {
+  background: var(--cds-layer-01);
+}
+
+.mcal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: var(--sp-06) var(--sp-07);
+  margin-top: var(--sp-05);
+}
+
+.mcal-month {
+  align-self: start;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--type-label-01);
+}
+
+.mcal-month caption {
+  padding-bottom: var(--sp-03);
+  text-align: left;
+  font-size: var(--type-body-01);
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-month th {
+  padding-bottom: var(--sp-02);
+  border-bottom: 1px solid var(--cds-text-primary);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  text-align: center;
+}
+
+.mcal-month td {
+  height: 28px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.mcal-day.mcal-open {
+  color: var(--cds-text-primary);
+}
+
+.mcal-day.mcal-weekend,
+.mcal-month th.mcal-wkend {
+  color: var(--cds-text-helper);
+}
+
+.mcal-holiday {
+  background: var(--cds-layer-accent-02);
+}
+
+.mcal-day.mcal-holiday {
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-today {
+  box-shadow: inset 0 0 0 2px var(--cds-focus);
+}
+
+.mcal-day.mcal-today {
+  font-weight: 700;
+}
+
+.mcal-list {
+  width: 100%;
+  max-width: 560px;
+  margin-top: var(--sp-07);
+  border-collapse: collapse;
+  font-size: var(--type-body-01);
+}
+
+.mcal-list caption {
+  padding-bottom: var(--sp-03);
+  text-align: left;
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-list th {
+  white-space: nowrap;
+  padding: var(--sp-03) var(--sp-04) var(--sp-03) 0;
+  border-bottom: 1px solid var(--cds-text-primary);
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  text-align: left;
+}
+
+.mcal-list td {
+  padding: var(--sp-03) var(--sp-04) var(--sp-03) 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.mcal-list td:first-child,
+.mcal-list .mcal-list-rel {
+  white-space: nowrap;
+}
+
+.mcal-list .mcal-list-rel {
+  padding-right: 0;
+  text-align: right;
+}
+
+.mcal-list tr.mcal-past td {
+  color: var(--cds-text-helper);
+}
+
+/* 總經 → 國際指數, under the 台股 group: one line, the year behind a disclosure. */
+.mcal-line {
+  padding: var(--sp-03) 0 0;
+  scroll-margin-top: calc(var(--cds-header-h) + var(--sp-05));
+}
+
+.mcal-line-text {
+  margin: 0;
+  font-size: var(--type-body-01);
+  line-height: 1.6;
+  color: var(--cds-text-primary);
+}
+
+.mcal-line-label {
+  margin-right: var(--sp-03);
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+}
+
+.mcal-line .chart-more {
+  margin-top: var(--sp-03);
+}
+
+.mcal-line .mcal-legend {
+  margin: var(--sp-04) 0 0;
+}
+
+.mcal-line .mcal-list {
+  margin-top: var(--sp-06);
+}
+
+.mcal-line-foot {
+  margin: var(--sp-04) 0 0;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+}
+
+@media (max-width: 720px) {
+  .mcal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-05) var(--sp-05);
+  }
+}

@@ -23,20 +23,7 @@ import { IndexDetail } from './IndexDetail'
 import type { ClosedDates } from './sessionHours'
 import type { IndexQuote } from '../../services/indexQuotes'
 import { taipeiDateKey } from '../../utils/taipeiDate'
-
-const TAIPEI_WEEKDAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
-
-/**
- * MA-01: we hold no TW holiday calendar, only the after-hours schedule's own output. If today is
- * a Taipei weekday but the newest day on file is still older than today, the schedule had nothing
- * to write because the exchange never opened — i.e. today is 休市, not merely "not updated yet".
- */
-function isTwClosedToday(market: MarketData | null, now: Date): boolean {
-  if (!market || market.days.length === 0) return false
-  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Taipei', weekday: 'short' }).format(now)
-  if (!TAIPEI_WEEKDAYS.has(weekday)) return false
-  return market.days[market.days.length - 1].date < taipeiDateKey(now)
-}
+import { twIsClosedDay } from '../../../supabase/functions/stock-price/quoteWindow'
 
 type MacroSubTab = 'world' | 'us'
 
@@ -458,7 +445,8 @@ function UsMacroPanel() {
   )
 }
 
-export function MacroPage() {
+/** @param focus `'calendar'` (route `#/macro/calendar`) opens the 台股開休市 disclosure */
+export function MacroPage({ focus }: { focus?: string } = {}) {
   const [tab, setTab] = useState<MacroSubTab>('world')
   const [selectedDef, setSelectedDef] = useState<IndexDef | null>(null)
   const [selectedQuote, setSelectedQuote] = useState<IndexQuote | null>(null)
@@ -482,7 +470,10 @@ export function MacroPage() {
     }
   }, [])
 
-  const closedDates: ClosedDates | undefined = isTwClosedToday(twMarket, new Date())
+  // 0.10.26: TWSE's own holiday list (`TW_HOLIDAYS`), the same one the quote path and the dashboard
+  // read. It replaced MA-01's guess from `market/daily.json`, which also called a day 休市 when the
+  // after-hours schedule had merely failed to write it.
+  const closedDates: ClosedDates | undefined = twIsClosedDay(new Date())
     ? { TW: new Set([taipeiDateKey(new Date())]) }
     : undefined
 
@@ -533,7 +524,7 @@ export function MacroPage() {
       ) : selectedDef ? (
         <IndexDetail def={selectedDef} onBack={handleBack} quote={selectedQuote} />
       ) : (
-        <GlobalIndices onSelect={handleSelectIndex} closedDates={closedDates} />
+        <GlobalIndices onSelect={handleSelectIndex} closedDates={closedDates} calendarOpen={focus === 'calendar'} />
       )}
     </>
   )

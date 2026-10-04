@@ -18,6 +18,7 @@ import {
   type MarketRegion,
   type SessionState,
 } from './sessionHours'
+import { TwCalendarLine } from '../MarketCalendar/TwCalendarLine'
 import { pnlClass } from '../../utils/formatters'
 
 export interface IndexDef {
@@ -142,9 +143,12 @@ function IndexCard({
 export function GlobalIndices({
   onSelect,
   closedDates,
+  calendarOpen = false,
 }: {
   onSelect?: (def: IndexDef, quote?: IndexQuote) => void
   closedDates?: ClosedDates
+  /** Open the 台股開休市 disclosure and scroll to it (the dashboard's 「休市」 link) */
+  calendarOpen?: boolean
 }) {
   const [quotes, setQuotes] = useState<Record<string, IndexQuote>>({})
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -233,6 +237,7 @@ export function GlobalIndices({
                   />
                 ))}
               </div>
+              {region === 'TW' && <TwCalendarLine defaultOpen={calendarOpen} />}
             </div>
           )
         })}

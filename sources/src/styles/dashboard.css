@@ -107,6 +107,24 @@
   color: var(--cds-text-helper);
 }
 
+/* 「今天休市（國慶日）」 beside the quote time: a quiet link to 總經's 台股開休市 calendar. */
+.stmt-closed {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--cds-link-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.stmt-closed:hover {
+  color: var(--cds-link-hover);
+}
+
 /* The refresh sits beside the time it renews; negative margins keep it from growing the label row. */
 .stmt-refresh {
   appearance: none;

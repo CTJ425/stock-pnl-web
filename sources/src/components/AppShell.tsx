@@ -315,11 +315,12 @@ export function AppShell() {
                     }
                     onAddTransaction={() => setShowAddTx(true)}
                     onGoToTransactions={() => navigate('transactions')}
+                    onOpenCalendar={isReportConfigured ? () => navigate('macro', 'calendar') : undefined}
                   />
                 )}
                 <Suspense fallback={PAGE_FALLBACK}>
                   {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
-                  {view === 'macro' && <MacroPage />}
+                  {view === 'macro' && <MacroPage focus={route.ticker} />}
                   {view === 'fx' && <FxPage />}
                   {view === 'yearly' && <YearlyPage />}
                   {view === 'transactions' && <TransactionsPage />}
