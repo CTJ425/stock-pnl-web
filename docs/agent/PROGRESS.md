@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.30-dev.3 on `dev`** — Task 194: show password, keep sign-in 7 days, 類股資金流向 + a 手動更新 button for it. Not released.
+- Action: **0.10.30-dev.4 on `dev`** — Task 194: password reveal, 7-day sign-in, 資金流向 as its own page (方塊熱度圖) + 手動更新 button; free-tier survey (RISK-023). Not released.
 - Status: ✅ code + tests + DEV Edge deploy (`stock-report` v47); ⏳ no sector-flow file on DEV yet (needs the cron secret or Monday's chips round), ⏳ real-login browser check, ⏳ release. Earlier open: Task 193 item 6, Task 192 item 5, Task 191 item 5.
-- Timestamp: 2026-10-04 17:47:31 Asia/Taipei
+- Timestamp: 2026-10-04 18:16:00 Asia/Taipei
 
 ---
 
@@ -15,7 +15,9 @@
 - **Not verified**: any real file on DEV; a real login or the 7-day cap in a browser; PROD has none of this.
 - **Blocked**: firing `sync-sector-flow` on DEV needs `CRON_SECRET`; a DO block that clones the `source-probe` cron command to borrow it was denied by the permission classifier and was not retried.
 - **Follow-up (user: 「幫我新增按鈕我這邊處理」)**: `de3b1c8` 0.10.30-dev.3 adds `sync-sector-flow` to `admin-run` (Edge `ADMIN_RUN_JOBS`, web `adminRun.ts`, 手動更新 tab; jobname rolls into `stock-report-nightly`). vitest 3,041 pass, build, `typecheck:edge`, lint, engine sync; DEV `stock-report` v48 `f4b0e9fb7ae6…` from clean `de3b1c8`. The user presses it on DEV.
-- **Left**: Task 194 items 4, 5, 7.
+- **Follow-up 2 (user: 「都先按照你的建議處理 然後評估一下…免費的supabase loading」)**: `50c1765` 0.10.30-dev.4 — 資金流向 is a main-nav page `#/sector-flow[/<code>]` (`components/SectorFlow/`, `styles/sector-flow.css`): treemap (area = turnover so recolouring never moves tiles; `treemapLayout.ts` squarified), detail panel, table; 台股市場 keeps a link (`SectorFlowLink`). vitest 3,070 pass / 7 skipped, build, `typecheck:edge`, lint, engine sync. Browser run against the real 2026-10-02 output with Supabase mocked: 7 tabs on one row 768–1280 px, bottom bar 7 cells at 390 px, tile text ≥ 4.9:1 contrast, no overflow or console errors. No Edge change in dev.4, so DEV `stock-report` stays v48.
+- **Free-tier survey**: read-only on PROD, written up as `ACCEPTED_RISKS.md` RISK-023 — everything metered is ≤ 7% of the limit (DB 31 MB / 500, Storage 1 MB / 1 GB, cron ≈ 2% of the Edge invocations); the real constraints are the 2-project cap, the chips phase wall time (worst 66 s / 150 s) and growth with accounts; `cron.job_run_details` is never pruned (0.2 MB a day).
+- **Left**: Task 194 items 4, 4a, 5, 7 (and the optional 8).
 ## 📅 Log: 2026-10-04 15:07:11 Asia/Taipei (Task 193 — codebase review fixes, released 0.10.29)
 - **Ask**: full review of the codebase for hidden defects and optimisations; user chose all four areas, report first, then fixed B1–B4 and "cite the source before touching the ETN rate". Report: `specs/193-codebase-review-2026-10-04.md`.
 - **Found / fixed** (BUG-113…116; `dev` only, nothing on `main`): H1 取代 CSV import duplicated dividends; H2 `take_warm_quota` executable by `anon` (DEV query proved it; now 401); H3 nightly whitelist counted dividends as sells and netted across users (DEV: 2609 was kept although closed). B3: release-script titles ran through a shell, `restore.cjs` argv limit (E2BIG at 128 KiB, proven), `generate` meter 150/day, `app_log_size_check`. B2: edit-mode min fee, rate carry-over, ETN 0.1% (§2 款二 + 金管會 107-07-02 via 證交所), watched-stock quote/seed/polling, `1y` by date, fallback-quote TTL, monthly 全部 wording, intraday errors reach callers, 國際指數 per-ticker guard. B4: hidden-tab polling, 5-min refresh throttle, hover isolation, Fx refresh in place, war-room retire rule from the server plan, dead code and duplicates, cache bounds.

@@ -20,6 +20,15 @@ Newest first, in the order they stood in `BUG_FIX.md`.
 
 ## 🧾 Accepted risks
 
+### RISK-023 — Free-tier headroom is large today; the limits that can bind are not the metered ones
+- **Date**: 2026-10-04, measured read-only on PROD `hrilemueiqyaoiwnkeuu` (3 accounts); limits from supabase.com/pricing and /docs/guides/functions/limits the same day. Plan assumed Free (user's statement; the billing plan itself was not queried).
+- **Status**: ACCEPTED — re-measure when accounts pass ~20 or before any feature that polls or stores per user.
+- **Numbers (PROD)**: DB 31.2 MB of 500 MB; Storage 1.09 MB of 1 GB (`reports` 0.70, `backups` 0.39); 3 users, 2 signed in over the last 7 days; Realtime not used. Edge invocations from cron ≈ 9,700 a month of 500,000 (≈2%), 89% of them `source-probe` (`*/5 * * * *`, 288 a day, nights and weekends included, although `sourcesForTaipeiTime` only has work on weekdays at 12:00 and 15:00–23:30 Taipei). User polling is 1 request a minute per visible tab during market hours ≈ 6–7 K a month per always-open tab, so the cap is reached at about 70 such tabs. Per-request limits (Free): CPU 2 s, wall 150 s, memory 256 MB. `batch_run_log` 14 days: 12 runs a day, mean 4–12 s, worst 65.8 s (2026-10-02) and 56.5 s (2026-09-29); `app_log` has **0** rows matching 546/504/timeout/resource in 30 days. 類股資金流向 adds ≈ 40–100 ms CPU per chips round (measured on the real 1.6 MB of inputs) and a file of 19 KB (1 day) to 168 KB (20 days, raw).
+- **What can bind**: (1) the **2 active projects** cap — DEV and PROD already use both; (2) per-request wall time of the chips phase (worst 66 s of 150 s); (3) Edge invocations and Storage egress once accounts grow into the tens.
+- **Known growth**: `cron.job_run_details` is never pruned — 10,709 rows, 6.65 MB since 2026-08-31, ≈ 0.2 MB a day (≈ 6 years to 500 MB on its own). `source_probe_tick` and `batch_run_log` have no retention either (1,734 and 268 rows, negligible).
+- **Cheap options, none urgent**: prune `cron.job_run_details` to ~14 days; restrict `source-probe` to `*/5 4,7-15 * * 1-5` UTC (≈ 70% fewer invocations; must keep every probe window and MOPS slot — change with `cron.alter_job`, never unschedule+schedule); `SECTOR_FLOW_DAYS_CAP` 20 → 7 (the page reads 5 days).
+- **Not verified**: the dashboard's own egress and invocation counters (not reachable from SQL), whether Storage gzips JSON, whether cron-originated calls count as "activity" for the 1-week auto-pause (PROD also has sign-ins every few days).
+
 ### RISK-022 — A 月退 broker's 折讓金 is folded into each trade, never recorded as income
 - **Decision**: ACCEPTED (Task 184, 0.10.12, user's call 2026-10-01)
 - **What**: under 月退 the broker deducts the statutory 0.1425% at settlement and refunds the

@@ -17,15 +17,17 @@
 ## 📋 Active Tasks
 
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
-- **Status**: 🔄 OPEN REMAINDER — code on `dev` as **0.10.30-dev.3** (`de3b1c8`); DEV `stock-report` v48 `f4b0e9fb7ae6…` (v46 `5977623f…` → v47 `9e1d2e11…` → v48), `verify_jwt` false kept. Nothing on `main`, nothing on PROD.
+- **Status**: 🔄 OPEN REMAINDER — code on `dev` as **0.10.30-dev.4** (`50c1765`; admin button `de3b1c8` in dev.3); DEV `stock-report` v48 `f4b0e9fb7ae6…` (v46 `5977623f…` → v47 `9e1d2e11…` → v48), `verify_jwt` false kept. Nothing on `main`, nothing on PROD.
 - **Agent**: Claude
-- **Timestamp**: 2026-10-04 17:47:31 Asia/Taipei
+- **Timestamp**: 2026-10-04 18:16:00 Asia/Taipei
 - **Spec**: docs/agent/specs/194-login-remember-and-sector-flow.md
 - **Done**: items 1–3 (code, tests, DEV Edge deploy) — vitest 3,041 pass / 7 skipped, build, `typecheck:edge`, lint, engine sync; login page and the new card screenshotted at 1180/390 px, light and dark, no overflow or console errors.
 - **Items**:
   4. DEV has **no `market/sector_flow.json` yet**. The 手動更新 tab now has a 「類股資金流向」 row (`sync-sector-flow`, dev.3): the user presses it on the DEV site (admin login), then 總經 → 台股市場 shows the card. Without it the first weekday chips round (Mon 2026-10-05 from ~16:30 Taipei) produces it. The agent could not fire it itself (needs `CRON_SECRET`; borrowing it from the cron command was refused by the permission classifier — do not retry that route). Real-data run of the same code on 2026-10-02 worked locally (41 rows, 19.7 KB, 估算 103.2 億 vs 公布 104.2 億) ⏳
+  4a. 資金流向 is now its own page (dev.4, `50c1765`): main-nav tab `#/sector-flow[/<code>]`, 方塊熱度圖 (area = turnover, colour = net buy/sell), detail panel, table below; 台股市場 keeps a one-line link. Checked in a real browser against the real 2026-10-02 output at 1280/390 px, light and dark (tile text contrast ≥ 4.9:1, 7 tabs on one row from 768 to 1280 px, bottom bar 7 cells at 390 px). **Not seen on the DEV site** — it has no data file yet (item 4) ⏳
   5. Real-browser check on the DEV site with a real login: 保持登入 across a close/reopen on iOS Safari and Windows, the 7-day cap (not exercised; unit-tested only), the card on the live 總經 → 台股市場 page ⏳
   6. ~~Admin-run job for `sync-sector-flow`~~ ✅ (dev.3, `de3b1c8`)
+  8. Optional, from the free-tier survey (`ACCEPTED_RISKS.md` RISK-023): prune `cron.job_run_details`; restrict `source-probe` to its real windows; `SECTOR_FLOW_DAYS_CAP` 20 → 7 (needs an Edge deploy). None is urgent ⏳
   7. Release: PROD needs the Edge deploy (`stock-report`, no DDL) with explicit OK; changelog 0.10.30 is still 「開發中」 and must be final before the `main` push ⏳
 
 ### Task 193: Codebase review 2026-10-04 — fix the findings (B1–B4)
