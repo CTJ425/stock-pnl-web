@@ -1,6 +1,6 @@
 # Task 192 — Discord 持股日報: one message, one section per workspace
 
-- **Status**: DRAFT (open decisions D1–D3 below need the user)
+- **Status**: IMPLEMENTED in 0.10.27 — D1–D3 accepted as proposed; grand total shown only with ≥2 sections
 - **Timestamp**: 2026-10-04 12:10:00 Asia/Taipei
 - **Related**: `discord-holdings.md` (original card spec, Revision 8 §8.1 line formats)
 

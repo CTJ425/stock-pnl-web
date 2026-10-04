@@ -1,6 +1,12 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
 
+
+### Task 192 — completed sub-items (rolled from TASK.md 2026-10-04 12:23:11)
+  1. ~~User decides D1–D3~~ ✅ all as proposed (2026-10-04)
+  2. ~~Loader selects `workspaces.name`; per-ledger aggregation; N-embed budget + 10-embed cap~~ ✅ `a3bfb07`
+  3. ~~Tests per spec §7; bump + CHANGELOG; deploy DEV~~ ✅ 0.10.27-dev.1, DEV v43
+
 ## Archived 2026-10-02 18:12:59 Asia/Taipei — Task 190 completed sub-items
 
 ### Task 191 — completed sub-items (rolled from TASK.md 2026-10-04 11:22:25)
