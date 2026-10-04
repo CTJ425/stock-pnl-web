@@ -17,15 +17,12 @@
 ## 📋 Active Tasks
 
 ### Task 191: TW market holiday calendar — weekday-holiday guard + calendar for admin and users
-- **Status**: 🔄 IN PROGRESS — `0.10.26-dev.4` on `dev` (`373e76f`, `b24d47d`, `c1e73e5`: 總經 line moved to a footnote under 國際指數 at the user's request; `d985939`: 國際指數 badges read 休市 on a local non-trading day — weekends for all, `TW_HOLIDAYS` for TW; JP/KR/US holidays still 已收盤, no calendar); DEV `stock-price` v27 deployed
+- **Status**: 🔄 OPEN REMAINDER — released as **0.10.26** (`6fb3cf6`); DEV `stock-price` v27 / PROD v17 (`811480ed6d70…`). Only item 5 is live.
 - **Agent**: Claude
-- **Timestamp**: 2026-10-04 10:45:41 Asia/Taipei
+- **Timestamp**: 2026-10-04 11:22:25 Asia/Taipei
+- **Done**: items 1–4 — full text in `TASK_ARCHIVE.md`.
 - **Why**: BUG-110 follow-up — MIS can serve test-session matches on any closed day; next weekday holiday is 2026-10-09.
 - **Items**:
-  1. ~~`TW_HOLIDAYS` guard in `quoteWindow.ts`, `stock-price`, `priceProxy.ts`; tests~~ ✅
-  2. ~~Admin 開休市日 tab; dashboard 「今天/明天休市」 note; 總經 台灣 line + disclosure; `MacroPage` on `twIsClosedDay`~~ ✅
-  3. User reviews on `dev.stock-pnl-web.pages.dev` ⏳
-  4. Release 0.10.26: `ship` step 8 OK from user → merge `main`, deploy PROD `stock-price`, verify — **before 2026-10-09** ⏳
   5. On 2026-10-09: confirm PROD/DEV `price_cache` holds no `trade_date = 20261009` rows and the dashboard shows 「今天休市（國慶日）」 ⏳
 
 ### Task 190: Fee settings UX — broker presets and a sticky action bar (/impeccable)

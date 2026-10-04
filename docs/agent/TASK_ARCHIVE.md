@@ -3,6 +3,12 @@
 
 ## Archived 2026-10-02 18:12:59 Asia/Taipei — Task 190 completed sub-items
 
+### Task 191 — completed sub-items (rolled from TASK.md 2026-10-04 11:22:25)
+  1. ~~`TW_HOLIDAYS` guard in `quoteWindow.ts`, `stock-price`, `priceProxy.ts`; tests~~ ✅
+  2. ~~Admin 開休市日 tab; dashboard 「今天/明天休市」 note; 總經 國際指數 footnote + disclosure (moved from under 台灣 at the user's request, dev.3); badges 未開盤 / 已收盤 / 休市 (dev.4–5); `MacroPage` on `twIsClosedDay`~~ ✅
+  3. ~~User reviewed on `dev.stock-pnl-web.pages.dev`~~ ✅
+  4. ~~Released 0.10.26 (`6fb3cf6`, user OK): PROD `stock-price` v17 `811480ed6d70…`, live call = Friday closes, CI Release body correct, Pages serves the new bundle~~ ✅
+
 ### Task 190 — completed sub-items (rolled from TASK.md 2026-10-02 18:12:59)
   1. ~~`WorkspaceFeeSettings` + `dashboard.css` + `DashboardPage` impact line; DESIGN.md fee-settings entry~~ ✅
   2. ~~vitest 2,824 pass / 7 skipped (5 new preset tests; `mount` opens 改單項 for the old radio tests); build / lint /
