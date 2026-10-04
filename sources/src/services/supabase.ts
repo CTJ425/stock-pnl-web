@@ -5,6 +5,7 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { parseAuthRedirectHash, type AuthRedirectNotice } from './authRedirect'
+import { authStorage } from './authPersistence'
 
 const url: string | undefined = import.meta.env.VITE_SUPABASE_URL
 const anonKey: string | undefined = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -22,5 +23,5 @@ export const initialAuthNotice: AuthRedirectNotice | null =
   typeof window !== 'undefined' ? parseAuthRedirectHash(window.location.hash) : null
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(url!, anonKey!)
+  ? createClient(url!, anonKey!, { auth: { storage: authStorage } })
   : null

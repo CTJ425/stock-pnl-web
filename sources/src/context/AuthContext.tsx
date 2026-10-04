@@ -6,6 +6,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { isSupabaseConfigured, supabase } from '../services/supabase'
+import { clearPersistence, isRememberExpired, setRemember } from '../services/authPersistence'
+
+/** How often an open tab checks whether its remembered login has passed the 7-day cap. */
+const EXPIRY_CHECK_MS = 60_000
 
 export interface AuthUser {
   id: string
@@ -19,8 +23,11 @@ export interface AuthState {
   loading: boolean
   /** Users who enter through the "Reset Password" email link should be prompted to set a new password.*/
   recovery: boolean
-  /** Returns an error message; null on success*/
-  signIn: (email: string, password: string) => Promise<string | null>
+  /**
+   * Returns an error message; null on success. `remember` keeps the login for 7 days in this
+   * browser; false keeps it only until the browser is closed.
+   */
+  signIn: (email: string, password: string, remember?: boolean) => Promise<string | null>
   /** Returns an error message; null on success. If mailbox verification is enabled for the project, a prompt message string (not an error) will be returned.*/
   signUp: (email: string, password: string) => Promise<string | null>
   /** Send password reset email; return error message, success is null*/
@@ -77,6 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Entering the site from the reset password email link: prompting the user to set a new password
       if (event === 'PASSWORD_RECOVERY') setRecovery(true)
+      // Whatever ended the session (sign-out here or in another tab, expiry), the next one starts
+      // from the default persistence again.
+      if (event === 'SIGNED_OUT') clearPersistence()
       applyUser(session?.user)
       // A token refresh or profile update does not change `user` (same id/email), so anything
       // that needs to re-check server-side state (e.g. isAdmin()) needs a separate signal.
@@ -90,9 +100,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyUser])
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  // A tab that stays open past the 7-day cap would otherwise keep its in-memory session.
+  const signedIn = Boolean(user)
+  useEffect(() => {
+    if (!supabase || !signedIn) return
+    const client = supabase
+    const check = () => {
+      if (document.visibilityState !== 'hidden' && isRememberExpired()) {
+        void client.auth.signOut({ scope: 'local' })
+      }
+    }
+    check()
+    const timer = window.setInterval(check, EXPIRY_CHECK_MS)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [signedIn])
+
+  const signIn = useCallback(async (email: string, password: string, remember = true) => {
     if (!supabase) return null
+    // Must be set before the call: the new session is written to the storage this picks.
+    setRemember(remember)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) clearPersistence()
     return error ? error.message : null
   }, [])
 

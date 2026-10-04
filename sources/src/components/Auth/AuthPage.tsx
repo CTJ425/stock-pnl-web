@@ -3,6 +3,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { BrandMark } from '../BrandMark'
+import { PasswordField } from './PasswordField'
+import { REMEMBER_DAYS } from '../../services/authPersistence'
 
 type Mode = 'signin' | 'signup' | 'reset'
 
@@ -20,6 +22,7 @@ export function AuthPage() {
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ kind: 'error' | 'ok'; text: string } | null>(null)
 
@@ -44,7 +47,7 @@ export function AuthPage() {
     setBusy(true)
     try {
       if (mode === 'signin') {
-        const err = await signIn(cleanEmail, password)
+        const err = await signIn(cleanEmail, password, remember)
         if (err) setMessage({ kind: 'error', text: `登入失敗：${err}` })
       } else if (mode === 'signup') {
         const err = await signUp(cleanEmail, password)
@@ -106,16 +109,31 @@ export function AuthPage() {
             )}
           </div>
           {mode !== 'reset' && (
+            <PasswordField
+              id="auth-password"
+              label="密碼"
+              value={password}
+              onChange={setPassword}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              placeholder={mode === 'signup' ? `至少 ${MIN_PASSWORD_LENGTH} 個字元` : '請輸入密碼'}
+            />
+          )}
+          {mode === 'signin' && (
             <div className="field">
-              <label htmlFor="auth-password">密碼</label>
-              <input
-                id="auth-password"
-                type="password"
-                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'signup' ? `至少 ${MIN_PASSWORD_LENGTH} 個字元` : '請輸入密碼'}
-              />
+              <label className="check-row" htmlFor="auth-remember">
+                <input
+                  id="auth-remember"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                保持登入 {REMEMBER_DAYS} 天
+              </label>
+              <div className="field-hint">
+                {remember
+                  ? `只在這個瀏覽器有效，${REMEMBER_DAYS} 天後需重新登入`
+                  : '不勾選時，關閉瀏覽器後需重新登入'}
+              </div>
             </div>
           )}
           <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>

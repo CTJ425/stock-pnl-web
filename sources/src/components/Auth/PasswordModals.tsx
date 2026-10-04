@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { MIN_PASSWORD_LENGTH } from './AuthPage'
 import { Modal } from '../Common/Modal'
+import { PasswordField } from './PasswordField'
 
 /** After the user clicks the "Reset Password" email link to enter the site, he or she is prompted to set a new password.*/
 export function RecoveryPasswordModal() {
@@ -43,29 +44,23 @@ export function RecoveryPasswordModal() {
       </div>
       <form onSubmit={(e) => void submit(e)}>
         {error && <div className="notice notice-error">{error}</div>}
-        <div className="field">
-          <label htmlFor="new-password">新密碼</label>
-          <input
-            id="new-password"
-            type="password"
-            autoComplete="new-password"
-            autoFocus
-            value={password}
-            placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="confirm-password">確認新密碼</label>
-          <input
-            id="confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            placeholder="再輸入一次新密碼"
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </div>
+        <PasswordField
+          id="new-password"
+          label="新密碼"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          autoFocus
+          placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
+        />
+        <PasswordField
+          id="confirm-password"
+          label="確認新密碼"
+          value={confirm}
+          onChange={setConfirm}
+          autoComplete="new-password"
+          placeholder="再輸入一次新密碼"
+        />
         <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
           {busy ? '儲存中…' : '儲存新密碼'}
         </button>
@@ -122,39 +117,30 @@ export function ChangePasswordModal({ onClose }: { onClose: () => void }) {
       <form onSubmit={(e) => void submit(e)}>
         {error && <div className="notice notice-error">{error}</div>}
         {done && <div className="notice notice-ok">密碼已變更</div>}
-        <div className="field">
-          <label htmlFor="current-password">目前密碼</label>
-          <input
-            id="current-password"
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="change-new-password">新密碼</label>
-          <input
-            id="change-new-password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="change-confirm-password">確認新密碼</label>
-          <input
-            id="change-confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            placeholder="再輸入一次新密碼"
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </div>
+        <PasswordField
+          id="current-password"
+          label="目前密碼"
+          value={current}
+          onChange={setCurrent}
+          autoComplete="current-password"
+          autoFocus
+        />
+        <PasswordField
+          id="change-new-password"
+          label="新密碼"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
+        />
+        <PasswordField
+          id="change-confirm-password"
+          label="確認新密碼"
+          value={confirm}
+          onChange={setConfirm}
+          autoComplete="new-password"
+          placeholder="再輸入一次新密碼"
+        />
         <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy || done}>
           {busy ? '儲存中…' : '變更密碼'}
         </button>
