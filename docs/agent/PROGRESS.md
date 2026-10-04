@@ -1,7 +1,7 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.26-dev.3 on `dev`** (總經 開休市 now a footnote under 國際指數) — weekday-holiday guard (`TW_HOLIDAYS`) + TW market calendar for admin and users.
+- Action: **0.10.26-dev.4 on `dev`** (總經 開休市 footnote; 國際指數 badges 休市 vs 已收盤) — weekday-holiday guard (`TW_HOLIDAYS`) + TW market calendar for admin and users.
 - Status: ⏳ awaiting user review on the dev preview; PROD release (main + PROD `stock-price`) not done — target before 2026-10-09.
 - Timestamp: 2026-10-04 10:45:41 Asia/Taipei
 
