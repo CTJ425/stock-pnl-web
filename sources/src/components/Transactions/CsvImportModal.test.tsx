@@ -166,6 +166,8 @@ describe('CsvImportModal 取代模式', () => {
       await paste(WITH_DIVIDENDS)
       await userEvent.click(await screen.findByLabelText(/以這個檔案取代這段期間/))
       expect(await screen.findByText(/檔案裡的 2 筆股利不會寫入/)).toBeTruthy()
+      // The heading counted all 3 rows although only 1 trade is written (seen in the browser run).
+      expect(screen.getByText(/預覽（共 3 筆，取代匯入只寫入其中 1 筆買賣）/)).toBeTruthy()
       await userEvent.click(await screen.findByRole('button', { name: /取代匯入 1 筆/ }))
       await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
       expect(onImport.mock.calls[0][0].map((r) => r.tx_type)).toEqual(['BUY'])

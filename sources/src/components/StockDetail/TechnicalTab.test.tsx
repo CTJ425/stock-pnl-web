@@ -169,6 +169,12 @@ describe('TechnicalTab 長區間', () => {
       expect(table.textContent).not.toContain('日統計')
     })
 
+    it('標題旁寫「資料月份」而不是「資料日」（月 K 的最後一根沒有日）', async () => {
+      await openAll()
+      expect(screen.getByText(/資料月份 2015-\d{2}/)).toBeTruthy()
+      expect(screen.queryByText(/資料日 \d{4}-\d{2}-\d{2}/)).toBeNull()
+    })
+
     it('均線說明用「個月」，不再寫週線／月線／季線', async () => {
       await openAll()
       expect(screen.queryByText('週線')).toBeNull()

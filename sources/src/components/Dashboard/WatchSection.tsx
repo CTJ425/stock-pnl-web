@@ -141,7 +141,9 @@ export function WatchSection({
       undoTimer.current = setTimeout(() => setUndoItem(null), 5000)
     } catch (err) {
       // Without this a failed delete was an unhandled rejection and the row just stayed, unexplained.
-      show(`移除失敗：${err instanceof Error ? err.message : '請稍後再試'}`, 'error')
+      // watchlistService's message already says what failed (「移除觀察標的失敗：…」); prefixing it again read
+      // 「移除失敗：移除觀察標的失敗：…」 in the browser run.
+      show(err instanceof Error && err.message ? err.message : '移除失敗，請稍後再試', 'error')
     } finally {
       setRemoving(null)
     }
@@ -157,7 +159,7 @@ export function WatchSection({
       await load()
       show(`已復原 ${restored.ticker} ${restored.name}`)
     } catch (err) {
-      show(`復原失敗：${err instanceof Error ? err.message : '請稍後再試'}`, 'error')
+      show(err instanceof Error && err.message ? err.message : '復原失敗，請稍後再試', 'error')
     }
   }
 

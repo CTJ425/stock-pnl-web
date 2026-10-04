@@ -215,7 +215,10 @@ export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalPr
               )}
 
               <div style={{ margin: '10px 0 8px', fontSize: 14, color: 'var(--ink-secondary)' }}>
-                預覽（共 {parsed.rows.length} 筆有效交易
+                預覽（共 {parsed.rows.length} 筆
+                {mode === 'replace' && skippedDividends > 0
+                  ? `，取代匯入只寫入其中 ${importRows.length} 筆買賣`
+                  : '有效交易'}
                 {mode === 'merge' && exactCount > 0 && `，其中 ${exactCount} 筆完全相同`}
                 {mode === 'merge' &&
                   similarCount > 0 &&

@@ -506,7 +506,8 @@ describe('WatchSection — 背景分頁與移除失敗', () => {
   it('says so when removing fails instead of leaving an unhandled rejection', async () => {
     const user = userEvent.setup()
     listWatchlist.mockResolvedValue(TWO)
-    removeWatch.mockRejectedValue(new Error('權限不足'))
+    // The service already says what failed (watchlistService: 「移除觀察標的失敗：…」); the toast must not add a second prefix.
+    removeWatch.mockRejectedValue(new Error('移除觀察標的失敗：權限不足'))
     render(
       <ToastProvider>
         <WatchSection onSelectTicker={() => {}} />
@@ -515,8 +516,23 @@ describe('WatchSection — 背景分頁與移除失敗', () => {
     await screen.findByText('台積電')
     await user.click(screen.getByRole('button', { name: '移除 2330 台積電' }))
 
-    expect(await screen.findByText(/移除失敗：權限不足/)).toBeTruthy()
+    expect(await screen.findByText('移除觀察標的失敗：權限不足')).toBeTruthy()
+    expect(screen.queryByText(/移除失敗：移除觀察標的失敗/)).toBeNull()
     // The row is still there: nothing was removed.
     expect(screen.getByText('台積電')).toBeTruthy()
+  })
+
+  it('falls back to a plain sentence when the error carries no message', async () => {
+    const user = userEvent.setup()
+    listWatchlist.mockResolvedValue(TWO)
+    removeWatch.mockRejectedValue('boom')
+    render(
+      <ToastProvider>
+        <WatchSection onSelectTicker={() => {}} />
+      </ToastProvider>,
+    )
+    await screen.findByText('台積電')
+    await user.click(screen.getByRole('button', { name: '移除 2330 台積電' }))
+    expect(await screen.findByText('移除失敗，請稍後再試')).toBeTruthy()
   })
 })

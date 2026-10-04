@@ -253,7 +253,8 @@ export function TechnicalTab({
           <h3>
             {bar} K · 均線 · 布林通道
             <span className="source-tag">
-              資料日 {latest.date} · 更新於 {fmtUpdatedAt(series?.asOf)}
+              {/* A monthly bar's date is just the month's first trading day, so say the month (Task 193). */}
+              {monthly ? `資料月份 ${latest.date.slice(0, 7)}` : `資料日 ${latest.date}`} · 更新於 {fmtUpdatedAt(series?.asOf)}
             </span>
           </h3>
           <div className="chip-toggle" role="group" aria-label="選擇顯示區間">
