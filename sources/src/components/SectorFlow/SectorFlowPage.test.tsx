@@ -76,6 +76,17 @@ const data: SectorFlowData = {
   ],
 }
 
+/** n consecutive days, each buying 電子零組件 +10 and selling 電腦及週邊 −4, so a window of k days nets +6k. */
+const daysOf = (n: number): SectorFlowData => ({
+  asOf: data.asOf,
+  days: Array.from({ length: n }, (_, i) =>
+    day(`2026-09-${String(24 + i)}`, [
+      row('28', '電子零組件', 10, { topBuy: stocks('欣', 2, 1) }),
+      row('25', '電腦及週邊', -4),
+    ]),
+  ),
+})
+
 beforeEach(() => {
   window.history.replaceState(null, '', '#/sector-flow')
 })
@@ -191,13 +202,44 @@ describe('SectorFlowPage: the day', () => {
     expect(await screen.findByText('這段期間沒有賣超的類股。')).toBeTruthy()
   })
 
-  it('switches to the 5-day window and names it; one day of data cannot', async () => {
-    const user = await mount({ kind: 'ok', data })
-    await user.click(screen.getByRole('button', { name: '近 5 日' }))
-    expect(await screen.findByText(/10\/01–10\/02（2 個交易日）\s+三大法人合計淨/)).toBeTruthy()
-    cleanup()
-    await mount({ kind: 'ok', data: { ...data, days: [data.days[1]] } })
+  it('offers a window only when the file holds enough days to fill it, and says why not', async () => {
+    await mount({ kind: 'ok', data: daysOf(1) })
+    const btn = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement
+    expect(btn('今日').disabled).toBe(false)
+    expect(btn('近 3 日').disabled).toBe(true)
+    expect(btn('近 5 日').disabled).toBe(true)
+    expect(btn('近 3 日').title).toBe('資料累積中：目前 1 天，近 3 日需要 3 天')
+    expect(screen.getByText(/資料累積中，目前有 1 個交易日.*滿 3 天可看近 3 日，滿 5 天可看近 5 日/)).toBeTruthy()
+  })
+
+  it('keeps 近 3 日 closed with two days, so a name never covers fewer days than it says', async () => {
+    await mount({ kind: 'ok', data })
+    expect((screen.getByRole('button', { name: '近 3 日' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '近 5 日' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('opens 近 3 日 at three days, sums exactly those three, and names them', async () => {
+    const user = await mount({ kind: 'ok', data: daysOf(3) })
+    expect((screen.getByRole('button', { name: '近 3 日' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: '近 5 日' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/目前有 3 個交易日.*滿 5 天可看近 5 日/)).toBeTruthy()
+    expect(screen.queryByText(/滿 3 天可看近 3 日/)).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '近 3 日' }))
+    const label = await screen.findByText(/09\/24–09\/26（3 個交易日）\s+三大法人合計淨買超/)
+    expect(label.nextElementSibling?.textContent).toBe('+18.0 億')
+    expect(screen.getByRole('button', { name: '近 3 日' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('takes only the last three of five days for 近 3 日, and all five for 近 5 日', async () => {
+    const user = await mount({ kind: 'ok', data: daysOf(5) })
+    expect(screen.queryByText(/資料累積中/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: '近 3 日' }))
+    expect((await screen.findByText(/09\/26–09\/28（3 個交易日）/)).nextElementSibling?.textContent).toBe('+18.0 億')
+    await user.click(screen.getByRole('button', { name: '近 5 日' }))
+    expect((await screen.findByText(/09\/24–09\/28（5 個交易日）/)).nextElementSibling?.textContent).toBe('+30.0 億')
+    await user.click(screen.getByRole('button', { name: '今日' }))
+    expect((await screen.findByText(/09\/28\s+三大法人合計淨買超/)).nextElementSibling?.textContent).toBe('+6.0 億')
   })
 
   it('shows the estimate against the official figure, and says what it covers and what it does not claim', async () => {
@@ -336,8 +378,8 @@ describe('SectorFlowPage: opening a sector in place', () => {
   })
 
   it('lists no stocks for a window of several days, and says why', async () => {
-    const user = await mount({ kind: 'ok', data })
-    await user.click(screen.getByRole('button', { name: '近 5 日' }))
+    const user = await mount({ kind: 'ok', data: daysOf(3) })
+    await user.click(screen.getByRole('button', { name: '近 3 日' }))
     await user.click(legendRow(await buyList(), /電子零組件/))
     expect(screen.getByText('個股只列單日的主力，切回「今日」就會看到。')).toBeTruthy()
   })
@@ -397,11 +439,11 @@ describe('SectorFlowPage: the table', () => {
   })
 
   it('does not repeat the date inside a detail for a single day, and names the window for several', async () => {
-    const user = await mount({ kind: 'ok', data })
+    const user = await mount({ kind: 'ok', data: daysOf(3) })
     await user.click(legendRow(await buyList(), /電子零組件/))
-    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).queryByText('10/02')).toBeNull()
-    await user.click(screen.getByRole('button', { name: '近 5 日' }))
-    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).getByText(/10\/01–10\/02（2 個交易日）/)).toBeTruthy()
+    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).queryByText(/09\/26/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: '近 3 日' }))
+    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).getByText(/09\/24–09\/26（3 個交易日）/)).toBeTruthy()
   })
 
   it('opens a sector under its own row when the name is pressed, and not under a ring', async () => {

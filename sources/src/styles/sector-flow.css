@@ -14,6 +14,10 @@
   font-size: var(--type-heading-03);
 }
 
+.sf-range-hint {
+  margin: 8px 0 0;
+}
+
 /*
  * Slice colours. Two tones per side, alternating, so neighbouring slices differ in lightness and not
  * only in hue; the numerals and the numbered list carry which slice is which. Checked with the

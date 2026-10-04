@@ -19,8 +19,11 @@ import { SectorFlowTable } from './SectorFlowTable'
 import { SectorSides } from './SectorSides'
 import {
   METRIC_LABEL,
-  WEEK_DAYS,
+  RANGES,
+  RANGE_DAYS,
+  RANGE_LABEL,
   buildView,
+  rangeHint,
   reconciliationGap,
   signedBillion as signed,
   toneOf,
@@ -82,7 +85,8 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
 
   const view = useMemo(() => (data ? buildView(data.days, range, metric) : null), [data, range, metric])
   const sides = useMemo(() => (view ? buildSides(view) : null), [view])
-  const canWeek = (data?.days.length ?? 0) >= 2
+  const dayCount = data?.days.length ?? 0
+  const hint = data ? rangeHint(dayCount) : null
 
   const rows = useMemo(() => {
     const m = new Map<string, ViewRow>()
@@ -133,18 +137,22 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
         <h2 className="head-tight sf-title">類股資金流向</h2>
         {data && <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(data.asOf)}</span>}
         <div className="inst-metric-seg" role="group" aria-label="切換期間">
-          <button type="button" className="btn btn-sm" aria-pressed={range === 'day'} onClick={() => setRange('day')}>
-            今日
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            aria-pressed={range === 'week'}
-            disabled={!canWeek}
-            onClick={() => setRange('week')}
-          >
-            近 {WEEK_DAYS} 日
-          </button>
+          {RANGES.map((r) => {
+            const enough = dayCount >= RANGE_DAYS[r]
+            return (
+              <button
+                key={r}
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={range === r}
+                disabled={!enough}
+                title={enough ? undefined : `資料累積中：目前 ${dayCount} 天，${RANGE_LABEL[r]}需要 ${RANGE_DAYS[r]} 天`}
+                onClick={() => setRange(r)}
+              >
+                {RANGE_LABEL[r]}
+              </button>
+            )
+          })}
         </div>
         <div className="inst-metric-seg" role="group" aria-label="切換法人">
           {METRICS.map((m) => (
@@ -154,6 +162,8 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
           ))}
         </div>
       </div>
+
+      {hint && <p className="hint sf-range-hint">{hint}</p>}
 
       {loading ? (
         <p className="hint" style={{ marginTop: 8 }}>

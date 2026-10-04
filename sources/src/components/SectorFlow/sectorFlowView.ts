@@ -7,10 +7,24 @@ import type { SectorFlowDay, SectorFlowRow, SectorMovers } from '../../services/
 import { fmtBillion, fmtBillionSigned, toBillion } from '../../utils/formatters'
 
 export type Metric = 'total' | 'foreign' | 'trust' | 'dealer'
-export type Range = 'day' | 'week'
+export type Range = 'day' | 'three' | 'week'
 
-/** Trading days in the "近 5 日" window. */
-export const WEEK_DAYS = 5
+/** Trading days in each window. */
+export const RANGE_DAYS: Record<Range, number> = { day: 1, three: 3, week: 5 }
+export const RANGES: readonly Range[] = ['day', 'three', 'week']
+export const RANGE_LABEL: Record<Range, string> = { day: '今日', three: '近 3 日', week: '近 5 日' }
+
+/**
+ * Why a window is not available yet, or null once every window is. A window is only offered when the
+ * file holds enough trading days to fill it, so the name always matches what is summed; the file gains
+ * one day per trading day, so the longer windows open up as it grows.
+ */
+export function rangeHint(dayCount: number): string | null {
+  const waiting = RANGES.filter((r) => RANGE_DAYS[r] > dayCount)
+  if (waiting.length === 0) return null
+  const parts = waiting.map((r) => `滿 ${RANGE_DAYS[r]} 天可看${RANGE_LABEL[r]}`)
+  return `資料累積中，目前有 ${dayCount} 個交易日（每個交易日盤後多一天）；${parts.join('，')}。`
+}
 
 export const METRIC_LABEL: Record<Metric, string> = {
   total: '合計',
@@ -66,7 +80,7 @@ const pickGroup = (g: Groups, metric: Metric): number =>
 
 /** The last `range` days of the file, oldest first. */
 export function windowOf(days: SectorFlowDay[], range: Range): SectorFlowDay[] {
-  return days.slice(-(range === 'week' ? WEEK_DAYS : 1))
+  return days.slice(-RANGE_DAYS[range])
 }
 
 /** The newest day's top-stock lists for the chosen investor group; null when the file has none for it. */

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SectorFlowDay, SectorFlowRow } from '../../services/sectorFlowProxy'
 import {
-  WEEK_DAYS,
+  RANGES,
+  RANGE_DAYS,
+  rangeHint,
   buildView,
   leadClause,
   reconciliationGap,
@@ -69,11 +71,28 @@ const D2 = day(
 )
 
 describe('windowOf', () => {
-  it('takes the last day, or the last WEEK_DAYS days, oldest first', () => {
-    expect(windowOf([D1, D2], 'day').map((d) => d.date)).toEqual(['2026-10-02'])
-    expect(windowOf([D1, D2], 'week').map((d) => d.date)).toEqual(['2026-10-01', '2026-10-02'])
+  it('takes the last 1, 3 or 5 days, oldest first', () => {
     const many = Array.from({ length: 9 }, (_, i) => day(`2026-09-${String(10 + i)}`, [row('28', 'x', 1)]))
-    expect(windowOf(many, 'week')).toHaveLength(WEEK_DAYS)
+    expect(windowOf(many, 'day').map((d) => d.date)).toEqual(['2026-09-18'])
+    expect(windowOf(many, 'three').map((d) => d.date)).toEqual(['2026-09-16', '2026-09-17', '2026-09-18'])
+    expect(windowOf(many, 'week')).toHaveLength(RANGE_DAYS.week)
+    expect(windowOf([D1, D2], 'week').map((d) => d.date)).toEqual(['2026-10-01', '2026-10-02'])
+  })
+
+  it('has windows of 1, 3 and 5 trading days, shortest first', () => {
+    expect(RANGES.map((r) => RANGE_DAYS[r])).toEqual([1, 3, 5])
+  })
+})
+
+describe('rangeHint', () => {
+  it('says which windows are still waiting for days, and how many days there are', () => {
+    expect(rangeHint(1)).toBe('資料累積中，目前有 1 個交易日（每個交易日盤後多一天）；滿 3 天可看近 3 日，滿 5 天可看近 5 日。')
+    expect(rangeHint(2)).toContain('目前有 2 個交易日')
+    expect(rangeHint(3)).toBe('資料累積中，目前有 3 個交易日（每個交易日盤後多一天）；滿 5 天可看近 5 日。')
+  })
+  it('is silent once every window can be filled', () => {
+    expect(rangeHint(5)).toBeNull()
+    expect(rangeHint(7)).toBeNull()
   })
 })
 
