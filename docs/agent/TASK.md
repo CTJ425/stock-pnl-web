@@ -17,15 +17,15 @@
 ## 📋 Active Tasks
 
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
-- **Status**: 🔄 OPEN REMAINDER — code on `dev` as **0.10.30-dev.2** (`0e86921`); DEV `stock-report` v47 `9e1d2e111016…` (was v46 `5977623f…`), `verify_jwt` false kept. Nothing on `main`, nothing on PROD.
+- **Status**: 🔄 OPEN REMAINDER — code on `dev` as **0.10.30-dev.3** (`de3b1c8`); DEV `stock-report` v48 `f4b0e9fb7ae6…` (v46 `5977623f…` → v47 `9e1d2e11…` → v48), `verify_jwt` false kept. Nothing on `main`, nothing on PROD.
 - **Agent**: Claude
-- **Timestamp**: 2026-10-04 17:41:06 Asia/Taipei
+- **Timestamp**: 2026-10-04 17:47:31 Asia/Taipei
 - **Spec**: docs/agent/specs/194-login-remember-and-sector-flow.md
 - **Done**: items 1–3 (code, tests, DEV Edge deploy) — vitest 3,041 pass / 7 skipped, build, `typecheck:edge`, lint, engine sync; login page and the new card screenshotted at 1180/390 px, light and dark, no overflow or console errors.
 - **Items**:
-  4. DEV has **no `market/sector_flow.json` yet** — the card shows 尚無類股資金流向資料. Real-data run of the same code against TWSE/TPEx for 2026-10-02 worked (41 rows, 19.7 KB, 估算 103.2 億 vs 公布 104.2 億) but was local, not DEV. The agent could not fire `sync-sector-flow` on DEV: it needs `CRON_SECRET`, and cloning the `source-probe` cron command to borrow it was refused by the permission classifier (correctly — do not retry). Unauthenticated smoke: `sync-sector-flow` → 401, unknown action → 400. Either wait for the first weekday chips round (Mon 2026-10-05 from ~16:30 Taipei) and check `market/sector_flow.json`, or the user triggers it ⏳
+  4. DEV has **no `market/sector_flow.json` yet**. The 手動更新 tab now has a 「類股資金流向」 row (`sync-sector-flow`, dev.3): the user presses it on the DEV site (admin login), then 總經 → 台股市場 shows the card. Without it the first weekday chips round (Mon 2026-10-05 from ~16:30 Taipei) produces it. The agent could not fire it itself (needs `CRON_SECRET`; borrowing it from the cron command was refused by the permission classifier — do not retry that route). Real-data run of the same code on 2026-10-02 worked locally (41 rows, 19.7 KB, 估算 103.2 億 vs 公布 104.2 億) ⏳
   5. Real-browser check on the DEV site with a real login: 保持登入 across a close/reopen on iOS Safari and Windows, the 7-day cap (not exercised; unit-tested only), the card on the live 總經 → 台股市場 page ⏳
-  6. Optional: an `admin-run` job for `sync-sector-flow` so the console can backfill without the cron secret ⏳
+  6. ~~Admin-run job for `sync-sector-flow`~~ ✅ (dev.3, `de3b1c8`)
   7. Release: PROD needs the Edge deploy (`stock-report`, no DDL) with explicit OK; changelog 0.10.30 is still 「開發中」 and must be final before the `main` push ⏳
 
 ### Task 193: Codebase review 2026-10-04 — fix the findings (B1–B4)
