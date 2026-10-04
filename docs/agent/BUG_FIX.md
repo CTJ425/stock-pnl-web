@@ -71,6 +71,7 @@
   - a signed-in `warm`/`generate` caller still supplies the `name` stored in shared files (see above);
   - quote pollers refresh every 1–2 min, not every minute (measured in the browser run, 2026-10-04): the poll interval (60 s) equals the quote TTL (60 s in session) and `asOf` is stamped when the response lands, so the first tick finds a 59.5 s-old quote still fresh and the next tick, 60 s later, refetches. Same in `useStockPrices` (holdings) and `WatchSection`; QuoteTab's text 「每分鐘更新一次」 is therefore optimistic. A fix would shorten the tick or let `fetchPrices` accept a tolerance — shared code, so not done with Task 193;
   - local mode: the dashboard's 觀察股票 block shows 「載入失敗」 and 「還沒有觀察標的」 together (`listWatchlist` throws without Supabase); toasts stack over the footer version on a 390 px screen. Both existed before Task 193.
+  - the CI step `gh release create 0.7.25 --target 5550979… --title "0.7.25 — 修正 \`computeLedger()\` …"` fails on every `main` push (the workflow still reports success); before Task 193 it died on the backticks in the shell string, now it fails for a reason not yet read from the log — no `0.7.25` tag or Release exists.
 - **Status**: OPEN — found 2026-10-04 (Task 193).
 
 ### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)

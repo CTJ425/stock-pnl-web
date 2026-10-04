@@ -2,6 +2,14 @@
 
 
 
+### Task 193 — completed sub-items (rolled from TASK.md 2026-10-04 15:53:11)
+  1. ~~B1 — H1 CSV 取代 / H2 REVOKE `take_warm_quota` / H3 `netOpenTickers`~~ ✅ (`986daa5`, BUG-113)
+  2. ~~B3 — M11–M14 + Edge lows~~ ✅ (`6a3db30`, BUG-114)
+  3. ~~B2 — M1–M10 incl. ETN 0.1% with cited sources~~ ✅ (`d0a8cd0`, BUG-115)
+  4. ~~B4 — M15–M19, dead code, duplicates, cache bounds~~ ✅ (`34961d5`, BUG-116); browser run + three wording fixes ✅ (`34450df`, 0.10.29-dev.5)
+  5. ~~DEV deploy, then PROD DDL (H2 REVOKE, M12 `app_log_size_check`, new `verify.sql`) and PROD Edge (3 functions)~~ ✅ 2026-10-04 15:53:11, user authorized: PROD `verify_setup()` 11/11 PASS (target host PROD), anon `take_warm_quota` no longer executable; `stock-report` v27→v28 `5977623f…`, `stock-price` v17→v18 `bee3895c…`, `backup-transactions` v7→v8 `6bfb84af…`, all equal to DEV, `verify_jwt` flags kept; smoke: all three answer 401 without credentials
+  7. ~~Release 0.10.29~~ ✅ `main` = `dev` = `f4d8420`; CI + Cloudflare Pages + Sync Releases green; Release 0.10.29 (Latest) created by CI with the final CHANGELOG body; production serves it (content check: 「只寫入其中」 in the Transactions chunk, 「資料月份」 in the Analysis chunk)
+
 ### Task 192 — completed sub-items (rolled from TASK.md 2026-10-04 12:23:11)
   1. ~~User decides D1–D3~~ ✅ all as proposed (2026-10-04)
   2. ~~Loader selects `workspaces.name`; per-ledger aggregation; N-embed budget + 10-embed cap~~ ✅ `a3bfb07`
