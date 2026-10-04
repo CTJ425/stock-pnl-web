@@ -221,10 +221,20 @@ export async function storageCoverage(): Promise<Record<string, number | null>> 
       // `list()` fails without throwing — { data: null, error }. Reading only `data` turned a failed
       // lookup into "0 files", which an operator cannot tell apart from a genuinely empty directory
       // (AUDIT-2026-09-04 #5). `null` here means "lookup failed", not "empty".
-      const { data, error } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000 })
-      out[d] = error
-        ? null
-        : (data ?? []).filter((f: { name: string }) => f.name.endsWith('.json')).length
+      // Paged: one `list` returns at most 1000 entries, so a bucket past that undercounted silently.
+      let count = 0
+      let failed = false
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000, offset })
+        if (error) {
+          failed = true
+          break
+        }
+        const page = data ?? []
+        count += page.filter((f: { name: string }) => f.name.endsWith('.json')).length
+        if (page.length < 1000) break
+      }
+      out[d] = failed ? null : count
     }),
   )
   try {

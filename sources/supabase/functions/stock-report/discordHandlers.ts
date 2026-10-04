@@ -433,6 +433,7 @@ export async function finishHoldingsSend(userId: string, ymd: string, kind: Hold
       .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
       .eq('taipei_ymd', ymd)
+      .eq('kind', 'daily')
       .eq('status', 'claimed')
     if (error) throw new Error(error.message)
     return

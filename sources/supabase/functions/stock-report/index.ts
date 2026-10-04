@@ -36,7 +36,8 @@
  * `allowedTwTickers()` — holdings ∪ every user's `tw_watchlist` (0.8.0; 0.7.0 had restored a
  * holdings-only whitelist after removing full-market search / TOP20). The same set is the nightly
  * batch scope, so a watched ticker gets its reports built like a held one.
- * `warm` additionally charges `WARM_DAILY_LIMIT` via `take_warm_quota`. Deployed with
+ * `warm` additionally charges `WARM_DAILY_LIMIT`, and `generate` charges `GENERATE_DAILY_LIMIT` (quotaKeys.ts),
+ * both via `take_warm_quota`. Deployed with
  * --no-verify-jwt; see 0.3.9 for what happens with no gate at all.
  */
 import { logEvent } from '../_shared/log.ts'
@@ -63,6 +64,7 @@ import {
   type T86ResponseShape,
 } from './twChips.ts'
 import { allowsTicker, mergeTwTickerLists } from './batchTickers.ts'
+import { GENERATE_DAILY_LIMIT, generateQuotaKey } from './quotaKeys.ts'
 import {
   buildReport,
   dashDate,
@@ -853,12 +855,22 @@ async function handleGenerate(
     return json({ error: '僅限持有或已加入觀察清單的台股代號' }, 403)
   }
 
+  // Task 193 M11: a daily meter per account. Only 'limited' stops the call — if the counter is
+  // unavailable the holdings/watchlist whitelist above is still a ceiling, and failing closed here
+  // would take the report page down with the database instead of protecting it.
+  const used = await takeWarmQuota(auth.userId, generateQuotaKey(taipeiYmd(new Date())), GENERATE_DAILY_LIMIT)
+  if (used === 'limited') {
+    return json({ error: '今日產生報告的次數已達上限，請明天再試' }, 429)
+  }
+
   const series = await loadSeries([ticker], new Date())
   const marginFallbackRows = await loadMarginFallback(
     series.dataYmd,
     series.marginDatedFailed || series.days.length === 0,
   )
-  const borrow = await loadBorrow()
+  // With the data date as `minYmd` a cached borrow file for that date or later is used instead of
+  // re-downloading TWSE's ~244 KB on every call (the batch and `warm` already do this).
+  const borrow = await loadBorrow(series.dataYmd)
   const data = assembleOne({ ticker, name, holding, series, marginFallbackRows, borrow })
 
   if (series.dataYmd && series.days.length > 0) {
@@ -909,12 +921,13 @@ const CACHE_RETAIN_DAYS = LOOKBACK_DAYS
 async function takeWarmQuota(
   userId: string,
   ymd: string,
+  limit: number = WARM_DAILY_LIMIT,
 ): Promise<'ok' | 'limited' | 'error'> {
   try {
     const { data, error } = await db.rpc('take_warm_quota', {
       p_user_id: userId,
       p_ymd: ymd,
-      p_limit: WARM_DAILY_LIMIT,
+      p_limit: limit,
     })
     if (error) return 'error'
     return data === true ? 'ok' : 'limited'

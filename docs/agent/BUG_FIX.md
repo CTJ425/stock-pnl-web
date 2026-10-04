@@ -62,7 +62,9 @@
   - `stock-price/index.ts:732` applies the Taipei 13:30 cutoff to US daily bars;
   - `index.ts:2786` uncapped `Promise.all` in `readFundamentalSnapshot` (with RISK-002);
   - latent: `fees.ts:237` day-trade signature at 0% rate, `WorkspaceContext.tsx:191-199` add during a workspace switch, `StockSplitModal.tsx:196-203` inferred rate stored as recorded, `FundamentalTab.tsx:330` TTM EPS needs four newest quarters, `DiscordMySettings.tsx:201-235` two quick time saves overwrite each other;
-  - CI `e2e-dev.yml` runs `npx wait-on` unpinned (not a devDependency).
+  - CI `e2e-dev.yml` runs `npx wait-on` unpinned (not a devDependency);
+  - the request-body `name` of `generate`/`warm` lands in the shared report/fundamental files shown to every user (spoofing, not XSS), and the nightly batch takes names from the same user-supplied rows — the real fix is the official TWSE/TPEx names (`twNames.ts`) in all three places;
+  - `app_log` insert policy still lets a signed-in browser write many small rows (the size CHECK caps each row, not the count).
 - **Status**: OPEN — found 2026-10-04 (Task 193).
 
 ### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)

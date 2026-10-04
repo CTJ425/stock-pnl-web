@@ -58,7 +58,7 @@
  *       "no data" answer, not an error, 0.9.41.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { logEvent } from '../_shared/log.ts'
+import { logEvent, safeStack } from '../_shared/log.ts'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
 import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
 import { twIsClosedDay, twIsClosedDate, twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
@@ -807,7 +807,7 @@ Deno.serve(async (req) => {
       level: 'error',
       action: typeof body.action === 'string' ? body.action : 'stock-price',
       message: err instanceof Error ? err.message : String(err),
-      detail: { stack: err instanceof Error ? err.stack : undefined },
+      detail: { stack: safeStack(err) },
     })
     return json({ error: 'Internal error' }, 500)
   }

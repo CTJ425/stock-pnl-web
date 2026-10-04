@@ -36,8 +36,8 @@ function truncate(value: string, key: string | undefined): string {
 
 /**
  * An array is the only place `detail` can grow without bound: the allowlist caps the key count
- * and `truncate` caps each string, but nothing caps the element count. `app_log.detail` has no
- * size CHECK in the database (`pg_column_size` is not immutable), so this is the cap.
+ * and `truncate` caps each string, but nothing caps the element count. This is the cap;
+ * `app_log_size_check` (schema.sql) is the backstop for a browser that skips this code (Task 193 M12).
  */
 const MAX_ARRAY_ITEMS = 20
 
@@ -54,6 +54,20 @@ function sanitize(value: unknown, key: string | undefined): unknown {
     return out
   }
   return value
+}
+
+/**
+ * ER-15: `err.stack` is unbounded and can echo an upstream response verbatim — a stack that runs
+ * through a URL carrying a signed query string would leak it straight into app_log. Keep only the
+ * message line plus the first 3 call frames, and mask anything shaped like a long token (20+ chars
+ * of base64/hex/JWT alphabet) before it ever reaches `logEvent`. This is a mask, not the allowlist
+ * redaction _shared/log.ts already does on every field — see that file's header comment on why a
+ * denylist is never enough on its own.
+ */
+export function safeStack(err: unknown): string | undefined {
+  if (!(err instanceof Error) || !err.stack) return undefined
+  const [head, ...frames] = err.stack.split('\n')
+  return [head, ...frames.slice(0, 3)].join('\n').replace(/[A-Za-z0-9+/_=-]{20,}/g, '[redacted]')
 }
 
 export function redactDetail(detail: unknown): Record<string, unknown> {

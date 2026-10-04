@@ -19,13 +19,19 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { buildCreateArgs, buildEditArgs } = require('./lib/releaseArgs.cjs');
 
 // Determine repo root
 const repoRoot = path.resolve(__dirname, '../..');
 const changelogPath = path.join(repoRoot, 'docs/agent/CHANGELOG.md');
 const packageJsonPath = path.join(repoRoot, 'sources/package.json');
 const versionTsPath = path.join(repoRoot, 'sources/src/version.ts');
+
+const USAGE = `Usage: node scripts/sync-github-releases.cjs [--latest | --all | --version <ver>] [--dry-run] [--force]
+
+Publishes docs/agent/CHANGELOG.md entries as GitHub Releases. With no mode it syncs the current
+version LIVE — use --dry-run first. -h / --help print this text and change nothing.`;
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -49,6 +55,14 @@ function parseArgs() {
       options.force = true;
     } else if (arg === '--version' && i + 1 < args.length) {
       options.version = args[++i];
+    } else if (arg === '--help' || arg === '-h') {
+      console.log(USAGE);
+      process.exit(0);
+    } else {
+      // An unknown flag used to fall through to the default (--latest, live): `--help` published a
+      // Release. Refuse instead of guessing (Task 193).
+      console.error(`Unknown argument: ${arg}\n\n${USAGE}`);
+      process.exit(1);
     }
   }
 
@@ -105,7 +119,7 @@ function parseChangelog() {
 }
 
 function getGitCommits() {
-  const logOut = execSync('git log --format="%H|%s|%aI"', { cwd: repoRoot })
+  const logOut = execFileSync('git', ['log', '--format=%H|%s|%aI'], { cwd: repoRoot })
     .toString()
     .trim()
     .split('\n');
@@ -152,7 +166,7 @@ function matchCommitForVersion(version, commits) {
 
 function getExistingReleases() {
   try {
-    const output = execSync('gh release list --limit 300', { cwd: repoRoot, stdio: ['ignore', 'pipe', 'ignore'] })
+    const output = execFileSync('gh', ['release', 'list', '--limit', '300'], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim();
 
@@ -272,7 +286,7 @@ async function main() {
     try {
       if (exists) {
         console.log(`[UPDATE] Updating release ${tag}...`);
-        execSync(`gh release edit "${tag}" --title "${item.title.replace(/"/g, '\\"')}" --notes-file "${notesFile}"`, {
+        execFileSync('gh', buildEditArgs({ tag, title: item.title, notesFile }), {
           cwd: repoRoot,
           stdio: 'inherit',
         });
@@ -280,8 +294,7 @@ async function main() {
       } else {
         console.log(`[CREATE] Creating release ${tag} pointing to commit ${targetCommit.slice(0, 7)}...`);
         const isLatest = (tag === allVersions[0].version);
-        const latestFlag = isLatest ? '--latest' : '--latest=false';
-        execSync(`gh release create "${tag}" --target "${targetCommit}" --title "${item.title.replace(/"/g, '\\"')}" --notes-file "${notesFile}" ${latestFlag}`, {
+        execFileSync('gh', buildCreateArgs({ tag, targetCommit, title: item.title, notesFile, isLatest }), {
           cwd: repoRoot,
           stdio: 'inherit',
         });
@@ -305,7 +318,10 @@ async function main() {
   console.log(`Total  : ${targetVersions.length}`);
 }
 
-main().catch(err => {
-  console.error('[FATAL]', err);
-  process.exit(1);
-});
+// Importing this file (a syntax check, a test) must never publish anything.
+if (require.main === module) {
+  main().catch(err => {
+    console.error('[FATAL]', err);
+    process.exit(1);
+  });
+}

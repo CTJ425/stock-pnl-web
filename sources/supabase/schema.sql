@@ -1198,6 +1198,20 @@ CREATE POLICY app_log_insert_own ON app_log
   FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = user_id AND source = 'web');
 
+-- Task 193 M12: the insert policy lets any signed-in browser write straight to PostgREST, bypassing
+-- the application-layer allowlist and truncation, so the row size is capped here too. Real rows
+-- are about 1.3 KB at most (DEV 1,297 B, PROD 663 B on 2026-10-04); 32 KB leaves room for a long
+-- stack plus a 20-item array. `octet_length(detail::text)` is immutable, unlike `pg_column_size`.
+-- A NULL app_version / request_id passes (a CHECK only rejects FALSE). NOT VALID then VALIDATE so
+-- a re-run on a populated table cannot lock out writers while it scans.
+ALTER TABLE app_log DROP CONSTRAINT IF EXISTS app_log_size_check;
+ALTER TABLE app_log ADD CONSTRAINT app_log_size_check CHECK (
+  octet_length(detail::text) <= 32768
+  AND char_length(app_version) <= 32
+  AND char_length(request_id) <= 64
+) NOT VALID;
+ALTER TABLE app_log VALIDATE CONSTRAINT app_log_size_check;
+
 CREATE INDEX IF NOT EXISTS app_log_at_idx       ON app_log (at DESC);
 CREATE INDEX IF NOT EXISTS app_log_level_at_idx ON app_log (level, at DESC);
 CREATE INDEX IF NOT EXISTS app_log_request_idx  ON app_log (request_id)

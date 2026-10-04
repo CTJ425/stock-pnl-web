@@ -24,16 +24,5 @@ export function json(body: unknown, status = 200): Response {
   })
 }
 
-/**
- * ER-15: `err.stack` is unbounded and can echo an upstream response verbatim — a stack that runs
- * through a URL carrying a signed query string would leak it straight into app_log. Keep only the
- * message line plus the first 3 call frames, and mask anything shaped like a long token (20+ chars
- * of base64/hex/JWT alphabet) before it ever reaches `logEvent`. This is a mask, not the allowlist
- * redaction _shared/log.ts already does on every field — see that file's header comment on why a
- * denylist is never enough on its own.
- */
-export function safeStack(err: unknown): string | undefined {
-  if (!(err instanceof Error) || !err.stack) return undefined
-  const [head, ...frames] = err.stack.split('\n')
-  return [head, ...frames.slice(0, 3)].join('\n').replace(/[A-Za-z0-9+/_=-]{20,}/g, '[redacted]')
-}
+// Moved to _shared/log.ts so stock-price masks its stacks the same way (Task 193); re-exported for index.ts.
+export { safeStack } from '../_shared/log.ts'

@@ -18,6 +18,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 const { verifyManifest, substituteCronPlaceholders } = require('./lib/snapshotPlan.cjs')
+const { buildQueryArgs, withSqlFile } = require('./lib/sqlFile.cjs')
 
 // `supabase db query --linked` recognizes cwd, not "the linked project you think" (supabase-ops
 // skill). Every supabase invocation below runs with this fixed cwd so it never inherits a stale
@@ -186,17 +187,25 @@ function applySchemaAndData(packageDir, setupSql, authSql, dryRun, appliedSteps)
   }
 
   console.log('  Applying setup.sql...')
-  execFileSync('supabase', ['db', 'query', '--linked', setupSql], { cwd: SOURCES_DIR, stdio: 'inherit' })
+  runSqlFile(setupSql)
   appliedSteps.push('setup.sql')
 
   console.log('  Applying data-auth.sql...')
-  execFileSync('supabase', ['db', 'query', '--linked', authSql], { cwd: SOURCES_DIR, stdio: 'inherit' })
+  runSqlFile(authSql)
   appliedSteps.push('data-auth.sql')
 
   console.log('  Applying data-public.sql...')
-  const publicSql = fs.readFileSync(path.join(packageDir, 'data-public.sql'), 'utf8')
-  execFileSync('supabase', ['db', 'query', '--linked', publicSql], { cwd: SOURCES_DIR, stdio: 'inherit' })
+  runSqlFile(fs.readFileSync(path.join(packageDir, 'data-public.sql'), 'utf8'))
   appliedSteps.push('data-public.sql')
+}
+
+// The SQL goes in a private temp file, never as an argument: one argv string is capped at 128 KiB
+// on Linux (setup.sql is already ~100 KB) and an argument is readable in /proc/<pid>/cmdline,
+// where these statements would expose password hashes and the CRON_SECRET (Task 193 M14).
+function runSqlFile(sql) {
+  withSqlFile(sql, (file) => {
+    execFileSync('supabase', buildQueryArgs(file), { cwd: SOURCES_DIR, stdio: 'inherit' })
+  })
 }
 
 function readBucketsManifest(packageDir) {
