@@ -1,19 +1,23 @@
 /**
- * 資金流向: which industries the three institutional investors (外資、投信、自營商) bought and sold
- * today, from the after-hours file `market/sector_flow.json`.
+ * 資金流向: which industries the three institutional investors (外資、投信、自營商) bought and sold,
+ * from the after-hours file `market/sector_flow.json`.
  *
- * Top to bottom: the answer in words, the picture (方塊熱度圖 with a detail panel beside it), then the
- * full numbers. The selected sector lives in the URL (`#/sector-flow/24`), so a link opens the page
- * with that sector already picked. Selecting replaces the URL instead of pushing, so the back button
- * leaves the page rather than stepping through every tile the reader touched.
+ * Top to bottom: the day's net in one figure with the two totals beside it, then two rings — where
+ * the buying went and where the selling came from, each its own 100% — then, folded away, the
+ * treemap (how big each sector is, with a detail panel) and the full numbers. The selected sector
+ * lives in the URL (`#/sector-flow/24`), so a link opens the page with that sector already picked.
+ * Selecting replaces the URL instead of pushing, so the back button leaves the page rather than
+ * stepping through every tile the reader touched.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchSectorFlow, type SectorFlowData } from '../../services/sectorFlowProxy'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
-import { fmtUpdatedAt } from '../StockDetail/chipFormat'
+import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { formatViewHash } from '../viewRoute'
+import { buildSides } from './flowSides'
 import { SectorDetail } from './SectorDetail'
 import { SectorFlowTable } from './SectorFlowTable'
+import { SectorSides } from './SectorSides'
 import { SectorTreemap } from './SectorTreemap'
 import {
   METRIC_LABEL,
@@ -21,7 +25,8 @@ import {
   buildView,
   reconciliationGap,
   signedBillion as signed,
-  summarize,
+  toneOf,
+  windowLabel,
   type Metric,
   type Range,
   type ViewRow,
@@ -62,12 +67,15 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
   const [range, setRange] = useState<Range>('day')
   const [metric, setMetric] = useState<Metric>('total')
   const [selected, setSelected] = useState<string | null>(focus ?? null)
+  // A link to a sector opens the treemap it points into; otherwise it stays folded away.
+  const [treemapOpen, setTreemapOpen] = useState(Boolean(focus))
   const narrow = useMediaQuery(NARROW_QUERY)
   const detailRef = useRef<HTMLDivElement | null>(null)
 
   // A pasted link or the back/forward buttons change the route's argument from outside.
   useEffect(() => {
     setSelected(focus ?? null)
+    if (focus) setTreemapOpen(true)
   }, [focus])
 
   useEffect(() => {
@@ -90,7 +98,7 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
   }, [])
 
   const view = useMemo(() => (data ? buildView(data.days, range, metric) : null), [data, range, metric])
-  const summary = useMemo(() => (view ? summarize(view, metric) : []), [view, metric])
+  const sides = useMemo(() => (view ? buildSides(view) : null), [view])
   const canWeek = (data?.days.length ?? 0) >= 2
 
   const rows = useMemo(() => {
@@ -113,6 +121,7 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
     }
   }
   const gap = view?.reconciliation ? reconciliationGap(view.reconciliation) : null
+  const who = metric === 'total' ? '三大法人合計' : METRIC_LABEL[metric]
 
   return (
     <div className="section glass sf-page">
@@ -154,39 +163,64 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
         <p className="hint" style={{ marginTop: 8 }}>
           資料格式不符，無法顯示
         </p>
-      ) : !view ? (
+      ) : !view || !sides ? (
         <p className="hint" style={{ marginTop: 8 }}>
           尚無類股資金流向資料，盤後三大法人資料公布後會自動產生。
         </p>
       ) : (
         <>
-          <div className="sf-summary" aria-live="polite">
-            {summary.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </div>
-
-          <Legend />
-
-          <div className="sf-stage">
-            <SectorTreemap
-              view={view}
-              selected={picked ? picked.code : null}
-              narrow={narrow}
-              onSelect={(code) => select(code === selected ? null : code)}
-            />
-            <div ref={detailRef}>
-              <SectorDetail row={picked} dates={view.dates} onClear={() => select(null)} />
+          <div className="sf-strip">
+            <div className="sf-strip-lead">
+              <div className="sf-strip-label">
+                {windowLabel(view.dates)}　{who}
+                {sides.netTwd >= 0 ? '淨買超' : '淨賣超'}
+              </div>
+              <div className={`sf-hero ${chipClass(toneOf(sides.netTwd))}`}>{signed(sides.netTwd)}</div>
+              <p className="sf-strip-note">買進的產業減掉賣出的產業</p>
+            </div>
+            <div className="sf-strip-cell">
+              <div className="sf-strip-label">買進的產業</div>
+              <div className={`sf-figure ${chipClass(sides.buy.totalTwd)}`}>{signed(sides.buy.totalTwd)}</div>
+              <p className="sf-strip-note">共 {sides.buy.count} 個類股</p>
+            </div>
+            <div className="sf-strip-cell">
+              <div className="sf-strip-label">賣出的產業</div>
+              <div className={`sf-figure ${chipClass(sides.sell.totalTwd)}`}>{signed(sides.sell.totalTwd)}</div>
+              <p className="sf-strip-note">共 {sides.sell.count} 個類股</p>
             </div>
           </div>
 
-          <h3 className="sf-table-title">詳細數字</h3>
-          <SectorFlowTable view={view} selected={picked ? picked.code : null} />
+          <SectorSides sides={sides} />
+
+          <details
+            className="chart-more sf-fold"
+            open={treemapOpen}
+            onToggle={(e) => setTreemapOpen(e.currentTarget.open)}
+          >
+            <summary>看方塊圖：各產業有多大</summary>
+            <Legend />
+            <div className="sf-stage">
+              <SectorTreemap
+                view={view}
+                selected={picked ? picked.code : null}
+                narrow={narrow}
+                onSelect={(code) => select(code === selected ? null : code)}
+              />
+              <div ref={detailRef}>
+                <SectorDetail row={picked} dates={view.dates} onClear={() => select(null)} />
+              </div>
+            </div>
+          </details>
+
+          <details className="chart-more sf-fold">
+            <summary>看詳細數字</summary>
+            <SectorFlowTable view={view} selected={picked ? picked.code : null} />
+          </details>
 
           <p className="hint">
-            金額是「法人買賣超股數 × 當日均價（成交金額 ÷ 成交股數）」的估算，單位億元；「佔成交」是該類股成交金額佔全市場的比例。
+            金額是「法人買賣超股數 × 當日均價（成交金額 ÷ 成交股數）」的估算，單位億元。左右兩個圓各自是 100%：左邊只看買超的產業，右邊只看賣超的產業，兩邊的總額不同；這兩個圖不表示資金從賣出的產業轉到買進的產業。
             {view.allOtc ? '涵蓋上市與上櫃。' : '部分日期只含上市（當時上櫃資料還沒公布）。'}
-            ETF 與受益證券另列一塊；半導體細分依櫃買中心產業價值鏈歸類，沒列在其中的歸「設備、材料與其他」。
+            半導體拆成 IC 設計、晶圓製造、封裝測試、設備材料與其他四塊計算（依櫃買中心產業價值鏈歸類），所以 IC 設計的賣壓不會被半導體合計蓋住；ETF 與受益證券另列。
           </p>
           {view.reconciliation && (
             <p className="hint">

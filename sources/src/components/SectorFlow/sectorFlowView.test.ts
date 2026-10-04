@@ -6,7 +6,6 @@ import {
   leadClause,
   reconciliationGap,
   signedBillion,
-  summarize,
   toneOf,
   windowLabel,
   windowOf,
@@ -149,36 +148,6 @@ describe('windowLabel', () => {
   it('writes one day as MM/DD and a window as a range with its length', () => {
     expect(windowLabel(['2026-10-02'])).toBe('10/02')
     expect(windowLabel(['2026-09-26', '2026-09-29', '2026-10-02'])).toBe('09/26–10/02（3 個交易日）')
-  })
-})
-
-describe('summarize', () => {
-  it('answers who bought most, who sold most, and how semiconductors split', () => {
-    const lines = summarize(buildView([D2], 'day', 'total')!, 'total')
-    expect(lines[0]).toBe('10/02　法人合計買超最多的是電子零組件（+234.0 億），賣超最多的是電腦及週邊（-114.0 億）。')
-    expect(lines[1]).toBe(
-      '半導體合計 -70.0 億（IC 設計 -70.0 億、晶圓製造 +32.0 億、封裝測試 +10.0 億、設備、材料與其他 -42.0 億）。',
-    )
-  })
-
-  it('never names ETF or unclassified as the biggest seller', () => {
-    const lines = summarize(buildView([D2], 'day', 'total')!, 'total')
-    expect(lines[0]).not.toContain('ETF')
-  })
-
-  it('names the investor group when it is not the combined figure', () => {
-    const lines = summarize(buildView([D2], 'day', 'foreign')!, 'foreign')
-    expect(lines[0]).toContain('外資買超最多')
-  })
-
-  it('says so when nothing was bought or sold', () => {
-    const flat = buildView([day('2026-10-02', [row('28', '電子零組件', 0)])], 'day', 'total')!
-    expect(summarize(flat, 'total')[0]).toContain('都沒有明顯買賣超')
-  })
-
-  it('has no sentences when only ETFs are present', () => {
-    const etfOnly = buildView([day('2026-10-02', [row('ETF', 'ETF 與受益證券', 5)])], 'day', 'total')!
-    expect(summarize(etfOnly, 'total')).toEqual([])
   })
 })
 
