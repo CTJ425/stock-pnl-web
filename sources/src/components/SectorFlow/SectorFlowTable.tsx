@@ -1,11 +1,13 @@
 /**
- * The numbers behind the picture: every sector with its signed 億 figure, a bar, its share of the
- * market's turnover and the movers behind the number. It is the complete, screen-reader-friendly
- * version of the treemap, so nothing is only in the picture.
+ * The numbers behind the rings: every sector with its signed 億 figure, a bar and its share of the
+ * market's turnover. Pressing a sector's name opens its detail right under the row, the same detail
+ * a ring's legend row opens. It is the complete, screen-reader-friendly version of the rings, so
+ * nothing is only in the picture.
  *
  * Shows the biggest buyers and sellers (and 半導體, always) first; the rest on request.
  */
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { chipClass } from '../StockDetail/chipFormat'
 import { signedBillion as signed, toneOf, type FlowView, type ViewRow } from './sectorFlowView'
@@ -27,32 +29,58 @@ function Bar({ net, scale }: { net: number; scale: number }) {
   )
 }
 
-function Movers({ row }: { row: ViewRow }) {
-  if (!row.movers) return null
-  return (
-    <div className="sf-movers">
-      {row.movers.side === 'buy' ? '買超主力' : '賣超主力'}：{row.movers.stocks.map((s) => s.name).join('、')}
-    </div>
-  )
-}
-
 interface Props {
   view: FlowView
   selected: string | null
+  /** Whether a picked sector opens here (otherwise it opens under a ring). */
+  detailHere: boolean
+  onSelect: (code: string) => void
+  renderDetail: (code: string) => ReactNode
 }
 
-export function SectorFlowTable({ view, selected }: Props) {
+export function SectorFlowTable({ view, selected, detailHere, onSelect, renderDetail }: Props) {
   const [showAll, setShowAll] = useState(false)
   const [semiOpen, setSemiOpen] = useState(true)
 
   const sectors = view.sectors
-  const shown = showAll
-    ? sectors
-    : sectors.filter((s, i) => i < VISIBLE_EACH_SIDE || i >= sectors.length - VISIBLE_EACH_SIDE || s.code === SEMICONDUCTOR)
+  const inShortList = (s: ViewRow, i: number) =>
+    i < VISIBLE_EACH_SIDE || i >= sectors.length - VISIBLE_EACH_SIDE || s.code === SEMICONDUCTOR
+  const shown = showAll ? sectors : sectors.filter(inShortList)
 
-  const rowClass = (code: string, extra = '') => {
-    const cls = [extra, selected === code ? 'sf-row-selected' : ''].filter(Boolean).join(' ')
-    return cls || undefined
+  // A link can point at a sector the short list leaves out, or at a semiconductor part under a folded
+  // parent. The detail has to open where the reader can see it, so those rows are shown.
+  const target = detailHere ? selected : null
+  const hiddenByList = target !== null && !sectors.some((s, i) => inShortList(s, i) && (s.code === target || s.children.some((c) => c.code === target)))
+  const hiddenByFold = target !== null && sectors.some((s) => s.children.some((c) => c.code === target))
+  useEffect(() => {
+    if (hiddenByList && target !== null && sectors.some((s) => s.code === target)) setShowAll(true)
+  }, [hiddenByList, target, sectors])
+  useEffect(() => {
+    if (hiddenByFold) setSemiOpen(true)
+  }, [hiddenByFold])
+
+  const line = (r: ViewRow, child: boolean, toggle?: ReactNode) => {
+    const open = detailHere && selected === r.code
+    return (
+      <Fragment key={r.code}>
+        <tr className={[child ? 'sf-child' : '', open ? 'sf-row-selected' : ''].filter(Boolean).join(' ') || undefined}>
+          <td role="rowheader" className="sf-name">
+            {toggle}
+            <button type="button" className="sf-name-btn" aria-expanded={open} onClick={() => onSelect(r.code)}>
+              {r.name}
+            </button>
+          </td>
+          <td className={`num ${chipClass(toneOf(r.netTwd))}`}>{signed(r.netTwd)}</td>
+          <Bar net={r.netTwd} scale={view.scale} />
+          <td className="num sf-share">{pct(r.turnoverShare)}</td>
+        </tr>
+        {open && (
+          <tr className="sf-detail-row">
+            <td colSpan={4}>{renderDetail(r.code)}</td>
+          </tr>
+        )}
+      </Fragment>
+    )
   }
 
   return (
@@ -78,41 +106,22 @@ export function SectorFlowTable({ view, selected }: Props) {
               const hasChildren = s.children.length > 0
               return (
                 <Fragment key={s.code}>
-                  <tr className={rowClass(s.code)} aria-selected={selected === s.code || undefined}>
-                    <td role="rowheader" className="sf-name">
-                      {hasChildren ? (
-                        <button
-                          type="button"
-                          className="sf-toggle"
-                          aria-expanded={semiOpen}
-                          aria-label={`${semiOpen ? '收合' : '展開'}${s.name}細分`}
-                          onClick={() => setSemiOpen((o) => !o)}
-                        >
-                          {semiOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
-                          {s.name}
-                        </button>
-                      ) : (
-                        s.name
-                      )}
-                      <Movers row={s} />
-                    </td>
-                    <td className={`num ${chipClass(toneOf(s.netTwd))}`}>{signed(s.netTwd)}</td>
-                    <Bar net={s.netTwd} scale={view.scale} />
-                    <td className="num sf-share">{pct(s.turnoverShare)}</td>
-                  </tr>
-                  {hasChildren &&
-                    semiOpen &&
-                    s.children.map((c) => (
-                      <tr key={c.code} className={rowClass(c.code, 'sf-child')} aria-selected={selected === c.code || undefined}>
-                        <td role="rowheader" className="sf-name">
-                          {c.name}
-                          <Movers row={c} />
-                        </td>
-                        <td className={`num ${chipClass(toneOf(c.netTwd))}`}>{signed(c.netTwd)}</td>
-                        <Bar net={c.netTwd} scale={view.scale} />
-                        <td className="num sf-share">{pct(c.turnoverShare)}</td>
-                      </tr>
-                    ))}
+                  {line(
+                    s,
+                    false,
+                    hasChildren ? (
+                      <button
+                        type="button"
+                        className="sf-toggle"
+                        aria-expanded={semiOpen}
+                        aria-label={`${semiOpen ? '收合' : '展開'}${s.name}細分`}
+                        onClick={() => setSemiOpen((o) => !o)}
+                      >
+                        {semiOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+                      </button>
+                    ) : undefined,
+                  )}
+                  {hasChildren && semiOpen && s.children.map((c) => line(c, true))}
                 </Fragment>
               )
             })}

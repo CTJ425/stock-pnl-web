@@ -3,7 +3,7 @@
  * the sorted rows with their semiconductor children, and the plain-language summary.
  * Kept apart from the component so the arithmetic is testable without a DOM.
  */
-import type { SectorFlowDay, SectorFlowRow, SectorTopStock } from '../../services/sectorFlowProxy'
+import type { SectorFlowDay, SectorFlowRow, SectorMovers } from '../../services/sectorFlowProxy'
 import { fmtBillion, fmtBillionSigned, toBillion } from '../../utils/formatters'
 
 export type Metric = 'total' | 'foreign' | 'trust' | 'dealer'
@@ -36,8 +36,12 @@ export interface ViewRow {
   turnoverTwd: number
   /** Share of the market's turnover; null when the window has none. */
   turnoverShare: number | null
-  /** The biggest movers behind the number, on the side the number points to. Newest day only. */
-  movers: { side: 'buy' | 'sell'; stocks: SectorTopStock[] } | null
+  /**
+   * The biggest buyers and sellers behind the number, ranked the way the chosen investor group is:
+   * the three together for 合計, one group alone for 外資 / 投信 / 自營商. Newest day only, so null for a
+   * window of several days, and null when the file predates the per-group lists.
+   */
+  movers: SectorMovers | null
 }
 
 export interface ViewSector extends ViewRow {
@@ -63,6 +67,12 @@ const pickGroup = (g: Groups, metric: Metric): number =>
 /** The last `range` days of the file, oldest first. */
 export function windowOf(days: SectorFlowDay[], range: Range): SectorFlowDay[] {
   return days.slice(-(range === 'week' ? WEEK_DAYS : 1))
+}
+
+/** The newest day's top-stock lists for the chosen investor group; null when the file has none for it. */
+function moversOf(row: SectorFlowRow, metric: Metric): SectorMovers | null {
+  if (metric === 'total') return { buy: row.topBuy, sell: row.topSell }
+  return row.groupTops?.[metric] ?? null
 }
 
 export function buildView(days: SectorFlowDay[], range: Range, metric: Metric): FlowView | null {
@@ -102,8 +112,7 @@ export function buildView(days: SectorFlowDay[], range: Range, metric: Metric): 
     const s = sums.get(code)!
     const latest = newestRows.get(code)
     const net = pickGroup(s.groups, metric)
-    const side = net >= 0 ? 'buy' : 'sell'
-    const stocks = range === 'day' && latest ? (side === 'buy' ? latest.topBuy : latest.topSell) : []
+    const lists = range === 'day' && latest ? moversOf(latest, metric) : null
     return {
       code,
       name: latest?.name ?? s.row.name,
@@ -111,7 +120,7 @@ export function buildView(days: SectorFlowDay[], range: Range, metric: Metric): 
       groups: s.groups,
       turnoverTwd: s.turnover,
       turnoverShare: marketTurnover > 0 ? s.turnover / marketTurnover : null,
-      movers: stocks.length > 0 ? { side, stocks } : null,
+      movers: lists && (lists.buy.length > 0 || lists.sell.length > 0) ? lists : null,
     }
   }
 

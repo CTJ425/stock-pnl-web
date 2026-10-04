@@ -3,22 +3,20 @@
  * from the after-hours file `market/sector_flow.json`.
  *
  * Top to bottom: the day's net in one figure with the two totals beside it, then two rings — where
- * the buying went and where the selling came from, each its own 100% — then, folded away, the
- * treemap (how big each sector is, with a detail panel) and the full numbers. The selected sector
- * lives in the URL (`#/sector-flow/24`), so a link opens the page with that sector already picked.
- * Selecting replaces the URL instead of pushing, so the back button leaves the page rather than
- * stepping through every tile the reader touched.
+ * the buying went and where the selling came from, each its own 100% — and, folded away, the full
+ * table. Picking a ring slice, a legend row or a table row opens that sector's detail in place, under
+ * the thing that was picked. The picked sector lives in the URL (`#/sector-flow/24`), so a link opens
+ * the page with that sector already open. Picking replaces the URL instead of pushing, so the back
+ * button leaves the page rather than stepping through every row the reader touched.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchSectorFlow, type SectorFlowData } from '../../services/sectorFlowProxy'
-import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { formatViewHash } from '../viewRoute'
 import { buildSides } from './flowSides'
 import { SectorDetail } from './SectorDetail'
 import { SectorFlowTable } from './SectorFlowTable'
 import { SectorSides } from './SectorSides'
-import { SectorTreemap } from './SectorTreemap'
 import {
   METRIC_LABEL,
   WEEK_DAYS,
@@ -33,29 +31,15 @@ import {
 } from './sectorFlowView'
 
 const METRICS: Metric[] = ['total', 'foreign', 'trust', 'dealer']
-const NARROW_QUERY = '(max-width: 720px)'
+
+/** Where a picked sector's detail opens: under a ring's legend row, or under a table row. */
+type Origin = 'ring' | 'table'
 
 /** Put the picked sector (or none) in the address bar without adding a history entry. */
 function writeSelectionToUrl(code: string | null) {
-  const hash = formatViewHash({ view: 'sector-flow', ticker: code ?? undefined })
+  // 其他 is not a sector: it has no link of its own.
+  const hash = formatViewHash({ view: 'sector-flow', ticker: code && !code.startsWith('other:') ? code : undefined })
   if (window.location.hash !== hash) window.history.replaceState(null, '', hash)
-}
-
-function Legend() {
-  return (
-    <ul className="sf-legend" aria-label="圖例">
-      <li>
-        <span className="sf-swatch sf-swatch-buy" aria-hidden="true" />
-        紅色：法人買超
-      </li>
-      <li>
-        <span className="sf-swatch sf-swatch-sell" aria-hidden="true" />
-        綠色：法人賣超
-      </li>
-      <li>顏色越深，買賣越多</li>
-      <li>方塊越大，成交越多</li>
-    </ul>
-  )
 }
 
 export function SectorFlowPage({ focus }: { focus?: string }) {
@@ -67,15 +51,14 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
   const [range, setRange] = useState<Range>('day')
   const [metric, setMetric] = useState<Metric>('total')
   const [selected, setSelected] = useState<string | null>(focus ?? null)
-  // A link to a sector opens the treemap it points into; otherwise it stays folded away.
-  const [treemapOpen, setTreemapOpen] = useState(Boolean(focus))
-  const narrow = useMediaQuery(NARROW_QUERY)
-  const detailRef = useRef<HTMLDivElement | null>(null)
+  /** Set by a press; a sector arriving from a link has none and is placed by `detailIn` below. */
+  const [origin, setOrigin] = useState<Origin | null>(null)
+  const [tableOpen, setTableOpen] = useState(false)
 
   // A pasted link or the back/forward buttons change the route's argument from outside.
   useEffect(() => {
     setSelected(focus ?? null)
-    if (focus) setTreemapOpen(true)
+    setOrigin(null)
   }, [focus])
 
   useEffect(() => {
@@ -109,17 +92,38 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
     }
     return m
   }, [view])
-  // A code from a stale link that this file does not have is ignored, not shown as an error.
-  const picked = selected !== null ? (rows.get(selected) ?? null) : null
+  /** The codes that have a row in a legend, i.e. the named slices of either ring. */
+  const ringCodes = useMemo(
+    () => new Set([...(sides?.buy.slices ?? []), ...(sides?.sell.slices ?? [])].filter((s) => !s.other).map((s) => s.code)),
+    [sides],
+  )
 
-  const select = (code: string | null) => {
-    setSelected(code)
-    writeSelectionToUrl(code)
-    // Stacked under the picture on a phone: bring the panel into view so the tap visibly did something.
-    if (code && narrow) {
-      requestAnimationFrame(() => detailRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }))
-    }
+  // A code from a stale link that this file does not have is ignored, not shown as an error.
+  const isOther = selected !== null && selected.startsWith('other:')
+  const picked = selected !== null && !isOther ? (rows.get(selected) ?? null) : null
+  const sectorPicked = picked !== null
+  /** Under a ring when pressed there (or linked to a named slice); otherwise in the table. */
+  const detailIn: Origin | null = !sectorPicked
+    ? null
+    : origin ?? (ringCodes.has(picked.code) ? 'ring' : 'table')
+
+  // A sector that opens in the table needs the table open.
+  useEffect(() => {
+    if (detailIn === 'table') setTableOpen(true)
+  }, [detailIn])
+
+  const pick = (code: string, from: Origin) => {
+    const next = code === selected && (origin ?? (ringCodes.has(code) ? 'ring' : 'table')) === from ? null : code
+    setSelected(next)
+    setOrigin(next === null ? null : from)
+    writeSelectionToUrl(next)
   }
+
+  const renderDetail = (code: string) => {
+    const row = rows.get(code)
+    return row && view ? <SectorDetail row={row} dates={view.dates} metric={metric} /> : null
+  }
+
   const gap = view?.reconciliation ? reconciliationGap(view.reconciliation) : null
   const who = metric === 'total' ? '三大法人合計' : METRIC_LABEL[metric]
 
@@ -190,31 +194,28 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
             </div>
           </div>
 
-          <SectorSides sides={sides} />
+          <SectorSides
+            sides={sides}
+            selected={isOther ? selected : sectorPicked && detailIn === 'ring' ? picked.code : null}
+            detailHere={detailIn === 'ring'}
+            onSelect={(code) => pick(code, 'ring')}
+            renderDetail={renderDetail}
+          />
 
           <details
             className="chart-more sf-fold"
-            open={treemapOpen}
-            onToggle={(e) => setTreemapOpen(e.currentTarget.open)}
+            open={tableOpen}
+            onToggle={(e) => setTableOpen(e.currentTarget.open)}
           >
-            <summary>看方塊圖：各產業有多大</summary>
-            <Legend />
-            <div className="sf-stage">
-              <SectorTreemap
-                view={view}
-                selected={picked ? picked.code : null}
-                narrow={narrow}
-                onSelect={(code) => select(code === selected ? null : code)}
-              />
-              <div ref={detailRef}>
-                <SectorDetail row={picked} dates={view.dates} onClear={() => select(null)} />
-              </div>
-            </div>
-          </details>
-
-          <details className="chart-more sf-fold">
             <summary>看詳細數字</summary>
-            <SectorFlowTable view={view} selected={picked ? picked.code : null} />
+            <p className="hint sf-table-hint">點類股名稱，看那個產業的細節。</p>
+            <SectorFlowTable
+              view={view}
+              selected={sectorPicked && detailIn === 'table' ? picked.code : null}
+              detailHere={detailIn === 'table'}
+              onSelect={(code) => pick(code, 'table')}
+              renderDetail={renderDetail}
+            />
           </details>
 
           <p className="hint">
@@ -233,3 +234,4 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
     </div>
   )
 }
+

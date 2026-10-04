@@ -29,8 +29,8 @@ export const SECTOR_FLOW_SCHEMA = 1
  * file: at 20 days it was 168 KB raw, at 7 it is about 66 KB. Two days of cushion over the window.
  */
 export const SECTOR_FLOW_DAYS_CAP = 7
-/** Biggest buyers and sellers kept per sector. */
-export const TOP_PER_SECTOR = 3
+/** Biggest buyers and sellers kept per sector, for the total and for each investor group. */
+export const TOP_PER_SECTOR = 5
 
 export const SEMICONDUCTOR_CODE = '24'
 
@@ -137,8 +137,21 @@ export interface SectorFlowRow {
   /** Everything traded in this sector that day, not only what the institutions touched. */
   turnoverTwd: number
   stocks: number
+  /** Ranked by the three groups together. */
   topBuy: SectorTopStock[]
   topSell: SectorTopStock[]
+  /**
+   * The same lists ranked by one group alone, so choosing 外資 on the screen names the stocks 外資
+   * traded, not the stocks the three groups traded together. Newest day only.
+   */
+  groupTops?: Record<InstitutionGroup, SectorMovers>
+}
+
+export type InstitutionGroup = 'foreign' | 'trust' | 'dealer'
+
+export interface SectorMovers {
+  buy: SectorTopStock[]
+  sell: SectorTopStock[]
 }
 
 export interface SectorFlowDay {
@@ -342,10 +355,27 @@ interface Acc {
   stocks: number
   buys: SectorTopStock[]
   sells: SectorTopStock[]
+  groupBuys: Record<InstitutionGroup, SectorTopStock[]>
+  groupSells: Record<InstitutionGroup, SectorTopStock[]>
 }
 
+const GROUPS: InstitutionGroup[] = ['foreign', 'trust', 'dealer']
+
 function newAcc(code: string, name: string, parent: string | null): Acc {
-  return { code, name, parent, foreign: 0, trust: 0, dealer: 0, turnover: 0, stocks: 0, buys: [], sells: [] }
+  return {
+    code,
+    name,
+    parent,
+    foreign: 0,
+    trust: 0,
+    dealer: 0,
+    turnover: 0,
+    stocks: 0,
+    buys: [],
+    sells: [],
+    groupBuys: { foreign: [], trust: [], dealer: [] },
+    groupSells: { foreign: [], trust: [], dealer: [] },
+  }
 }
 
 /** Which sector a ticker belongs to; semiconductor tickers also get a child key. */
@@ -365,6 +395,13 @@ export function classify(
 
 const byNetDesc = (a: SectorTopStock, b: SectorTopStock) => b.netTwd - a.netTwd || a.ticker.localeCompare(b.ticker)
 const byNetAsc = (a: SectorTopStock, b: SectorTopStock) => a.netTwd - b.netTwd || a.ticker.localeCompare(b.ticker)
+
+function groupMovers(a: Acc, g: InstitutionGroup): SectorMovers {
+  return {
+    buy: a.groupBuys[g].sort(byNetDesc).slice(0, TOP_PER_SECTOR),
+    sell: a.groupSells[g].sort(byNetAsc).slice(0, TOP_PER_SECTOR),
+  }
+}
 
 export function buildSectorFlowDay(input: SectorFlowInput): SectorFlowDay {
   const accs = new Map<string, Acc>()
@@ -418,14 +455,16 @@ export function buildSectorFlowDay(input: SectorFlowInput): SectorFlowDay {
       a.dealer += dealer
       a.stocks++
     }
-    const top: SectorTopStock = { ticker, name: p.name, netTwd: Math.round(total) }
-    const target = acc(sector)
-    if (top.netTwd > 0) target.buys.push(top)
-    else if (top.netTwd < 0) target.sells.push(top)
-    if (child) {
-      const c = acc(child)
-      if (top.netTwd > 0) c.buys.push(top)
-      else if (top.netTwd < 0) c.sells.push(top)
+    const byGroup: Record<InstitutionGroup, number> = { foreign, trust, dealer }
+    for (const target of child ? [acc(sector), acc(child)] : [acc(sector)]) {
+      const top: SectorTopStock = { ticker, name: p.name, netTwd: Math.round(total) }
+      if (top.netTwd > 0) target.buys.push(top)
+      else if (top.netTwd < 0) target.sells.push(top)
+      for (const g of GROUPS) {
+        const net = Math.round(byGroup[g])
+        if (net > 0) target.groupBuys[g].push({ ticker, name: p.name, netTwd: net })
+        else if (net < 0) target.groupSells[g].push({ ticker, name: p.name, netTwd: net })
+      }
     }
   }
 
@@ -443,6 +482,11 @@ export function buildSectorFlowDay(input: SectorFlowInput): SectorFlowDay {
       stocks: a.stocks,
       topBuy: a.buys.sort(byNetDesc).slice(0, TOP_PER_SECTOR),
       topSell: a.sells.sort(byNetAsc).slice(0, TOP_PER_SECTOR),
+      groupTops: {
+        foreign: groupMovers(a, 'foreign'),
+        trust: groupMovers(a, 'trust'),
+        dealer: groupMovers(a, 'dealer'),
+      },
     }))
 
   return {
@@ -470,15 +514,15 @@ export function sectorFlowFingerprint(day: SectorFlowDay): string {
 
 /**
  * Add `day` to the file (replacing the same date), keep the newest SECTOR_FLOW_DAYS_CAP days, and
- * drop the top-stock lists from every day but the newest — they are the bulk of the size and only
- * the latest day shows them.
+ * drop the top-stock lists (total and per group) from every day but the newest — they are the bulk of
+ * the size and only the latest day shows them.
  */
 export function appendSectorFlowDay(existing: SectorFlowFile | null, day: SectorFlowDay, asOf: string): SectorFlowFile {
   const kept = (existing?.days ?? []).filter((d) => d.date !== day.date)
   const days = [...kept, day].sort((a, b) => a.date.localeCompare(b.date)).slice(-SECTOR_FLOW_DAYS_CAP)
   const newest = days[days.length - 1]
   const slim = days.map((d) =>
-    d === newest ? d : { ...d, rows: d.rows.map((r) => ({ ...r, topBuy: [], topSell: [] })) },
+    d === newest ? d : { ...d, rows: d.rows.map((r) => ({ ...r, topBuy: [], topSell: [], groupTops: undefined })) },
   )
   return { schema: SECTOR_FLOW_SCHEMA, asOf, fingerprint: sectorFlowFingerprint(day), days: slim }
 }

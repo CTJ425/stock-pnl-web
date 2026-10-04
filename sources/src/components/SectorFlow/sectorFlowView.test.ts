@@ -98,13 +98,38 @@ describe('buildView', () => {
     expect(v.sectors.find((s) => s.code === 'ETF')!.netTwd).toBe(-80 * E8)
   })
 
-  it('names the movers on the side the number points to', () => {
+  it('carries both lists of buyers and sellers for the day, ranked by the three groups together', () => {
     const v = buildView([D1, D2], 'day', 'total')!
     expect(v.sectors.find((s) => s.code === '28')!.movers).toEqual({
-      side: 'buy',
-      stocks: [{ ticker: '3037', name: '欣興', netTwd: 90 * E8 }],
+      buy: [{ ticker: '3037', name: '欣興', netTwd: 90 * E8 }],
+      sell: [],
     })
-    expect(v.sectors.find((s) => s.code === '25')!.movers?.side).toBe('sell')
+    expect(v.sectors.find((s) => s.code === '25')!.movers).toEqual({
+      buy: [],
+      sell: [{ ticker: '2376', name: '技嘉', netTwd: -30 * E8 }],
+    })
+  })
+
+  it('ranks the stocks by the chosen investor group when the file has per-group lists', () => {
+    const groupTops = {
+      foreign: { buy: [{ ticker: 'A', name: '外資買', netTwd: 5 * E8 }], sell: [] },
+      trust: { buy: [], sell: [{ ticker: 'B', name: '投信賣', netTwd: -2 * E8 }] },
+      dealer: { buy: [], sell: [] },
+    }
+    const d = day('2026-10-02', [
+      row('28', 'x', 3, { topBuy: [{ ticker: 'T', name: '合計買', netTwd: 4 * E8 }], groupTops }),
+    ])
+    expect(buildView([d], 'day', 'total')!.sectors[0].movers?.buy[0].name).toBe('合計買')
+    expect(buildView([d], 'day', 'foreign')!.sectors[0].movers).toEqual(groupTops.foreign)
+    expect(buildView([d], 'day', 'trust')!.sectors[0].movers).toEqual(groupTops.trust)
+    // A group with nothing on either side has no list to show.
+    expect(buildView([d], 'day', 'dealer')!.sectors[0].movers).toBeNull()
+  })
+
+  it('has no per-group lists to offer for a file written before they existed', () => {
+    const d = day('2026-10-02', [row('28', 'x', 3, { topBuy: [{ ticker: 'T', name: 't', netTwd: 4 * E8 }] })])
+    expect(buildView([d], 'day', 'total')!.sectors[0].movers).not.toBeNull()
+    expect(buildView([d], 'day', 'foreign')!.sectors[0].movers).toBeNull()
   })
 
   it('switches the figure with the investor group', () => {

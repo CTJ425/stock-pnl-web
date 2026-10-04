@@ -1,16 +1,21 @@
 /**
- * What one sector did, in plain words and four numbers. With nothing selected it says how to read
- * the picture instead, so the panel is never empty.
+ * What one sector did, opened under the row that was picked (a legend row under a ring, or a row of
+ * the table): one plain sentence, the four investor figures, its share of the market, and the five
+ * biggest buyers or sellers behind the number.
+ *
+ * Which side's stocks it lists follows the sign of the figure on screen: a sector that bought lists
+ * its buyers, one that sold lists its sellers. The ranking follows the investor group chosen on the
+ * page, so 外資 names the stocks 外資 traded, not the stocks all three traded together.
  */
 import { chipClass } from '../StockDetail/chipFormat'
 import { fmtBillion, toBillion } from '../../utils/formatters'
-import { leadClause, signedBillion as signed, toneOf, windowLabel, type ViewRow } from './sectorFlowView'
+import { METRIC_LABEL, leadClause, signedBillion as signed, toneOf, windowLabel, type Metric, type ViewRow } from './sectorFlowView'
 
 interface Props {
-  row: ViewRow | null
-  /** Dates the figures cover, for the subtitle. */
+  row: ViewRow
+  /** Dates the figures cover. */
   dates: string[]
-  onClear: () => void
+  metric: Metric
 }
 
 /** "法人合計賣超 69.9 億，主要是外資賣超 77.3 億。" */
@@ -22,16 +27,7 @@ function sentence(row: ViewRow): string {
   return lead ? `${head}，主要是${lead}。` : `${head}。`
 }
 
-export function SectorDetail({ row, dates, onClear }: Props) {
-  if (!row) {
-    return (
-      <aside className="sf-detail" aria-label="類股細節">
-        <p className="sf-detail-guide">點任一個方塊，看那個產業的外資、投信、自營商各買賣了多少，以及主力個股。</p>
-        <p className="hint">方塊越大，代表那個產業當天成交越多；紅色是法人買超，綠色是賣超。</p>
-      </aside>
-    )
-  }
-
+export function SectorDetail({ row, dates, metric }: Props) {
   const { groups } = row
   const lines: Array<[string, number]> = [
     ['外資', groups.foreignTwd],
@@ -39,15 +35,14 @@ export function SectorDetail({ row, dates, onClear }: Props) {
     ['自營商', groups.dealerTwd],
     ['合計', groups.totalTwd],
   ]
+  const side = row.netTwd >= 0 ? 'buy' : 'sell'
+  const list = row.movers ? row.movers[side] : []
+  const who = metric === 'total' ? '' : METRIC_LABEL[metric]
+  const title = `${who}${side === 'buy' ? '買超' : '賣超'}主力前 ${list.length}`
+
   return (
-    <aside className="sf-detail" aria-label="類股細節" aria-live="polite">
-      <div className="sf-detail-head">
-        <h3 className="sf-detail-title">{row.name}</h3>
-        <button type="button" className="btn btn-sm" onClick={onClear}>
-          取消選取
-        </button>
-      </div>
-      <p className="hint sf-detail-sub">{windowLabel(dates)}</p>
+    <div className="sf-detail" role="group" aria-label={`${row.name}細節`}>
+      {dates.length > 1 && <p className="hint sf-detail-sub">{windowLabel(dates)}</p>}
       <p className="sf-detail-sentence">{sentence(row)}</p>
 
       <dl className="sf-detail-groups">
@@ -64,11 +59,14 @@ export function SectorDetail({ row, dates, onClear }: Props) {
         {row.turnoverShare !== null ? `，佔全市場 ${(row.turnoverShare * 100).toFixed(1)}%` : ''}
       </p>
 
-      {row.movers ? (
+      {list.length > 0 ? (
         <div className="sf-detail-movers">
-          <h4>{row.movers.side === 'buy' ? '買超主力' : '賣超主力'}</h4>
+          <h4>
+            {title}
+            <span className="sf-detail-basis">{metric === 'total' ? '依三大法人合計排名' : `依${METRIC_LABEL[metric]}排名`}</span>
+          </h4>
           <ul>
-            {row.movers.stocks.map((s) => (
+            {list.map((s) => (
               <li key={s.ticker}>
                 <span>
                   {s.name} <span className="hint">{s.ticker}</span>
@@ -80,7 +78,9 @@ export function SectorDetail({ row, dates, onClear }: Props) {
         </div>
       ) : dates.length > 1 ? (
         <p className="hint">個股只列單日的主力，切回「今日」就會看到。</p>
+      ) : metric !== 'total' ? (
+        <p className="hint">這份資料還沒有{METRIC_LABEL[metric]}各自的個股排名，下一輪盤後更新後就會有。</p>
       ) : null}
-    </aside>
+    </div>
   )
 }

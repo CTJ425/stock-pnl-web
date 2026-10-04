@@ -341,3 +341,65 @@ describe('appendSectorFlowDay', () => {
     expect(appendSectorFlowDay(null, d, 't').fingerprint).toBe(sectorFlowFingerprint(d))
   })
 })
+
+describe('top stocks per sector', () => {
+  it('keeps the five biggest buyers and sellers, biggest first', async () => {
+    const { TOP_PER_SECTOR } = await import('./twSectorFlow.ts')
+    expect(TOP_PER_SECTOR).toBe(5)
+    const prices = new Map<string, PriceRow>()
+    const instMap = new Map<string, InstNet>()
+    const industry = new Map<string, string>()
+    for (let i = 1; i <= 7; i++) {
+      const t = `70${i}0`
+      prices.set(t, px(`買${i}`, 1000, 100_000)) // VWAP 100
+      instMap.set(t, inst(i * 10, 0, 0))
+      industry.set(t, '28')
+    }
+    const out = buildSectorFlowDay(dayInput({ listedPrices: prices, listedInst: instMap, otc: null, industry }))
+    const r = row(out, '28')
+    expect(r.topBuy.map((t) => t.name)).toEqual(['買7', '買6', '買5', '買4', '買3'])
+    expect(r.topBuy[0].netTwd).toBe(70 * 100)
+    expect(r.topSell).toEqual([])
+  })
+
+  it('also ranks by each group alone, so a group view names that group\'s stocks', () => {
+    const d = buildSectorFlowDay(dayInput())
+    // 2330: 外資 +300 sh, 自營商 −100 sh at VWAP 100; 2454 (design): 外資 −10 sh, 投信 +4 sh at VWAP 500.
+    const semi = row(d, '24').groupTops!
+    expect(semi.foreign.buy.map((t) => t.ticker)).toEqual(['2330', '3711', '8888'])
+    expect(semi.foreign.buy[0]).toEqual({ ticker: '2330', name: '台積電', netTwd: 30_000 })
+    expect(semi.foreign.sell).toEqual([{ ticker: '2454', name: '聯發科', netTwd: -5_000 }])
+    expect(semi.trust.buy).toEqual([{ ticker: '2454', name: '聯發科', netTwd: 2_000 }])
+    expect(semi.trust.sell).toEqual([])
+    expect(semi.dealer.sell).toEqual([{ ticker: '2330', name: '台積電', netTwd: -10_000 }])
+    expect(semi.dealer.buy).toEqual([])
+  })
+
+  it('gives a semiconductor part its own lists, and a group list can disagree with the total', () => {
+    const d = buildSectorFlowDay(dayInput())
+    const design = row(d, '24:design')
+    expect(design.groupTops!.foreign.sell.map((t) => t.ticker)).toEqual(['2454'])
+    // 2454 is a net seller overall (−3,000) yet 投信 bought it: the lists answer different questions.
+    expect(design.topSell.map((t) => t.ticker)).toEqual(['2454'])
+    expect(design.groupTops!.trust.buy.map((t) => t.ticker)).toEqual(['2454'])
+  })
+
+  it('drops every list from older days when a day is appended', () => {
+    const a = appendSectorFlowDay(null, { ...buildSectorFlowDay(dayInput()), date: '2026-10-01' }, 't1')
+    const b = appendSectorFlowDay(a, { ...buildSectorFlowDay(dayInput()), date: '2026-10-02' }, 't2')
+    for (const r of b.days[0].rows) {
+      expect(r.topBuy).toEqual([])
+      expect(r.groupTops).toBeUndefined()
+    }
+    expect(b.days[1].rows.some((r) => r.groupTops !== undefined)).toBe(true)
+  })
+
+  it('keeps the fingerprint stable however the stocks were ordered', () => {
+    const input = dayInput()
+    const reversed = dayInput({
+      listedPrices: new Map([...input.listedPrices].reverse()),
+      listedInst: new Map([...input.listedInst].reverse()),
+    })
+    expect(sectorFlowFingerprint(buildSectorFlowDay(reversed))).toBe(sectorFlowFingerprint(buildSectorFlowDay(input)))
+  })
+})

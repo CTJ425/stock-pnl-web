@@ -17,6 +17,13 @@ export interface SectorTopStock {
   netTwd: number
 }
 
+export type InstitutionGroup = 'foreign' | 'trust' | 'dealer'
+
+export interface SectorMovers {
+  buy: SectorTopStock[]
+  sell: SectorTopStock[]
+}
+
 export interface SectorFlowRow {
   /** Industry code ('24'), 'ETF', 'NA', or a semiconductor child ('24:design'). */
   code: string
@@ -30,8 +37,11 @@ export interface SectorFlowRow {
   /** Everything traded in the sector that day, not only what the institutions touched. */
   turnoverTwd: number
   stocks: number
+  /** Ranked by the three groups together. Newest day only. */
   topBuy: SectorTopStock[]
   topSell: SectorTopStock[]
+  /** The same lists ranked by one group alone. Absent on files written before 0.10.30-dev.7. */
+  groupTops?: Record<InstitutionGroup, SectorMovers>
 }
 
 export interface SectorFlowDay {
@@ -70,12 +80,25 @@ function normalizeTop(v: unknown): SectorTopStock | null {
   return { ticker: o.ticker, name: o.name, netTwd: o.netTwd }
 }
 
+const tops = (x: unknown): SectorTopStock[] =>
+  Array.isArray(x) ? x.map(normalizeTop).filter((t): t is SectorTopStock => t !== null) : []
+
+function normalizeMovers(v: unknown): SectorMovers {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  return { buy: tops(o.buy), sell: tops(o.sell) }
+}
+
+function normalizeGroupTops(v: unknown): Record<InstitutionGroup, SectorMovers> | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  return { foreign: normalizeMovers(o.foreign), trust: normalizeMovers(o.trust), dealer: normalizeMovers(o.dealer) }
+}
+
 function normalizeRow(v: unknown): SectorFlowRow | null {
   if (!v || typeof v !== 'object') return null
   const o = v as Record<string, unknown>
   if (typeof o.code !== 'string' || typeof o.name !== 'string') return null
   if (![o.foreignTwd, o.trustTwd, o.dealerTwd, o.totalTwd, o.turnoverTwd].every(isNum)) return null
-  const tops = (x: unknown) => (Array.isArray(x) ? x.map(normalizeTop).filter((t): t is SectorTopStock => t !== null) : [])
   return {
     code: o.code,
     name: o.name,
@@ -88,6 +111,7 @@ function normalizeRow(v: unknown): SectorFlowRow | null {
     stocks: isNum(o.stocks) ? o.stocks : 0,
     topBuy: tops(o.topBuy),
     topSell: tops(o.topSell),
+    groupTops: normalizeGroupTops(o.groupTops),
   }
 }
 

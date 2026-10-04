@@ -29,6 +29,8 @@ export interface FlowSide {
   /** Sectors on this side, before folding. */
   count: number
   slices: SideSlice[]
+  /** The sectors folded into 其他, biggest first, so the remainder can be opened and read. */
+  folded: SideSlice[]
 }
 
 export interface FlowSides {
@@ -48,30 +50,32 @@ function buildSide(rows: ViewRow[], sign: 1 | -1): FlowSide {
     .filter((r) => r.netTwd * sign > 0)
     .sort((a, b) => b.netTwd * sign - a.netTwd * sign || a.code.localeCompare(b.code))
   const totalTwd = side.reduce((s, r) => s + r.netTwd, 0)
-  if (side.length === 0) return { totalTwd: 0, count: 0, slices: [] }
+  if (side.length === 0) return { totalTwd: 0, count: 0, slices: [], folded: [] }
 
   const share = (net: number) => Math.abs(net) / Math.abs(totalTwd)
-  const named: SideSlice[] = side.slice(0, TOP_SLICES).map((r) => ({
+  const slice = (r: ViewRow): SideSlice => ({
     code: r.code,
     name: r.name,
     netTwd: r.netTwd,
     share: share(r.netTwd),
     semiconductor: r.code.startsWith('24:'),
     other: false,
-  }))
-  const rest = side.slice(TOP_SLICES)
-  if (rest.length > 0) {
-    const restTwd = rest.reduce((s, r) => s + r.netTwd, 0)
-    named.push({
+  })
+  const named = side.slice(0, TOP_SLICES).map(slice)
+  const folded = side.slice(TOP_SLICES).map(slice)
+  const slices = [...named]
+  if (folded.length > 0) {
+    const restTwd = folded.reduce((s, r) => s + r.netTwd, 0)
+    slices.push({
       code: 'other',
-      name: `其他 ${rest.length} 個類股`,
+      name: `其他 ${folded.length} 個類股`,
       netTwd: restTwd,
       share: share(restTwd),
       semiconductor: false,
       other: true,
     })
   }
-  return { totalTwd, count: side.length, slices: named }
+  return { totalTwd, count: side.length, slices, folded }
 }
 
 export function buildSides(view: FlowView): FlowSides {

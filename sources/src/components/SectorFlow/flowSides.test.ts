@@ -83,6 +83,17 @@ describe('buildSides', () => {
   it('does not fold anything when a side has no more than TOP_SLICES sectors', () => {
     const s = sides([row('a', 'A', 5), row('b', 'B', 3)])
     expect(s.buy.slices.some((x) => x.other)).toBe(false)
+    expect(s.buy.folded).toEqual([])
+  })
+
+  it('keeps the folded sectors, biggest first, so 其他 can be opened and read', () => {
+    const many = Array.from({ length: 9 }, (_, i) => row(`b${i}`, `買${i}`, 10 - i))
+    const { buy } = sides(many)
+    expect(buy.folded.map((x) => x.name)).toEqual(['買5', '買6', '買7', '買8'])
+    // The folded shares are real shares of the side, and with the named ones they make the whole.
+    const named = buy.slices.filter((x) => !x.other).reduce((t, x) => t + x.share, 0)
+    expect(named + buy.folded.reduce((t, x) => t + x.share, 0)).toBeCloseTo(1, 9)
+    expect(buy.slices[buy.slices.length - 1].netTwd).toBeCloseTo(buy.folded.reduce((t, x) => t + x.netTwd, 0), 3)
   })
 
   it('makes every side a whole: shares add up to 1', () => {
@@ -101,7 +112,7 @@ describe('buildSides', () => {
 
   it('has an empty side when nothing was bought, or sold', () => {
     const onlySells = sides([row('a', 'A', -5)])
-    expect(onlySells.buy).toEqual({ totalTwd: 0, count: 0, slices: [] })
+    expect(onlySells.buy).toEqual({ totalTwd: 0, count: 0, slices: [], folded: [] })
     expect(onlySells.netTwd).toBeCloseTo(-5 * E8, -3)
   })
 

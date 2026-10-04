@@ -154,6 +154,8 @@
 
 /* The hole: its box is the ring's centre ± 60 px (see RING in flowSides.ts). */
 .sf-ring-center {
+  /* The square's corners reach into the ring (85 px out, the ring spans 62–98); it must not catch their clicks. */
+  pointer-events: none;
   position: absolute;
   left: 62px;
   top: 62px;
@@ -199,14 +201,76 @@
   list-style: none;
 }
 
-.sf-side-list li {
+.sf-side-item {
+  border-top: 1px solid var(--cds-border-subtle);
+}
+
+.sf-side-btn {
+  appearance: none;
   display: grid;
-  grid-template-columns: 12px 18px minmax(0, 1fr) 56px 76px;
+  grid-template-columns: 12px 18px minmax(0, 1fr) 56px 76px 16px;
   gap: 0 8px;
   align-items: center;
+  width: 100%;
   min-height: 36px;
-  border-top: 1px solid var(--cds-border-subtle);
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: var(--type-body-01);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-side-btn:hover,
+.sf-side-open > .sf-side-btn {
+  background: var(--cds-layer-hover-01);
+}
+
+.sf-side-btn:focus-visible,
+.sf-name-btn:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
+.sf-side-btn svg {
+  color: var(--ink-secondary);
+}
+
+/* The detail opens under the row that was picked, indented under the name. */
+.sf-side-detail,
+.sf-detail-row > td {
+  padding: 4px 0 14px 38px;
+}
+
+.sf-folded {
+  margin: 0;
+  padding: 2px 0 10px 38px;
+  list-style: none;
+}
+
+.sf-folded li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 76px;
+  gap: 0 8px;
+  align-items: center;
+  min-height: 32px;
+  font-size: var(--type-body-01);
+}
+
+/* A ring slice and its numeral are a pointer shortcut for the row; they are not tab stops. */
+.sf-slice,
+.sf-rank {
+  cursor: pointer;
+}
+
+.sf-slice {
+  transition: opacity var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.sf-slice-dim {
+  opacity: 0.3;
 }
 
 .sf-swatch-box {
@@ -248,167 +312,19 @@
   white-space: nowrap;
 }
 
-/* How to read the picture, one line. */
-.sf-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
-  margin: 10px 0 12px;
-  padding: 0;
-  list-style: none;
-  font-size: var(--type-label-01);
-  line-height: 1.4;
-  color: var(--ink-secondary);
-}
 
-.sf-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sf-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius);
-}
-
-.sf-swatch-buy {
-  background: color-mix(in srgb, var(--up) 45%, var(--cds-layer-01));
-}
-
-.sf-swatch-sell {
-  background: color-mix(in srgb, var(--down) 45%, var(--cds-layer-01));
-}
-
-/* ----- picture + detail ----- */
-.sf-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 18px;
-  align-items: start;
-}
-
-.sf-treemap {
-  position: relative;
-  width: 100%;
-  container-type: inline-size;
-  background: var(--cds-layer-01);
-}
-
-.sf-tile,
-.sf-parent-head {
-  appearance: none;
-  position: absolute;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--cds-layer-01);
-  border-radius: 0;
-  color: var(--cds-text-primary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.sf-tile:hover,
-.sf-parent-head:hover {
-  border-color: var(--cds-text-primary);
-}
-
-.sf-tile:focus-visible,
-.sf-parent-head:focus-visible {
-  outline: 2px solid var(--cds-focus);
-  outline-offset: -2px;
-  z-index: 2;
-}
-
-.sf-tile-selected {
-  border-color: var(--cds-text-primary);
-  outline: 2px solid var(--cds-text-primary);
-  outline-offset: -3px;
-  z-index: 1;
-}
-
-.sf-tile-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 5px 6px;
-  line-height: 1.25;
-}
-
-.sf-tile-name {
-  font-size: clamp(11px, 1.45cqw, 14px);
-  font-weight: 600;
-}
-
-.sf-tile-figure {
-  font-size: clamp(11px, 1.3cqw, 13px);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 半導體: a header strip on top, its four sub-sectors below. */
-.sf-parent {
-  position: absolute;
-  box-sizing: border-box;
-}
-
-.sf-parent-head {
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 8px;
-  white-space: nowrap;
-}
-
-.sf-parent-head .sf-tile-name,
-.sf-parent-head .sf-tile-figure {
-  font-size: 13px;
-}
-
-.sf-parent-body {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
-
-/* ----- detail panel ----- */
+/* ----- the detail itself ----- */
 .sf-detail {
-  padding: 4px 0;
   min-width: 0;
-}
-
-.sf-detail-guide {
-  margin: 0 0 8px;
-  font-size: var(--type-body-01);
-  line-height: 1.6;
-  color: var(--cds-text-primary);
-}
-
-.sf-detail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.sf-detail-title {
-  font-size: var(--type-heading-03);
+  max-width: 560px;
 }
 
 .sf-detail-sub {
-  margin-top: 2px;
+  margin: 0;
 }
 
 .sf-detail-sentence {
-  margin: 10px 0;
+  margin: 6px 0 10px;
   font-size: var(--type-body-01);
   line-height: 1.6;
   color: var(--cds-text-primary);
@@ -443,10 +359,20 @@
 }
 
 .sf-detail-movers h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
   margin: 12px 0 4px;
-  font-size: var(--type-label-01);
+  font-size: var(--type-body-01);
   font-weight: 600;
-  color: var(--ink-secondary);
+  color: var(--cds-text-primary);
+}
+
+.sf-detail-basis {
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  color: var(--ink-muted);
 }
 
 .sf-detail-movers ul {
@@ -466,8 +392,8 @@
 }
 
 /* ----- table ----- */
-.sf-table-title {
-  margin-top: 22px;
+.sf-table-hint {
+  margin: 8px 0 0;
 }
 
 .sector-flow-table .sf-name {
@@ -482,15 +408,27 @@
 }
 
 .sector-flow-table .sf-row-selected td {
-  background: var(--cds-layer-selected-01, var(--cds-layer-hover-01));
+  background: var(--cds-layer-hover-01);
 }
 
-.sf-movers {
-  margin-top: 2px;
-  font-size: var(--type-label-01);
-  font-weight: 400;
-  line-height: 1.4;
-  color: var(--ink-muted);
+.sector-flow-table .sf-detail-row > td {
+  white-space: normal;
+  background: var(--cds-layer-01);
+}
+
+.sf-name-btn {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-name-btn:hover {
+  text-decoration: underline;
 }
 
 .sf-toggle {
@@ -567,12 +505,6 @@
   margin-top: 2px;
 }
 
-@media (max-width: 900px) {
-  .sf-stage {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 720px) {
   .sf-page {
     padding: 14px 12px;
@@ -599,27 +531,13 @@
     padding-right: 0;
   }
 
-  .sf-side-list li {
-    grid-template-columns: 12px 16px minmax(0, 1fr) 50px 66px;
-    gap: 0 6px;
-    min-height: 44px;
-    font-size: 13px;
-  }
-
-  .sf-tag {
+    .sf-tag {
     height: 18px;
     padding: 0 4px;
     font-size: 11px;
     line-height: 16px;
   }
 
-  .sf-tile-name {
-    font-size: 12px;
-  }
-
-  .sf-tile-figure {
-    font-size: 11px;
-  }
 }
 
 @media (max-width: 560px) {
@@ -638,10 +556,4 @@
     max-width: 9em;
   }
 
-  /* One line per row on a phone: the names behind a number are a glance, not a paragraph. */
-  .sf-movers {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
 }

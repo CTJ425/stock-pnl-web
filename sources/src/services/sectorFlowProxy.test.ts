@@ -55,6 +55,24 @@ describe('fetchSectorFlow', () => {
     expect((await fetchSectorFlow()).kind).toBe('invalid')
   })
 
+  it('reads the per-group top-stock lists, and tolerates their absence', async () => {
+    const groupTops = {
+      foreign: { buy: [{ ticker: '2330', name: '台積電', netTwd: 5 }], sell: [] },
+      trust: { buy: [], sell: [{ ticker: '2454', name: '聯發科', netTwd: -2 }, { ticker: 7 }] },
+    }
+    downloadReportsJson.mockResolvedValue({ schema: 1, asOf: 't', days: [day('2026-10-02', { rows: [row({ groupTops }), row({ code: '25', name: 'x' })] })] })
+    const r = await fetchSectorFlow()
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') {
+      const [withTops, without] = r.data.days[0].rows
+      expect(withTops.groupTops?.foreign.buy[0]).toEqual({ ticker: '2330', name: '台積電', netTwd: 5 })
+      // A broken entry is dropped, a missing group is an empty list.
+      expect(withTops.groupTops?.trust.sell).toEqual([{ ticker: '2454', name: '聯發科', netTwd: -2 }])
+      expect(withTops.groupTops?.dealer).toEqual({ buy: [], sell: [] })
+      expect(without.groupTops).toBeUndefined()
+    }
+  })
+
   it('accepts a newer schema (the backend only ever adds fields)', async () => {
     downloadReportsJson.mockResolvedValue({ schema: 7, asOf: 't', days: [day('2026-10-02')] })
     expect((await fetchSectorFlow()).kind).toBe('ok')
