@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import {
   PROBE_FOLLOW_UP,
   PROBE_SOURCE_ORDER,
@@ -540,5 +540,61 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     for (const id of PROBE_SOURCE_ORDER) {
       expect(sourceLanded(id, '20260811', noise)).toBe(false)
     }
+  })
+})
+
+/**
+ * The `source-probe` cron job (supabase/schema.sql) only fires in the hours where the plan has work.
+ * That is a second copy of the windows above, so it is checked against them: a window added to
+ * DAILY_WINDOWS or MOPS_SLOTS that the cron hours do not reach would silently never be probed.
+ */
+describe('source-probe cron schedule covers every probe window', () => {
+  let m: RegExpExecArray | null = null
+
+  beforeAll(async () => {
+    // Dynamic imports with ts-ignore: the Edge tsconfig has no Node types (same as tablePnlStyles.test.ts).
+    // @ts-ignore
+    const fs = await import('node:fs'.slice(0))
+    // @ts-ignore
+    const path = await import('node:path'.slice(0))
+    // @ts-ignore
+    const cwd: string = typeof process !== 'undefined' ? process.cwd() : '.'
+    const schema: string = fs.readFileSync(path.resolve(cwd, 'supabase/schema.sql'), 'utf-8')
+    m = /cron\.schedule\(\s*'source-probe',\s*'([^']+)'/.exec(schema)
+  })
+
+  /** Hour field of a `*\/N hours * * dow` expression → the set of UTC hours it fires in. */
+  function utcHours(expr: string): Set<number> {
+    const hourField = expr.trim().split(/\s+/)[1]
+    const hours = new Set<number>()
+    for (const part of hourField.split(',')) {
+      const [a, b = a] = part.split('-').map(Number)
+      for (let h = a; h <= b; h++) hours.add(h)
+    }
+    return hours
+  }
+
+  it('is defined in schema.sql, weekdays only', () => {
+    expect(m).not.toBeNull()
+    expect(m![1].trim().split(/\s+/).slice(2)).toEqual(['*', '*', '1-5'])
+  })
+
+  it('fires in the UTC hour of every Taipei 5-minute slot that has sources to probe', () => {
+    const hours = utcHours(m![1])
+    const missed: string[] = []
+    for (let mins = 0; mins < 24 * 60; mins += 5) {
+      const hhmm = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
+      if (sourcesForTaipeiTime(hhmm, true).length === 0) continue
+      const utcHour = (Math.floor(mins / 60) - 8 + 24) % 24
+      // Taipei is UTC+8 with no daylight saving; these slots (12:00–23:30) never cross midnight,
+      // so the UTC weekday is the Taipei weekday and `1-5` means the same on both clocks.
+      expect(Math.floor(mins / 60)).toBeGreaterThanOrEqual(8)
+      if (!hours.has(utcHour)) missed.push(hhmm)
+    }
+    expect(missed).toEqual([])
+  })
+
+  it('does not fire all day: the hours where there is nothing to probe are left out', () => {
+    expect(utcHours(m![1]).size).toBeLessThan(24)
   })
 })

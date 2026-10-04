@@ -103,8 +103,8 @@ const PROBE_SOURCES_CONFIG: ProbeSourceConfig[] = [
 const CRON_JOBS_CONFIG: CronJobConfig[] = [
   {
     jobname: 'source-probe',
-    cron: '*/5 * * * *',
-    taipeiTime: '每日 每 5 分鐘 (全天候)',
+    cron: '*/5 4,7-15 * * 1-5',
+    taipeiTime: '平日 12:00–12:55、15:00–23:55 每 5 分鐘',
     action: 'probe',
     role: '探針主引擎',
     description: '驅動 8 大資料源探測，在 Edge 判斷時窗與資料狀態，命中立即聯動抓取。',

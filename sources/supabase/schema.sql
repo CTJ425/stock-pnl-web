@@ -776,12 +776,16 @@ BEGIN
   END IF;
 END $$;
 
--- 0.7.3 實驗期間改為每 5 分全天候：時間窗判斷搬進 Edge（sourceProbePlan.ts），
--- 窗外的班次拿到 sources=[]、不發任何外部請求也不寫表。實驗結束後可收成
--- '*/5 4,7-14 * * 1-5'（UTC；＝台北 12:00 與 15:00–22:55）少掉約一半的空轉。
+-- 0.7.3 起每 5 分全天候：時間窗判斷在 Edge（sourceProbePlan.ts），窗外的班次拿到 sources=[]、
+-- 不發任何外部請求也不寫表。0.10.30 收成只在有工作的時段跑（UTC，平日）：
+--   hour 4      = 台北 12:00–12:55   （MOPS 槽點 12:00、12:05）
+--   hour 7–15   = 台北 15:00–23:55   （bfi82u 15:00 起 … borrow 到 23:30，所以要含 UTC 15 點）
+-- 每月 Edge 呼叫從約 8,640 次降到約 2,400 次，`cron.job_run_details` 也少長約七成。
+-- ⚠️ 新增探測窗（sourceProbePlan.ts 的 DAILY_WINDOWS / MOPS_SLOTS）時，必須回來檢查這個時間範圍涵蓋它。
+-- ⚠️ 線上改排程只用 `cron.alter_job`，不要 unschedule + schedule（見 §6c 的佔位符地雷）。
 SELECT cron.schedule(
   'source-probe',
-  '*/5 * * * *',
+  '*/5 4,7-15 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
@@ -1276,6 +1280,17 @@ SELECT cron.schedule(
     DELETE FROM public.discord_send_log     WHERE created_at  < now() - interval '180 days';
     DELETE FROM public.user_discord_send_log WHERE created_at < now() - interval '180 days';
   $job$
+);
+
+-- 0.10.30: pg_cron never prunes its own history. `cron.job_run_details` had 10,709 rows / 6.65 MB on PROD
+-- after 34 days (≈ 0.2 MB a day, ≈ 6 years to fill the 500 MB free plan on its own). The admin console only
+-- looks back 2 days (admin_schedule_status); 14 days leaves room for diagnosing a bad week. Pure SQL, no URL
+-- and no secret, so plain cron.schedule is safe here (same reasoning as run-log-prune above).
+SELECT cron.unschedule('cron-history-prune')
+  WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'cron-history-prune');
+SELECT cron.schedule(
+  'cron-history-prune', '50 3 * * *',
+  $job$DELETE FROM cron.job_run_details WHERE COALESCE(end_time, start_time) < now() - interval '14 days'$job$
 );
 
 -- Task 166 (DB-02): backup_run_log.user_id had no foreign key, so a deleted account left orphan

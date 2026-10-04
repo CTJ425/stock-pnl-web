@@ -24,8 +24,11 @@ import { parseBfi82u } from './twMarket.ts'
 import { SEMICONDUCTOR_SEGMENTS } from './semiconductorSegments.ts'
 
 export const SECTOR_FLOW_SCHEMA = 1
-/** Trading days kept in the file. Per-sector sums are small; 20 days covers 近 5 日 and one month of trend. */
-export const SECTOR_FLOW_DAYS_CAP = 20
+/**
+ * Trading days kept in the file. The page reads at most 5 (近 5 日), and every visit downloads the whole
+ * file: at 20 days it was 168 KB raw, at 7 it is about 66 KB. Two days of cushion over the window.
+ */
+export const SECTOR_FLOW_DAYS_CAP = 7
 /** Biggest buyers and sellers kept per sector. */
 export const TOP_PER_SECTOR = 3
 

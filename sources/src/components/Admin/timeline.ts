@@ -31,6 +31,17 @@ export function describeCron(expr: string): string {
     return `週一至週五 ${p(from)}:00–${p(to)}:${p(lastMinute(Number(w[1])))} 每 ${w[1]} 分`
   }
 
+  // `*/5 4,7-15 * * 1-5`: several hour ranges on weekdays (the probe, 0.10.30).
+  const ranges = /^\*\/(\d+)\s+(\d+(?:-\d+)?(?:,\d+(?:-\d+)?)+)\s+\*\s+\*\s+1-5$/.exec(expr)
+  if (ranges) {
+    const step = Number(ranges[1])
+    const spans = ranges[2].split(',').map((part) => {
+      const [a, b = a] = part.split('-').map(Number)
+      return `${p((a + TAIPEI_UTC_OFFSET_HOURS) % 24)}:00–${p((b + TAIPEI_UTC_OFFSET_HOURS) % 24)}:${p(lastMinute(step))}`
+    })
+    return `週一至週五 ${spans.join('、')} 每 ${step} 分`
+  }
+
   const dw = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+\*$/.exec(expr)
   if (dw) {
     const step = Number(dw[1])

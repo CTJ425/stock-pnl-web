@@ -9,6 +9,9 @@ describe('describeCron', () => {
   it('盤後批次：UTC 換算成台北', () => {
     // */15 8-15 * * 1-5 → Taipei 16:00–23:45
     expect(describeCron('*/15 8-15 * * 1-5')).toBe('週一至週五 16:00–23:45 每 15 分')
+    // The probe (0.10.30): MOPS hour at noon, then the after-hours windows, weekdays only.
+    expect(describeCron('*/5 4,7-15 * * 1-5')).toBe('週一至週五 12:00–12:55、15:00–23:55 每 5 分')
+    expect(describeCron('*/10 4,8 * * 1-5')).toBe('週一至週五 12:00–12:50、16:00–16:50 每 10 分')
   })
 
   it('每日兩班：13/15 UTC → 台北 21:00 / 23:00', () => {
