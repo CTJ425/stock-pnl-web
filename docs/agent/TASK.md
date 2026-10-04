@@ -17,7 +17,7 @@
 ## 📋 Active Tasks
 
 ### Task 191: TW market holiday calendar — weekday-holiday guard + calendar for admin and users
-- **Status**: 🔄 IN PROGRESS — `0.10.26-dev.2` on `dev` (`373e76f`, `b24d47d`); DEV `stock-price` v27 deployed
+- **Status**: 🔄 IN PROGRESS — `0.10.26-dev.3` on `dev` (`373e76f`, `b24d47d`, `c1e73e5`: 總經 line moved to a footnote under 國際指數 at the user's request); DEV `stock-price` v27 deployed
 - **Agent**: Claude
 - **Timestamp**: 2026-10-04 10:45:41 Asia/Taipei
 - **Why**: BUG-110 follow-up — MIS can serve test-session matches on any closed day; next weekday holiday is 2026-10-09.
