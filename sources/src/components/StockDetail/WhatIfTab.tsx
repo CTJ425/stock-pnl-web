@@ -121,6 +121,17 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, rawAvgCost, avgCost, heldQty])
 
+  // A watched stock has no holding to seed from, and its quote arrives after this tab mounted (a
+  // selection change reads null until the new stock's own quote lands — Task 193 M4). Fill the inputs
+  // that are still empty when the quote first appears. Only the false → true edge of `hasQuote` fires
+  // this, so a polled price that merely moves never touches a number the user is looking at.
+  useEffect(() => {
+    if (!hasQuote) return
+    setSellPrice((p) => (p === '' ? String(currentPrice) : p))
+    if (!isHeld) setBuyPrice((p) => (p === '' && !buyPriceEdited ? String(currentPrice) : p))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasQuote, ticker])
+
   const buyPriceNum = Number(buyPrice)
   const qtyNum = Number(qty)
   const sellPriceNum = Number(sellPrice)

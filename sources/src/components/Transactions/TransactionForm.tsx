@@ -82,7 +82,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // Task 182: the workspace's rate can change from a date, so the default follows the transaction's
   // own date — until the user types a rate for this one trade, after which the field is theirs.
   const feeRateManual = useRef(false)
-  const minFeeUnit = unit === '張' ? 'whole' : 'odd'
+  // Edit mode shows the saved quantity in 零股 whatever its size, so there the unit says nothing about
+  // the lot: the share count decides, the same `qty >= 1000` rule 重算手續費 uses (Task 193 M1).
+  // A new trade keeps following the unit the user picked.
+  const sharesForMinFee = (parseFloat(qty) || 0) * (unit === '張' ? 1000 : 1)
+  const minFeeUnit: 'whole' | 'odd' = isEdit
+    ? sharesForMinFee >= 1000
+      ? 'whole'
+      : 'odd'
+    : unit === '張'
+      ? 'whole'
+      : 'odd'
   const [minFee, setMinFee] = useState(() => String(getMinFee(minFeeUnit, workspaceId)))
 
   // When switching workspaces/whole shares or odd units, the corresponding memorized rates and minimum handling fees are brought in
@@ -673,6 +683,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       lastSearchedTicker.current = ''
       taxRateManual.current = false
       feeRateManual.current = false
+      // The field still holds the rate typed for this one trade; put the workspace's rate back,
+      // or the next trade on the same date is priced at it (Task 193 M2).
+      setFeeRate(String(getFeeRateOn(date, workspaceId)))
       autoApplied.current = false
       setTaxRate('0.003')
       setMessage({ kind: 'ok', text: '🎉 成功新增交易紀錄，Dashboard 與年度收益已同步更新！' })
@@ -1104,7 +1117,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               }}
             />
             <div className="field-hint">
-              手續費最低收這麼多（{unit === '張' ? '整股常見 20 元' : '零股常見 1 元'}）；費率填 0 就不套用
+              手續費最低收這麼多（{minFeeUnit === 'whole' ? '整股常見 20 元' : '零股常見 1 元'}）；費率填 0 就不套用
             </div>
           </div>
         )}

@@ -87,10 +87,32 @@ describe('rangeBars', () => {
     expect(rangeBars(rows, '6m')).toBe(120)
   })
 
-  it('1y / 5y / all 取全部列', () => {
+  it('5y / all 取全部列；1y 在資料不足一年時也取全部', () => {
+    // 300 consecutive calendar days span less than a year, so 1y has nothing to cut.
     expect(rangeBars(rows, '1y')).toBe(300)
     expect(rangeBars(rows, '5y')).toBe(300)
     expect(rangeBars(rows, 'all')).toBe(300)
+  })
+
+  // Task 193 M6: a stock nobody holds is read from a 5-year remote series (useDailySeries), so `1y`
+  // must cut by date. Before, it returned every row and 近 1 年 drew five years, identical to 近 5 年.
+  it('1y 只取最後一列往前一年內的列，即使資料有五年', () => {
+    const fiveYears = makeRows(5 * 365, Date.UTC(2021, 9, 5)) // 2021-10-05 … 2026-10-03, one row per day
+    const last = fiveYears[fiveYears.length - 1][0]
+    const n = rangeBars(fiveYears, '1y')
+    expect(n).toBe(fiveYears.filter((r) => r[0] >= `${Number(last.slice(0, 4)) - 1}${last.slice(4)}`).length)
+    expect(n).toBeGreaterThanOrEqual(365)
+    expect(n).toBeLessThanOrEqual(366)
+    expect(rangeBars(fiveYears, '5y')).toBe(fiveYears.length)
+  })
+
+  it('1y 的起點取自最後一列的日期，不看系統時鐘', () => {
+    const old = makeRows(800, Date.UTC(2019, 0, 1)) // ends 2021-03-10
+    expect(rangeBars(old, '1y')).toBeLessThanOrEqual(366)
+  })
+
+  it('1y 空列不會回負數', () => {
+    expect(rangeBars([], '1y')).toBe(0)
   })
 
   it('ytd 的年份取自最後一列，不看系統時鐘', () => {

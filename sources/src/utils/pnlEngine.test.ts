@@ -318,6 +318,29 @@ describe('股票名稱：代號佔位名不得覆蓋已知名稱', () => {
   })
 })
 
+describe('sellTaxRate — ETN（02xxxx）為 0.1%（Task 193 M3）', () => {
+  // Sources for the figure (checked 2026-10-04):
+  //  - 證券交易稅條例 §2: 「一、公司發行之股票…徵千分之三。二、公司債及其他經政府核准之有價證券徵千分之一。」
+  //    https://law.moj.gov.tw/LawClass/LawSingle.aspx?pcode=G0340078&flno=2
+  //  - 證交所投資人知識網 ETN 頁引金管會 107 年 7 月 2 日函釋：「ETN 為證券交易法第 6 條所定之『其他有價證券』，
+  //    適用千分之一證交稅稅率。」 https://investoredu.twse.com.tw/pages/TWSE_InvestmentEntry2_8.aspx?ID=1
+  // The classifier in stockCategory.ts already labels every 02xxxx code 'ETN'.
+  it('ETN 賣出證交稅 0.1%，不是一般股票的 0.3%', () => {
+    expect(sellTaxRate('020011')).toBe(0.001)
+    expect(sellTaxRate('020019')).toBe(0.001)
+  })
+
+  it('ETN 屬 §2 第二款，現股當沖也不適用 §2-2 的千分之 1.5（只取代第一款的 0.3%）', () => {
+    expect(dayTradeTaxRate('020011', '2026-10-01')).toBe(0.001)
+  })
+
+  it('一般股票與 02 開頭以外的代號不受影響', () => {
+    expect(sellTaxRate('2330')).toBe(0.003)
+    expect(sellTaxRate('2002')).toBe(0.003)
+    expect(sellTaxRate('1402')).toBe(0.003)
+  })
+})
+
 describe('sellTaxRate — TDR 與 REITs 同為 0.1%（BUG-035）', () => {
   it('TDR（91xx）證交稅 0.1%，不是一般股票的 0.3%', () => {
     expect(sellTaxRate('9105')).toBe(0.001)

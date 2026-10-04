@@ -149,20 +149,27 @@ export function GlobalIndices({
   const [quotes, setQuotes] = useState<Record<string, IndexQuote>>({})
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [now, setNow] = useState(() => new Date())
-  // Request-sequence guard (same pattern as TwIndexToday.tsx's reqId): a poll tick can still be
-  // in flight when the next one fires (or the tab regains visibility), and without this an older
-  // response resolving last would overwrite newer quotes already on screen.
-  const reqId = useRef(0)
+  // Request-sequence guard, kept PER TICKER (Task 193 M10). The point of a guard is that an older
+  // response must not overwrite a newer quote already on screen. A single shared counter did more:
+  // the poll tick (open regions only) discarded the still-running full load wholesale, so the closed
+  // markets stayed 「—」 for good. Now each ticker remembers the newest request that asked for it, and a
+  // response only writes the tickers it is still the newest answer for.
+  const nextReqId = useRef(0)
+  const latestReqFor = useRef(new Map<string, number>())
 
   // Merge, never replace: a symbol the poll could not answer (per-symbol drop, or a whole
   // failed request that resolves to `{}`) keeps whatever card value was already on screen.
   const load = useCallback(async (tickers: string[]) => {
     if (tickers.length === 0) return
-    const id = ++reqId.current
+    const id = ++nextReqId.current
+    for (const t of tickers) latestReqFor.current.set(t, id)
     const result = await fetchIndexQuotes(tickers)
-    if (reqId.current !== id) return
-    if (Object.keys(result).length === 0) return
-    setQuotes((prev) => ({ ...prev, ...result }))
+    const current: Record<string, IndexQuote> = {}
+    for (const [t, q] of Object.entries(result)) {
+      if (latestReqFor.current.get(t) === id) current[t] = q
+    }
+    if (Object.keys(current).length === 0) return
+    setQuotes((prev) => ({ ...prev, ...current }))
     setLastUpdated(new Date())
   }, [])
 
@@ -179,7 +186,11 @@ export function GlobalIndices({
       const tickers = INDICES.filter((i) => regions.includes(i.region)).map((i) => i.ticker)
       void load(tickers)
     }
-    const timer = setInterval(tick, POLL_INTERVAL_MS)
+    // A hidden tab has nobody to show a quote to: skip the timer's tick, and catch up the moment the
+    // tab is visible again (Task 193 M15, same rule as useStockPrices).
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') tick()
+    }, POLL_INTERVAL_MS)
     const onVisible = () => {
       if (document.visibilityState === 'visible') tick()
     }

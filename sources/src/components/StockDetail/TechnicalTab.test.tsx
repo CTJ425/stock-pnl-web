@@ -140,9 +140,50 @@ describe('TechnicalTab 長區間', () => {
     expect(screen.getByText('正在讀取歷史股價…')).toBeTruthy()
 
     resolveMax!(makeRemote(120, 2015, '1mo'))
-    const table = await screen.findByRole('table', { name: '每日成交量矩陣' })
+    // 全部 is monthly bars (Task 193 M8), so the table is the monthly one.
+    const table = await screen.findByRole('table', { name: '每月成交量矩陣' })
     expect(table.textContent).toContain('2015-')
     expect(table.textContent).not.toContain('2018-')
+  })
+
+  // Task 193 M8: the Edge answers 全部 with monthly bars (`granularity: '1mo'`) and nothing read that field,
+  // so the page called them 日 K, labelled MA5/20/60 as 週/月/季線 and dated the x axis MM/DD across decades.
+  describe('全部＝月 K 時的文字', () => {
+    async function openAll() {
+      const user = userEvent.setup()
+      mockRemote.mockResolvedValue(makeRemote(120, 2015, '1mo'))
+      render(<TechnicalTab ticker="2330" status="ready" series={makeDailySeries(60)} />)
+      await user.click(screen.getByRole('button', { name: '全部' }))
+      return screen.findByRole('table', { name: '每月成交量矩陣' })
+    }
+
+    it('標題、表格與統計都改說「月」', async () => {
+      const table = await openAll()
+      expect(screen.getByText(/月 K · 均線 · 布林通道/)).toBeTruthy()
+      expect(screen.queryByText(/日 K · 均線 · 布林通道/)).toBeNull()
+      expect(screen.getByText(/每月成交量・全部/)).toBeTruthy()
+      expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)[0]).toBe('月份')
+      expect(table.querySelector('tbody td')?.textContent).toMatch(/^\d{4}-\d{2}$/)
+      expect(table.textContent).toContain('個月統計')
+      expect(table.textContent).toContain('月均')
+      expect(table.textContent).not.toContain('日統計')
+    })
+
+    it('均線說明用「個月」，不再寫週線／月線／季線', async () => {
+      await openAll()
+      expect(screen.queryByText('週線')).toBeNull()
+      expect(screen.queryByText('季線')).toBeNull()
+      expect(screen.getByText('20 個月')).toBeTruthy()
+    })
+
+    it('日線區間不受影響', async () => {
+      const user = userEvent.setup()
+      render(<TechnicalTab ticker="2330" status="ready" series={makeDailySeries(60)} />)
+      await user.click(screen.getByRole('button', { name: '近 6 月' }))
+      expect(screen.getByText(/日 K · 均線 · 布林通道/)).toBeTruthy()
+      expect(screen.getByText('週線')).toBeTruthy()
+      expect(screen.getByRole('table', { name: '每日成交量矩陣' })).toBeTruthy()
+    })
   })
 
   it('遠端讀取失敗時說明是長區間失敗，不是整頁失敗', async () => {

@@ -91,6 +91,8 @@ export function tradeDateLabel(tradeDate: string | null | undefined): string | n
 const CACHE_KEY = 'stock-pnl-web/price-cache-v3'
 /** US stock cache validity period (same as Edge Function DB cache); Taiwan stock changes are determined by time period, see quoteWindow.ts*/
 const CACHE_TTL_US_MS = 10 * 60 * 1000
+/** A fallback (TWSE daily list) Taiwan quote is only a stop-gap: try Edge again on the next poll. */
+const CACHE_TTL_FALLBACK_MS = 60 * 1000
 
 /**
  * Get the cache TTL of the market at this moment based on positionKey.
@@ -98,6 +100,11 @@ const CACHE_TTL_US_MS = 10 * 60 * 1000
  */
 export function cacheTtlMs(key: string, quote?: PriceQuote): number {
   if (!key.startsWith('TPE:')) return CACHE_TTL_US_MS
+  // Task 193 M7: a quote from the TWSE daily list (Edge was unreachable) carries no matching time, and
+  // the list's close still reads the previous trading day for hours after 13:30 (see QuoteTab). The
+  // after-close lock below would have kept that number as "today's close" until 08:25 next morning,
+  // even after Edge came back. Retry it every minute so the real quote replaces it as soon as it can.
+  if (quote?.source === 'twse') return CACHE_TTL_FALLBACK_MS
   const fetchedAt = quote?.asOf ? new Date(quote.asOf) : null
   return twQuoteTtlMs(new Date(), quote?.tradeTime ?? null, fetchedAt && Number.isFinite(fetchedAt.getTime()) ? fetchedAt : null)
 }

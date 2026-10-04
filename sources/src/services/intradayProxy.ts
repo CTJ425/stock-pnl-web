@@ -61,18 +61,19 @@ export async function fetchIntraday(
     }
   }
 
+  // Local mode has no Edge to ask: that is "nothing to show", not a failure.
   if (!isSupabaseConfigured || !supabase) return null
-  try {
-    const { data, error } = await supabase.functions.invoke<EdgeIntradayResponse>('stock-price', {
-      body: { action: 'intraday', symbol: item, range },
-      timeout: 15_000,
-    })
-    if (error || !data) return null
-    const series = data.series ?? null
-    cache.set(key, { series, at: now })
-    capCache()
-    return series ? { ...series, ticker: item.ticker, fetchedAt: new Date(now).toISOString() } : null
-  } catch {
-    return null
-  }
+  // A failed call REJECTS (Task 193 M9). Every caller keeps its 「讀取走勢圖失敗」 state in a `.catch`;
+  // turning failures into `null` made those states unreachable and showed 「無走勢資料」 instead.
+  // Only an answered request with no series (holiday, new listing) resolves to `null`.
+  const { data, error } = await supabase.functions.invoke<EdgeIntradayResponse>('stock-price', {
+    body: { action: 'intraday', symbol: item, range },
+    timeout: 15_000,
+  })
+  if (error) throw error
+  if (!data) throw new Error('走勢圖沒有回應')
+  const series = data.series ?? null
+  cache.set(key, { series, at: now })
+  capCache()
+  return series ? { ...series, ticker: item.ticker, fetchedAt: new Date(now).toISOString() } : null
 }

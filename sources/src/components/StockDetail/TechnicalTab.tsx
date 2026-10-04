@@ -36,14 +36,14 @@ function sparkTrendColor(series: Array<number | null>): string {
   return last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
 }
 
-function fmtVolumeStreak(s: number): string {
+function fmtVolumeStreak(s: number, unit: string): string {
   if (!s) return '—'
-  return s > 0 ? `連 ${s} 日增量` : `連 ${-s} 日縮量`
+  return s > 0 ? `連 ${s} ${unit}增量` : `連 ${-s} ${unit}縮量`
 }
 
-function fmtPriceStreak(s: number): string {
+function fmtPriceStreak(s: number, unit: string): string {
   if (!s) return '—'
-  return s > 0 ? `連 ${s} 日上漲` : `連 ${-s} 日下跌`
+  return s > 0 ? `連 ${s} ${unit}上漲` : `連 ${-s} ${unit}下跌`
 }
 
 const RANGES: RangeKey[] = ['1m', '6m', 'ytd', '1y', '5y', 'all']
@@ -134,10 +134,16 @@ export function TechnicalTab({
   }, [ticker, range])
 
   const sourceRows = isRemoteRange(range) ? (remote?.rows ?? null) : (series?.rows ?? null)
+  // The Edge answers 全部 with monthly bars (`granularity: '1mo'`). Every word below that says 日 / 每日 /
+  // 週線 would then be wrong, so the wording follows the series (Task 193 M8).
+  const monthly = isRemoteRange(range) && remote?.granularity === '1mo'
   const view = useMemo(
-    () => (sourceRows ? buildTechnicalView(sourceRows, range) : null),
-    [sourceRows, range],
+    () => (sourceRows ? buildTechnicalView(sourceRows, range, monthly ? '1mo' : '1d') : null),
+    [sourceRows, range, monthly],
   )
+  const bar = monthly ? '月' : '日'
+  const barUnit = monthly ? '個月' : '日'
+  const volumeTitle = monthly ? '每月成交量' : '每日成交量'
 
   if (status === 'loading') {
     return (
@@ -245,7 +251,7 @@ export function TechnicalTab({
       <section className="rpt-section">
         <div className="rpt-section-head">
           <h3>
-            日 K · 均線 · 布林通道
+            {bar} K · 均線 · 布林通道
             <span className="source-tag">
               資料日 {latest.date} · 更新於 {fmtUpdatedAt(series?.asOf)}
             </span>
@@ -277,7 +283,7 @@ export function TechnicalTab({
             ]}
             labelIndices={view.labelIndices}
             formatValue={fmtPrice}
-            ariaLabel={`${ticker} 日 K、均線與布林通道`}
+            ariaLabel={`${ticker} ${bar} K、均線與布林通道`}
             tooltipExtra={(i) => {
               const v = view.volumes[i]
               return v === undefined ? null : `量 ${fmtLots(v)}`
@@ -286,20 +292,20 @@ export function TechnicalTab({
           <div className="chart-legend-side">
             <ChartLegend
               items={[
-                { label: 'MA5', color: MA_COLORS.ma5, note: '週線' },
-                { label: 'MA20', color: MA_COLORS.ma20, note: '月線' },
-                { label: 'MA60', color: MA_COLORS.ma60, note: '季線' },
+                { label: 'MA5', color: MA_COLORS.ma5, note: monthly ? '5 個月' : '週線' },
+                { label: 'MA20', color: MA_COLORS.ma20, note: monthly ? '20 個月' : '月線' },
+                { label: 'MA60', color: MA_COLORS.ma60, note: monthly ? '60 個月' : '季線' },
                 { label: 'BB上', color: BB_COLORS.upper, note: '中軌+2σ' },
                 { label: 'BB中', color: BB_COLORS.mid, note: 'SMA20' },
                 { label: 'BB下', color: BB_COLORS.lower, note: '中軌−2σ' },
               ]}
             />
-            <div className="chart-legend-foot">紅漲綠跌；布林為 20 日、±2 標準差</div>
+            <div className="chart-legend-foot">紅漲綠跌；布林為 20 {barUnit}、±2 標準差</div>
           </div>
         </div>
         <p className="hint">
           用的是原始收盤價，沒有還原除權息，與券商 App 看到的均線一致；除權息當天會有跳空。
-          布林中軌即 20 日均線，與 MA20 重疊屬正常。
+          布林中軌即 20 {barUnit}均線，與 MA20 重疊屬正常。
         </p>
       </section>
 
@@ -348,12 +354,12 @@ export function TechnicalTab({
           labelIndices={view.labelIndices}
           height={120}
           formatValue={(v) => fmtLots(v)}
-          ariaLabel={`${ticker} 每日成交量`}
+          ariaLabel={`${ticker} ${volumeTitle}`}
         />
 
         <div className="rpt-section-head" style={{ marginTop: 14 }}>
           <div className="chart-title">
-            每日成交量・{RANGE_LABELS[range]}（{view.volumeRows.length} 筆）
+            {volumeTitle}・{RANGE_LABELS[range]}（{view.volumeRows.length} 筆）
           </div>
           {view.volumeRows.length > VOLUME_ROWS_COLLAPSED && (
             <button className="btn btn-sm" onClick={() => setShowAllVolume((v) => !v)}>
@@ -363,10 +369,10 @@ export function TechnicalTab({
           )}
         </div>
         <div className="table-scroll">
-          <table className="data-table inst-matrix" aria-label="每日成交量矩陣">
+          <table className="data-table inst-matrix" aria-label={`${volumeTitle}矩陣`}>
             <thead>
               <tr>
-                <th scope="col">日期</th>
+                <th scope="col">{monthly ? '月份' : '日期'}</th>
                 <th scope="col" className="num">成交量</th>
                 <th scope="col" className="num">量比</th>
                 <th scope="col" className="num">收盤價</th>
@@ -378,7 +384,7 @@ export function TechnicalTab({
                 const volRatioDiff = r.volRatio !== null ? r.volRatio - 1.0 : null
                 return (
                   <tr key={r.date}>
-                    <td>{r.date}</td>
+                    <td>{monthly ? r.date.slice(0, 7) : r.date}</td>
                     <td className="num" style={heatStyle(r.volume, maxVolume)}>
                       {fmtLots(r.volume)}
                     </td>
@@ -401,15 +407,15 @@ export function TechnicalTab({
             </tbody>
             <tfoot>
               <tr className="tfoot-summary">
-                <td>{volumeRows.length} 日統計</td>
+                <td>{volumeRows.length} {barUnit}統計</td>
                 <td className="num inst-matrix-cum">
-                  <div>日均 {fmtLots(avgVolume)}</div>
+                  <div>{bar}均 {fmtLots(avgVolume)}</div>
                   <div className="tfoot-cum-trend">
                     <span
                       className={volumeStreak ? (volumeStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
                       style={{ fontSize: 12, fontWeight: volumeStreak ? 600 : undefined }}
                     >
-                      {fmtVolumeStreak(volumeStreak)}
+                      {fmtVolumeStreak(volumeStreak, barUnit)}
                     </span>
                     <SparkCell
                       points={volumeSeries}
@@ -460,7 +466,7 @@ export function TechnicalTab({
                       className={priceStreak ? (priceStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
                       style={{ fontSize: 12, fontWeight: priceStreak ? 600 : undefined }}
                     >
-                      {fmtPriceStreak(priceStreak)}
+                      {fmtPriceStreak(priceStreak, barUnit)}
                     </span>
                     <SparkCell
                       points={changePctSeries}
@@ -476,7 +482,7 @@ export function TechnicalTab({
           </table>
         </div>
         <p className="hint">
-          量比是當日成交量相對前 20 個交易日平均量的倍數，1 倍代表與均量相當。
+          量比是當{bar === '月' ? '月' : '日'}成交量相對前 20 個{monthly ? '月' : '交易日'}平均量的倍數，1 倍代表與均量相當。
           成交量與資料日來自盤後日線批次，與上方「行情」卡的即時報價是不同來源，數字可能略有差異。
         </p>
       </section>

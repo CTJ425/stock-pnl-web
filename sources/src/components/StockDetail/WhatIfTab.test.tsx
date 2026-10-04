@@ -396,3 +396,38 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     expect(screen.queryByTestId('whatif-ladder')).toBeNull()
   })
 })
+
+// Task 193 M4: a watched stock's quote arrives after the tab has mounted (and is read as null for the
+// first render of a newly selected stock). The two price inputs must fill in when it does.
+describe('WhatIfTab 報價晚到時補上預設價', () => {
+  const buyInput = () => screen.getByLabelText('買進價格') as HTMLInputElement
+  const sellInput = () => screen.getByLabelText('賣出價格') as HTMLInputElement
+
+  it('seeds both empty inputs once the first quote arrives', () => {
+    const view = render(<WhatIfTab ticker="6488" currentPrice={null} {...watched} />)
+    expect(buyInput().value).toBe('')
+    expect(sellInput().value).toBe('')
+    view.rerender(<WhatIfTab ticker="6488" currentPrice={35} {...watched} />)
+    expect(buyInput().value).toBe('35')
+    expect(sellInput().value).toBe('35')
+  })
+
+  it('does not overwrite what the user typed, and a later poll never re-seeds', () => {
+    const view = render(<WhatIfTab ticker="6488" currentPrice={null} {...watched} />)
+    fireEvent.change(sellInput(), { target: { value: '50' } })
+    view.rerender(<WhatIfTab ticker="6488" currentPrice={35} {...watched} />)
+    expect(sellInput().value).toBe('50')
+    expect(buyInput().value).toBe('35')
+    // The polled quote moves; the inputs stay where the user left them.
+    view.rerender(<WhatIfTab ticker="6488" currentPrice={36} {...watched} />)
+    expect(sellInput().value).toBe('50')
+    expect(buyInput().value).toBe('35')
+  })
+
+  it('leaves a held stock\'s buy price on its average cost', () => {
+    const view = render(<WhatIfTab ticker="2330" currentPrice={null} rawAvgCost={80} avgCost={80} heldQty={1000} />)
+    view.rerender(<WhatIfTab ticker="2330" currentPrice={100} rawAvgCost={80} avgCost={80} heldQty={1000} />)
+    expect(buyInput().value).toBe('80.00')
+    expect(sellInput().value).toBe('100')
+  })
+})

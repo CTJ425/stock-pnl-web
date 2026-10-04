@@ -221,11 +221,21 @@ export interface Ledger {
 /**
  * The securities tax rate for selling Taiwan stocks: 0.3% for general stocks, 0.1% for ETFs starting with code 00,
  * Bond ETFs (starting with 00 and ending with B, such as 00679B) are currently exempt from 0
+ *
+ * 證券交易稅條例 §2 第一款 is the 千分之三 for 股票; 第二款 is 「公司債及其他經政府核准之有價證券徵千分之一」.
+ * An ETN (02xxxx, the same rule `getStockCategory` uses) is the second kind: the 金管會 letter of
+ * 107-07-02 treats it as an 「其他有價證券」 under 證券交易法 §6 and the 證交所 quotes the 千分之一.
  */
 export function sellTaxRate(ticker: string): number {
   if (/^00\d+B$/i.test(ticker)) return 0
-  // TDR (91xx) and REITs (01xxx[T]) also get the 0.1% ETF rate.
-  if (ticker.startsWith('00') || ticker.startsWith('91') || /^01\d{3}[A-Z]?$/i.test(ticker)) return 0.001
+  // TDR (91xx), REITs (01xxx[T]) and ETNs (02xxxx) also get the 0.1% ETF rate.
+  if (
+    ticker.startsWith('00') ||
+    ticker.startsWith('91') ||
+    ticker.startsWith('02') ||
+    /^01\d{3}[A-Z]?$/i.test(ticker)
+  )
+    return 0.001
   return 0.003
 }
 

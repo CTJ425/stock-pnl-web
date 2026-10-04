@@ -56,6 +56,33 @@ describe('cacheTtlMs', () => {
   })
 })
 
+describe('cacheTtlMs — 備援報價不鎖到隔天（Task 193 M7）', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  // TWSE daily list close, stamped by fetchPrices when Edge failed: no matching time, `source: 'twse'`.
+  const fallback = (asOf: string): PriceQuote => ({ ...quote(asOf), source: 'twse', prevClose: null })
+
+  it('收盤後抓到的備援價 60 秒就過期，不會被當成「今天收盤價」鎖到 08:25', () => {
+    // Fetched at Taipei 14:30 (06:30Z); a 'edge' quote with no matching time would be locked to 08:25.
+    vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
+    expect(cacheTtlMs('TPE:2330', quote('2026-07-20T06:30:00Z'))).toBeGreaterThan(60 * 60 * 1000)
+    expect(cacheTtlMs('TPE:2330', fallback('2026-07-20T06:30:00Z'))).toBe(60 * 1000)
+  })
+
+  it('isFresh：過一分鐘就會重新向 Edge 要價', () => {
+    const fetchedAt = '2026-07-20T06:30:00Z'
+    vi.setSystemTime(new Date('2026-07-20T06:30:30Z'))
+    expect(isFresh('TPE:2330', fallback(fetchedAt), Date.now())).toBe(true)
+    vi.setSystemTime(new Date('2026-07-20T06:31:30Z'))
+    expect(isFresh('TPE:2330', fallback(fetchedAt), Date.now())).toBe(false)
+  })
+
+  it('美股不受影響', () => {
+    expect(cacheTtlMs('US:AAPL', fallback('2026-07-20T06:30:00Z'))).toBe(10 * 60 * 1000)
+  })
+})
+
 describe('isFresh', () => {
   const now = Date.parse(INTRADAY)
 

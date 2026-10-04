@@ -16,8 +16,7 @@ import { taipeiDateKey } from '../../utils/taipeiDate'
 import { getFeeRateOn } from '../../utils/settings'
 import { listPriceCost, pnlBasis, rowRoi, rowUnrealized } from '../../utils/pnlBasis'
 import { displayStockName } from '../../services/usStockNames'
-import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
-import { positionKey } from '../../types/models'
+import { useWatchQuote } from '../../hooks/useWatchQuote'
 import { listWatchlist, type WatchItem } from '../../services/watchlistService'
 import { groupWatchItems } from '../../utils/stockGrouping'
 import { HeaderMenu } from '../Common/HeaderMenu'
@@ -41,7 +40,6 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   // mount still resolves — the loaded `watchlist` copy below is not refreshed on every click.
   const [pickedWatch, setPickedWatch] = useState<{ ticker: string; name: string } | null>(null)
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])
-  const [watchQuote, setWatchQuote] = useState<PriceQuote | null>(null)
   const [showAddWatch, setShowAddWatch] = useState(false)
 
   /**
@@ -141,6 +139,9 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const selected = selectedFromKey ?? initialEntry ?? holdingEntries[0] ?? watchEntries[0] ?? null
 
   const watchTicker = selected?.kind === 'watch' ? selected.ticker : null
+  // Watched tickers carry no quote from useStockPrices (holdings-only). The hook keys the quote by
+  // ticker, so the next stock can never render with this one's price, and it polls (Task 193 M4/M5).
+  const watchQuote = useWatchQuote(watchTicker)
 
   const watchGrouping = useMemo(() => {
     return groupWatchItems(watchEntries, (e) => {
@@ -150,29 +151,6 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
       return prices[`TPE:${e.ticker}`]?.industry
     })
   }, [watchEntries, watchQuote, watchTicker, prices])
-
-  // Watched tickers carry no quote from useStockPrices (holdings-only), so fetch just the
-  // one currently on screen. `cancelled` drops a stale response if the selection moves on
-  // before this fetch resolves.
-  useEffect(() => {
-    if (!watchTicker) {
-      setWatchQuote(null)
-      return
-    }
-    let cancelled = false
-    setWatchQuote(null)
-    fetchPrices([{ market: 'TPE', ticker: watchTicker }])
-      .then((map) => {
-        if (cancelled) return
-        setWatchQuote(map[positionKey('TPE', watchTicker)] ?? null)
-      })
-      .catch(() => {
-        if (!cancelled) setWatchQuote(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [watchTicker])
 
   if (!selected) {
     return (

@@ -44,7 +44,7 @@ export function remoteRangeOf(range: RangeKey): '5y' | 'max' | null {
  * How many trailing K bars are displayed in each interval (**Trading day**, non-calendar
  * day; Taiwan stocks have approximately 20 trading days per month).
  *
- * `ytd` reads the year off the **last row's date**, not the wall clock: that keeps this
+ * `ytd` and `1y` read their start off the **last row's date**, not the wall clock: that keeps this
  * function pure and removes every time zone question.
  */
 export function rangeBars(rows: DailyRow[], range: RangeKey): number {
@@ -53,7 +53,17 @@ export function rangeBars(rows: DailyRow[], range: RangeKey): number {
       return 20
     case '6m':
       return 120
-    case '1y':
+    case '1y': {
+      // By date, not by row count: a stock nobody holds is read from a 5-year remote series, and
+      // `rows.length` made 近 1 年 draw all five years (Task 193 M6). Like `ytd`, the anchor is the
+      // last row's date, so this stays pure.
+      if (rows.length === 0) return 0
+      const last = rows[rows.length - 1][0]
+      const from = `${Number(last.slice(0, 4)) - 1}${last.slice(4)}`
+      let n = 0
+      for (let i = rows.length - 1; i >= 0 && rows[i][0] >= from; i--) n++
+      return Math.max(1, n)
+    }
     case '5y':
     case 'all':
       return rows.length
@@ -135,12 +145,23 @@ export function pickLabelIndices(count: number, want = 6): number[] {
   return [...out].sort((a, b) => a - b)
 }
 
-/** YYYY-MM-DD → MM/DD */
-function shortDate(date: string): string {
-  return date.length >= 10 ? `${date.slice(5, 7)}/${date.slice(8, 10)}` : date
+/**
+ * YYYY-MM-DD → MM/DD for daily bars; → YY/MM for monthly bars (Task 193 M8): 全部 spans decades, and
+ * a monthly bar has no meaningful day, so the axis needs the year and not the day.
+ */
+function shortDate(date: string, granularity: BarGranularity = '1d'): string {
+  if (date.length < 10) return date
+  return granularity === '1mo' ? `${date.slice(2, 4)}/${date.slice(5, 7)}` : `${date.slice(5, 7)}/${date.slice(8, 10)}`
 }
 
-export function buildTechnicalView(rows: DailyRow[], range: RangeKey): TechnicalView | null {
+/** What one bar in `rows` stands for; the Edge reports it with every remote series. */
+export type BarGranularity = '1d' | '1mo'
+
+export function buildTechnicalView(
+  rows: DailyRow[],
+  range: RangeKey,
+  granularity: BarGranularity = '1d',
+): TechnicalView | null {
   if (rows.length === 0) return null
 
   // ---- 1. Calculate the indicator based on "complete sequence" ----
@@ -163,7 +184,7 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
   const slice = <T,>(arr: T[]): T[] => arr.slice(from)
 
   const viewRows = slice(rows)
-  const labels = viewRows.map((r) => shortDate(r[0]))
+  const labels = viewRows.map((r) => shortDate(r[0], granularity))
 
   const lastIdx = rows.length - 1
   const last = rows[lastIdx]
@@ -173,7 +194,7 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
   return {
     labels,
     candles: viewRows.map((r) => ({
-      label: shortDate(r[0]),
+      label: shortDate(r[0], granularity),
       open: r[1],
       high: r[2],
       low: r[3],
