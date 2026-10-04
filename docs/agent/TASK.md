@@ -17,9 +17,9 @@
 ## 📋 Active Tasks
 
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
-- **Status**: 🔄 OPEN REMAINDER — **released as 0.10.30** (`6c25488`, `main` = `dev`). PROD DDL applied and PROD Edge deployed (`stock-report` v29 `6cf00d27dc3d` = DEV v50, `verify_jwt` false kept); `verify_setup()` 11/11 PASS on PROD; Release 0.10.30 created by CI, body correct; production serves the build (live bundle carries `sector-flow` and `保持登入`).
+- **Status**: 🔄 OPEN REMAINDER — **released as 0.10.30** (`6c25488`) and 0.10.31 (`872e620`, `main` = `dev`; 資金流向 windows 今日 / 近 3 日 / 近 5 日). PROD DDL applied and PROD Edge deployed (`stock-report` v29 `6cf00d27dc3d` = DEV v50, `verify_jwt` false kept); `verify_setup()` 11/11 PASS on PROD; Release 0.10.30 created by CI, body correct; production serves the build (live bundle carries `sector-flow` and `保持登入`).
 - **Agent**: Claude
-- **Timestamp**: 2026-10-05 00:41:08 Asia/Taipei
+- **Timestamp**: 2026-10-05 00:57:50 Asia/Taipei
 - **Spec**: docs/agent/specs/194-login-remember-and-sector-flow.md
 - **Done**: items 1–3, 4a, 6, 7, 8 — password reveal, 保持登入 7 天, 資金流向 page (layout B, in-place details, per-group top-5 stocks, treemap removed), the 手動更新 button, the three free-tier optimisations on DEV **and PROD**. Full text in `TASK_ARCHIVE.md`.
 - **Items**:
