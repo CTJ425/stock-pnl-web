@@ -1,7 +1,9 @@
 /**
- * 台股開休市 for every user (0.10.26): one line under the 台股 group on 總經 → 國際指數, and the year
- * behind a disclosure. The admin page has the operator's version (why MIS is skipped, uncovered years
- * in detail); this one only answers "is the market open, and when is it next closed".
+ * 台股開休市 for every user (0.10.26): a footnote at the bottom of 總經 → 國際指數, and the year
+ * behind a disclosure. A footnote, not a line under the 台灣 group: the owner found a sentence
+ * between the TW rows and 日本 broke the list (2026-10-04). The admin page has the operator's version
+ * (why MIS is skipped, uncovered years in detail); this one only answers "is the market open, and when
+ * is it next closed".
  */
 import { useEffect, useRef } from 'react'
 import {
@@ -35,24 +37,19 @@ export function TwCalendarLine({ now, defaultOpen = false }: { now?: Date; defau
   const off = nextHoliday(today)
   const upcoming = holidaysOf(year).filter((d) => d.ymd >= today)
 
-  let status: string
-  if (t.kind === 'open') {
-    status = !covered
-      ? `今天開市・${year} 年休市日還沒更新`
-      : off && off.ymd.startsWith(String(year))
-        ? `今天開市・下一個休市日 ${md(off.ymd)} ${off.name}・${daysBetween(today, off.ymd)} 天後`
-        : '今天開市・今年沒有其他平日休市了'
-  } else {
-    const why = t.kind === 'holiday' ? t.name : '週末'
-    status = `今天休市（${why}）・現價停在前一個交易日收盤・下一個交易日 ${md(nextTradingDay(today))}`
-  }
+  const offText =
+    off && off.ymd.startsWith(String(year))
+      ? `下一個平日休市 ${md(off.ymd)} ${off.name}${t.kind === 'open' ? `，${daysBetween(today, off.ymd)} 天後` : ''}。`
+      : '今年沒有其他平日休市了。'
+  const todayText =
+    t.kind === 'open'
+      ? '今天開市。'
+      : `今天休市（${t.kind === 'holiday' ? t.name : '週末'}），下一個交易日 ${md(nextTradingDay(today))}。`
+  const status = `台股：${todayText}${covered ? offText : `${year} 年休市日還沒更新。`}`
 
   return (
     <div className="mcal-line" id="tw-calendar" ref={ref}>
-      <p className="mcal-line-text">
-        <span className="mcal-line-label">開休市</span>
-        {status}
-      </p>
+      <p className="mcal-line-text">{status}</p>
       <details className="chart-more" open={defaultOpen}>
         <summary>看 {year} 年休市日</summary>
         {covered ? (

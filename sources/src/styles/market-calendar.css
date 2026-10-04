@@ -140,28 +140,25 @@
   color: var(--cds-text-helper);
 }
 
-/* 總經 → 國際指數, under the 台股 group: one line, the year behind a disclosure. */
+/* 總經 → 國際指數: a footnote under the whole list, the year behind a disclosure. */
 .mcal-line {
-  padding: var(--sp-03) 0 0;
+  margin-top: var(--sp-06);
+  padding-top: var(--sp-04);
+  border-top: 1px solid var(--cds-border-subtle);
   scroll-margin-top: calc(var(--cds-header-h) + var(--sp-05));
 }
 
 .mcal-line-text {
   margin: 0;
-  font-size: var(--type-body-01);
-  line-height: 1.6;
-  color: var(--cds-text-primary);
-}
-
-.mcal-line-label {
-  margin-right: var(--sp-03);
   font-size: var(--type-label-01);
-  font-weight: 500;
-  color: var(--cds-text-helper);
+  line-height: 1.6;
+  color: var(--cds-text-secondary);
 }
 
 .mcal-line .chart-more {
-  margin-top: var(--sp-03);
+  margin-top: var(--sp-02);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .mcal-line .mcal-legend {

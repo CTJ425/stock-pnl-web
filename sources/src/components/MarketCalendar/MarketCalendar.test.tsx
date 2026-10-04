@@ -25,13 +25,15 @@ describe('TwCalendarLine', () => {
 
   it('開市日寫下一個休市日，日曆預設收起', () => {
     render(<TwCalendarLine now={taipei('2026-10-05')} />)
-    expect(screen.getByText(/今天開市・下一個休市日 10月9日（五） 國慶日・4 天後/)).toBeTruthy()
+    expect(screen.getByText('台股：今天開市。下一個平日休市 10月9日（五） 國慶日，4 天後。')).toBeTruthy()
     expect(document.querySelector('details')?.open).toBe(false)
   })
 
   it('休市日寫原因與下一個交易日；從總覽連過來時日曆展開', () => {
     render(<TwCalendarLine now={taipei('2026-10-09')} defaultOpen />)
-    expect(screen.getByText(/今天休市（國慶日）・現價停在前一個交易日收盤・下一個交易日 10月12日（一）/)).toBeTruthy()
+    expect(
+      screen.getByText('台股：今天休市（國慶日），下一個交易日 10月12日（一）。下一個平日休市 10月26日（一） 臺灣光復暨金門古寧頭大捷紀念日。'),
+    ).toBeTruthy()
     expect(document.querySelector('details')?.open).toBe(true)
     // Only holidays still ahead are listed for users
     const rows = [...document.querySelectorAll('.mcal-list tbody tr')].map((r) => r.textContent)
@@ -42,9 +44,16 @@ describe('TwCalendarLine', () => {
     ])
   })
 
+  it('週末寫下一個交易日與下一個平日休市', () => {
+    render(<TwCalendarLine now={taipei('2026-10-04')} />)
+    expect(
+      screen.getByText('台股：今天休市（週末），下一個交易日 10月5日（一）。下一個平日休市 10月9日（五） 國慶日。'),
+    ).toBeTruthy()
+  })
+
   it('清單沒涵蓋的年份直說還沒更新', () => {
     render(<TwCalendarLine now={taipei('2027-01-04')} />)
-    expect(screen.getByText(/今天開市・2027 年休市日還沒更新/)).toBeTruthy()
+    expect(screen.getByText('台股：今天開市。2027 年休市日還沒更新。')).toBeTruthy()
     expect(document.querySelector('.mcal-grid')).toBeNull()
   })
 })

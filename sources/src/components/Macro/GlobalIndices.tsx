@@ -237,11 +237,11 @@ export function GlobalIndices({
                   />
                 ))}
               </div>
-              {region === 'TW' && <TwCalendarLine defaultOpen={calendarOpen} />}
             </div>
           )
         })}
       </div>
+      <TwCalendarLine defaultOpen={calendarOpen} />
     </div>
   )
 }
