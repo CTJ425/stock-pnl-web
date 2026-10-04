@@ -5,6 +5,8 @@ export interface GenerateReportRequestBody {
   market?: string
   ticker?: string
   name?: string
+  /** sync-sector-flow only: the trading day to build, YYYYMMDD (default: today, then back to the last published day). */
+  date?: string
   /**
    * warm only (0.6.46-dev.4). `core` | `history` | `full` (default).
    * See handleWarm header comment.

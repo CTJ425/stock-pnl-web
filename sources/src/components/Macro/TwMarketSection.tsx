@@ -23,6 +23,7 @@ import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
 import { fmtBillion, fmtBillionSigned, toBillion } from '../../utils/formatters'
 import { ForeignTopSection } from './ForeignTopSection'
+import { SectorFlowSection } from './SectorFlowSection'
 import { TwIndexToday, type TwIndexFallbackQuote } from './TwIndexToday'
 import type { IndexQuote } from '../../services/indexQuotes'
 
@@ -875,6 +876,7 @@ export function TwMarketSection({
           走勢欄讀的是近 {TREND_DAYS} 個交易日，比表格的 7 欄長，連續天數才不會被表格寬度截斷。
         </p>
       </div>
+    <SectorFlowSection />
     <ForeignTopSection />
     </>
   )

@@ -147,6 +147,7 @@ import {
   type MarketDay,
   type MarketFile,
 } from './twMarket.ts'
+import { syncSectorFlow, type SectorFlowSyncDeps, type SectorFlowSyncResult } from './sectorFlowSync.ts'
 import {
   FOREIGN_TOP_SCHEMA,
   foreignTopFingerprint,
@@ -1738,6 +1739,23 @@ async function syncForeignTop(
   }
 }
 
+/**
+ * Output/update market/sector_flow.json: what the institutions bought and sold today, by industry.
+ *
+ * Rides on `generate-chips` for the same reason as `syncForeignTop` (the T86 probe re-triggers that
+ * phase through the evening, so each round re-reads T86 and a revision is picked up), and is also
+ * reachable on its own as the `sync-sector-flow` action. All the logic is in `sectorFlowSync.ts`.
+ */
+function sectorFlowDeps(): SectorFlowSyncDeps {
+  return {
+    fetchJson: fetchRwdJson,
+    loadT86: (ymd) => loadT86(ymd, true),
+    download: downloadJson,
+    upload: uploadJson,
+    now: () => new Date(),
+  }
+}
+
 // ----U.S. General Economic Indicator (0.6.5)----
 
 /**
@@ -3034,6 +3052,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     rawDate: null,
     reason: null,
   }
+  let sectorFlow: SectorFlowSyncResult | null = null
   /*
     Seeded from today's last row, not from null (BUG-026). A skipped round fetches nothing, so
     logging null here would erase the very date that justified the skip —— and since `decideSkip`
@@ -3141,6 +3160,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     }
 
     foreignTop = await syncForeignTop(todayYmd)
+    sectorFlow = await syncSectorFlow(todayYmd, sectorFlowDeps())
   }
 
   if (regenerate && seriesDataYmd) {
@@ -3204,6 +3224,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     t86Revisions: t86State?.revisions ?? last?.t86?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? last?.t86?.frozen ?? false,
     foreignTop,
+    sectorFlow,
     scopes: {
       holdings: {
         total: holdingsScope.total,
@@ -3526,6 +3547,23 @@ async function handleSyncMarket(): Promise<Response> {
   })
 }
 
+/**
+ * Trigger the sector money-flow sync by hand (and for backfilling the day after a miss).
+ * `date` (YYYYMMDD) picks the day; without it, today and then up to five days back until one is
+ * a published trading day. TPEx only serves its latest day, so an older `date` is listed-only.
+ */
+async function handleSyncSectorFlow(body: GenerateReportRequestBody): Promise<Response> {
+  const startedAt = Date.now()
+  const asked = typeof body.date === 'string' && /^\d{8}$/.test(body.date) ? body.date : null
+  const first = asked ?? taipeiYmd(new Date())
+  let result: SectorFlowSyncResult = { synced: false, date: null, otc: false, reason: 'no-t86' }
+  for (let back = 0; back <= (asked ? 0 : 5); back++) {
+    result = await syncSectorFlow(ymdMinusDays(first, back), sectorFlowDeps())
+    if (result.reason !== 'no-t86' && result.reason !== 'no-prices') break
+  }
+  return json({ ok: true, ...result, durationMs: Date.now() - startedAt })
+}
+
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -3752,6 +3790,7 @@ const ACTION_ROUTES = new Map<string, ActionRoute<GenerateReportRequestBody>>([
   // Independent cron jobs: macro-daily (FRED), market-daily (TWSE, schema.sql §11), fx-daily (§10).
   ['sync-macro', { gate: 'cron', run: () => handleSyncMacro() }],
   ['sync-market', { gate: 'cron', run: () => handleSyncMarket() }],
+  ['sync-sector-flow', { gate: 'cron', run: (_req, body) => handleSyncSectorFlow(body) }],
   ['sync-fx', { gate: 'cron', run: () => handleSyncFx() }],
   // Source probe only reads (plus its own observation table) but still calls TWSE.
   ['probe', { gate: 'cron', run: () => handleProbe() }],
