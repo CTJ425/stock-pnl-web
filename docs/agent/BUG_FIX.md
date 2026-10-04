@@ -13,14 +13,6 @@
 > session start and returned nothing. `grep` that file before you "discover" one of them again.
 > Fixed bugs are in `FIXED_BUG.md`. Only things that still need doing belong here.
 
-### BUG-111 — 「頁面發生錯誤」 on a tab switch after a deploy (stale lazy chunk)
-- **Where**: every `lazy(() => import(...))` — `sources/src/components/AppShell.tsx:41-53`, `WorkspaceControls.tsx`, `Dashboard/DashboardPage.tsx`; fallback UI `ErrorBoundary.tsx`
-- **Root Cause**: a tab opened before a deploy still requests the previous build's hashed chunk (e.g. `FxPage-C27YOKQ4.js`). Cloudflare Pages answers an unknown path with `index.html`, `200 text/html` (checked live 2026-10-04), the module load fails, `React.lazy` rejects, and the root ErrorBoundary replaces the whole app. Releases land several times a day, so any long-lived tab hits it on its next first visit to a lazy page.
-- **Evidence**: PROD `app_log` (source=web, action=render, 30 days): all 6 rows are `Failed to fetch dynamically imported module` / `error loading dynamically imported module` (Firefox), each from a client one release behind — e.g. 0.10.26 at 04:33Z, 12 min after 0.10.27 reached `main`. DEV rows are dev-server HMR noise (`useWorkspace 必須在 WorkspaceProvider 內使用`), not this.
-- **Fix**: `sources/src/utils/chunkReload.ts` `loadChunk` wraps all 9 dynamic imports: on failure reload once (guard `sessionStorage['chunk-reload-at']`, 30 s) and keep the Suspense fallback; a second failure in the window, or no usable sessionStorage, rethrows to the ErrorBoundary.
-- **Verified**: unit `chunkReload.test.ts` (5). Playwright on local-mode production builds behind a Pages-style SPA fallback, first 年度 chunk answered with index.html: before fix → 「頁面發生錯誤」; after fix → one reload, 年度收益 renders; chunk broken on every request → one reload then the ErrorBoundary, no loop.
-- **Status**: FIXED on `dev` (0.10.28-dev.1), not released.
-
 ### BUG-084 — Stale per-workspace 最低手續費 in localStorage still drives estimates, with no UI to see or change it
 - **Where**: `sources/src/utils/settings.ts` (`getMinFee`), `sources/src/utils/holdingRows.ts:80-81,119-121`
 - **Root Cause Analysis**:

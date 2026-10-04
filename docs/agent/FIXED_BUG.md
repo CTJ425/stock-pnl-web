@@ -585,6 +585,14 @@
 - **Note**: A second minimum-fee check added during implementation was removed after `route:reviewer` found it discarded recoverable rates: an **unclamped** fee can equal a minimum fee by coincidence, because `calculateFee` clamps only when `minFee > fee`. Measured: gross 100,000, `fee_tax` 15, minimum fee 15, real rate `0.00015` forced to `0.001425`. A clamp always inflates `fee / gross`, so the ratio cap covers the clamp case on its own.
 
 ## 🐛 Historical Bug Fixes
+### Bug ID: BUG-111 — 「頁面發生錯誤」 on a tab switch after a deploy (stale lazy chunk)
+- **Date**: 2026-10-04, reported by the user; fixed in 0.10.28
+- **Where**: every `lazy(() => import(...))` — `sources/src/components/AppShell.tsx:41-53`, `WorkspaceControls.tsx`, `Dashboard/DashboardPage.tsx`; fallback UI `ErrorBoundary.tsx`
+- **Root Cause**: a tab opened before a deploy still requests the previous build's hashed chunk (e.g. `FxPage-C27YOKQ4.js`). Cloudflare Pages answers an unknown path with `index.html`, `200 text/html` (checked live 2026-10-04), the module load fails, `React.lazy` rejects, and the root ErrorBoundary replaces the whole app. Releases land several times a day, so any long-lived tab hits it on its next first visit to a lazy page.
+- **Evidence**: PROD `app_log` (source=web, action=render, 30 days): all 6 rows are `Failed to fetch dynamically imported module` / `error loading dynamically imported module` (Firefox), each from a client one release behind — e.g. 0.10.26 at 04:33Z, 12 min after 0.10.27 reached `main`. DEV rows are dev-server HMR noise (`useWorkspace 必須在 WorkspaceProvider 內使用`), not this.
+- **Fix**: `sources/src/utils/chunkReload.ts` `loadChunk` wraps all 9 dynamic imports: on failure reload once (guard `sessionStorage['chunk-reload-at']`, 30 s) and keep the Suspense fallback; a second failure in the window, or no usable sessionStorage, rethrows to the ErrorBoundary.
+- **Verified**: unit `chunkReload.test.ts` (5). Playwright on local-mode production builds behind a Pages-style SPA fallback, first 年度 chunk answered with index.html: before fix → 「頁面發生錯誤」; after fix → one reload, 年度收益 renders; chunk broken on every request → one reload then the ErrorBoundary, no loop.
+- **Status**: ✅ FIXED (0.10.28). Check after release: PROD `app_log` render rows with `dynamically imported module` should stop from clients ≥ 0.10.28.
 
 ### Bug ID: BUG-109 — 0050 shows 「台灣５０」: the holding name is the newest row's name, and an import brought the broker's spelling
 - **Where**: `sources/src/utils/pnlEngine.ts:557-560` (`pos.name` / `yt.name` = the last row in date order whose name is not the ticker), shared with the Edge card via `_shared/engine`.
