@@ -116,6 +116,8 @@ export interface AdminStatus {
       hit?: boolean
       ok?: boolean
       data_ymd?: string | null
+      /** Content hash of what the probe saw; the server retires a source on repeated equal fingerprints. */
+      fingerprint?: string | null
       note?: string | null
       duration_ms?: number | null
       probed_at?: string

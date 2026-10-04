@@ -451,10 +451,10 @@ export function MacroPage({ focus }: { focus?: string } = {}) {
   const [selectedDef, setSelectedDef] = useState<IndexDef | null>(null)
   const [selectedQuote, setSelectedQuote] = useState<IndexQuote | null>(null)
   /*
-    MA-01/MA-05: fetched once here (not inside GlobalIndices/TwMarketSection) so that
-    (a) GlobalIndices can know TW is 休市 today before the user ever drills into it, and
-    (b) re-entering TwMarketSection later in the same session reuses this instead of
-    re-fetching and flashing its loading state (see TwMarketSection's `initialMarket`).
+    MA-01/MA-05: fetched once here (not inside GlobalIndices/TwMarketSection) so that re-entering
+    TwMarketSection later in the same session reuses this instead of re-fetching and flashing its
+    loading state (see TwMarketSection's `initialMarket`). Whether TW is 休市 today no longer comes
+    from this file: `closedDates` below reads the holiday calendar (`twIsClosedDay`, since 0.10.26).
   */
   const [twMarket, setTwMarket] = useState<MarketData | null>(null)
 

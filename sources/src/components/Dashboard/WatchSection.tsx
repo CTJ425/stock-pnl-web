@@ -23,11 +23,9 @@ type ViewMode = 'cards' | 'table'
 
 export function WatchSection({
   onSelectTicker,
-  onChanged,
   refreshTrigger,
 }: {
   onSelectTicker: (ticker: string, name: string) => void
-  onChanged?: () => void
   refreshTrigger?: number
 }) {
   const [items, setItems] = useState<WatchItem[]>([])
@@ -111,7 +109,10 @@ export function WatchSection({
 
   // 60-second silent background polling + foreground catch-up (identical to useStockPrices)
   useEffect(() => {
-    const timer = setInterval(() => void loadPrices(itemsRef.current), POLL_INTERVAL_MS)
+    // A hidden tab has nobody to show a quote to (Task 193 M15, same rule as useStockPrices).
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadPrices(itemsRef.current)
+    }, POLL_INTERVAL_MS)
     const onVisible = () => {
       if (document.visibilityState === 'visible') void loadPrices(itemsRef.current)
     }
@@ -133,12 +134,14 @@ export function WatchSection({
     try {
       await removeWatch(item.ticker)
       await load()
-      onChanged?.()
       show(`已移除 ${item.ticker} ${item.name}`)
       if (undoTimer.current) clearTimeout(undoTimer.current)
       // DA-04: keep the original sort_order so 復原 puts it back where it was, not at the end.
       setUndoItem(item)
       undoTimer.current = setTimeout(() => setUndoItem(null), 5000)
+    } catch (err) {
+      // Without this a failed delete was an unhandled rejection and the row just stayed, unexplained.
+      show(`移除失敗：${err instanceof Error ? err.message : '請稍後再試'}`, 'error')
     } finally {
       setRemoving(null)
     }
@@ -149,10 +152,13 @@ export function WatchSection({
     const restored = undoItem
     if (undoTimer.current) clearTimeout(undoTimer.current)
     setUndoItem(null)
-    await addWatch(restored.ticker, restored.name, restored.sortOrder)
-    await load()
-    onChanged?.()
-    show(`已復原 ${restored.ticker} ${restored.name}`)
+    try {
+      await addWatch(restored.ticker, restored.name, restored.sortOrder)
+      await load()
+      show(`已復原 ${restored.ticker} ${restored.name}`)
+    } catch (err) {
+      show(`復原失敗：${err instanceof Error ? err.message : '請稍後再試'}`, 'error')
+    }
   }
 
   const [filter, setFilter] = useState<string>('all')
@@ -477,7 +483,6 @@ export function WatchSection({
           onClose={() => setShowAdd(false)}
           onAdded={() => {
             void load()
-            onChanged?.()
           }}
         />
       )}

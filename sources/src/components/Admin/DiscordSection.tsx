@@ -6,6 +6,7 @@
  * after a successful save. Client-side format validation reuses the same predicate the
  * Edge function uses, so an obviously bad URL never leaves the browser.
  */
+import { DISCORD_FAIL_REASON_LABELS, discordSendResultText } from '../../utils/discordSendText'
 import { useCallback, useEffect, useState } from 'react'
 import {
   clearDiscordWebhook,
@@ -33,18 +34,8 @@ const STATUS_LABELS: Record<DiscordSendStatus, string> = {
   failed: '失敗',
 }
 
-const FAIL_REASON_LABELS: Record<string, string> = {
-  'webhook-gone': '網址已失效',
-  'rate-limited': 'Discord 限流',
-  'http-error': 'Discord 回應錯誤',
-  network: '連線失敗',
-  'invalid-url': '網址格式不正確',
-}
-
 function testResultText(test: DiscordTestResult): string {
-  if (test.ok) return '測試訊息已送出'
-  const reason = FAIL_REASON_LABELS[test.reason ?? ''] ?? '未知錯誤'
-  return `發送失敗（${reason}）`
+  return discordSendResultText(test)
 }
 
 function errorMessage(err: unknown): string {
@@ -77,7 +68,7 @@ function reasonCellText(reason: string | null): string {
   if (reason === null) return '—'
   if (reason === 'no-market-day') return '非交易日或資料未到'
   if (reason === 'no-webhook') return '未設定網址'
-  return FAIL_REASON_LABELS[reason] ?? reason
+  return DISCORD_FAIL_REASON_LABELS[reason] ?? reason
 }
 
 export function DiscordSection() {

@@ -1,29 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   describeCron,
-  describeScope,
   groupProbeTicks,
   humanAgo,
-  judgeCron,
 } from './timeline'
-
-describe('judgeCron', () => {
-  it('停用的排程要看得出來', () => {
-    expect(judgeCron(false, 0, '2026-07-31T01:00:00Z')).toBe('late')
-  })
-
-  it('今日有失敗 → warn', () => {
-    expect(judgeCron(true, 2, '2026-07-31T01:00:00Z')).toBe('warn')
-  })
-
-  it('從未跑過 → idle', () => {
-    expect(judgeCron(true, 0, null)).toBe('idle')
-  })
-
-  it('啟用且無失敗 → 正常', () => {
-    expect(judgeCron(true, 0, '2026-07-31T01:00:00Z')).toBe('ok')
-  })
-})
 
 describe('describeCron', () => {
   it('盤後批次：UTC 換算成台北', () => {
@@ -83,27 +63,6 @@ describe('humanAgo', () => {
   it('負數或非數字回破折號，不顯示奇怪的值', () => {
     expect(humanAgo(-1)).toBe('—')
     expect(humanAgo(NaN)).toBe('—')
-  })
-})
-
-describe('describeScope', () => {
-  it('每個排程都說得出自己抓什麼', () => {
-    expect(describeScope('generate-chips')).toContain('T86')
-    expect(describeScope('generate-chips')).toContain('淨持股')
-    expect(describeScope('generate-all')).toContain('phase')
-    expect(describeScope('sync-market')).toContain('FMTQIK')
-    expect(describeScope('sync-market')).toContain('BFI82U')
-    expect(describeScope('sync-market')).toContain('market/daily.json')
-    expect(describeScope('sync-market')).toContain('15:00–16:30')
-    expect(describeScope('sync-top-tickers')).toBe('')
-    expect(describeScope('sync-macro')).toContain('FRED')
-    expect(describeScope('sync-fx')).toContain('八個幣對')
-    expect(describeScope('probe')).toContain('不寫報告')
-  })
-
-  it('不認得的 action 回空字串，畫面就不顯示那一行', () => {
-    expect(describeScope('unknown')).toBe('')
-    expect(describeScope(null)).toBe('')
   })
 })
 

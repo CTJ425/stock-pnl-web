@@ -1,5 +1,5 @@
 /** The three auth gates an action can sit behind: pg_cron secret, admin JWT, any signed-in user. */
-import { secretsMatch } from './cronSecret.ts'
+import { secretsMatch } from '../_shared/cronSecret.ts'
 import { db, json } from './runtime.ts'
 
 /** generate-all will write Storage, and the endpoint is public (--no-verify-jwt), so x-cron-secret is required to match the environment variable*/

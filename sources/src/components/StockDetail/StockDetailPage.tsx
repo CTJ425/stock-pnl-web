@@ -13,7 +13,7 @@
  * Fundamentals are loaded once at this layer and distributed to three places (the industry badge of the title and the fundamentals section).
  * Independent from chip reporting, failure of either does not affect the other.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { RefreshCw } from 'lucide-react'
 import {
@@ -51,10 +51,6 @@ interface StockDetailPageProps extends StockDetailTarget {
   avgCost?: number | null
   /** The control items on the left side of the top of the page (AnalysisPage passes in the drop-down menu for switching stocks)*/
   selector?: ReactNode
-  /** Fired when a row in a watchlist component is clicked. */
-  onSelectTicker?: (ticker: string, name: string) => void
-  /** Fired after a watchlist component successfully adds or removes a watched ticker. */
-  onWatchlistChanged?: () => void
 }
 
 type DetailTab = 'analysis' | 'whatif'
@@ -74,6 +70,9 @@ const PAGE_TABS: Array<{ id: PageTab; label: string }> = [
 ]
 
 const PAGE_TAB_IDS = PAGE_TABS.map((t) => t.id)
+
+/** Shortest time between two foreground re-checks for a newer report (Task 193 M16). */
+const REFRESH_MIN_GAP_MS = 5 * 60 * 1000
 
 function isDetailTab(v: string | null): v is DetailTab {
   return v === 'analysis' || v === 'whatif'
@@ -217,23 +216,38 @@ export function StockDetailPage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, name, reloadKey])
 
+  // Returning to the tab re-checks for a newer report, but at most once per REFRESH_MIN_GAP_MS: each
+  // check is three Storage downloads (manifest, report, fundamentals) and the nightly files change a
+  // few times a day, so refetching on every alt-tab was pure waste (Task 193 M16).
+  const lastRefreshAt = useRef(0)
   useEffect(() => {
+    // `alive` stops a response that lands after the ticker moved on from overwriting the new stock's
+    // report: the timestamp guard below cannot tell the two stocks apart.
+    let alive = true
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
+      const nowMs = Date.now()
+      if (nowMs - lastRefreshAt.current < REFRESH_MIN_GAP_MS) return
+      lastRefreshAt.current = nowMs
       void (async () => {
         try {
           const stored = await fetchStoredReport(ticker, { forceRefresh: true })
+          if (!alive) return
           if (stored) {
             setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
           }
           const f = await fetchFundamental(ticker)
+          if (!alive) return
           if (f) setFundamental((prev) => (prev && f.asOf !== prev.asOf ? f : prev))
         } catch {
         }
       })()
     }
     document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    return () => {
+      alive = false
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [ticker])
 
   useEffect(() => {

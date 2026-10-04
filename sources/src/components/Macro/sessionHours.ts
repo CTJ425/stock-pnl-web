@@ -163,8 +163,3 @@ export function isMarketOpen(region: MarketRegion, now: Date, closedDates?: Clos
 export function openRegions(now: Date, closedDates?: ClosedDates): MarketRegion[] {
   return (['TW', 'JP', 'KR', 'US'] as const).filter((region) => isMarketOpen(region, now, closedDates))
 }
-
-/** True when at least one region is open. */
-export function anyMarketOpen(now: Date, closedDates?: ClosedDates): boolean {
-  return openRegions(now, closedDates).length > 0
-}

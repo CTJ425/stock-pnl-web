@@ -224,7 +224,9 @@ export function AdminStatusPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const d = await fetchAdminStatus()
-    setData(d)
+    // Keep the last good snapshot on a failed poll: one transient error used to replace the whole
+    // console with the 「讀不到」 page until the next tick (Task 193 M15).
+    if (d !== null) setData(d)
     setFailed(d === null)
     setLoading(false)
   }, [])
@@ -234,11 +236,19 @@ export function AdminStatusPage() {
   }, [load])
 
   // AD-04: 每 60 秒重新拉一次狀態，卸載時清掉計時器——這頁常常整天開著沒人手動按重新整理。
+  // 分頁在背景時不打後端；回到前景立刻補一次（Task 193 M15，與 useStockPrices 同一規則）。
   useEffect(() => {
     const id = setInterval(() => {
-      void load()
+      if (document.visibilityState === 'visible') void load()
     }, 60_000)
-    return () => clearInterval(id)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [load])
 
   // 抓取全市場排程
@@ -252,7 +262,7 @@ export function AdminStatusPage() {
     )
   }
 
-  if (failed || !data) {
+  if (!data) {
     return (
       <div className="section glass" style={SECTION_PAD}>
         <div className="notice notice-error">
@@ -270,6 +280,11 @@ export function AdminStatusPage() {
 
   return (
     <>
+      {failed && (
+        <div className="notice notice-warn" role="status" style={{ marginBottom: 12 }}>
+          最近一次更新失敗，下面顯示的是上一次讀到的資料。
+        </div>
+      )}
       {/* ── 盤後探針命中戰情室 ────────────────────────────── */}
       <ProbeWarRoom data={data} loading={loading} onRefresh={() => void load()} />
 

@@ -163,6 +163,20 @@ interface CachedReportEntry {
 }
 
 const reportCache = new Map<string, CachedReportEntry>()
+
+/** Reports kept in memory; one is tens of KB, and a long session used to keep every stock it ever opened. */
+export const REPORT_CACHE_MAX_ENTRIES = 40
+
+/** Insert or refresh an entry as the most recent, and drop the least recently used past the bound. */
+function cacheReport(ticker: string, entry: CachedReportEntry): void {
+  reportCache.delete(ticker)
+  reportCache.set(ticker, entry)
+  while (reportCache.size > REPORT_CACHE_MAX_ENTRIES) {
+    const oldest = reportCache.keys().next().value
+    if (oldest === undefined) break
+    reportCache.delete(oldest)
+  }
+}
 let cachedManifest: { ymd: string; fetchedAt: number } | null = null
 
 export interface FetchStoredReportOptions {
@@ -190,7 +204,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Report
   if (!isSupportedReport(data?.data)) {
     throw new Error('伺服器回傳的報告格式不符，請稍後再試')
   }
-  reportCache.set(input.ticker, { data: data.data, fetchedAt: Date.now() })
+  cacheReport(input.ticker, { data: data.data, fetchedAt: Date.now() })
   return data.data
 }
 
@@ -232,6 +246,6 @@ export async function fetchStoredReport(
   const stored = await downloadReportsJson<{ data?: unknown }>(`${ymd}/${ticker}.json`)
   if (!isSupportedReport(stored?.data)) return null
 
-  reportCache.set(ticker, { data: stored.data, fetchedAt: now })
+  cacheReport(ticker, { data: stored.data, fetchedAt: now })
   return stored.data
 }

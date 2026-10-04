@@ -99,4 +99,19 @@ describe('useDailySeries', () => {
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(mockRemote).not.toHaveBeenCalled()
   })
+
+  // Task 193: the remote series' `asOf` is what 技術面 prints as 「更新於」; it used to be the moment the hook
+  // ran, so a 5-minute-old cached answer read as just fetched.
+  it('遠端資料的 asOf 是 Edge 回應的抓取時間，不是現在', async () => {
+    mockFile.mockResolvedValue(null)
+    mockRemote.mockResolvedValue({
+      rows: makeRows(10, 100),
+      granularity: '1d',
+      ticker: '2330',
+      fetchedAt: '2026-09-10T05:00:00.000Z',
+    } as RemoteDaily)
+    const { result } = renderHook(() => useDailySeries('2330'))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.series?.asOf).toBe('2026-09-10T05:00:00.000Z')
+  })
 })

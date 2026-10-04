@@ -36,12 +36,6 @@ export function fmtLotsPlain(n: number | null | undefined): string {
   return Math.round(n / 1000).toLocaleString('en-US')
 }
 
-/** Continuous buying and selling (legal person): +3 → 3 consecutive buys*/
-export function fmtTradeStreak(n: number): string {
-  if (!n) return '—'
-  return n > 0 ? `連 ${n} 買` : `連 ${-n} 賣`
-}
-
 /** Consecutive increases and consecutive decreases (margin margin trading balance): -2 → 2 consecutive decreases*/
 export function fmtBalanceStreak(n: number): string {
   if (!n) return '—'

@@ -9,6 +9,7 @@
  * test buttons and both 啟用 toggles stay disabled until the corresponding URL is stored
  * (spec D6) — the save button is the only path to a stored URL.
  */
+import { discordSendResultText } from '../../utils/discordSendText'
 import { useEffect, useState } from 'react'
 import {
   clearMyHoldingsWebhook,
@@ -35,18 +36,8 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-const FAIL_REASON_LABELS: Record<string, string> = {
-  'webhook-gone': '網址已失效',
-  'rate-limited': 'Discord 限流',
-  'http-error': 'Discord 回應錯誤',
-  network: '連線失敗',
-  'invalid-url': '網址格式不正確',
-}
-
 function sendResultText(send: DiscordMySettingsSendResult): string {
-  if (send.ok) return '測試訊息已送出'
-  const reason = FAIL_REASON_LABELS[send.reason ?? ''] ?? '未知錯誤'
-  return `發送失敗（${reason}）`
+  return discordSendResultText(send)
 }
 
 /** Spec Revision 1 — two lines so the global and per-account channels are never confused. */

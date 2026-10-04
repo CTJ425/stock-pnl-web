@@ -1,4 +1,8 @@
 /**
+ * Shared by stock-report and backup-transactions (Task 193). backup-transactions kept its own copy on
+ * the belief that an Edge function bundles only its own directory; `_shared/` is bundled with every
+ * function (it already imports `_shared/log.ts`), so there is one implementation.
+ *
  * AUDIT-13: `assertCronSecret` used to compare the header against `CRON_SECRET` with `!==`,
  * which returns as soon as it hits a differing byte — an attacker measuring response timing
  * could learn the secret one byte at a time. `secretsMatch` replaces it with a comparison whose

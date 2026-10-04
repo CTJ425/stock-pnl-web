@@ -846,6 +846,34 @@ describe('StockDetailPage', () => {
       expect(container.querySelector('#sec-chips .rpt-head')!.textContent).toBe(before)
     })
 
+    // Task 193 M16: every return used to download the manifest, the report and the fundamentals again
+    // (three Storage requests), however often the user alt-tabbed.
+    it('連續切回前景只補抓一次，過了間隔才會再抓', async () => {
+      const now = vi.spyOn(Date, 'now')
+      const t0 = 1_800_000_000_000
+      now.mockReturnValue(t0)
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
+      await screen.findByText('三大法人買賣超')
+      const mountCalls = fetchStoredReport.mock.calls.length
+
+      await fireVisible()
+      await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(mountCalls + 1))
+
+      // Three more returns within the next minute: nothing new is downloaded.
+      now.mockReturnValue(t0 + 60_000)
+      await fireVisible()
+      await fireVisible()
+      await fireVisible()
+      await new Promise((res) => setTimeout(res, 30))
+      expect(fetchStoredReport).toHaveBeenCalledTimes(mountCalls + 1)
+
+      // Past the gap the next return refreshes again.
+      now.mockReturnValue(t0 + 6 * 60_000)
+      await fireVisible()
+      await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(mountCalls + 2))
+      now.mockRestore()
+    })
+
     it('切到背景時不抓（只在使用者真的要看的時候才打 Storage）', async () => {
       render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')

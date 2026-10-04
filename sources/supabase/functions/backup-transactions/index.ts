@@ -21,7 +21,8 @@ import {
   type BackupRow,
   type BackupTables,
 } from './backupPlan.ts'
-import { secretsMatch } from './cronSecret.ts'
+import { secretsMatch } from '../_shared/cronSecret.ts'
+import { pagedSelect } from '../_shared/pagedSelect.ts'
 
 const BACKUPS_BUCKET = 'backups'
 const KEEP_DAYS = 7
@@ -66,28 +67,6 @@ interface BackupLogRow {
   pruned: number
   status: 'ok' | 'error'
   error: string | null
-}
-
-/**
- * PostgREST caps a single response at `max_rows` (1000, see `supabase/config.toml`). Same shape
- * as `pagedSelect` in stock-report/index.ts — this function cannot import from that directory,
- * an Edge function bundles only its own directory, so it is copied rather than shared.
- */
-async function pagedSelect<T>(
-  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000,
-): Promise<{ data: T[]; error: { message: string } | null }> {
-  const rows: T[] = []
-  let from = 0
-  for (;;) {
-    const { data, error } = await build(from, from + pageSize - 1)
-    if (error) return { data: rows, error }
-    const page = data ?? []
-    rows.push(...page)
-    if (page.length < pageSize) break
-    from += pageSize
-  }
-  return { data: rows, error: null }
 }
 
 async function backupAccount(userId: string, backupDate: string, exportedAt: Date): Promise<BackupLogRow> {

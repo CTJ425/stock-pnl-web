@@ -28,6 +28,7 @@ vi.stubGlobal('fetch', async (url: string) => {
 })
 
 import {
+  REPORT_CACHE_MAX_ENTRIES,
   clearReportCache,
   fetchStoredReport,
   generateReport,
@@ -174,5 +175,36 @@ describe('generateReport（即點即產 fallback）', () => {
       error: null,
     })
     await expect(generateReport({ market: 'TPE', ticker: '2330', name: '台積電' })).rejects.toThrow('格式不符')
+  })
+})
+
+// Task 193: every stock opened in a session used to stay in memory for the rest of it.
+describe('報告記憶體快取有上限', () => {
+  beforeEach(() => {
+    functionsInvoke.mockReset()
+    storageDownload.mockReset()
+    clearReportCache()
+  })
+
+  const generate = (ticker: string) => {
+    functionsInvoke.mockResolvedValue({
+      data: { reportId: 'r', generatedAt: 't', dataDate: '2026-07-24', data: { ...reportData, ticker } },
+      error: null,
+    })
+    return generateReport({ market: 'TPE', ticker, name: ticker })
+  }
+
+  it('drops the least recently used report past the bound and keeps the recent ones', async () => {
+    for (let i = 0; i < REPORT_CACHE_MAX_ENTRIES; i++) await generate(`T${i}`)
+    // Touch T0 again so it becomes the most recent, then add one more: T1 is the oldest and goes.
+    await generate('T0')
+    await generate('NEW')
+
+    storageDownload.mockResolvedValue(notFound)
+    expect((await fetchStoredReport('T0'))?.ticker).toBe('T0') // memory hit
+    expect((await fetchStoredReport('NEW'))?.ticker).toBe('NEW')
+    expect(storageDownload).not.toHaveBeenCalled()
+    expect(await fetchStoredReport('T1')).toBeNull() // evicted: it had to go to Storage, which has nothing
+    expect(storageDownload).toHaveBeenCalled()
   })
 })

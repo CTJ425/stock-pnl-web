@@ -64,7 +64,11 @@
   - latent: `fees.ts:237` day-trade signature at 0% rate, `WorkspaceContext.tsx:191-199` add during a workspace switch, `StockSplitModal.tsx:196-203` inferred rate stored as recorded, `FundamentalTab.tsx:330` TTM EPS needs four newest quarters, `DiscordMySettings.tsx:201-235` two quick time saves overwrite each other;
   - CI `e2e-dev.yml` runs `npx wait-on` unpinned (not a devDependency);
   - the request-body `name` of `generate`/`warm` lands in the shared report/fundamental files shown to every user (spoofing, not XSS), and the nightly batch takes names from the same user-supplied rows — the real fix is the official TWSE/TPEx names (`twNames.ts`) in all three places;
-  - `app_log` insert policy still lets a signed-in browser write many small rows (the size CHECK caps each row, not the count).
+  - `app_log` insert policy still lets a signed-in browser write many small rows (the size CHECK caps each row, not the count);
+  - `IntradayChart` re-runs `lineSegments` twice and rebuilds up to ~1,250 volume rects on every hover (the card-level re-render is fixed, this inner cost is not; it needs a stable `geo` before it can be memoised);
+  - `MacroPage.tsx:31` `isSameDay` uses the browser's local date and `BackupsSection.tsx:113` names the export file from the UTC date (before 08:00 Taipei it is yesterday's);
+  - Edge: the `discord-holdings` action and `listEnabledHoldingsUsers` (its cron is retired) and the seven `discord-accounts` ops no client calls any more; `MechanismGuide.tsx` and `AdminStatusPage.tsx:373` still write the probe windows as prose;
+  - a signed-in `warm`/`generate` caller still supplies the `name` stored in shared files (see above).
 - **Status**: OPEN — found 2026-10-04 (Task 193).
 
 ### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)

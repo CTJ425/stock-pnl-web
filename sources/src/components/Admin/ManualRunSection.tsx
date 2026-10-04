@@ -1,7 +1,7 @@
 /**
- * Admin console: manually trigger the five cron-backed batch jobs (0.6.44-dev.2).
+ * Admin console: manually trigger the cron-backed batch jobs listed in `ADMIN_RUN_JOBS` (0.6.44-dev.2).
  *
- * "全部" = all five in server order; individual checkboxes pick a subset.
+ * "全部" = every job in server order; individual checkboxes pick a subset.
  * Authorization is the admin JWT (Edge `admin-run`), never CRON_SECRET.
  * 0.6.48: live progress bar so multi-job runs show which step is active.
  */

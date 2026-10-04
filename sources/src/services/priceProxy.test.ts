@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PriceQuote } from './priceProxy'
-import { cacheTtlMs, isClosed, isFresh, tradeDateLabel } from './priceProxy'
+import { PRICE_CACHE_MAX_ENTRIES, cacheTtlMs, capPriceCache, isClosed, isFresh, tradeDateLabel } from './priceProxy'
 
 function quote(asOf: string, stale = false, tradeTime: string | null = null): PriceQuote {
   return {
@@ -229,5 +229,29 @@ describe('isClosed — 收盤後推論 (BUG-050)', () => {
   it('沒有報價時為 false', () => {
     expect(isClosed(null, 'TPE')).toBe(false)
     expect(isClosed(undefined, 'TPE')).toBe(false)
+  })
+})
+
+// Task 193: the localStorage price cache never evicted anything.
+describe('capPriceCache', () => {
+  const at = (minutesAgo: number) => quote(new Date(Date.UTC(2026, 6, 20, 5, 0) - minutesAgo * 60_000).toISOString())
+
+  it('leaves a small cache alone (same object, nothing copied)', () => {
+    const map = { 'TPE:2330': at(0) }
+    expect(capPriceCache(map)).toBe(map)
+  })
+
+  it('keeps the newest quotes and drops the oldest past the bound', () => {
+    const map: Record<string, PriceQuote> = {}
+    for (let i = 0; i < PRICE_CACHE_MAX_ENTRIES + 25; i++) map[`TPE:${1000 + i}`] = at(i)
+    const capped = capPriceCache(map)
+    expect(Object.keys(capped)).toHaveLength(PRICE_CACHE_MAX_ENTRIES)
+    expect(capped['TPE:1000']).toBeDefined() // newest (0 minutes ago)
+    expect(capped[`TPE:${1000 + PRICE_CACHE_MAX_ENTRIES + 24}`]).toBeUndefined() // oldest
+  })
+
+  it('treats an unreadable asOf as the oldest', () => {
+    const map = { 'TPE:1': quote('garbage'), 'TPE:2': at(0), 'TPE:3': at(1) }
+    expect(Object.keys(capPriceCache(map, 2)).sort()).toEqual(['TPE:2', 'TPE:3'])
   })
 })

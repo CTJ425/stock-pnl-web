@@ -9,19 +9,7 @@ vi.mock('./supabase', () => ({
   },
 }))
 
-import {
-  clearHoldingsWebhook,
-  clearMarketWebhook,
-  getDiscordAccounts,
-  previewHoldingsReport,
-  saveDiscordSchedule,
-  saveHoldingsWebhook,
-  saveMarketWebhook,
-  setHoldingsEnabled,
-  testHoldingsWebhook,
-  testMarketWebhook,
-  type DiscordAccountsSnapshot,
-} from './discordAccounts'
+import { getDiscordAccounts, type DiscordAccountsSnapshot } from './discordAccounts'
 
 // Assembled from pieces with a fake token: this repo is public and runs secret scanning.
 const TOKEN = 'Fake_Token-' + 'x'.repeat(57) + 'Wxyz'
@@ -64,50 +52,6 @@ describe('discordAccounts service', () => {
     expectBody({ op: 'list' })
   })
 
-  it('saves the schedule', async () => {
-    expect(await saveDiscordSchedule('18:30', '22:00')).toEqual(SNAPSHOT)
-    expectBody({ op: 'set-schedule', brief: '18:30', full: '22:00' })
-  })
-
-  it('saves, clears and tests the 經濟快報 webhook of one account', async () => {
-    await saveMarketWebhook(U1, URL_)
-    expectBody({ op: 'set-market', userId: U1, url: URL_ })
-    await clearMarketWebhook(U1)
-    expectBody({ op: 'clear-market', userId: U1 })
-    invoke().mockResolvedValue({ data: { ok: true, ...SNAPSHOT, send: { ok: true, httpStatus: 204 } }, error: null })
-    expect(await testMarketWebhook(U1)).toEqual({ ...SNAPSHOT, send: { ok: true, httpStatus: 204 } })
-    expectBody({ op: 'test-market', userId: U1 })
-  })
-
-  it('saves, clears, toggles and tests the 個人持股報告 webhook of one account', async () => {
-    await saveHoldingsWebhook(U1, URL_)
-    expectBody({ op: 'holdings-set', userId: U1, url: URL_ })
-    await clearHoldingsWebhook(U1)
-    expectBody({ op: 'holdings-clear', userId: U1 })
-    await setHoldingsEnabled(U1, false)
-    expectBody({ op: 'holdings-enable', userId: U1, enabled: false })
-    invoke().mockResolvedValue({ data: { ok: true, ...SNAPSHOT, send: { ok: false, httpStatus: 404, reason: 'webhook-gone' } }, error: null })
-    expect((await testHoldingsWebhook(U1)).send).toEqual({ ok: false, httpStatus: 404, reason: 'webhook-gone' })
-    expectBody({ op: 'holdings-test', userId: U1 })
-  })
-
-  it('sends the full holdings report with a longer timeout and returns its data date', async () => {
-    invoke().mockResolvedValue({
-      data: { ok: true, ...SNAPSHOT, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17', missingQuotes: 2 },
-      error: null,
-    })
-    expect(await previewHoldingsReport(U1)).toEqual({
-      ...SNAPSHOT,
-      send: { ok: true, httpStatus: 204 },
-      previewYmd: '2026-09-17',
-      missingQuotes: 2,
-    })
-    expect(invoke()).toHaveBeenCalledWith('stock-report', {
-      body: { action: 'discord-accounts', op: 'holdings-preview', userId: U1 },
-      timeout: 90_000,
-    })
-  })
-
   it('strips the ok flag from the snapshot', async () => {
     const res = await getDiscordAccounts()
     expect('ok' in res).toBe(false)
@@ -126,7 +70,7 @@ describe('discordAccounts service', () => {
     [409, 'no-market-data', 'Discord 設定失敗（HTTP 409：找不到任何台股大盤資料）'],
   ])('reports HTTP %i %s without server text or the URL', async (status, code, text) => {
     invoke().mockResolvedValue(httpError(status, { error: code }))
-    const err = await saveMarketWebhook(U1, URL_).catch((e: Error) => e)
+    const err = await getDiscordAccounts().catch((e: Error) => e)
     expect(err).toBeInstanceOf(Error)
     expect((err as Error).message).toBe(text)
     expect((err as Error).message).not.toContain(TOKEN)
@@ -134,7 +78,7 @@ describe('discordAccounts service', () => {
 
   it('never echoes a network-layer error message', async () => {
     invoke().mockResolvedValue({ data: null, error: { message: `fetch failed ${URL_}` } })
-    const err = await saveHoldingsWebhook(U1, URL_).catch((e: Error) => e)
+    const err = await getDiscordAccounts().catch((e: Error) => e)
     expect((err as Error).message).toBe('Discord 設定失敗')
   })
 

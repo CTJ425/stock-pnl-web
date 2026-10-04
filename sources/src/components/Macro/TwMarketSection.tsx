@@ -8,7 +8,7 @@
  * Unit trap: The source is **yuan**, and the screen is converted into **billion yuan** (the market's single-day turnover is 885.5 billion,
  * In meta it is 885,506,043,091 - no one reads it that way). The unit of individual stock chips is "share", and the two are not comparable.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import {
   fetchMarketDaily,
@@ -192,6 +192,103 @@ function taiexTrendStreak(days: MarketDay[]): { label: string | null; color: str
 
 
 
+/**
+ * The three stacked charts (candles, index line, turnover) and the hover index they share (0.6.34).
+ *
+ * The index lives HERE and not in TwMarketSection (Task 193 M17): it used to be the card's own state, so
+ * every mouse move re-rendered the whole card — both tables, 當日走勢 and the 外資 top list — only to move a
+ * crosshair. Held in this memoised child, a move re-renders just the three charts. The index is shared by
+ * the three because they consume the same `days`: hovering a day highlights that same day on all of them,
+ * and each tooltip still reports its own thing (candles: OHLC; line: the index; bars: hundred-million TWD).
+ */
+const StackedCharts = memo(function StackedCharts({ allDays }: { allDays: MarketDay[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const days = useMemo(() => allDays.slice(-SHOWN_DAYS), [allDays])
+
+  /*
+    A candle needs open/high/low/close; missing any one and it is not drawn —— open/high/low come from a
+    different source than close, so the last day or two may have close only. **But that day's slot must stay**
+    (0.6.34): the three stacked charts share one hover index, and filtering incomplete days out would make the
+    Nth candle a different day from the Nth point of the others. Padding open/high/low with the close is no
+    better: it draws a row of doji that look like a day with no movement at all.
+  */
+  const candles = useMemo(
+    () =>
+      days.map((d) => ({
+        label: shortDate(d.date),
+        open: d.taiexOpen,
+        high: d.taiexHigh,
+        low: d.taiexLow,
+        close: d.taiex,
+      })),
+    [days],
+  )
+  const drawableCandles = useMemo(
+    () => candles.filter((c) => c.open !== null && c.high !== null && c.low !== null && c.close !== null).length,
+    [candles],
+  )
+  const indexPoints = useMemo(() => days.map((d) => ({ label: shortDate(d.date), value: d.taiex })), [days])
+  const turnoverPoints = useMemo(
+    () => days.map((d) => ({ label: shortDate(d.date), value: toBillion(d.tradeValueTwd) })),
+    [days],
+  )
+  // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
+  // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
+  const labelIndices = useMemo(() => days.map((_, i) => i).filter((i) => i % 10 === 0), [days])
+
+  return (
+    <>
+      <div style={{ marginTop: 16 }}>
+        <div className="chart-title">加權指數日 K（近 {drawableCandles} 個交易日）</div>
+        {drawableCandles === 0 ? (
+          <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
+        ) : (
+          <CandleChart
+            candles={candles}
+            labelIndices={labelIndices}
+            height={STACK_CHART_H}
+            formatValue={formatIndex}
+            ariaLabel={`近 ${drawableCandles} 個交易日的加權指數日 K 線`}
+            hoverIndex={hover}
+            onHover={setHover}
+            crosshair
+          />
+        )}
+      </div>
+
+      <div className="chart-title" style={{ marginTop: 14 }}>
+        加權指數走勢（收盤）
+      </div>
+      <LineSeriesChart
+        points={indexPoints}
+        labelIndices={labelIndices}
+        height={STACK_CHART_H}
+        formatValue={formatIndex}
+        ariaLabel={`近 ${days.length} 個交易日的加權指數收盤走勢`}
+        hoverIndex={hover}
+        onHover={setHover}
+      />
+
+      <div className="chart-title" style={{ marginTop: 14 }}>
+        每日成交金額（億元）
+      </div>
+      <LineSeriesChart
+        points={turnoverPoints}
+        labelIndices={labelIndices}
+        height={STACK_VOLUME_H}
+        formatValue={formatBillion}
+        ariaLabel={`近 ${days.length} 個交易日的台股成交金額`}
+        hoverIndex={hover}
+        onHover={setHover}
+      />
+    </>
+  )
+})
+
+/** Stable formatters, so the memoised charts below do not see a new function on every render. */
+const formatIndex = (v: number) => v.toFixed(2)
+const formatBillion = (v: number) => `${v.toFixed(1)} 億`
+
 export function TwMarketSection({
   onBack,
   quote,
@@ -214,14 +311,6 @@ export function TwMarketSection({
   const [invalid, setInvalid] = useState(false)
   /** Which amount the institutional matrix shows (0.7.6). */
   const [instMetric, setInstMetric] = useState<InstMetric>('net')
-  /*
-    A hover index shared by all three charts (0.6.34). It lives here rather than in each chart so that hovering
-    a day highlights that same day on the candles, the index line and the turnover bars —— the user is asking
-    "what happened that day", not "what was the index that day". The indices only line up because all three
-    charts consume the same `days` (see candles below).
-  */
-  const [hover, setHover] = useState<number | null>(null)
-
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
@@ -339,23 +428,6 @@ export function TwMarketSection({
   const days = market.days.slice(-SHOWN_DAYS)
   const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
   const turnoverDays = instDays
-  /*
-    A candle needs open/high/low/close; missing any one and it is not drawn —— open/high/low come from a
-    different source than close, so the last day or two may have close only. **But that day's slot must stay**
-    (0.6.34): the three stacked charts share one hover index, and filtering incomplete days out would make the
-    Nth candle a different day from the Nth point of the others. Padding open/high/low with the close is no
-    better: it draws a row of doji that look like a day with no movement at all.
-  */
-  const candles = days.map((d) => ({
-    label: shortDate(d.date),
-    open: d.taiexOpen,
-    high: d.taiexHigh,
-    low: d.taiexLow,
-    close: d.taiex,
-  }))
-  const drawableCandles = candles.filter(
-    (c) => c.open !== null && c.high !== null && c.low !== null && c.close !== null,
-  ).length
   // latest and latestInst are already derived above for topPanel
 
   /*
@@ -457,10 +529,6 @@ export function TwMarketSection({
     ...turnoverDiffs.map((r) => (r.taiexDiff === null ? 0 : Math.abs(r.taiexDiff))),
   )
 
-  // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
-  // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
-  const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
-
   return (
     <>
       {topPanel}
@@ -484,59 +552,7 @@ export function TwMarketSection({
           </button>
         </div>
 
-        {/*
-          Three charts stacked top to bottom sharing one hover index (0.6.34; in 0.6.33 the candles and the index
-          line sat side by side).
-
-          The crosshair only lands on the same day across all three when they share width, X axis and index.
-          Side by side, each is half as wide and the same pixel position means a different day in each.
-
-          `hover` is held here and passed down, so the mouse over any one of them highlights all three, and each
-          tooltip reports its own thing (candles: OHLC; line: the index; bars: hundred-million TWD).
-        */}
-        <div style={{ marginTop: 16 }}>
-          <div className="chart-title">加權指數日 K（近 {drawableCandles} 個交易日）</div>
-          {drawableCandles === 0 ? (
-            <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
-          ) : (
-            <CandleChart
-              candles={candles}
-              labelIndices={labelIndices}
-              height={STACK_CHART_H}
-              formatValue={(v) => v.toFixed(2)}
-              ariaLabel={`近 ${drawableCandles} 個交易日的加權指數日 K 線`}
-              hoverIndex={hover}
-              onHover={setHover}
-              crosshair
-            />
-          )}
-        </div>
-
-        <div className="chart-title" style={{ marginTop: 14 }}>
-          加權指數走勢（收盤）
-        </div>
-        <LineSeriesChart
-          points={days.map((d) => ({ label: shortDate(d.date), value: d.taiex }))}
-          labelIndices={labelIndices}
-          height={STACK_CHART_H}
-          formatValue={(v) => v.toFixed(2)}
-          ariaLabel={`近 ${days.length} 個交易日的加權指數收盤走勢`}
-          hoverIndex={hover}
-          onHover={setHover}
-        />
-
-        <div className="chart-title" style={{ marginTop: 14 }}>
-          每日成交金額（億元）
-        </div>
-        <LineSeriesChart
-          points={days.map((d) => ({ label: shortDate(d.date), value: toBillion(d.tradeValueTwd) }))}
-          labelIndices={labelIndices}
-          height={STACK_VOLUME_H}
-          formatValue={(v) => `${v.toFixed(1)} 億`}
-          ariaLabel={`近 ${days.length} 個交易日的台股成交金額`}
-          hoverIndex={hover}
-          onHover={setHover}
-        />
+        <StackedCharts allDays={market.days} />
 
         {/*
           Daily turnover table (single table layout):

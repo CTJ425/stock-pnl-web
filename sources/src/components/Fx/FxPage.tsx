@@ -265,7 +265,10 @@ function TrendChart({ cur }: { cur: FxCurrency }) {
 export function FxPage() {
   const [fx, setFx] = useState<FxData | null>(null)
   const [quotes, setQuotes] = useState<FxQuoteMap>({})
+  // `loading` is the first load only: it swaps the page for a spinner. A refresh sets `refreshing`
+  // instead, so the page, the chosen chart range and the converter stay where they are (Task 193 M18).
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [selected, setSelected] = useState<string | null>(readSelected)
   // MA-11: neither request has an AbortController (fetchFx/fetchFxQuotes take no signal), so
@@ -284,9 +287,14 @@ export function FxPage() {
    * When the quotation cannot be obtained, the card will return the trading price (see cardView). If the history cannot be obtained, the card will be in an empty state.
    * Therefore, the failure of the quotation does not enter the loading judgment and does not block the screen.
    */
+  const hasFx = useRef(false)
   const load = useCallback(async (force = false) => {
-    setLoading(true)
+    // First load (or a retry after a failed one) → full-page spinner; with data on screen → in place.
+    const inPlace = hasFx.current
+    if (inPlace) setRefreshing(true)
+    else setLoading(true)
     let d: FxData | null = null
+    let failed = false
     try {
       d = await fetchFx()
       if (mountedRef.current) setLoadError(false)
@@ -294,12 +302,22 @@ export function FxPage() {
       // fetchFx now throws on a real network/5xx/bad-JSON failure and returns null only when the
       // file is genuinely absent. Without this catch the rejection is unhandled and the `finally`
       // below never runs, so the page spins forever instead of saying what went wrong.
+      failed = true
       if (mountedRef.current) setLoadError(true)
     } finally {
-      if (mountedRef.current) setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
     if (!mountedRef.current) return
+    // A failed refresh keeps what is already on screen instead of replacing it with an error page.
+    if (failed && inPlace) {
+      setLoadError(false)
+      return
+    }
     setFx(d)
+    hasFx.current = d !== null
     if (d) {
       // A failed quote is a bonus that is missing, not a broken page (see the note above).
       // Refreshing (force=true) re-fetches both the history file above and the quotes here, so
@@ -381,8 +399,8 @@ export function FxPage() {
           {fx.asOf && (
             <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(fx.asOf)}</span>
           )}
-          <button className="btn btn-sm" onClick={() => void load(true)} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'spin' : undefined} />
+          <button className="btn btn-sm" onClick={() => void load(true)} disabled={loading || refreshing}>
+            <RefreshCw size={14} className={loading || refreshing ? 'spin' : undefined} />
             重新整理
           </button>
         </div>

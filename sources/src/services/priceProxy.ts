@@ -129,6 +129,20 @@ export function readPriceCache(): PriceMap {
   }
 }
 
+/**
+ * Quotes the cache keeps. Every ticker ever looked at left an entry behind and nothing removed it, so
+ * the one localStorage value grew for as long as the browser lived (Task 193). The newest by `asOf` win;
+ * held tickers are refreshed every minute, so they are never the ones dropped.
+ */
+export const PRICE_CACHE_MAX_ENTRIES = 300
+
+export function capPriceCache(map: PriceMap, max = PRICE_CACHE_MAX_ENTRIES): PriceMap {
+  const entries = Object.entries(map)
+  if (entries.length <= max) return map
+  entries.sort((a, b) => (Date.parse(b[1].asOf) || 0) - (Date.parse(a[1].asOf) || 0))
+  return Object.fromEntries(entries.slice(0, max))
+}
+
 function writePriceCache(map: PriceMap): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(map))
@@ -302,7 +316,7 @@ export async function fetchPrices(
   for (const [key, quote] of Object.entries(result)) {
     if (!quote.stale) nextCache[key] = quote
   }
-  writePriceCache(nextCache)
+  writePriceCache(capPriceCache(nextCache))
 
   return result
 }

@@ -393,7 +393,12 @@ export function splitFeeTax(
   return { fee: tx.fee_tax - tax - borrow, tax, borrow }
 }
 
-const COMMON_FEE_RATES = [
+/**
+ * Common Taiwan broker fee rates (discounts on the statutory 0.001425). The single list: `fees.ts` re-exports
+ * it, and both inference paths (`inferTxFeeRate` here, `inferFeeRate` there) walk it — two copies could
+ * drift apart and make the same row read as two different rates (Task 193).
+ */
+export const COMMON_FEE_RATES = [
   0.001425, // 1.0 (原價)
   0.00092625, // 6.5 折
   0.000855, // 6.0 折

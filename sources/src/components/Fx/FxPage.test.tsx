@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const { fetchFx, fetchFxQuotes } = vi.hoisted(() => ({
   fetchFx: vi.fn(),
@@ -295,6 +295,55 @@ describe('FxPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /重新整理/ }))
     await screen.findByText('外幣匯率')
     expect(fetchFxQuotes).toHaveBeenCalledWith(['USD', 'JPY'], true)
+  })
+})
+
+// Task 193 M18: 重新整理 used to set `loading`, which swaps the whole page for a spinner — the chart came
+// back reset to 3 個月 and the button's own `disabled={loading}` never showed.
+describe('FxPage 重新整理不清掉畫面', () => {
+  beforeEach(() => {
+    fetchFx.mockReset()
+    fetchFxQuotes.mockReset()
+    fetchFxQuotes.mockResolvedValue({})
+    localStorage.clear()
+  })
+  afterEach(cleanup)
+
+  it('keeps the page and the chosen range while refreshing', async () => {
+    fetchFx.mockResolvedValue(fx)
+    render(<FxPage />)
+    await screen.findByText('美元走勢')
+    fireEvent.click(screen.getByRole('tab', { name: '1 年' }))
+    expect(screen.getByRole('tab', { name: '1 年' }).getAttribute('aria-selected')).toBe('true')
+
+    let finish!: (v: FxData) => void
+    fetchFx.mockImplementation(() => new Promise<FxData>((res) => (finish = res)))
+    fireEvent.click(screen.getByRole('button', { name: /重新整理/ }))
+
+    // While the refresh is in flight the page is still there and the button says it is busy.
+    expect(screen.queryByText('正在讀取匯率資料…')).toBeNull()
+    expect(screen.getByText('美元走勢')).toBeTruthy()
+    expect((screen.getByRole('button', { name: /重新整理/ }) as HTMLButtonElement).disabled).toBe(true)
+
+    finish(fx)
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /重新整理/ }) as HTMLButtonElement).disabled).toBe(false),
+    )
+    expect(screen.getByRole('tab', { name: '1 年' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('a failed refresh keeps the data already on screen', async () => {
+    fetchFx.mockResolvedValue(fx)
+    render(<FxPage />)
+    await screen.findByText('美元走勢')
+
+    fetchFx.mockRejectedValue(new Error('offline'))
+    fireEvent.click(screen.getByRole('button', { name: /重新整理/ }))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /重新整理/ }) as HTMLButtonElement).disabled).toBe(false),
+    )
+    expect(screen.getByText('美元走勢')).toBeTruthy()
+    expect(screen.queryByText(/匯率資料讀取失敗/)).toBeNull()
   })
 })
 

@@ -11,8 +11,6 @@ vi.mock('./StockDetailPage', () => ({
     rawAvgCost,
     quote,
     selector,
-    onSelectTicker,
-    onWatchlistChanged,
   }: {
     ticker: string
     name: string
@@ -20,23 +18,9 @@ vi.mock('./StockDetailPage', () => ({
     rawAvgCost?: number | null
     quote?: { price: number | null } | null
     selector?: React.ReactNode
-    onSelectTicker?: (ticker: string, name: string) => void
-    onWatchlistChanged?: () => void
   }) => (
     <div>
       {selector}
-      <button type="button" data-testid="pick-watch" onClick={() => onSelectTicker?.('2059', '川湖')}>
-        從觀察頁籤選 2059
-      </button>
-      <button type="button" data-testid="pick-new-watch" onClick={() => onSelectTicker?.('1101', '台泥')}>
-        從觀察頁籤選一檔剛加入的
-      </button>
-      <button type="button" data-testid="pick-held-watch" onClick={() => onSelectTicker?.('2330', '台積電')}>
-        從觀察頁籤選一檔同時也持有的
-      </button>
-      <button type="button" data-testid="fire-watch-changed" onClick={() => onWatchlistChanged?.()}>
-        通知觀察清單有變動
-      </button>
       <div data-testid="detail-ticker">{ticker}</div>
       <div data-testid="detail-name">{name}</div>
       <div data-testid="detail-qty">{holding?.qty ?? '—'}</div>
@@ -269,33 +253,16 @@ describe('AnalysisPage', () => {
     expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2059' }])
   })
 
-  it('觀察股票頁籤選一檔後，頁面換成那一檔且不帶持股', async () => {
-    const user = userEvent.setup()
-    setup(TW_AND_US)
-    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
-    fetchPrices.mockResolvedValue({ 'TPE:2059': { price: 987 } })
-    render(<AnalysisPage />)
-    await screen.findByTestId('detail-ticker')
-
-    await user.click(screen.getByTestId('pick-watch'))
-
-    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
-    expect(screen.getByTestId('detail-name').textContent).toBe('川湖')
-    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
-    expect(await screen.findByTestId('detail-quote')).toBeTruthy()
-    expect(screen.getByTestId('detail-quote').textContent).toBe('987')
-    expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2059' }])
-  })
-
   it('觀察股抓不到報價時不炸，也不會卡住畫面', async () => {
     const user = userEvent.setup()
     setup(TW_AND_US)
     listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
     fetchPrices.mockRejectedValue(new Error('offline'))
     render(<AnalysisPage />)
-    await screen.findByTestId('detail-ticker')
+    await screen.findByRole('button', { name: /切換個股/ })
 
-    await user.click(screen.getByTestId('pick-watch'))
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(screen.getByRole('menuitemradio', { name: '2059 川湖' }))
 
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
     expect(screen.getByTestId('detail-quote').textContent).toBe('—')
@@ -328,75 +295,17 @@ describe('AnalysisPage', () => {
     expect(screen.queryByRole('button', { name: '管理觀察' })).toBeNull()
   })
 
-  it('剛在頁籤裡加入的股票，點下去就要能切換（掛載時的清單沒有它）', async () => {
-    // Regression: AnalysisPage resolved the clicked ticker against a watchlist it read once on
-    // mount, so anything added afterwards silently fell back to the first holding.
-    const user = userEvent.setup()
-    setup(TW_AND_US)
-    listWatchlist.mockResolvedValue([])
-    fetchPrices.mockResolvedValue({ 'TPE:1101': { price: 24.05 } })
-    render(<AnalysisPage />)
-    await screen.findByTestId('detail-ticker')
-
-    await user.click(screen.getByTestId('pick-new-watch'))
-
-    expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
-    expect(screen.getByTestId('detail-name').textContent).toBe('台泥')
-    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
-  })
-
   it('同時被持有的觀察股，要以持股身分渲染（帶股數成本）', async () => {
     // Buying a stock you were watching must not strip its position data: the watch: key path
     // used to skip the holdings lookup entirely.
-    const user = userEvent.setup()
+    // The dashboard's watch list opens a stock through `initialTicker`, which selects `watch:<ticker>`.
     setup(TW_AND_US, { 'TPE:2330': { price: 2350, stale: false } })
     listWatchlist.mockResolvedValue([{ ticker: '2330', name: '台積電', sortOrder: 0 }])
-    render(<AnalysisPage />)
+    render(<AnalysisPage initialTicker="2330" />)
     await screen.findByTestId('detail-ticker')
-
-    await user.click(screen.getByTestId('pick-held-watch'))
 
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2330')
     expect(screen.getByTestId('detail-qty').textContent).not.toBe('—')
-  })
-
-  it('在頁籤裡移除正在看的觀察股後，不再顯示那一檔', async () => {
-    // Two independent copies of the watchlist let a removed stock linger on screen forever.
-    const user = userEvent.setup()
-    setup(TW_AND_US)
-    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
-    render(<AnalysisPage />)
-    await screen.findByTestId('detail-ticker')
-
-    await user.click(screen.getByTestId('pick-watch'))
-    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
-
-    listWatchlist.mockResolvedValue([])
-    await user.click(screen.getByTestId('fire-watch-changed'))
-
-    expect(await screen.findByTestId('detail-ticker')).toBeTruthy()
-    expect(screen.getByTestId('detail-ticker').textContent).not.toBe('2059')
-  })
-
-  it('重讀還沒回來時，不能先把剛點的那一檔弄丟', async () => {
-    // pickedWatch is the bridge for a stock added in the tab but not yet in this page's copy.
-    // Clearing it when the reload is DISPATCHED (rather than when it LANDS) lets an unrelated
-    // second watchlist change strip the bridge while the copy is still stale, remounting the
-    // user away from the stock they just picked.
-    const user = userEvent.setup()
-    setup(TW_AND_US)
-    listWatchlist.mockResolvedValue([])
-    render(<AnalysisPage />)
-    await screen.findByTestId('detail-ticker')
-
-    await user.click(screen.getByTestId('pick-new-watch'))
-    expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
-
-    // an unrelated change fires; its reload never resolves during this test
-    listWatchlist.mockReturnValue(new Promise(() => {}))
-    await user.click(screen.getByTestId('fire-watch-changed'))
-
-    expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
   })
 
   describe('下拉選單觀察股依產業自動分組 (Auto-Grouping in HeaderMenu)', () => {

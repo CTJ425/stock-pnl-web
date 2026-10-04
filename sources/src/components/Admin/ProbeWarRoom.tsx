@@ -7,6 +7,14 @@
 import { useMemo } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { AdminStatus } from '../../services/adminStatus'
+// The retire rule, the windows and the required counts live in the Edge plan and are imported from it
+// (like quoteWindow.ts): a second copy here made the card say 收工 while the server kept probing (Task 193 M19).
+import {
+  DAILY_WINDOWS,
+  REQUIRED_LANDED_COUNTS,
+  summariseLandedTicks,
+  type ProbeSourceId,
+} from '../../../supabase/functions/stock-report/sourceProbePlan'
 
 export interface WarRoomSourceConfig {
   id: string
@@ -18,13 +26,31 @@ export interface WarRoomSourceConfig {
   neverRetires?: boolean
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const hhmmOf = (mins: number) => `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`
+
+/** `15:00–16:30 / 19:30–20:15` from the server's own DAILY_WINDOWS. */
+function dailyWindowLabel(id: keyof typeof DAILY_WINDOWS): string {
+  return [DAILY_WINDOWS[id]]
+    .flat()
+    .map((w) => `${hhmmOf(w.from)}–${hhmmOf(w.to)}`)
+    .join(' / ')
+}
+
+/** A daily source: its window and its retire count both come from the plan. */
+const dailySource = (
+  id: keyof typeof DAILY_WINDOWS,
+  name: string,
+  code: string,
+): WarRoomSourceConfig => ({ id, name, code, window: dailyWindowLabel(id), target: REQUIRED_LANDED_COUNTS[id] })
+
 const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
-  { id: 'bfi82u', name: '全市場三大法人', code: 'BFI82U', window: '15:00–16:30 / 19:30–20:15', target: 3 },
-  { id: 't86', name: '個股三大法人', code: 'T86', window: '16:00–17:00', target: 3 },
-  { id: 'bwibbu', name: '個股估值 (PE/PB/DY)', code: 'BWIBBU', window: '17:00–18:30', target: 3 },
-  { id: 'twt38u', name: '外資買賣超 TOP50', code: 'TWT38U', window: '17:00–18:00', target: 3 },
-  { id: 'margin', name: '融資融券', code: 'MARGIN', window: '20:30–22:30', target: 3 },
-  { id: 'borrow', name: '借券賣出餘額', code: 'BORROW', window: '21:00–23:30', target: 3 },
+  dailySource('bfi82u', '全市場三大法人', 'BFI82U'),
+  dailySource('t86', '個股三大法人', 'T86'),
+  dailySource('bwibbu', '個股估值 (PE/PB/DY)', 'BWIBBU'),
+  dailySource('twt38u', '外資買賣超 TOP50', 'TWT38U'),
+  dailySource('margin', '融資融券', 'MARGIN'),
+  dailySource('borrow', '借券賣出餘額', 'BORROW'),
   { id: 'mops_revenue', name: 'MOPS 月營收彙整', code: 'MOPS_REV', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 6, neverRetires: true },
   { id: 'mops_profit', name: 'MOPS 季報獲利彙整', code: 'MOPS_PROFIT', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 6, neverRetires: true },
 ]
@@ -189,6 +215,22 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
   const normalizedToday = todayYmd.replace(/-/g, '')
 
   const cards = useMemo<ProbeSourceCardData[]>(() => {
+    // The server's own retire evidence: trailing identical fingerprints, counted inside the window that
+    // is active at the snapshot's time (`data.asOf`, Taipei = UTC+8).
+    const asOfMs = Date.parse(data.asOf)
+    const slotMinutes = Number.isFinite(asOfMs) ? Math.floor(asOfMs / 60_000 + 480) % 1440 : null
+    const todayTicks = ticks.filter((t) => {
+      const tickYmd = (t.taipei_ymd || '').replace(/-/g, '')
+      return normalizedToday ? tickYmd === normalizedToday : true
+    })
+    const { counts } = summariseLandedTicks(
+      todayTicks.map((t) => ({
+        source: t.source ?? '',
+        taipei_time: t.taipei_time ?? null,
+        fingerprint: t.fingerprint ?? null,
+      })),
+      slotMinutes,
+    )
     return WAR_ROOM_SOURCES.map((s) => {
       const sourceTicks = ticks.filter((t) => {
         const tickYmd = (t.taipei_ymd || '').replace(/-/g, '')
@@ -208,7 +250,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
       // neverRetires（MOPS）的分子是「今日已跑的槽數」，不是命中次數——命中不收工，
       // 六槽全跑才是唯一在量的事；一般來源仍以命中次數計。
       const progressCount = s.neverRetires ? sourceTicks.length : hitCount
-      const isRetired = s.neverRetires ? false : hitCount >= s.target
+      const isRetired = s.neverRetires ? false : (counts[s.id] ?? 0) >= REQUIRED_LANDED_COUNTS[s.id as ProbeSourceId]
       const slotsDone = s.neverRetires && progressCount >= s.target
       const isProbing = s.neverRetires
         ? progressCount > 0 && !slotsDone
@@ -255,7 +297,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         statusType,
       }
     })
-  }, [ticks, normalizedToday])
+  }, [ticks, normalizedToday, data.asOf])
 
   const retiredCount = cards.filter((c) => c.statusType === 'retired').length
   const probingCount = cards.filter((c) => c.statusType === 'probing').length

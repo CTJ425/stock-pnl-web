@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { marketSession, isMarketOpen, openRegions, anyMarketOpen } from './sessionHours'
+import { marketSession, isMarketOpen, openRegions } from './sessionHours'
 
 /**
  * All instants are absolute UTC so the DST rules of America/New_York are exercised.
@@ -94,7 +94,7 @@ describe('marketSession — 週末以當地星期判斷', () => {
   })
 })
 
-describe('isMarketOpen / openRegions / anyMarketOpen', () => {
+describe('isMarketOpen / openRegions', () => {
   it('isMarketOpen 只有 open 算開盤，午休不算', () => {
     expect(isMarketOpen('JP', new Date('2026-09-15T00:00:00Z'))).toBe(true)
     expect(isMarketOpen('JP', new Date('2026-09-15T02:30:00Z'))).toBe(false)
@@ -111,10 +111,5 @@ describe('isMarketOpen / openRegions / anyMarketOpen', () => {
 
   it('週六全休市', () => {
     expect(openRegions(new Date('2026-09-19T05:00:00Z'))).toEqual([])
-    expect(anyMarketOpen(new Date('2026-09-19T05:00:00Z'))).toBe(false)
-  })
-
-  it('有任一市場開盤時 anyMarketOpen 為 true', () => {
-    expect(anyMarketOpen(new Date('2026-09-15T01:00:00Z'))).toBe(true)
   })
 })

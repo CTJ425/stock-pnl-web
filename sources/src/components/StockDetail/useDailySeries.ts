@@ -79,7 +79,9 @@ export function useDailySeries(
         if (remote && remote.rows.length > 0) {
           s = {
             ticker,
-            asOf: new Date().toISOString(),
+            // The capture time of the remote answer (it may come from the 5-minute cache), not "now":
+            // 技術面 prints this as 「更新於」 (Task 193).
+            asOf: remote.fetchedAt ?? new Date().toISOString(),
             lastDate: remote.rows[remote.rows.length - 1][0],
             rows: remote.rows,
           }

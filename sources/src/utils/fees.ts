@@ -8,6 +8,7 @@ import type { FeeRounding, Market, Transaction, TxNature, TxType } from '../type
 import type { Holding } from './pnlEngine'
 import {
   BORROW_FEE_RATE,
+  COMMON_FEE_RATES,
   compareTxOrder,
   dayTradeTaxRate,
   estimateUnrealizedShort,
@@ -19,22 +20,7 @@ import {
 /** The legal standard handling fee for Taiwan stocks is 0.1425%*/
 export const DEFAULT_FEE_RATE = 0.001425
 
-/** Common Taiwan broker fee rates (discounts on statutory rate 0.001425) */
-export const COMMON_FEE_RATES = [
-  0.001425, // 1.0 (原價)
-  0.00092625, // 6.5 折
-  0.000855, // 6.0 折
-  0.0007125, // 5.0 折
-  0.00057, // 4.0 折
-  0.0005415, // 3.8 折
-  0.0004275, // 3.0 折
-  0.000399, // 2.8 折
-  0.00035625, // 2.5 折
-  0.000285, // 2.0 折
-  0.00021375, // 1.5 折
-  0.0001425, // 1.0 折
-  0, // 0 免手續費
-]
+export { COMMON_FEE_RATES }
 
 /**
  * Infers the historical brokerage fee rate from an existing transaction record when fee_rate was not explicitly stored.

@@ -13,16 +13,6 @@ import type { DiscordAccountsSnapshot } from '../../services/discordAccounts'
 
 const svc = vi.hoisted(() => ({
   getDiscordAccounts: vi.fn(),
-  saveDiscordSchedule: vi.fn(),
-  saveMarketWebhook: vi.fn(),
-  clearMarketWebhook: vi.fn(),
-  testMarketWebhook: vi.fn(),
-  toggleMarketEnabled: vi.fn(),
-  saveHoldingsWebhook: vi.fn(),
-  clearHoldingsWebhook: vi.fn(),
-  setHoldingsEnabled: vi.fn(),
-  testHoldingsWebhook: vi.fn(),
-  previewHoldingsReport: vi.fn(),
 }))
 vi.mock('../../services/discordAccounts', () => svc)
 

@@ -1,7 +1,7 @@
 /**
  * 當日大盤 (0.9.19; layout reworked 0.9.20): intraday TAIEX panel above the existing 台股 charts.
- * The panel itself is the current session, fetched straight from Yahoo chart v8 via
- * fetchIntraday. `closeStats` folds in the three cards that used to sit in a KPI grid below the
+ * The panel itself is the current session, fetched through the `stock-price` Edge function (Yahoo
+ * chart v8 upstream) via fetchIntraday. `closeStats` folds in the three cards that used to sit in a KPI grid below the
  * panel — they describe the latest *complete* trading day (market/daily.json, ~90min after
  * close), not the current session, so they get their own caption and their own date.
  *

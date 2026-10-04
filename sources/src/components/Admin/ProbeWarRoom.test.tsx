@@ -43,9 +43,9 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
       order: [],
       ticks: [
         // BFI82U: 3 hits -> retired
-        { taipei_ymd: '20260814', taipei_time: '15:05', source: 'bfi82u', hit: true, ok: true },
-        { taipei_ymd: '20260814', taipei_time: '15:10', source: 'bfi82u', hit: true, ok: true },
-        { taipei_ymd: '20260814', taipei_time: '15:15', source: 'bfi82u', hit: true, ok: true, note: '3次到位退休' },
+        { taipei_ymd: '20260814', taipei_time: '15:05', source: 'bfi82u', hit: true, ok: true, fingerprint: 'fp-a' },
+        { taipei_ymd: '20260814', taipei_time: '15:10', source: 'bfi82u', hit: true, ok: true, fingerprint: 'fp-a' },
+        { taipei_ymd: '20260814', taipei_time: '15:15', source: 'bfi82u', hit: true, ok: true, fingerprint: 'fp-a', note: '3次到位退休' },
         // T86: 1 hit, 1 miss -> probing (1/3)
         { taipei_ymd: '20260814', taipei_time: '15:30', source: 't86', hit: false, ok: true },
         { taipei_ymd: '20260814', taipei_time: '15:35', source: 't86', hit: true, ok: true },
@@ -105,6 +105,70 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     expect(marginCard.textContent).toContain('⏳ 待機中')
     expect(marginCard.textContent).toContain('0/ 3 次命中')
     expect(marginCard.textContent).toContain('尚未進入時窗 (今日未命中)')
+  })
+
+  // Task 193 M19: the server retires a source after 3 TRAILING hits with the SAME fingerprint, counted
+  // only inside the window that is active now (`summariseLandedTicks`, `REQUIRED_LANDED_COUNTS`). The
+  // card used to retire at "3 hits today", so it said 收工 while the server was still probing.
+  describe('收工判準與伺服器一致', () => {
+    const withTicks = (ticks: NonNullable<AdminStatus['probeExperiment']>['ticks'], asOf: string): AdminStatus => ({
+      ...baseStatus,
+      asOf,
+      probeExperiment: { mode: 'probe-only', labels: {}, order: [], ticks },
+    })
+    const tick = (time: string, fp: string | null) => ({
+      taipei_ymd: '20260814',
+      taipei_time: time,
+      source: 'bfi82u',
+      hit: true,
+      ok: true,
+      fingerprint: fp,
+    })
+    // 2026-08-14T12:00Z = 20:00 Taipei, inside bfi82u's second window (19:30–20:15).
+    const EVENING = '2026-08-14T12:00:00.000Z'
+
+    it('three hits with a changing fingerprint are not retired: the upstream is still moving', () => {
+      render(
+        <ProbeWarRoom
+          data={withTicks([tick('19:35', 'a'), tick('19:40', 'b'), tick('19:45', 'c')], EVENING)}
+          loading={false}
+          onRefresh={vi.fn()}
+        />,
+      )
+      const card = screen.getByTestId('pwr-card-bfi82u')
+      expect(card.textContent).not.toContain('已退休')
+      expect(card.textContent).toContain('🟢 探測中')
+    })
+
+    it('hits spread over the two windows do not add up to a retirement', () => {
+      // Two in the 15:00–16:30 window, one in the evening window, all the same content. Only the active
+      // (evening) window counts, so this is one landing, not three.
+      render(
+        <ProbeWarRoom
+          data={withTicks([tick('15:05', 'a'), tick('15:10', 'a'), tick('19:35', 'a')], EVENING)}
+          loading={false}
+          onRefresh={vi.fn()}
+        />,
+      )
+      expect(screen.getByTestId('pwr-card-bfi82u').textContent).not.toContain('已退休')
+    })
+
+    it('three identical landings inside the active window retire it', () => {
+      render(
+        <ProbeWarRoom
+          data={withTicks([tick('19:35', 'a'), tick('19:40', 'a'), tick('19:45', 'a')], EVENING)}
+          loading={false}
+          onRefresh={vi.fn()}
+        />,
+      )
+      expect(screen.getByTestId('pwr-card-bfi82u').textContent).toContain('✅ 已退休')
+    })
+
+    it('takes the windows and the retire count from the server plan, not a second copy', () => {
+      render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
+      expect(screen.getByTestId('pwr-card-bfi82u').textContent).toContain('15:00–16:30 / 19:30–20:15')
+      expect(screen.getByTestId('pwr-card-borrow').textContent).toContain('21:00–23:30')
+    })
   })
 
   it('空卡片依融資融券時窗（20:30–22:30）區分三種狀態', () => {
@@ -176,6 +240,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
             taipei_ymd: '20260814',
             taipei_time: '15:35',
             source: 't86',
+            fingerprint: 'fp-t86',
             hit: true,
             ok: true,
             note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
@@ -204,6 +269,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
             taipei_ymd: '20260814',
             taipei_time: '15:35',
             source: 't86',
+            fingerprint: 'fp-t86',
             hit: true,
             ok: true,
             note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
@@ -212,6 +278,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
             taipei_ymd: '20260814',
             taipei_time: '15:40',
             source: 't86',
+            fingerprint: 'fp-t86',
             hit: true,
             ok: true,
             note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
@@ -241,6 +308,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
             taipei_ymd: '20260814',
             taipei_time: '15:35',
             source: 't86',
+            fingerprint: 'fp-t86',
             hit: true,
             ok: true,
             note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
@@ -249,6 +317,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
             taipei_ymd: '20260814',
             taipei_time: '15:40',
             source: 't86',
+            fingerprint: 'fp-t86',
             hit: true,
             ok: true,
             note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
@@ -257,6 +326,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
             taipei_ymd: '20260814',
             taipei_time: '15:45',
             source: 't86',
+            fingerprint: 'fp-t86',
             hit: true,
             ok: true,
             note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',

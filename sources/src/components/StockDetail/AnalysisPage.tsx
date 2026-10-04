@@ -2,8 +2,7 @@
  * Individual stock analysis page: which held or watched Taiwan stock to inspect.
  *
  * The stock picker lists both TW holdings (持股) and watched stocks (觀察), each under its
- * own heading. A watched stock can also be reached as the current selection via the 觀察股票
- * tab inside StockDetailPage, without going through this menu.
+ * own heading. The dashboard's watch list opens a watched stock here through `initialTicker`.
  * TWSE after-hours chips cover listed TW only, so the picker stays TW-only.
  * Holding figures share `buildHoldingRows` with the inventory overview.
  */
@@ -36,28 +35,14 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   // Same basis as 庫存總覽: derived from the workspace's fee settings (utils/pnlBasis).
   const basis = pnlBasis(feeRate, current?.fee_rebate, current?.sell_fee_basis)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  // Remembers what WatchSection handed over (ticker + name) so a stock added to the watchlist after
-  // mount still resolves — the loaded `watchlist` copy below is not refreshed on every click.
-  const [pickedWatch, setPickedWatch] = useState<{ ticker: string; name: string } | null>(null)
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])
   const [showAddWatch, setShowAddWatch] = useState(false)
 
-  /**
-   * `clearBridge` drops `pickedWatch` only once the fresh list is in hand. Clearing it when the
-   * reload is DISPATCHED lets an unrelated second change strip the bridge while this copy is
-   * still stale, remounting the user away from the stock they just picked.
-   */
-  function reloadWatchlist(clearBridge = false) {
+  function reloadWatchlist() {
     // A watchlist load failure must never blank out the page for a user with holdings.
     listWatchlist()
-      .then((list) => {
-        setWatchlist(list)
-        if (clearBridge) setPickedWatch(null)
-      })
-      .catch(() => {
-        setWatchlist([])
-        if (clearBridge) setPickedWatch(null)
-      })
+      .then(setWatchlist)
+      .catch(() => setWatchlist([]))
   }
 
   useEffect(() => {
@@ -120,17 +105,12 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
 
   // A ticker that is held is a holding, full stop — the watchlist is only how you found it.
   // So a `watch:` key is resolved against holdings FIRST, by ticker, before falling through to
-  // the watchlist / pickedWatch bridge. Fall back order (this expression, then below): holding →
-  // loaded watchlist → pickedWatch bridge → first holding → first watched. Watched entries also
-  // appear in the menu's 觀察 group, and can still be reached as the current selection via the
-  // 觀察股票 tab.
+  // the loaded watchlist. Fall back order (this expression, then below): holding → loaded
+  // watchlist → first holding → first watched. Watched entries appear in the menu's 觀察 group.
   const selectedFromKey = selectedKey
     ? selectedKey.startsWith('watch:')
       ? (holdingEntries.find((e) => e.ticker === selectedKey.slice('watch:'.length)) ??
-        watchByTicker(selectedKey.slice('watch:'.length)) ??
-        (pickedWatch && `watch:${pickedWatch.ticker}` === selectedKey
-          ? { kind: 'watch' as const, key: selectedKey, ticker: pickedWatch.ticker, name: pickedWatch.name }
-          : null))
+        watchByTicker(selectedKey.slice('watch:'.length)))
       : (holdingEntries.find((e) => e.key === selectedKey) ?? null)
     : null
   const initialEntry = initialTicker
@@ -295,13 +275,6 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
         }
         quote={selected.kind === 'holding' ? prices[selected.row.holding.key] ?? null : watchQuote}
         selector={selector}
-        onSelectTicker={(ticker, name) => {
-          setPickedWatch({ ticker, name })
-          setSelectedKey(`watch:${ticker}`)
-        }}
-        onWatchlistChanged={() => {
-          reloadWatchlist(true)
-        }}
       />
     </>
   )

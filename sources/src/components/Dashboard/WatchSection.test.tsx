@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const { listWatchlist, removeWatch, fetchPrices } = vi.hoisted(() => ({
@@ -29,6 +29,7 @@ vi.mock('../StockDetail/AddWatchModal', () => ({
 }))
 
 import { WatchSection } from './WatchSection'
+import { ToastProvider } from '../Common/Toast'
 
 const quote = (price: number, prevClose: number | null) => ({
   price,
@@ -156,9 +157,8 @@ describe('WatchSection (Dashboard)', () => {
 
   it('點擊刪除呼叫 removeWatch 並重新載入', async () => {
     const user = userEvent.setup()
-    const onChanged = vi.fn()
     listWatchlist.mockResolvedValueOnce(TWO).mockResolvedValueOnce([TWO[1]])
-    render(<WatchSection onSelectTicker={() => {}} onChanged={onChanged} />)
+    render(<WatchSection onSelectTicker={() => {}} />)
     await screen.findByText('台積電')
 
     const delBtn = screen.getByRole('button', { name: '移除 2330 台積電' })
@@ -166,7 +166,6 @@ describe('WatchSection (Dashboard)', () => {
 
     expect(removeWatch).toHaveBeenCalledWith('2330')
     expect(listWatchlist).toHaveBeenCalledTimes(2)
-    expect(onChanged).toHaveBeenCalledTimes(1)
   })
 
   it('滿 30 檔時停用加入按鈕並提示說明', async () => {
@@ -477,3 +476,47 @@ describe('WatchSection (Dashboard)', () => {
   })
 })
 
+// Task 193 M15 for the dashboard's watch list.
+describe('WatchSection — 背景分頁與移除失敗', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('does not poll quotes while the tab is hidden, and catches up on return', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    listWatchlist.mockResolvedValue(TWO)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    render(<WatchSection onSelectTicker={() => {}} />)
+    await screen.findByText('台積電')
+    expect(fetchPrices).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+    expect(fetchPrices).toHaveBeenCalledTimes(1)
+
+    visibility.mockReturnValue('visible')
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => expect(fetchPrices).toHaveBeenCalledTimes(2))
+  })
+
+  it('says so when removing fails instead of leaving an unhandled rejection', async () => {
+    const user = userEvent.setup()
+    listWatchlist.mockResolvedValue(TWO)
+    removeWatch.mockRejectedValue(new Error('權限不足'))
+    render(
+      <ToastProvider>
+        <WatchSection onSelectTicker={() => {}} />
+      </ToastProvider>,
+    )
+    await screen.findByText('台積電')
+    await user.click(screen.getByRole('button', { name: '移除 2330 台積電' }))
+
+    expect(await screen.findByText(/移除失敗：權限不足/)).toBeTruthy()
+    // The row is still there: nothing was removed.
+    expect(screen.getByText('台積電')).toBeTruthy()
+  })
+})

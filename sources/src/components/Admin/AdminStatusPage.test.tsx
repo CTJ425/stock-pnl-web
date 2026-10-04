@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 const { fetchAdminStatus } = vi.hoisted(() => ({ fetchAdminStatus: vi.fn() }))
 vi.mock('../../services/adminStatus', () => ({ fetchAdminStatus, isAdmin: vi.fn() }))
@@ -142,6 +142,53 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     expect(await screen.findByText('盤後探針命中戰情室')).toBeTruthy()
+  })
+})
+
+// Task 193 M15: the page is left open all day and polls once a minute.
+describe('AdminStatusPage 輪詢', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('keeps showing the last good data when one poll fails, and says it is stale', async () => {
+    fetchAdminStatus.mockResolvedValueOnce(status).mockResolvedValue(null)
+    render(<AdminStatusPage />)
+    await screen.findByText(/盤後探針命中戰情室/)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    await waitFor(() => expect(fetchAdminStatus).toHaveBeenCalledTimes(2))
+    // One transient failure must not replace the console with 「讀不到資料抓取狀況」.
+    expect(screen.queryByText('讀不到資料抓取狀況')).toBeNull()
+    expect(screen.getByText(/盤後探針命中戰情室/)).toBeTruthy()
+    expect(await screen.findByText(/最近一次更新失敗/)).toBeTruthy()
+  })
+
+  it('does not poll while the tab is hidden, and refreshes when it returns', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    render(<AdminStatusPage />)
+    await screen.findByText(/盤後探針命中戰情室/)
+    expect(fetchAdminStatus).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+    expect(fetchAdminStatus).toHaveBeenCalledTimes(1)
+
+    visibility.mockReturnValue('visible')
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => expect(fetchAdminStatus).toHaveBeenCalledTimes(2))
   })
 })
 

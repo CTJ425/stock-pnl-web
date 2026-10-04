@@ -1,7 +1,7 @@
 /**
  * Fundamentals page: three valuation indicators (price-to-earnings ratio/yield rate/price-to-book value ratio) and monthly revenue in the past 12 months.
  * The data comes from fundamental/{ticker}.json, which is pre-produced in batches after the market opens. This component is only responsible for rendering and does not load it by itself.
- * ——The same data is also fed to the industry badge and AI analysis of the title column, so it is loaded and distributed by StockDetailPage.
+ * ——The same data is also fed to the industry badge of the title column, so it is loaded and distributed by StockDetailPage.
  *
  * Unit trap: The monthly revenue is **thousand yuan**, and the profit rate and increase/decrease rate are **%**. Table headers and column names must be marked.
  * You can't just know it in the program (follow the principle of "stock/ticket" in chip tab).
