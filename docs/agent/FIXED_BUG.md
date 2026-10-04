@@ -6,6 +6,16 @@
 
 ---
 
+### Bug ID: BUG-110 — Weekend 現價 near limit-up: MIS test-session matches cached as quotes
+- **Date**: 2026-10-04 (Sunday), found on PROD by the user; fixed in 0.10.25
+- **Root Cause**: MIS served TWSE test-session matches with today's date (`d=20261004`, `t=09:07`, mostly `z` = limit-up `u`). `quoteWindow.ts` polled every minute in weekend 08:25–13:30 like a session (since 0.6.36 `dfd5a34`) and `pickPrice()` trusts `z`, so `stock-price` cached them site-wide (PROD: 0050 124.05 vs 112.8, 2603 +10%, 2303 +9.9%, …).
+- **Fix (0.10.25-dev.1)**: `quoteWindow.ts` `twIsWeekend` / `twIsWeekendDate`; weekends are never a session, locks end at the next weekday 08:25 (`msUntilResume`, `twMaxTtlMs`); `stock-price/index.ts` skips MIS on Sat/Sun and ignores weekend-dated `price_cache` rows; `priceProxy.ts` `isFresh` and the stale fallback drop weekend-dated quotes. PROD's 13 weekend-dated rows deleted 2026-10-04 09:18.
+- **Not covered**: a test session on a weekday national holiday (needs a holiday calendar). A ticker first fetched on a weekend comes from Yahoo with `industry = null` (BUG-085's known limit, now hit on every weekend cache miss) — watchlist falls back to `stockCategory.ts` until Monday.
+- **Verification**: gates green (`npm test` 2,844 pass / 7 skipped, build, `typecheck:edge`, lint); 8 new/changed tests fail on the old code. `stock-price` deployed from clean tree (`34f9b21` / `7a63001`): DEV v26 and PROD v16, both `ezbr_sha256` `b085cd6e4186…`. Live Sunday calls: DEV and PROD return Friday 10/02 closes for all 14 tickers (e.g. 0050 112.8, 2603 240, 4958 561), matching the `y` field MIS itself reported; PROD `price_cache` weekend-dated rows = 0. Pages serves 0.10.25.
+- **Status**: ✅ FIXED (0.10.25)
+
+---
+
 ### Bug ID: BUG-108 — Fee settings: 「刪除」 a rate period and the base row's 「改」 wrote to the database at once (reported on PROD 2026-10-02)
 - **Date**: reported 2026-10-02 on PROD, fixed in 0.10.20
 - **Where**: `sources/src/components/WorkspaceFeeSettings.tsx` `removeSegment` / `saveBase` (called `setWorkspaceFeeRateHistory` / `setWorkspaceFeeRate` on click)

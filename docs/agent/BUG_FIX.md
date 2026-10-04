@@ -13,13 +13,6 @@
 > session start and returned nothing. `grep` that file before you "discover" one of them again.
 > Fixed bugs are in `FIXED_BUG.md`. Only things that still need doing belong here.
 
-### BUG-110 — Weekend 現價 near limit-up: MIS test-session matches cached as quotes
-- **Date**: 2026-10-04 (Sunday), found on PROD by the user
-- **Root Cause**: MIS served TWSE test-session matches with today's date (`d=20261004`, `t=09:07`, mostly `z` = limit-up `u`). `quoteWindow.ts` polled every minute in weekend 08:25–13:30 like a session (since 0.6.36 `dfd5a34`) and `pickPrice()` trusts `z`, so `stock-price` cached them site-wide (PROD: 0050 124.05 vs 112.8, 2603 +10%, 2303 +9.9%, …).
-- **Fix (0.10.25-dev.1)**: `quoteWindow.ts` `twIsWeekend` / `twIsWeekendDate`; weekends are never a session, locks end at the next weekday 08:25 (`msUntilResume`, `twMaxTtlMs`); `stock-price/index.ts` skips MIS on Sat/Sun and ignores weekend-dated `price_cache` rows; `priceProxy.ts` `isFresh` and the stale fallback drop weekend-dated quotes. PROD's 13 weekend-dated rows deleted 2026-10-04 09:18.
-- **Not covered**: a test session on a weekday national holiday (needs a holiday calendar). A ticker first fetched on a weekend comes from Yahoo with `industry = null` (BUG-085's known limit, now hit on every weekend cache miss) — watchlist falls back to `stockCategory.ts` until Monday.
-- **Status**: OPEN — fixed on `dev`; deploy `stock-price` to DEV and PROD, verify a weekend call returns Friday's close.
-
 ### BUG-084 — Stale per-workspace 最低手續費 in localStorage still drives estimates, with no UI to see or change it
 - **Where**: `sources/src/utils/settings.ts` (`getMinFee`), `sources/src/utils/holdingRows.ts:80-81,119-121`
 - **Root Cause Analysis**:
