@@ -17,13 +17,12 @@
 ## 📋 Active Tasks
 
 ### Task 192: Discord 持股日報 — one message, one section per workspace
-- **Status**: 🔄 OPEN REMAINDER — released as **0.10.27** (`f7d812b`); DEV `stock-report` v43 (`92e139e7ab55…`). PROD Edge not deployed.
+- **Status**: 🔄 OPEN REMAINDER — released as **0.10.27**; `stock-report` DEV v43 / PROD v27, both `92e139e7ab55…`. Only item 5 is live.
 - **Agent**: Claude
 - **Timestamp**: 2026-10-04 12:23:11 Asia/Taipei
 - **Spec**: docs/agent/specs/task-192-holdings-by-workspace.md
-- **Done**: items 1–3 — full text in `TASK_ARCHIVE.md`.
+- **Done**: items 1–4 — full text in `TASK_ARCHIVE.md`.
 - **Items**:
-  4. Deploy `stock-report` to PROD (`--no-verify-jwt`) and confirm ezbr = DEV's `92e139e7ab55…` ⏳ (needs the user: auto-mode denied it)
   5. On 2026-10-05 (first weekday tick) look at a real per-workspace card ⏳
 
 ### Task 191: TW market holiday calendar — weekday-holiday guard + calendar for admin and users

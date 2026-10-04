@@ -6,6 +6,7 @@
   1. ~~User decides D1–D3~~ ✅ all as proposed (2026-10-04)
   2. ~~Loader selects `workspaces.name`; per-ledger aggregation; N-embed budget + 10-embed cap~~ ✅ `a3bfb07`
   3. ~~Tests per spec §7; bump + CHANGELOG; deploy DEV~~ ✅ 0.10.27-dev.1, DEV v43
+  4. ~~Deploy `stock-report` to PROD~~ ✅ v27, ezbr `92e139e7ab55…` = DEV (2026-10-04 12:25:51, user authorized)
 
 ## Archived 2026-10-02 18:12:59 Asia/Taipei — Task 190 completed sub-items
 
