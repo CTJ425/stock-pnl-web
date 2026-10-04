@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { twIsAfterClose, twIsWeekend, twIsWeekendDate, twMaxTtlMs, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow.ts'
+import { TW_HOLIDAYS, twIsAfterClose, twIsClosedDate, twIsClosedDay, twMaxTtlMs, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow.ts'
 
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
@@ -205,15 +205,15 @@ describe('週末不輪詢、鎖到週一 (BUG-110)', () => {
     now.getTime() - fetchedAt.getTime() < twQuoteTtlMs(now, tradeTime, fetchedAt)
 
   it('以台北時間判斷週末', () => {
-    expect(twIsWeekend(taipei('2026-10-02', '23:59:59'))).toBe(false)
-    expect(twIsWeekend(taipei('2026-10-03', '00:00:00'))).toBe(true)
-    expect(twIsWeekend(taipei('2026-10-04', '09:07:00'))).toBe(true)
-    expect(twIsWeekend(taipei('2026-10-05', '00:00:00'))).toBe(false)
-    expect(twIsWeekendDate('20261004')).toBe(true)
-    expect(twIsWeekendDate('20261003')).toBe(true)
-    expect(twIsWeekendDate('20261002')).toBe(false)
-    expect(twIsWeekendDate(null)).toBe(false)
-    expect(twIsWeekendDate('-')).toBe(false)
+    expect(twIsClosedDay(taipei('2026-10-02', '23:59:59'))).toBe(false)
+    expect(twIsClosedDay(taipei('2026-10-03', '00:00:00'))).toBe(true)
+    expect(twIsClosedDay(taipei('2026-10-04', '09:07:00'))).toBe(true)
+    expect(twIsClosedDay(taipei('2026-10-05', '00:00:00'))).toBe(false)
+    expect(twIsClosedDate('20261004')).toBe(true)
+    expect(twIsClosedDate('20261003')).toBe(true)
+    expect(twIsClosedDate('20261002')).toBe(false)
+    expect(twIsClosedDate(null)).toBe(false)
+    expect(twIsClosedDate('-')).toBe(false)
   })
 
   it('週末的 08:25–13:30 不是盤中，不會每分鐘重抓', () => {
@@ -246,5 +246,51 @@ describe('週末不輪詢、鎖到週一 (BUG-110)', () => {
       expect(fresh(now, '13:30:00', fetchedAt)).toBe(true)
       expect(now.getTime() - fetchedAt.getTime()).toBeLessThanOrEqual(twMaxTtlMs(now))
     }
+  })
+})
+
+/**
+ * 0.10.26: a weekday holiday is as closed as a weekend, so MIS can serve the same test-session matches.
+ * 2026-10-09 (Fri) is the 國慶日 make-up holiday; 10-08 Thu and 10-12 Mon trade. Source: TWSE 「市場開休市日期」.
+ */
+describe('平日休市日比照週末 (TW_HOLIDAYS)', () => {
+  const fresh = (now: Date, tradeTime: string | null, fetchedAt: Date) =>
+    now.getTime() - fetchedAt.getTime() < twQuoteTtlMs(now, tradeTime, fetchedAt)
+
+  it('證交所列的休市日算休市，交易日標記不算', () => {
+    expect(twIsClosedDay(taipei('2026-10-09', '09:00:00'))).toBe(true)
+    expect(twIsClosedDate('20261009')).toBe(true)
+    expect(twIsClosedDate('20260212')).toBe(true) // 市場無交易，僅辦理結算交割作業
+    // The source lists these as trading-day markers; treating one as closed would freeze that day's prices
+    for (const ymd of ['20260102', '20260211', '20260223']) {
+      expect(twIsClosedDate(ymd)).toBe(false)
+      expect(TW_HOLIDAYS.has(ymd)).toBe(false)
+    }
+    expect(twIsClosedDate('20261008')).toBe(false)
+  })
+
+  it('清單沒涵蓋的年份只看週末', () => {
+    expect(twIsClosedDate('20270101')).toBe(false)
+    expect(twIsClosedDate('20270102')).toBe(true) // Saturday
+  })
+
+  it('休市日的 08:25–13:30 不是盤中', () => {
+    expect(twQuoteTtlMs(taipei('2026-10-09', '09:07:00'), '13:30:00')).not.toBe(MIN)
+    expect(twMaxTtlMs(taipei('2026-10-09', '09:07:00'))).not.toBe(MIN)
+    expect(twIsAfterClose(taipei('2026-10-09', '09:07:00'))).toBe(true)
+  })
+
+  it('週四收盤後抓到的收盤價跨過休市日與週末，週一 08:25 才過期', () => {
+    const fetchedAt = taipei('2026-10-08', '13:30:30')
+    expect(fresh(taipei('2026-10-09', '09:07:00'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-11', '20:00:00'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-12', '08:24:59'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-12', '08:25:00'), '13:30:00', fetchedAt)).toBe(false)
+  })
+
+  it('DB 粗篩下界在休市日涵蓋週四收盤後的列', () => {
+    const fetchedAt = taipei('2026-10-08', '13:30:30')
+    const now = taipei('2026-10-09', '09:07:00')
+    expect(now.getTime() - fetchedAt.getTime()).toBeLessThanOrEqual(twMaxTtlMs(now))
   })
 })

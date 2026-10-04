@@ -21,9 +21,10 @@ import { DiscordHelpSection } from './DiscordHelpSection'
 import { DiscordSection } from './DiscordSection'
 import { LogsSection } from './LogsSection'
 import { ManualRunSection } from './ManualRunSection'
+import { MarketCalendarSection } from './MarketCalendarSection'
 
 type Panel = 'accounts' | 'data' | 'discord' | 'backups'
-type DataTab = 'status' | 'run' | 'logs'
+type DataTab = 'status' | 'run' | 'logs' | 'calendar'
 
 const PANELS: Array<{ id: Panel; label: string; icon: typeof Users }> = [
   { id: 'accounts', label: '帳號', icon: Users },
@@ -32,11 +33,12 @@ const PANELS: Array<{ id: Panel; label: string; icon: typeof Users }> = [
   { id: 'backups', label: '備份', icon: Database },
 ]
 
-// 資料更新 holds three large views (~1000 lines together), so it switches them instead of stacking.
+// 資料更新 holds four views (~1000 lines together), so it switches them instead of stacking.
 const DATA_TABS: Array<{ id: DataTab; label: string }> = [
   { id: 'status', label: '抓取狀況' },
   { id: 'run', label: '手動更新' },
   { id: 'logs', label: '執行記錄' },
+  { id: 'calendar', label: '開休市日' },
 ]
 
 export function AdminConsolePage({ onExit }: { onExit: () => void }) {
@@ -88,6 +90,7 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
             {dataTab === 'status' && <AdminStatusPage />}
             {dataTab === 'run' && <ManualRunSection />}
             {dataTab === 'logs' && <LogsSection />}
+            {dataTab === 'calendar' && <MarketCalendarSection />}
           </>
         )}
         {panel === 'discord' && (

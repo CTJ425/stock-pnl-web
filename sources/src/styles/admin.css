@@ -825,3 +825,298 @@
     color: transparent;
   }
 }
+
+/* =========================================================
+   台股開休市日 (MarketCalendarSection, 0.10.26)
+   The statement's calendar page: today's status closed by the double rule, then twelve
+   ruled months. A closed weekday is the one filled cell; today is the one ruling-blue ring.
+   Neither uses market red/green — a holiday is not a price move.
+   ========================================================= */
+.mcal {
+  padding: 18px 20px;
+}
+
+.mcal-today-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-06);
+  margin-top: var(--sp-05);
+  padding-bottom: var(--sp-05);
+  border-bottom: 3px double var(--cds-text-primary);
+}
+
+.mcal-today-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-04);
+  row-gap: var(--sp-02);
+}
+
+.mcal-label {
+  flex: 0 0 100%;
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+}
+
+.mcal-date {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cds-text-primary);
+}
+
+.mcal-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--sp-03);
+  border: 1px solid var(--cds-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}
+
+.mcal-state-closed {
+  background: var(--cds-layer-accent-02);
+}
+
+.mcal-effect {
+  flex: 0 0 100%;
+  margin: var(--sp-02) 0 0;
+  font-size: var(--type-body-01);
+  color: var(--cds-text-secondary);
+}
+
+.mcal-next {
+  display: flex;
+  gap: var(--sp-06);
+  margin: 0;
+  padding-left: var(--sp-06);
+  border-left: 1px solid var(--cds-border-subtle);
+}
+
+.mcal-next dt {
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+}
+
+.mcal-next dd {
+  margin: var(--sp-02) 0 0;
+  font-size: var(--type-body-02);
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-sub {
+  display: block;
+  margin-top: var(--sp-01);
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  color: var(--cds-text-helper);
+}
+
+.mcal-yearbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-02);
+  margin-top: var(--sp-07);
+}
+
+.mcal-year {
+  margin: 0;
+  min-width: 5.5em;
+  text-align: center;
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+}
+
+.mcal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-05);
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-secondary);
+}
+
+.mcal-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-03);
+}
+
+.mcal-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--cds-border-subtle);
+}
+
+.mcal-swatch.mcal-weekend {
+  background: var(--cds-layer-01);
+}
+
+.mcal-notice {
+  margin: var(--sp-04) 0 0;
+}
+
+.mcal-notice code,
+.mcal-foot code {
+  font-size: 0.92em;
+}
+
+.mcal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: var(--sp-06) var(--sp-07);
+  margin-top: var(--sp-05);
+}
+
+.mcal-month {
+  align-self: start;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--type-label-01);
+}
+
+.mcal-month caption {
+  padding-bottom: var(--sp-03);
+  text-align: left;
+  font-size: var(--type-body-01);
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-month th {
+  padding-bottom: var(--sp-02);
+  border-bottom: 1px solid var(--cds-text-primary);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  text-align: center;
+}
+
+.mcal-month td {
+  height: 28px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.mcal-day.mcal-open {
+  color: var(--cds-text-primary);
+}
+
+.mcal-day.mcal-weekend,
+.mcal-month th.mcal-wkend {
+  color: var(--cds-text-helper);
+}
+
+.mcal-holiday {
+  background: var(--cds-layer-accent-02);
+}
+
+.mcal-day.mcal-holiday {
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-today {
+  box-shadow: inset 0 0 0 2px var(--cds-focus);
+}
+
+.mcal-day.mcal-today {
+  font-weight: 700;
+}
+
+.mcal-list {
+  width: 100%;
+  max-width: 560px;
+  margin-top: var(--sp-07);
+  border-collapse: collapse;
+  font-size: var(--type-body-01);
+}
+
+.mcal-list caption {
+  padding-bottom: var(--sp-03);
+  text-align: left;
+  font-weight: 700;
+  color: var(--cds-text-primary);
+}
+
+.mcal-list th {
+  white-space: nowrap;
+  padding: var(--sp-03) var(--sp-04) var(--sp-03) 0;
+  border-bottom: 1px solid var(--cds-text-primary);
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--cds-text-helper);
+  text-align: left;
+}
+
+.mcal-list td {
+  padding: var(--sp-03) var(--sp-04) var(--sp-03) 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.mcal-list td:first-child,
+.mcal-list .mcal-list-rel {
+  white-space: nowrap;
+}
+
+.mcal-list .mcal-list-rel {
+  padding-right: 0;
+  text-align: right;
+}
+
+.mcal-list tr.mcal-past td {
+  color: var(--cds-text-helper);
+}
+
+.mcal-foot {
+  max-width: 72ch;
+  margin-top: var(--sp-05);
+}
+
+.mcal-foot a {
+  color: var(--cds-link-primary);
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .mcal {
+    padding: 16px;
+  }
+
+  .mcal-today-block {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-05);
+  }
+
+  .mcal-next {
+    padding: var(--sp-04) 0 0;
+    border-left: none;
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  .mcal-next > div {
+    flex: 1 1 0;
+  }
+
+  .mcal-legend {
+    flex: 0 0 100%;
+    margin: var(--sp-03) 0 0;
+  }
+
+  .mcal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-05) var(--sp-05);
+  }
+}

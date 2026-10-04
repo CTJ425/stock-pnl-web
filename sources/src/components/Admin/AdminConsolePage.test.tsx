@@ -23,7 +23,7 @@ describe('AdminConsolePage', () => {
     const items = [...nav.querySelectorAll('button')].map((b) => b.textContent)
     expect(items).toEqual(['帳號', '資料更新', 'Discord', '備份'])
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    expect(tabs).toEqual(['抓取狀況', '手動更新', '執行記錄'])
+    expect(tabs).toEqual(['抓取狀況', '手動更新', '執行記錄', '開休市日'])
     expect(screen.getByRole('tab', { name: '抓取狀況' }).getAttribute('aria-selected')).toBe('true')
     expect(await screen.findByText(/讀不到資料抓取狀況/)).toBeTruthy()
   })

@@ -11,8 +11,12 @@
  *
  * Weekends are the exception (BUG-110): they need no calendar, and treating them as sessions was not harmless.
  * On Sunday 2026-10-04 MIS served TWSE test-session matches as today's trades (d=20261004, t=09:07, most at
- * the limit-up price), and PROD cached them site-wide. A lock now runs to the next **weekday** 08:25, nothing
- * polls on Saturday or Sunday, and the Edge skips MIS on those days (see `twIsWeekend`).
+ * the limit-up price), and PROD cached them site-wide. A lock now runs to the next **trading day's** 08:25,
+ * nothing polls on a closed day, and the Edge skips MIS on those days (see `twIsClosedDay`).
+ *
+ * Weekday holidays followed (0.10.26): the same test session can run on any day the market is shut, so the
+ * "no calendar" argument above no longer holds. `TW_HOLIDAYS` is that calendar. A year it does not cover
+ * falls back to the weekend rule alone, which is the 0.10.25 behaviour.
  */
 
 /** Taipei time zone is fixed at +8 (no daylight savings in Taiwan), consistent with the handling of stock-report/macroCalendar.ts*/
@@ -64,50 +68,96 @@ function taipeiMsOfDay(now: Date): number {
   return (now.getTime() + TAIPEI_OFFSET_MS) % DAY_MS
 }
 
-/** Is `at` a Saturday or Sunday in Taipei? TWSE never trades then, though MIS can serve test-session matches (BUG-110). */
-export function twIsWeekend(at: Date): boolean {
-  const day = new Date(at.getTime() + TAIPEI_OFFSET_MS).getUTCDay()
-  return day === 0 || day === 6
+/**
+ * TWSE weekday closures, `YYYYMMDD` → name. Source: TWSE 「市場開休市日期」
+ * https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&date=20260101 (fetched 2026-10-04).
+ *
+ * Only days the market does not trade. The source also lists trading days as markers — 「國曆新年開始交易日」
+ * 01-02, 「農曆春節前最後交易日」 02-11, 「農曆春節後開始交易日」 02-23 — and those are left out on purpose: listing
+ * one would freeze that day's prices. 「市場無交易，僅辦理結算交割作業」 (02-12, 02-13) has no trading, so it is in.
+ * Holidays that fall on a weekend are left out too; the weekend rule already covers them.
+ *
+ * Refresh every December from the same URL with next year's `date` (Task 47). An uncovered year only loses the
+ * holiday guard — see `TW_HOLIDAY_YEARS`.
+ */
+export const TW_HOLIDAYS: ReadonlyMap<string, string> = new Map([
+  ['20260101', '中華民國開國紀念日'],
+  ['20260212', '市場無交易，僅辦理結算交割作業'],
+  ['20260213', '市場無交易，僅辦理結算交割作業'],
+  ['20260216', '農曆除夕及春節'],
+  ['20260217', '農曆除夕及春節'],
+  ['20260218', '農曆除夕及春節'],
+  ['20260219', '農曆除夕及春節'],
+  ['20260220', '農曆除夕及春節'],
+  ['20260227', '和平紀念日'],
+  ['20260403', '兒童節及民族掃墓節'],
+  ['20260406', '兒童節及民族掃墓節'],
+  ['20260501', '勞動節'],
+  ['20260619', '端午節'],
+  ['20260925', '中秋節'],
+  ['20260928', '孔子誕辰紀念日/ 教師節'],
+  ['20261009', '國慶日'],
+  ['20261026', '臺灣光復暨金門古寧頭大捷紀念日'],
+  ['20261225', '行憲紀念日'],
+])
+
+/** Years `TW_HOLIDAYS` covers. Outside them only weekends count as closed. */
+export const TW_HOLIDAY_YEARS: ReadonlySet<number> = new Set([2026])
+
+/** `YYYYMMDD` of the Taipei calendar day that contains `at`. */
+function taipeiYmd(at: Date): string {
+  return new Date(at.getTime() + TAIPEI_OFFSET_MS).toISOString().slice(0, 10).replace(/-/g, '')
 }
 
-/** Is a `YYYYMMDD` trade date a Saturday or Sunday? Such a quote can only be a test-session match (BUG-110). */
-export function twIsWeekendDate(tradeDate: string | null | undefined): boolean {
-  if (!tradeDate || !/^\d{8}$/.test(tradeDate)) return false
-  const day = new Date(
-    Date.UTC(Number(tradeDate.slice(0, 4)), Number(tradeDate.slice(4, 6)) - 1, Number(tradeDate.slice(6, 8))),
-  ).getUTCDay()
+/** Is a `YYYYMMDD` date a Saturday or Sunday? */
+function ymdIsWeekend(ymd: string): boolean {
+  const day = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)))).getUTCDay()
   return day === 0 || day === 6
 }
 
 /**
+ * Is a `YYYYMMDD` trade date one the TWSE does not trade —— a weekend or a `TW_HOLIDAYS` day? A quote dated
+ * then can only be a test-session match (BUG-110).
+ */
+export function twIsClosedDate(tradeDate: string | null | undefined): boolean {
+  if (!tradeDate || !/^\d{8}$/.test(tradeDate)) return false
+  return ymdIsWeekend(tradeDate) || TW_HOLIDAYS.has(tradeDate)
+}
+
+/** Is `at` on a Taipei day the TWSE does not trade? MIS can still serve test-session matches then (BUG-110). */
+export function twIsClosedDay(at: Date): boolean {
+  return twIsClosedDate(taipeiYmd(at))
+}
+
+/**
  * Is `at` a Taipei moment where the TW market can produce no new price today —— at or after the
- * 14:00 settle-window end, or before the 08:25 resume time (BUG-050), or on a weekend (BUG-110)?
+ * 14:00 settle-window end, or before the 08:25 resume time (BUG-050), or on a closed day (BUG-110)?
  */
 export function twIsAfterClose(at: Date): boolean {
   const t = taipeiMsOfDay(at)
-  return twIsWeekend(at) || t >= SETTLE_END_MS || t < RESUME_MS
+  return twIsClosedDay(at) || t >= SETTLE_END_MS || t < RESUME_MS
 }
 
-/** Milliseconds from `at` until the next weekday 08:25 Taipei resume (BUG-110: Saturday and Sunday are skipped). */
+/** Milliseconds from `at` until the next trading day's 08:25 Taipei resume (BUG-110: closed days are skipped). */
 function msUntilResume(at: Date): number {
   const t = taipeiMsOfDay(at)
   let ms = t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
-  while (twIsWeekend(new Date(at.getTime() + ms))) ms += DAY_MS
+  while (twIsClosedDay(new Date(at.getTime() + ms))) ms += DAY_MS
   return ms
 }
 
-/** Milliseconds from the latest weekday 08:25 Taipei resume at or before `now` until `now`. */
+/** Milliseconds from the latest trading day's 08:25 Taipei resume at or before `now` until `now`. */
 function msSinceResume(now: Date): number {
   const t = taipeiMsOfDay(now)
   let ms = t >= RESUME_MS ? t - RESUME_MS : DAY_MS - RESUME_MS + t
-  while (twIsWeekend(new Date(now.getTime() - ms))) ms += DAY_MS
+  while (twIsClosedDay(new Date(now.getTime() - ms))) ms += DAY_MS
   return ms
 }
 
-/** Is `at` inside a weekday's 08:25–13:30, where a fetched quote can still be superseded the same day? */
+/** Is `at` inside a trading day's 08:25–13:30, where a fetched quote can still be superseded the same day? */
 function twInSession(at: Date): boolean {
   const t = taipeiMsOfDay(at)
-  return !twIsWeekend(at) && t >= RESUME_MS && t < CLOSE_MS
+  return !twIsClosedDay(at) && t >= RESUME_MS && t < CLOSE_MS
 }
 
 /**
@@ -128,8 +178,8 @@ function lockMs(now: Date, fetchedAt?: Date | null): number {
 /**
  * The cache validity period of Taiwan stock quotes.
  *
- * - Weekday 08:25–13:30 (trial and intraday): 60 seconds, consistent with immediate needs before closing
- * - The rest of the time period, weekends included: **Only lock the quotes that have been confirmed to be the closing value**, and lock them until the next weekday 08:25
+ * - Trading-day 08:25–13:30 (trial and intraday): 60 seconds, consistent with immediate needs before closing
+ * - The rest of the time period, closed days included: **Only lock the quotes that have been confirmed to be the closing value**, and lock them until the next trading day's 08:25
  *
  * @param tradeTime The last matching time of the source return (`t` for MIS, HH:mm:ss).
  *   **It will not be locked until 13:30 or if it cannot be obtained at all** (0.6.37 correction):
@@ -152,17 +202,17 @@ function lockMs(now: Date, fetchedAt?: Date | null): number {
  */
 export function twQuoteTtlMs(now: Date, tradeTime?: string | null, fetchedAt?: Date | null): number {
   const t = taipeiMsOfDay(now)
-  const weekday = !twIsWeekend(now)
-  if (weekday && t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
+  const tradingDay = !twIsClosedDay(now)
+  if (tradingDay && t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
   const settled =
     tradeTime != null && tradeTime >= CLOSE_TIME_TEXT && (fetchedAt == null || !twInSession(fetchedAt))
   if (!settled) {
     // 13:30–14:00 的沉澱窗：收盤撮合馬上就會落地，這時退避十分鐘等於把盤中價停在畫面上
-    if (weekday && t >= CLOSE_MS && t < SETTLE_END_MS) return POLL_MS
+    if (tradingDay && t >= CLOSE_MS && t < SETTLE_END_MS) return POLL_MS
     if (fetchedAt != null && twIsAfterClose(fetchedAt)) return lockMs(now, fetchedAt)
     return UNSETTLED_RETRY_MS
   }
-  // Locked until the first weekday 08:25 after the fetch; a row fetched in the early morning (before 08:25) unlocks at 08:25 that day
+  // Locked until the first trading-day 08:25 after the fetch; a row fetched in the early morning (before 08:25) unlocks at 08:25 that day
   return lockMs(now, fetchedAt)
 }
 
@@ -170,8 +220,8 @@ export function twQuoteTtlMs(now: Date, tradeTime?: string | null, fetchedAt?: D
  * The coarse-filter lower bound for the DB query: the oldest a Taiwan row can be and still be fresh now.
  *
  * The coarse filter does not know each row's `trade_time`, so it takes the most generous case. Since a
- * lock ends at the first weekday 08:25 after the fetch (see `lockMs`), no row fetched before the latest
- * weekday 08:25 can still be fresh outside the session, and nothing older than one poll interval can be
+ * lock ends at the first trading-day 08:25 after the fetch (see `lockMs`), no row fetched before the latest
+ * trading-day 08:25 can still be fresh outside the session, and nothing older than one poll interval can be
  * fresh inside it. The actual judgment on a row-by-row basis is still the responsibility of `twQuoteTtlMs`.
  */
 export function twMaxTtlMs(now: Date): number {

@@ -13,7 +13,7 @@ import type { Market } from '../types/models'
 import { positionKey } from '../types/models'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { getTwStockList } from './twMarketData'
-import { twIsAfterClose, twIsWeekendDate, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow'
+import { twIsAfterClose, twIsClosedDate, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow'
 import { logClient } from './appLog'
 
 export interface PriceQuote {
@@ -104,8 +104,8 @@ export function cacheTtlMs(key: string, quote?: PriceQuote): number {
 
 export function isFresh(key: string, quote: PriceQuote | undefined, now: number): quote is PriceQuote {
   if (!quote || quote.stale) return false
-  // BUG-110: a weekend trade date is a TWSE test-session match; refetch it instead of trusting the lock
-  if (twIsWeekendDate(quote.tradeDate)) return false
+  // BUG-110: a trade date on a closed day (weekend or holiday) is a TWSE test-session match; refetch it instead of trusting the lock
+  if (twIsClosedDate(quote.tradeDate)) return false
   const at = Date.parse(quote.asOf)
   return Number.isFinite(at) && now - at < cacheTtlMs(key, quote)
 }
@@ -285,7 +285,7 @@ export async function fetchPrices(
   // Cache downgrade: If there is still no current price, the last successfully obtained price will be used (marked stale)
   for (const item of items) {
     const key = positionKey(item.market, item.ticker)
-    if (!result[key] && cache[key] && !twIsWeekendDate(cache[key].tradeDate)) {
+    if (!result[key] && cache[key] && !twIsClosedDate(cache[key].tradeDate)) {
       result[key] = { ...cache[key], source: 'cache', stale: true }
     }
   }
