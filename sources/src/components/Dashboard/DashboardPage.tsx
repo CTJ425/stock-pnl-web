@@ -27,9 +27,10 @@ import { HoldingsLedger } from './HoldingsLedger'
 import { WatchSection } from './WatchSection'
 import { closedNote, taipeiToday } from '../MarketCalendar/marketCalendar'
 import { asOfLabel, combine, marketSums, type Combined, type MarketSums } from './dashboardSums'
+import { loadChunk } from '../../utils/chunkReload'
 
 const RecalcFeesModal = lazy(() =>
-  import('../Transactions/RecalcFeesModal').then((m) => ({ default: m.RecalcFeesModal })),
+  loadChunk(() => import('../Transactions/RecalcFeesModal')).then((m) => ({ default: m.RecalcFeesModal })),
 )
 
 function Figure({ c, signed, testId }: { c: Combined; signed?: boolean; testId: string }) {

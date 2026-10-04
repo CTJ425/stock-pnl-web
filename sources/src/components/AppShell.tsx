@@ -29,6 +29,7 @@ import { UserMenu } from './UserMenu'
 import { formatViewHash, parseViewHash, type ViewRoute } from './viewRoute'
 import { WorkspaceControls } from './WorkspaceControls'
 import { useTwOfficialNames } from '../hooks/useTwOfficialNames'
+import { loadChunk } from '../utils/chunkReload'
 
 /**
  * Route-level split points. Only the dashboard (the first paint) and the shell ship in the entry
@@ -37,18 +38,18 @@ import { useTwOfficialNames } from '../hooks/useTwOfficialNames'
  * not a loading placeholder (~6 KB gzip).
  * `.then` maps the named export onto `default`, which is what `lazy` expects.
  */
-const AnalysisPage = lazy(() => import('./StockDetail/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
-const YearlyPage = lazy(() => import('./YearlyReport/YearlyPage').then((m) => ({ default: m.YearlyPage })))
+const AnalysisPage = lazy(() => loadChunk(() => import('./StockDetail/AnalysisPage')).then((m) => ({ default: m.AnalysisPage })))
+const YearlyPage = lazy(() => loadChunk(() => import('./YearlyReport/YearlyPage')).then((m) => ({ default: m.YearlyPage })))
 const TransactionsPage = lazy(() =>
-  import('./Transactions/TransactionsPage').then((m) => ({ default: m.TransactionsPage })),
+  loadChunk(() => import('./Transactions/TransactionsPage')).then((m) => ({ default: m.TransactionsPage })),
 )
-const MacroPage = lazy(() => import('./Macro/MacroPage').then((m) => ({ default: m.MacroPage })))
-const FxPage = lazy(() => import('./Fx/FxPage').then((m) => ({ default: m.FxPage })))
+const MacroPage = lazy(() => loadChunk(() => import('./Macro/MacroPage')).then((m) => ({ default: m.MacroPage })))
+const FxPage = lazy(() => loadChunk(() => import('./Fx/FxPage')).then((m) => ({ default: m.FxPage })))
 const AdminConsolePage = lazy(() =>
-  import('./Admin/AdminConsolePage').then((m) => ({ default: m.AdminConsolePage })),
+  loadChunk(() => import('./Admin/AdminConsolePage')).then((m) => ({ default: m.AdminConsolePage })),
 )
 const DiscordMySettings = lazy(() =>
-  import('./Settings/DiscordMySettings').then((m) => ({ default: m.DiscordMySettings })),
+  loadChunk(() => import('./Settings/DiscordMySettings')).then((m) => ({ default: m.DiscordMySettings })),
 )
 
 /** Same markup as the workspace-loading placeholder, so a split page does not flash a different shape. */

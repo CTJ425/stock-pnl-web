@@ -15,9 +15,10 @@ import { HeaderMenu } from './Common/HeaderMenu'
 import { useToast } from './Common/Toast'
 import { useConfirm } from './Common/useConfirm'
 import { WorkspaceFeeSettings } from './WorkspaceFeeSettings'
+import { loadChunk } from '../utils/chunkReload'
 
 const RecalcFeesModal = lazy(() =>
-  import('./Transactions/RecalcFeesModal').then((m) => ({ default: m.RecalcFeesModal })),
+  loadChunk(() => import('./Transactions/RecalcFeesModal')).then((m) => ({ default: m.RecalcFeesModal })),
 )
 
 export function WorkspaceControls() {
