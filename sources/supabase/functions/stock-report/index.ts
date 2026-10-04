@@ -3587,6 +3587,7 @@ const ADMIN_RUN_JOBS = [
   'generate-market-data',
   'generate-history',
   'sync-market',
+  'sync-sector-flow',
   'sync-macro',
   'sync-fx',
   'probe',
@@ -3600,6 +3601,8 @@ const ADMIN_RUN_JOBNAME: Record<AdminRunJob, string> = {
   'generate-market-data': 'stock-report-nightly',
   'generate-history': 'stock-report-nightly',
   'sync-market': 'market-daily',
+  // No cron job of its own: it rides on generate-chips, so a manual run rolls into the same row.
+  'sync-sector-flow': 'stock-report-nightly',
   'sync-macro': 'macro-daily',
   'sync-fx': 'fx-daily',
   probe: 'source-probe',
@@ -3715,6 +3718,9 @@ async function handleAdminRun(
           break
         case 'sync-market':
           resp = await handleSyncMarket()
+          break
+        case 'sync-sector-flow':
+          resp = await handleSyncSectorFlow({})
           break
         case 'sync-macro':
           resp = await handleSyncMacro()

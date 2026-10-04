@@ -20,6 +20,7 @@ export const ADMIN_RUN_JOBS = [
   'generate-market-data',
   'generate-history',
   'sync-market',
+  'sync-sector-flow',
   'sync-macro',
   'sync-fx',
   'probe',
@@ -82,6 +83,11 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
     title: '台股全市場',
     cron: 'market-daily',
     hint: '15:30／15:45 兩班：FMTQIK + BFI82U → market/daily.json；齊了就短路',
+  },
+  'sync-sector-flow': {
+    title: '類股資金流向',
+    cron: '（隨籌碼階段；無獨立排程）',
+    hint: 'T86 + 櫃買三大法人 + 產業別 → market/sector_flow.json；今天沒資料時往前找最近一個已公布的交易日，內容沒變就不重寫',
   },
   'sync-macro': {
     title: '美總經',

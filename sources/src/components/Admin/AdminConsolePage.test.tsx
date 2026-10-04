@@ -28,7 +28,7 @@ describe('AdminConsolePage', () => {
     expect(await screen.findByText(/讀不到資料抓取狀況/)).toBeTruthy()
   })
 
-  it('手動更新分頁列出五個可觸發的排程 job', async () => {
+  it('手動更新分頁列出可觸發的排程 job', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
     fireEvent.click(screen.getByRole('tab', { name: '手動更新' }))
     expect(await screen.findByRole('heading', { name: '手動更新' })).toBeTruthy()
@@ -39,6 +39,7 @@ describe('AdminConsolePage', () => {
       'generate-market-data',
       'generate-history',
       'sync-market',
+      'sync-sector-flow',
       'sync-macro',
       'sync-fx',
       'probe',
