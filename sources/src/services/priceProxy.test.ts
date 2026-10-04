@@ -75,6 +75,15 @@ describe('isFresh', () => {
     expect(isFresh('US:AAPL', quote('2026-07-20T04:49:59Z'), now)).toBe(false)
   })
 
+  it('交易日是週末的報價是測試盤撮合，一律視為過期（BUG-110）', () => {
+    // Sunday 2026-10-04 09:07 Taipei: MIS served test-session matches with d=20261004
+    vi.setSystemTime(new Date('2026-10-04T02:00:00Z'))
+    const test = { ...quote('2026-10-04T01:07:46Z', false, '09:07:33'), tradeDate: '20261004' }
+    expect(isFresh('TPE:0050', test, Date.parse('2026-10-04T02:00:00Z'))).toBe(false)
+    // The same row without the weekend date is a Yahoo-style weekend fetch, locked until Monday
+    expect(isFresh('TPE:0050', { ...test, tradeTime: null, tradeDate: null }, Date.parse('2026-10-04T02:00:00Z'))).toBe(true)
+  })
+
   it('stale 快取價與無效 asOf 一律視為過期', () => {
     expect(isFresh('TPE:2330', quote('2026-07-20T04:59:59Z', true), now)).toBe(false)
     expect(isFresh('TPE:2330', quote('not-a-date'), now)).toBe(false)

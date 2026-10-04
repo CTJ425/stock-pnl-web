@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { twMaxTtlMs, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow.ts'
+import { twIsAfterClose, twIsWeekend, twIsWeekendDate, twMaxTtlMs, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow.ts'
 
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
@@ -31,9 +31,9 @@ describe('twQuoteTtlMs', () => {
     expect(twQuoteTtlMs(taipei('2026-08-06', '08:00:00'), '13:30:00')).toBe(25 * MIN)
   })
 
-  it('週末不需要交易日曆：13:30 後照樣落入長 TTL', () => {
-    // 2026-08-08 is Saturday
-    expect(twQuoteTtlMs(taipei('2026-08-08', '20:00:00'), '13:30:00')).toBe(12 * HOUR + 25 * MIN)
+  it('週末鎖到週一 08:25，不在週六、週日的 08:25 解鎖（BUG-110）', () => {
+    // 2026-08-08 is Saturday; Monday 08-10 08:25 is 36h25m away
+    expect(twQuoteTtlMs(taipei('2026-08-08', '20:00:00'), '13:30:00')).toBe(36 * HOUR + 25 * MIN)
   })
 
   /*
@@ -192,5 +192,59 @@ describe('twQuoteTtlMs — 鎖定期從抓價時間起算 (BUG-086)', () => {
     const fetchedAt = taipei('2026-09-29', '13:30:30')
     expect(fresh(now, '13:30:00', fetchedAt)).toBe(true)
     expect(now.getTime() - fetchedAt.getTime()).toBeLessThanOrEqual(twMaxTtlMs(now))
+  })
+})
+
+/**
+ * BUG-110: on Sunday 2026-10-04 MIS served TWSE test-session matches (d=20261004, t=09:07, mostly at the
+ * limit-up price). The weekend 08:25–13:30 used to poll every minute like a session, so PROD cached them.
+ * 2026-10-02 is a Friday, 10-03 Saturday, 10-04 Sunday, 10-05 Monday.
+ */
+describe('週末不輪詢、鎖到週一 (BUG-110)', () => {
+  const fresh = (now: Date, tradeTime: string | null, fetchedAt: Date) =>
+    now.getTime() - fetchedAt.getTime() < twQuoteTtlMs(now, tradeTime, fetchedAt)
+
+  it('以台北時間判斷週末', () => {
+    expect(twIsWeekend(taipei('2026-10-02', '23:59:59'))).toBe(false)
+    expect(twIsWeekend(taipei('2026-10-03', '00:00:00'))).toBe(true)
+    expect(twIsWeekend(taipei('2026-10-04', '09:07:00'))).toBe(true)
+    expect(twIsWeekend(taipei('2026-10-05', '00:00:00'))).toBe(false)
+    expect(twIsWeekendDate('20261004')).toBe(true)
+    expect(twIsWeekendDate('20261003')).toBe(true)
+    expect(twIsWeekendDate('20261002')).toBe(false)
+    expect(twIsWeekendDate(null)).toBe(false)
+    expect(twIsWeekendDate('-')).toBe(false)
+  })
+
+  it('週末的 08:25–13:30 不是盤中，不會每分鐘重抓', () => {
+    expect(twQuoteTtlMs(taipei('2026-10-04', '09:07:00'), '13:30:00')).not.toBe(MIN)
+    expect(twMaxTtlMs(taipei('2026-10-04', '09:07:00'))).not.toBe(MIN)
+    expect(twIsAfterClose(taipei('2026-10-04', '09:07:00'))).toBe(true)
+  })
+
+  it('週五收盤後抓到的收盤價整個週末有效，週一 08:25 才過期', () => {
+    const fetchedAt = taipei('2026-10-02', '13:30:30')
+    expect(fresh(taipei('2026-10-03', '09:00:00'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-04', '09:07:00'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-05', '08:24:59'), '13:30:00', fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-05', '08:25:00'), '13:30:00', fetchedAt)).toBe(false)
+  })
+
+  it('週末從 Yahoo 補抓的報價（沒有撮合時間）同樣鎖到週一', () => {
+    const fetchedAt = taipei('2026-10-04', '09:20:00')
+    expect(fresh(taipei('2026-10-04', '20:00:00'), null, fetchedAt)).toBe(true)
+    expect(fresh(taipei('2026-10-05', '08:25:00'), null, fetchedAt)).toBe(false)
+  })
+
+  it('週五盤中的快照到了週末仍會重試，不被鎖住', () => {
+    expect(twQuoteTtlMs(taipei('2026-10-03', '10:00:00'), '11:05:23', taipei('2026-10-02', '11:05:30'))).toBe(RETRY)
+  })
+
+  it('DB 粗篩下界在週末與週一清晨涵蓋週五收盤後的列', () => {
+    const fetchedAt = taipei('2026-10-02', '13:30:30')
+    for (const now of [taipei('2026-10-04', '09:07:00'), taipei('2026-10-05', '07:00:00')]) {
+      expect(fresh(now, '13:30:00', fetchedAt)).toBe(true)
+      expect(now.getTime() - fetchedAt.getTime()).toBeLessThanOrEqual(twMaxTtlMs(now))
+    }
   })
 })

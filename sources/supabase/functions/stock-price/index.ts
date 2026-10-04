@@ -61,7 +61,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { logEvent } from '../_shared/log.ts'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
 import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
-import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
+import { twIsWeekend, twIsWeekendDate, twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyRange.ts'
 import { extractDaily } from '../stock-report/twDaily.ts'
 import { buildTwList } from './twList.ts'
@@ -302,6 +302,8 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
       const price = Number(row.price)
       const at = Date.parse(String(row.updated_at))
       const tradeTime = cachedText(row.trade_time)
+      // BUG-110: a weekend trade date is a TWSE test-session match, never a real quote
+      if (twIsWeekendDate(cachedText(row.trade_date))) continue
       const ttl = cacheTtlMsFor(key, now, tradeTime, Number.isFinite(at) ? new Date(at) : null)
       if (!Number.isFinite(price) || price <= 0) continue
       if (!Number.isFinite(at) || nowMs - at >= ttl) continue
@@ -325,10 +327,12 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
 
   // 2) Those with missing information on Taiwan stocks should go to MIS real-time quotes first (asOf = the time confirmed by the source, not the last transaction time,
   //    To avoid treating the cache as expired and making repeated requests after the market opens)
+  //    BUG-110: not on Saturday or Sunday. TWSE never trades then, but MIS can serve test-session matches
+  //    as today's trades (2026-10-04, mostly at the limit-up price); Yahoo still has Friday's close.
   const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
-  const fromMis = await fetchMisPrices(
-    missing.filter((i) => i.market === 'TPE').map((i) => i.ticker),
-  )
+  const fromMis = twIsWeekend(now)
+    ? new Map<string, Quote>()
+    : await fetchMisPrices(missing.filter((i) => i.market === 'TPE').map((i) => i.ticker))
   for (const [ticker, quote] of fromMis) {
     prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
   }
