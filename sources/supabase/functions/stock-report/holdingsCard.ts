@@ -16,6 +16,8 @@ export const DEFAULT_MIN_FEE_ODD = 1
 
 export interface WorkspaceInput {
   id: string
+  /** Task 192: the card's section title. Absent / blank prints as 未命名工作區. */
+  name?: string | null
   /** The rate before the first `fee_rate_history` segment; see `Workspace.fee_rate`. */
   fee_rate: number | null
   /** Ascending by `from`; see `FeeRateSegment` and `rateOn` below (Task 182). */
@@ -36,6 +38,8 @@ export type PnlBasis = 'net' | 'list'
 
 export interface WorkspaceLedger {
   id: string
+  /** Task 192: from `WorkspaceInput.name`; hand-built test ledgers may leave it out. */
+  name?: string
   feeRate: number
   rounding: FeeRounding
   basis: PnlBasis
@@ -96,6 +100,7 @@ export function buildLedgers(workspaces: WorkspaceInput[], today = ''): Workspac
     const feeRate = rateOn(w.fee_rate_history, w.fee_rate, today, DEFAULT_FEE_RATE)
     return {
       id: w.id,
+      name: w.name ?? '',
       feeRate,
       rounding: w.fee_rounding === 'position' ? 'position' : 'lot',
       basis: pnlBasis(feeRate, w.fee_rebate, w.sell_fee_basis),
@@ -182,6 +187,20 @@ export interface HoldingsSummary {
   ymd: string
   twd: CurrencySummary
   usd: CurrencySummary
+}
+
+/** Task 192: one workspace's own summary, printed as its own section of the card. */
+export interface WorkspaceSection {
+  name: string
+  summary: HoldingsSummary
+}
+
+/** Task 192: what the card prints — every workspace on its own, plus the merged total that the
+ * headline line carries when there is more than one section. */
+export interface HoldingsCard {
+  ymd: string
+  total: HoldingsSummary
+  sections: WorkspaceSection[]
 }
 
 // ── aggregation ──────────────────────────────────────────────────────────────────────
@@ -513,6 +532,24 @@ export function aggregateHoldings(
   }
 }
 
+/**
+ * Task 192: `aggregateHoldings` once per workspace for the sections, and once over all of them for
+ * the headline total. The engine is unchanged — a one-ledger call is exactly that workspace's card.
+ */
+export function aggregateCard(
+  ledgers: WorkspaceLedger[],
+  quotes: Map<string, HoldingQuote | null>,
+  ymd: string,
+  today?: string,
+  names?: TwNames,
+): HoldingsCard {
+  return {
+    ymd,
+    total: aggregateHoldings(ledgers, quotes, ymd, today, names),
+    sections: ledgers.map((l) => ({ name: l.name ?? '', summary: aggregateHoldings([l], quotes, ymd, today, names) })),
+  }
+}
+
 // ── payload ──────────────────────────────────────────────────────────────────────────
 
 const RED = 0xe5484d
@@ -523,11 +560,20 @@ const WEEKDAY_CHARS = '日一二三四五六'
 // Task 166 (ED-06): Discord's hard cap on one payload's title + description + field name/values,
 // summed across every embed — `discordSummary.ts` names the same number for the same reason.
 const TOTAL_EMBED_LIMIT = 6000
-// Headroom left per currency card for its title + footer text, outside the two body budgets
-// below — both are short, fixed-shape strings (a date and a missing-quote count), so 200 chars
-// each is generous. The remainder splits evenly between the (at most two) currency cards.
+// Headroom left per card for its title + footer text, outside the body budget below — both are
+// short, fixed-shape strings (a date, a capped workspace name and a missing-quote count), so 200
+// chars each is generous. Task 192: the remainder splits evenly between however many cards the
+// message carries, and one card never gets more than the two-card share it had before.
 const CARD_OVERHEAD = 200
-const BUDGET = (TOTAL_EMBED_LIMIT - CARD_OVERHEAD * 2) / 2
+const MAX_BUDGET = (TOTAL_EMBED_LIMIT - CARD_OVERHEAD * 2) / 2
+// Discord's cap on embeds per message.
+const EMBEDS_LIMIT = 10
+// Task 192: a workspace name is user input; it is cut to this many characters in a card title.
+const NAME_MAX = 40
+
+function budgetFor(cards: number): number {
+  return Math.min(MAX_BUDGET, Math.floor((TOTAL_EMBED_LIMIT - CARD_OVERHEAD * cards) / cards))
+}
 
 /** Markdown special characters escaped in data-derived text (stock names), spec Revision 8. */
 function escapeMd(s: string): string {
@@ -633,15 +679,15 @@ function rowLine(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Curr
 }
 
 /** Total line + blank line + one line per position, dropping whole positions from the end until
- * the description fits the 2,800-char budget (unchanged from earlier revisions). */
-function buildDescription(total: string, rowText: string[]): string {
+ * the description fits `budget` (2,800 chars for up to two cards, less with more — Task 192). */
+function buildDescription(total: string, rowText: string[], budget: number): string {
   let kept = rowText.length
   while (kept > 0) {
     const shown = rowText.slice(0, kept)
     const dropped = rowText.length - kept
     const body = dropped > 0 ? [...shown, `…另 ${dropped} 檔，完整明細請見網站`] : shown
     const desc = `${total}\n\n${body.join('\n')}`
-    if (desc.length <= BUDGET || kept === 1) return desc
+    if (desc.length <= budget || kept === 1) return desc
     kept--
   }
   return `${total}\n\n`
@@ -654,9 +700,24 @@ function footerText(missingCount: number, brokerLegend: boolean): string {
   return text
 }
 
-function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, generatedAt: string): DiscordEmbed {
+/** Task 192: blank → 未命名工作區; longer than `NAME_MAX` → cut with an ellipsis; then escaped. */
+function sectionName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return '未命名工作區'
+  const chars = [...trimmed]
+  return escapeMd(chars.length > NAME_MAX ? `${chars.slice(0, NAME_MAX - 1).join('')}…` : trimmed)
+}
+
+function buildEmbed(
+  cur: CurrencySummary,
+  currency: Currency,
+  ymd: string,
+  generatedAt: string,
+  section: string,
+  budget: number,
+): DiscordEmbed {
   const decimals = currency === 'TWD' ? 0 : 2
-  const title = currency === 'TWD' ? twdTitle(cur, ymd) : usdTitle(cur)
+  const title = `${section}｜${currency === 'TWD' ? twdTitle(cur, ymd) : usdTitle(cur)}`
   const total = totalLine(cur, decimals)
   const rows = cur.rows.map((r) => rowLine(r, cur.newestQuoteYmd, currency, decimals))
   const brokerLegend =
@@ -664,7 +725,7 @@ function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, gener
     cur.rows.some((r) => brokerShown(r.brokerUnrealized, r.unrealized, decimals))
   return {
     title,
-    description: buildDescription(total, rows),
+    description: buildDescription(total, rows, budget),
     color: colorFor(cur.unrealized, decimals),
     footer: { text: footerText(cur.missingCount, brokerLegend) },
     timestamp: generatedAt,
@@ -673,9 +734,9 @@ function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, gener
 
 /**
  * Task 166 (ED-06) safety net: `buildDescription` already keeps each currency block within
- * `BUDGET`, and `BUDGET * 2 <= TOTAL_EMBED_LIMIT` by construction, so this should never fire in
- * practice — but a future change to either constant must not be able to silently push the two
- * currency cards' combined title + description + footer past what Discord accepts.
+ * `budgetFor(cards)`, and `budgetFor(n) * n <= TOTAL_EMBED_LIMIT` by construction, so this should
+ * never fire in practice — but a future change to either constant must not be able to silently push
+ * the cards' combined title + description + footer past what Discord accepts.
  */
 function clampCurrencyBlocksTotal(embeds: DiscordEmbed[]): DiscordEmbed[] {
   const total = embeds.reduce((n, e) => n + e.title.length + (e.description?.length ?? 0) + (e.footer?.text.length ?? 0), 0)
@@ -686,17 +747,69 @@ function clampCurrencyBlocksTotal(embeds: DiscordEmbed[]): DiscordEmbed[] {
   return embeds.map((e, i) => (i === embeds.length - 1 ? { ...e, description: e.description!.slice(0, keep) } : e))
 }
 
-/** `null` when neither currency has a row to show — the caller logs `skipped / no-holdings`. */
-export function buildHoldingsPayload(summary: HoldingsSummary, opts: { generatedAt: string; preview: boolean }): DiscordPayload | null {
-  const embeds: DiscordEmbed[] = []
-  if (summary.twd.rows.length > 0) embeds.push(buildEmbed(summary.twd, 'TWD', summary.ymd, opts.generatedAt))
-  if (summary.usd.rows.length > 0) embeds.push(buildEmbed(summary.usd, 'USD', summary.ymd, opts.generatedAt))
-  if (embeds.length === 0) return null
+function currenciesOf(summary: HoldingsSummary): Currency[] {
+  const out: Currency[] = []
+  if (summary.twd.rows.length > 0) out.push('TWD')
+  if (summary.usd.rows.length > 0) out.push('USD')
+  return out
+}
 
-  const base = `📒 持股日報 ${titleDate(summary.ymd)}（${weekdayChar(summary.ymd)}）`
+/** Task 192 D2: `合計未實現 台股 **<signed>**（<pct>）｜美股 …` over every workspace, for a
+ * message with more than one section; only the currencies that have rows. */
+function grandTotalLine(total: HoldingsSummary): string {
+  const parts = currenciesOf(total).map((c) => {
+    const cur = c === 'TWD' ? total.twd : total.usd
+    const decimals = c === 'TWD' ? 0 : 2
+    const amt = cur.unrealized == null ? '--' : `**${fmtSigned(cur.unrealized, decimals)}**`
+    const pct = cur.unrealizedPct == null ? '' : `（${pctSigned(cur.unrealizedPct)}）`
+    return `${c === 'TWD' ? '台股' : '美股'} ${amt}${pct}`
+  })
+  return `合計未實現 ${parts.join('｜')}`
+}
+
+/**
+ * Task 192: one card per workspace × currency that has rows, in workspace order, each titled with
+ * the workspace name. More than `EMBEDS_LIMIT` cards: whole workspaces are kept while they fit in
+ * nine, and the tenth card names how many were left out. `null` when no workspace has a row — the
+ * caller logs `skipped / no-holdings`.
+ */
+export function buildHoldingsPayload(card: HoldingsCard, opts: { generatedAt: string; preview: boolean }): DiscordPayload | null {
+  const sections = card.sections
+    .map((s) => ({ name: sectionName(s.name), summary: s.summary, currencies: currenciesOf(s.summary) }))
+    .filter((s) => s.currencies.length > 0)
+  if (sections.length === 0) return null
+
+  let shown = sections
+  const all = sections.reduce((n, s) => n + s.currencies.length, 0)
+  if (all > EMBEDS_LIMIT) {
+    shown = []
+    let used = 0
+    for (const s of sections) {
+      if (used + s.currencies.length > EMBEDS_LIMIT - 1) break
+      shown.push(s)
+      used += s.currencies.length
+    }
+  }
+  const hidden = sections.length - shown.length
+  const cards = shown.reduce((n, s) => n + s.currencies.length, 0) + (hidden > 0 ? 1 : 0)
+  const budget = budgetFor(cards)
+
+  const embeds: DiscordEmbed[] = []
+  for (const s of shown) {
+    for (const c of s.currencies) {
+      const cur = c === 'TWD' ? s.summary.twd : s.summary.usd
+      embeds.push(buildEmbed(cur, c, card.ymd, opts.generatedAt, s.name, budget))
+    }
+  }
+  if (hidden > 0) {
+    embeds.push({ title: `…另 ${hidden} 個工作區`, description: '完整明細請見網站', color: GREY, timestamp: opts.generatedAt })
+  }
+
+  const base = `📒 持股日報 ${titleDate(card.ymd)}（${weekdayChar(card.ymd)}）`
+  const head = opts.preview ? `【預覽】${base}` : base
   return {
     username: '持股日報',
-    content: opts.preview ? `【預覽】${base}` : base,
+    content: sections.length > 1 ? `${head}\n${grandTotalLine(card.total)}` : head,
     allowed_mentions: { parse: [] },
     embeds: clampCurrencyBlocksTotal(embeds),
   }

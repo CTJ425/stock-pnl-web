@@ -16,6 +16,17 @@
 
 ## 📋 Active Tasks
 
+### Task 192: Discord 持股日報 — one message, one section per workspace
+- **Status**: 📝 SPEC DRAFT — waiting on the user's D1–D3
+- **Agent**: Claude
+- **Timestamp**: 2026-10-04 12:10:00 Asia/Taipei
+- **Spec**: docs/agent/specs/task-192-holdings-by-workspace.md
+- **Why**: the card merges every workspace (`aggregateHoldings`), so an account with one workspace per broker cannot see either account on its own. User chose "same message, split by workspace" over per-workspace webhooks.
+- **Items**:
+  1. User decides D1 (single workspace shows name?), D2 (cross-workspace grand total?), D3 (embed per workspace × currency vs per workspace) ⏳
+  2. Loader selects `workspaces.name`; per-ledger `aggregateHoldings`; N-embed budget + 10-embed cap in `buildHoldingsPayload` ⏳
+  3. Tests per spec §7; bump `-dev.N` + CHANGELOG; deploy `stock-report` to DEV and check a preview ⏳
+
 ### Task 191: TW market holiday calendar — weekday-holiday guard + calendar for admin and users
 - **Status**: 🔄 OPEN REMAINDER — released as **0.10.26** (`6fb3cf6`); DEV `stock-price` v27 / PROD v17 (`811480ed6d70…`). Only item 5 is live.
 - **Agent**: Claude

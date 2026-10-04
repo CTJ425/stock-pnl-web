@@ -8,7 +8,7 @@ import type { DiscordFailReason, DiscordPayload, DiscordSendResult } from './dis
 import { findMarketDay } from './discordSummary.ts'
 import { createQuoteCache, type ChartFetch } from './holdingQuotes.ts'
 import {
-  aggregateHoldings,
+  aggregateCard,
   buildHoldingsPayload,
   buildHoldingsTestPayload,
   buildLedgers,
@@ -138,13 +138,13 @@ export async function runOneUser(
     const quotes = await quotesFor(quoteCache, keys)
     // `ymd` is already the run's Taipei calendar date (`dashDate(taipeiYmd(now))` at both call
     // sites), so it serves as both the card's market day and the day-trade date (BUG-087).
-    const summary = aggregateHoldings(ledgers, quotes, ymd, ymd, await twNamesOf(deps))
-    const missing = summary.twd.missingCount + summary.usd.missingCount
+    const card = aggregateCard(ledgers, quotes, ymd, ymd, await twNamesOf(deps))
+    const missing = card.total.twd.missingCount + card.total.usd.missingCount
     if (missing > 0) {
-      const rows = summary.twd.rows.length + summary.usd.rows.length
+      const rows = card.total.twd.rows.length + card.total.usd.rows.length
       await deps.log({ level: 'warn', message: 'holdings quotes missing', detail: { userId, missing, rows } })
     }
-    const payload = buildHoldingsPayload(summary, { generatedAt: deps.now().toISOString(), preview: false })
+    const payload = buildHoldingsPayload(card, { generatedAt: deps.now().toISOString(), preview: false })
 
     if (!payload) {
       await finishSafe(deps, userId, ymd, 'daily', { kind: 'skipped', reason: 'no-holdings' })
@@ -299,9 +299,9 @@ export async function runHoldingsSettingsOp(
     const quotes = await quotesFor(quoteCache, keys)
     // Two different dates on purpose: `market.date` is the market day the card reports on (it can
     // be an earlier day), `ymd` is today in Taipei, which is what the day-trade rule keys off.
-    const summary = aggregateHoldings(ledgers, quotes, market.date, ymd, await twNamesOf(deps))
-    const missingQuotes = summary.twd.missingCount + summary.usd.missingCount
-    const payload = buildHoldingsPayload(summary, { generatedAt: deps.now().toISOString(), preview: true })
+    const card = aggregateCard(ledgers, quotes, market.date, ymd, await twNamesOf(deps))
+    const missingQuotes = card.total.twd.missingCount + card.total.usd.missingCount
+    const payload = buildHoldingsPayload(card, { generatedAt: deps.now().toISOString(), preview: true })
 
     if (!payload) {
       await deps.finish(userId, ymd, 'preview', { kind: 'skipped', reason: 'no-holdings' })

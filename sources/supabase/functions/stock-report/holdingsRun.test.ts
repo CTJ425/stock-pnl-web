@@ -44,10 +44,10 @@ function buy(ws: string, market: Market, ticker: string, price: number, qty: num
 }
 
 const WORKSPACES: Record<string, WorkspaceInput[]> = {
-  u1: [{ id: 'w1', fee_rate: null, transactions: [buy('w1', 'TPE', '2330', 900, 1000)] }],
+  u1: [{ id: 'w1', name: '玉山', fee_rate: null, transactions: [buy('w1', 'TPE', '2330', 900, 1000)] }],
   u2: [
-    { id: 'w2', fee_rate: 0.0004275, transactions: [buy('w2', 'TPE', '2330', 950, 100)] },
-    { id: 'w3', fee_rate: null, transactions: [buy('w3', 'US', 'AAPL', 150, 2)] },
+    { id: 'w2', name: '元大', fee_rate: 0.0004275, transactions: [buy('w2', 'TPE', '2330', 950, 100)] },
+    { id: 'w3', name: '複委託', fee_rate: null, transactions: [buy('w3', 'US', 'AAPL', 150, 2)] },
   ],
   u3: [],
 }
@@ -160,8 +160,10 @@ describe('runHoldingsDaily', () => {
     ])
     expect(rec.posts.map((p) => p.url)).toEqual([HOOK_1, HOOK_2])
     expect(rec.posts[0].payload.content).toBe('📒 持股日報 09/17（四）')
-    expect(rec.posts[0].payload.embeds.map((e) => e.title)).toEqual(['台股持股・09/17 收盤'])
-    expect(rec.posts[1].payload.embeds.map((e) => e.title)).toEqual(['台股持股・09/17 收盤', '美股持股・美東 09/17 收盤'])
+    expect(rec.posts[0].payload.embeds.map((e) => e.title)).toEqual(['玉山｜台股持股・09/17 收盤'])
+    // Task 192: two workspaces → one section each, plus the grand total in the headline
+    expect(rec.posts[1].payload.embeds.map((e) => e.title)).toEqual(['元大｜台股持股・09/17 收盤', '複委託｜美股持股・美東 09/17 收盤'])
+    expect(rec.posts[1].payload.content).toMatch(/^📒 持股日報 09\/17（四）\n合計未實現 台股 \*\*[+-][\d,]+\*\*（[+-][\d.]+%）｜美股 \*\*[+-][\d,.]+\*\*（[+-][\d.]+%）$/)
     expect(rec.posts[0].payload.embeds[0].description).toContain('2330 2330')
     expect(rec.posts[0].payload.embeds[0].description).toContain('**2330 2330**｜1 張｜均價 900｜未實現 **')
     expect(rec.finishes).toEqual([

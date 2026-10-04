@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import type { Holding } from '../_shared/engine/pnlEngine.ts'
 import { estimateUnrealized, estimateUnrealizedShort } from '../_shared/engine/pnlEngine.ts'
 import type { Market, Transaction, TxNature, TxType } from '../_shared/engine/models.ts'
+import type { DiscordPayload } from './discordWebhook.ts'
 import type { HoldingQuote } from './holdingQuotes.ts'
 import {
+  aggregateCard,
   aggregateHoldings,
   buildHoldingsPayload,
   buildHoldingsTestPayload,
@@ -13,6 +15,7 @@ import {
   pnlBasis,
   type CurrencySummary,
   type HoldingRowOut,
+  type HoldingsCard,
   type HoldingsSummary,
   type WorkspaceInput,
   type WorkspaceLedger,
@@ -332,7 +335,7 @@ describe('aggregateHoldings', () => {
     const s = aggregateHoldings([], new Map(), YMD)
     expect(s.twd.rows).toEqual([])
     expect(s.usd.rows).toEqual([])
-    expect(buildHoldingsPayload(s, { generatedAt: GEN, preview: false })).toBeNull()
+    expect(buildHoldingsPayload(one(s), { generatedAt: GEN, preview: false })).toBeNull()
   })
 })
 
@@ -379,6 +382,11 @@ function cur(currency: 'TWD' | 'USD', p: Partial<CurrencySummary> = {}): Currenc
     newestQuoteYmd: null,
     ...p,
   }
+}
+
+/** Task 192: a one-workspace card around a summary, as the run builds it. */
+function one(s: HoldingsSummary, name = '主帳戶'): HoldingsCard {
+  return { ymd: s.ymd, total: s, sections: [{ name, summary: s }] }
 }
 
 const TWD_ROWS: HoldingRowOut[] = [
@@ -435,20 +443,20 @@ describe('buildHoldingsPayload', () => {
   const both: HoldingsSummary = { ymd: YMD, twd: TWD_FULL, usd: USD_FULL }
 
   it('builds the full two-card message exactly', () => {
-    expect(buildHoldingsPayload(both, { generatedAt: GEN, preview: false })).toEqual({
+    expect(buildHoldingsPayload(one(both), { generatedAt: GEN, preview: false })).toEqual({
       username: '持股日報',
       content: '📒 持股日報 09/17（四）',
       allowed_mentions: { parse: [] },
       embeds: [
         {
-          title: '台股持股・09/17 收盤',
+          title: '主帳戶｜台股持股・09/17 收盤',
           description: TWD_DESC,
           color: RED,
           footer: { text: '資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本｜1 檔無報價，未計入合計' },
           timestamp: GEN,
         },
         {
-          title: '美股持股・美東 09/16 收盤',
+          title: '主帳戶｜美股持股・美東 09/16 收盤',
           description: USD_DESC,
           color: RED,
           footer: { text: '資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本' },
@@ -459,7 +467,7 @@ describe('buildHoldingsPayload', () => {
   })
 
   it('writes markdown, never a monospace fence, within the embed limit (spec Revision 8)', () => {
-    const p = buildHoldingsPayload(both, { generatedAt: GEN, preview: false })!
+    const p = buildHoldingsPayload(one(both), { generatedAt: GEN, preview: false })!
     for (const e of p.embeds) {
       expect(e.description).not.toContain('```')
       expect((e.description ?? '').length).toBeLessThanOrEqual(4096)
@@ -478,7 +486,7 @@ describe('buildHoldingsPayload', () => {
       dayPnl: 0,
       newestQuoteYmd: YMD,
     })
-    const p = buildHoldingsPayload({ ymd: YMD, twd, usd: cur('USD') }, { generatedAt: GEN, preview: false })!
+    const p = buildHoldingsPayload(one({ ymd: YMD, twd, usd: cur('USD') }), { generatedAt: GEN, preview: false })!
     expect(p.embeds[0].description).toBe([
       '未實現合計 **+107,801**（+16.58%）｜券商 +107,401｜今日 0',
       '',
@@ -490,16 +498,16 @@ describe('buildHoldingsPayload', () => {
   })
 
   it('prefixes a preview', () => {
-    expect(buildHoldingsPayload(both, { generatedAt: GEN, preview: true })?.content).toBe('【預覽】📒 持股日報 09/17（四）')
+    expect(buildHoldingsPayload(one(both), { generatedAt: GEN, preview: true })?.content).toBe('【預覽】📒 持股日報 09/17（四）')
   })
 
   it('sends only the currency that has rows', () => {
-    const p = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD'), usd: USD_FULL }, { generatedAt: GEN, preview: false })!
-    expect(p.embeds.map((e) => e.title)).toEqual(['美股持股・美東 09/16 收盤'])
+    const p = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD'), usd: USD_FULL }), { generatedAt: GEN, preview: false })!
+    expect(p.embeds.map((e) => e.title)).toEqual(['主帳戶｜美股持股・美東 09/16 收盤'])
   })
 
   it('returns null when neither currency has rows', () => {
-    expect(buildHoldingsPayload({ ymd: YMD, twd: cur('TWD'), usd: cur('USD') }, { generatedAt: GEN, preview: false })).toBeNull()
+    expect(buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD'), usd: cur('USD') }), { generatedAt: GEN, preview: false })).toBeNull()
   })
 
   it('warns in the title when the newest TWD quote is not today, and marks older rows', () => {
@@ -507,25 +515,25 @@ describe('buildHoldingsPayload', () => {
       row({ ticker: '2330', name: '台積電', close: 1085.5, prevClose: 1072.3, quoteYmd: YMD, mktVal: 1, unrealized: 1, returnPct: 1, dayPct: 1.2313 }),
       row({ ticker: '1101', name: '台泥', close: 30, prevClose: 30, quoteYmd: '2026-09-16', mktVal: 1, unrealized: 1, returnPct: 1, dayPct: 0 }),
     ]
-    const today = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows, unrealized: 2, newestQuoteYmd: YMD }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!
+    const today = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows, unrealized: 2, newestQuoteYmd: YMD }), usd: cur('USD') }), { generatedAt: GEN, preview: false })!
     const table = today.embeds[0].description!.split('\n')
     expect(table).toContain('**2330 台積電**｜1 張｜均價 0｜未實現 **+1**')
     expect(table).toContain('**⚠️1101 台泥**｜1 張｜均價 0｜未實現 **+1**')
 
     const stale = buildHoldingsPayload(
-      { ymd: YMD, twd: cur('TWD', { rows: rows.slice(1), unrealized: 1, newestQuoteYmd: '2026-09-16' }), usd: cur('USD') },
+      one({ ymd: YMD, twd: cur('TWD', { rows: rows.slice(1), unrealized: 1, newestQuoteYmd: '2026-09-16' }), usd: cur('USD') }),
       { generatedAt: GEN, preview: false },
     )!
-    expect(stale.embeds[0].title).toBe('台股持股・⚠️ 09/16 收盤・非今日')
+    expect(stale.embeds[0].title).toBe('主帳戶｜台股持股・⚠️ 09/16 收盤・非今日')
     expect(stale.embeds[0].description).toContain('\n**1101 台泥**｜')
   })
 
   it('titles a currency with no quote at all', () => {
     const p = buildHoldingsPayload(
-      { ymd: YMD, twd: cur('TWD', { rows: [row({ ticker: '6488', name: '環球晶' })], marketValue: null, missingCount: 1 }), usd: cur('USD', { rows: [row({ market: 'US', ticker: 'TSLA', name: 'Tesla' })], marketValue: null, missingCount: 1 }) },
+      one({ ymd: YMD, twd: cur('TWD', { rows: [row({ ticker: '6488', name: '環球晶' })], marketValue: null, missingCount: 1 }), usd: cur('USD', { rows: [row({ market: 'US', ticker: 'TSLA', name: 'Tesla' })], marketValue: null, missingCount: 1 }) }),
       { generatedAt: GEN, preview: false },
     )!
-    expect(p.embeds.map((e) => e.title)).toEqual(['台股持股・無報價', '美股持股・無報價'])
+    expect(p.embeds.map((e) => e.title)).toEqual(['主帳戶｜台股持股・無報價', '主帳戶｜美股持股・無報價'])
     expect(p.embeds.map((e) => e.color)).toEqual([GREY, GREY])
     expect(p.embeds[0].description).toContain('未實現合計 --｜今日 --')
   })
@@ -542,7 +550,7 @@ describe('buildHoldingsPayload', () => {
     const r = row({ market: currency === 'USD' ? 'US' : 'TPE', ticker: 'X', name: 'x' })
     const s = cur(currency, { rows: [r], unrealized })
     const p = buildHoldingsPayload(
-      currency === 'TWD' ? { ymd: YMD, twd: s, usd: cur('USD') } : { ymd: YMD, twd: cur('TWD'), usd: s },
+      one(currency === 'TWD' ? { ymd: YMD, twd: s, usd: cur('USD') } : { ymd: YMD, twd: cur('TWD'), usd: s }),
       { generatedAt: GEN, preview: false },
     )!
     expect(p.embeds[0].color).toBe(color)
@@ -554,7 +562,7 @@ describe('buildHoldingsPayload', () => {
       row({ ticker: '2222', name: 'b', avgCost: 12.35 }),
       row({ ticker: '3333', name: 'c', avgCost: 1085.5 }),
     ]
-    const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows, missingCount: 3 }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
+    const d = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows, missingCount: 3 }), usd: cur('USD') }), { generatedAt: GEN, preview: false })!.embeds[0].description!
     expect(d).toContain('｜均價 600｜')
     expect(d).toContain('｜均價 12.35｜')
     expect(d).toContain('｜均價 1,085.5｜')
@@ -562,13 +570,13 @@ describe('buildHoldingsPayload', () => {
 
   it('keeps a long name whole', () => {
     const r = row({ ticker: '1234', name: '非常非常非常非常長的公司名稱股份有限公司', dayPct: 0.1 })
-    const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows: [r], missingCount: 1 }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
+    const d = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows: [r], missingCount: 1 }), usd: cur('USD') }), { generatedAt: GEN, preview: false })!.embeds[0].description!
     expect(d.split('\n')).toContain('**1234 非常非常非常非常長的公司名稱股份有限公司**｜1 張｜均價 0｜未實現 --')
   })
 
   it('escapes markdown characters in a stock name', () => {
     const r = row({ ticker: '9999', name: 'A*B_C|D', unrealized: 1 })
-    const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows: [r] }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
+    const d = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows: [r] }), usd: cur('USD') }), { generatedAt: GEN, preview: false })!.embeds[0].description!
     expect(d).toContain('**9999 A\\*B\\_C\\|D**｜')
   })
 
@@ -578,7 +586,7 @@ describe('buildHoldingsPayload', () => {
       row({ ticker: '2222', name: 'b', shares: 1_500 }),
       row({ ticker: '3333', name: 'c', shares: 37 }),
     ]
-    const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows, missingCount: 3 }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
+    const d = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows, missingCount: 3 }), usd: cur('USD') }), { generatedAt: GEN, preview: false })!.embeds[0].description!
     expect(d).toContain('**1111 a**｜24 張｜')
     expect(d).toContain('**2222 b**｜1,500 股｜')
     expect(d).toContain('**3333 c**｜37 股｜')
@@ -586,7 +594,7 @@ describe('buildHoldingsPayload', () => {
 
   it('never cuts a number that is wider than its column', () => {
     const r = row({ ticker: '2330', name: '台積電', shares: 1_234_000, close: 1085.5, quoteYmd: YMD, mktVal: 1, unrealized: -123_456_789, returnPct: -12.5 })
-    const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows: [r], unrealized: -123_456_789, newestQuoteYmd: YMD }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
+    const d = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows: [r], unrealized: -123_456_789, newestQuoteYmd: YMD }), usd: cur('USD') }), { generatedAt: GEN, preview: false })!.embeds[0].description!
     expect(d).toContain('｜1,234 張｜')
     expect(d).toContain('未實現 **-123,456,789**')
   })
@@ -595,7 +603,7 @@ describe('buildHoldingsPayload', () => {
     const rows = Array.from({ length: 120 }, (_, i) =>
       row({ ticker: String(1000 + i), name: '測試股票', close: 100, prevClose: 99, quoteYmd: YMD, mktVal: 100_000 - i, unrealized: 1234, returnPct: 1.5, dayPct: 1.01 }),
     )
-    const p = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows, unrealized: 148_080, newestQuoteYmd: YMD }), usd: USD_FULL }, { generatedAt: GEN, preview: false })!
+    const p = buildHoldingsPayload(one({ ymd: YMD, twd: cur('TWD', { rows, unrealized: 148_080, newestQuoteYmd: YMD }), usd: USD_FULL }), { generatedAt: GEN, preview: false })!
     const d = p.embeds[0].description!
     expect(d.length).toBeLessThanOrEqual(2800)
     const shown = d.split('\n').filter((l) => /^\*\*\d{4} 測試股票\*\*/.test(l)).length
@@ -612,8 +620,100 @@ describe('buildHoldingsPayload', () => {
   })
 
   it('does not truncate when everything fits', () => {
-    const p = buildHoldingsPayload(both, { generatedAt: GEN, preview: false })!
+    const p = buildHoldingsPayload(one(both), { generatedAt: GEN, preview: false })!
     expect(p.embeds[0].description).not.toContain('…另')
+  })
+})
+
+describe('Task 192 — one section per workspace', () => {
+  const named = buildLedgers([
+    { ...WS_A, name: '玉山' },
+    { ...WS_B, name: '元大' },
+  ])
+
+  it('aggregateCard: each section is that workspace alone; total is the old merged summary', () => {
+    const card = aggregateCard(named, QUOTES, YMD)
+    expect(card.sections.map((s) => s.name)).toEqual(['玉山', '元大'])
+    expect(card.sections[0].summary).toEqual(aggregateHoldings([named[0]], QUOTES, YMD))
+    expect(card.sections[1].summary).toEqual(aggregateHoldings([named[1]], QUOTES, YMD))
+    expect(card.total).toEqual(aggregateHoldings(named, QUOTES, YMD))
+  })
+
+  it('prints a ticker held in two workspaces as one row in each section, not one merged row', () => {
+    const p = buildHoldingsPayload(aggregateCard(named, QUOTES, YMD), { generatedAt: GEN, preview: false })!
+    expect(p.embeds.map((e) => e.title)).toEqual([
+      '玉山｜台股持股・09/17 收盤',
+      '玉山｜美股持股・美東 09/16 收盤',
+      '元大｜台股持股・09/17 收盤',
+    ])
+    expect(p.embeds[0].description).toContain('**2330 台積電**｜600 股｜')
+    expect(p.embeds[2].description).toContain('**2330 TSMC**｜600 股｜')
+    expect(p.embeds.some((e) => (e.description ?? '').includes('1,200 股'))).toBe(false)
+  })
+
+  it('puts the cross-workspace total in the headline only when there is more than one section', () => {
+    const card = aggregateCard(named, QUOTES, YMD)
+    const twd = card.total.twd
+    const p = buildHoldingsPayload(card, { generatedAt: GEN, preview: true })!
+    const [head, total] = p.content!.split('\n')
+    expect(head).toBe('【預覽】📒 持股日報 09/17（四）')
+    expect(total.startsWith(`合計未實現 台股 **+${Math.round(twd.unrealized!).toLocaleString('en-US')}**（`)).toBe(true)
+    expect(total).toContain('｜美股 **+')
+
+    const single = buildHoldingsPayload(aggregateCard([named[0]], QUOTES, YMD), { generatedAt: GEN, preview: false })!
+    expect(single.content).toBe('📒 持股日報 09/17（四）')
+  })
+
+  it('leaves out a workspace with no open position', () => {
+    const empty = buildLedgers([{ id: 'ws-e', name: '空的', fee_rate: null, transactions: [] }])[0]
+    const p = buildHoldingsPayload(aggregateCard([empty, named[1]], QUOTES, YMD), { generatedAt: GEN, preview: false })!
+    expect(p.embeds.map((e) => e.title)).toEqual(['元大｜台股持股・09/17 收盤'])
+    expect(p.content).toBe('📒 持股日報 09/17（四）')
+    expect(buildHoldingsPayload(aggregateCard([empty], QUOTES, YMD), { generatedAt: GEN, preview: false })).toBeNull()
+  })
+
+  it('names a blank workspace, cuts a long name, and escapes markdown in it', () => {
+    const s: HoldingsSummary = { ymd: YMD, twd: cur('TWD', { rows: [row({ ticker: '2330', name: '台積電' })] }), usd: cur('USD') }
+    const title = (name: string) => buildHoldingsPayload(one(s, name), { generatedAt: GEN, preview: false })!.embeds[0].title
+    expect(title('  ')).toBe('未命名工作區｜台股持股・無報價')
+    expect(title('A*B_C')).toBe('A\\*B\\_C｜台股持股・無報價')
+    expect(title('長'.repeat(60))).toBe(`${'長'.repeat(39)}…｜台股持股・無報價`)
+  })
+
+  const many = (n: number, rows = 120): HoldingsCard => {
+    const summary = (i: number): HoldingsSummary => ({
+      ymd: YMD,
+      twd: cur('TWD', {
+        rows: Array.from({ length: rows }, (_, k) =>
+          row({ ticker: String(1000 + k), name: '測試股票', close: 100, prevClose: 99, quoteYmd: YMD, mktVal: 1, unrealized: 1234 + i, returnPct: 1.5 }),
+        ),
+        unrealized: 1234,
+        newestQuoteYmd: YMD,
+      }),
+      usd: USD_FULL,
+    })
+    const sections = Array.from({ length: n }, (_, i) => ({ name: `帳戶${i + 1}`, summary: summary(i) }))
+    return { ymd: YMD, total: sections[0].summary, sections }
+  }
+  const size = (p: DiscordPayload) =>
+    p.embeds.reduce((n, e) => n + e.title.length + (e.description ?? '').length + (e.footer?.text.length ?? 0), 0)
+
+  it.each([1, 2, 3, 5])('stays within Discord limits with %i workspaces of many rows', (n) => {
+    const p = buildHoldingsPayload(many(n), { generatedAt: GEN, preview: false })!
+    expect(p.embeds.length).toBeLessThanOrEqual(10)
+    expect(size(p)).toBeLessThanOrEqual(6000)
+    for (const e of p.embeds.filter((e) => e.title.includes('台股'))) {
+      expect(e.description).toMatch(/\n…另 \d+ 檔，完整明細請見網站$/)
+    }
+  })
+
+  it('keeps whole workspaces within nine cards and names how many were left out', () => {
+    const p = buildHoldingsPayload(many(6, 3), { generatedAt: GEN, preview: false })!
+    // 6 workspaces × 2 currencies = 12 cards: four whole workspaces fit in nine, two are left out
+    expect(p.embeds).toHaveLength(9)
+    expect(p.embeds.slice(0, 8).map((e) => e.title.split('｜')[0])).toEqual(['帳戶1', '帳戶1', '帳戶2', '帳戶2', '帳戶3', '帳戶3', '帳戶4', '帳戶4'])
+    expect(p.embeds[8]).toMatchObject({ title: '…另 2 個工作區', description: '完整明細請見網站' })
+    expect(size(p)).toBeLessThanOrEqual(6000)
   })
 })
 
