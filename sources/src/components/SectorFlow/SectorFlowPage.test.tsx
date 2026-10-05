@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const { fetchSectorFlow } = vi.hoisted(() => ({ fetchSectorFlow: vi.fn() }))
@@ -105,70 +105,48 @@ async function mount(result: unknown, focus?: string) {
   return user
 }
 
-const buyList = () => screen.findByRole('list', { name: /錢進了哪些產業/ })
-const sellList = () => screen.findByRole('list', { name: /錢出了哪些產業/ })
-const legendRow = (list: HTMLElement, name: RegExp) => within(list).getByRole('button', { name })
+/** A tile of the treemap, by sector name (the table's name buttons are named by the sector alone). */
+const tile = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}，買賣超`) })
+const aside = () => screen.getByRole('complementary', { name: '類股細節' })
 
 describe('SectorFlowPage: the day', () => {
-  it('opens with the day in three figures: the net, what was bought and what was sold', async () => {
+  it('opens with the day on one line: the net, what was bought and what was sold', async () => {
     await mount({ kind: 'ok', data })
-    expect(await screen.findByText(/10\/02\s+三大法人合計淨買超/)).toBeTruthy()
+    const label = await screen.findByText(/10\/02\s+三大法人合計淨買超/)
     // Leaves: buys 234 + 32 + 10 + (1..9) = 321; sells 114 + 70 + 42 + (1..10) = 281.
-    expect(screen.getByText('+40.0 億')).toBeTruthy()
-    expect(screen.getByText('買進的產業').nextElementSibling?.textContent).toBe('+321.0 億')
-    expect(screen.getByText('賣出的產業').nextElementSibling?.textContent).toBe('-281.0 億')
-    expect(screen.getByText('共 12 個類股')).toBeTruthy()
-    expect(screen.getByText('共 13 個類股')).toBeTruthy()
+    expect(label.nextElementSibling?.textContent).toBe('+40.0 億')
+    const sides = screen.getByText(/^買進的產業/).textContent
+    expect(sides).toContain('+321.0 億（12 個類股）')
+    expect(sides).toContain('-281.0 億（13 個類股）')
   })
 
-  it('has no treemap any more', async () => {
+  it('draws a treemap and no rings: one tile per sector, 半導體 as a header over its four parts', async () => {
     await mount({ kind: 'ok', data })
-    await screen.findByText(/10\/02\s+三大法人合計淨買超/)
-    expect(screen.queryByText(/方塊圖/)).toBeNull()
-    expect(screen.queryByRole('group', { name: /類股方塊圖/ })).toBeNull()
+    const map = await screen.findByRole('group', { name: /類股方塊圖：面積是成交金額，紅色買超、綠色賣超/ })
+    // 23 sectors minus the parent 半導體 (drawn as a header) plus its four parts, plus the header itself.
+    expect(within(map).getAllByRole('button')).toHaveLength(22 + 4 + 1)
+    expect(within(map).getByRole('button', { name: /^半導體合計，買賣超 -70\.0 億/ })).toBeTruthy()
+    for (const part of ['IC 設計', '晶圓製造', '封裝測試', '設備、材料與其他']) {
+      expect(within(map).getByRole('button', { name: new RegExp(`^${part}，買賣超`) })).toBeTruthy()
+    }
+    expect(document.querySelectorAll('svg circle')).toHaveLength(0)
+    expect(screen.queryByText(/錢進了哪些產業|錢出了哪些產業/)).toBeNull()
   })
 
-  it('shows where the buying went and where the selling came from, each as its own list', async () => {
+  it('names each tile with its signed figure and its share of the turnover, so colour never carries the sign alone', async () => {
     await mount({ kind: 'ok', data })
-    const buyItems = within(await buyList()).getAllByRole('listitem')
-    expect(buyItems).toHaveLength(6)
-    expect(buyItems[0].textContent).toContain('電子零組件')
-    expect(buyItems[0].textContent).toContain('72.9%')
-    expect(buyItems[0].textContent).toContain('+234.0 億')
-    expect(buyItems[5].textContent).toContain('其他 7 個類股')
-
-    const sellItems = within(await sellList()).getAllByRole('listitem')
-    expect(sellItems[0].textContent).toContain('電腦及週邊')
-    expect(sellItems[0].textContent).toContain('-114.0 億')
-    expect(sellItems[5].textContent).toContain('其他 8 個類股')
+    await screen.findByRole('group', { name: /類股方塊圖/ })
+    expect(tile('電子零組件').getAttribute('aria-label')).toBe('電子零組件，買賣超 +234.0 億，佔成交 10.0%')
+    expect(tile('電腦及週邊').getAttribute('aria-label')).toContain('買賣超 -114.0 億')
   })
 
-  it('lists semiconductors by their parts, tagged, so IC 設計 is not hidden by the parent', async () => {
+  it('says how to read the picture, and that a tile can be pressed', async () => {
     await mount({ kind: 'ok', data })
-    const sell = await sellList()
-    const ic = within(sell).getByText(/IC 設計/).closest('li')!
-    expect(ic.textContent).toContain('半導體')
-    expect(ic.textContent).toContain('-70.0 億')
-    expect(within(await buyList()).getAllByText('半導體')).toHaveLength(2)
-    expect(within(sell).getAllByText('半導體')).toHaveLength(2)
-  })
-
-  it('numbers the five biggest slices on the ring and in the list, 其他 unnumbered', async () => {
-    await mount({ kind: 'ok', data })
-    const ranks = within(await buyList())
-      .getAllByRole('listitem')
-      .map((li) => li.querySelector('.sf-side-rank')?.textContent)
-    expect(ranks).toEqual(['1', '2', '3', '4', '5', ''])
-    const panel = screen.getByRole('region', { name: '錢進了哪些產業' })
-    expect(panel.querySelectorAll('.sf-rank')).toHaveLength(5)
-    expect(panel.querySelectorAll('circle')).toHaveLength(6)
-  })
-
-  it('says each ring is a share of its own side, tells you to press, and the centre repeats the total', async () => {
-    await mount({ kind: 'ok', data })
-    expect(await screen.findByText(/每一塊是佔買進 \+321\.0 億的比例；點一塊或下面任一行看細節/)).toBeTruthy()
-    expect(screen.getByText(/每一塊是佔賣出 -281\.0 億的比例/)).toBeTruthy()
-    expect(within(screen.getByRole('region', { name: '錢進了哪些產業' })).getByText('買進合計')).toBeTruthy()
+    const legend = await screen.findByRole('list', { name: '怎麼看方塊圖' })
+    expect(legend.textContent).toContain('面積是成交金額')
+    expect(legend.textContent).toContain('紅色：買超')
+    expect(legend.textContent).toContain('綠色：賣超')
+    expect(legend.textContent).toContain('點一塊看細節')
   })
 
   it('recolours for another investor group', async () => {
@@ -187,19 +165,29 @@ describe('SectorFlowPage: the day', () => {
     await user.click(screen.getByRole('button', { name: '外資' }))
     expect(await screen.findByText(/10\/02\s+外資淨買超/)).toBeTruthy()
     expect(screen.getByText('+1.0 億')).toBeTruthy()
+    expect(tile('電腦及週邊').getAttribute('aria-label')).toContain('買賣超 -6.0 億')
     await user.click(screen.getByRole('button', { name: '投信' }))
     const label = await screen.findByText(/10\/02\s+投信淨買超/)
     expect(label.nextElementSibling?.textContent).toBe('+4.0 億')
   })
 
-  it('says net selling when the sellers outweigh the buyers, and says so when one side is empty', async () => {
+  it('keeps every tile where it was when the investor group changes, because the area is turnover', async () => {
+    const user = await mount({ kind: 'ok', data })
+    await screen.findByRole('group', { name: /類股方塊圖/ })
+    const place = () => (tile('電子零組件') as HTMLElement).style.cssText
+    const before = place()
+    await user.click(screen.getByRole('button', { name: '外資' }))
+    expect(place()).toBe(before)
+  })
+
+  it('says net selling when the sellers outweigh the buyers, and counts an empty side as none', async () => {
     const d: SectorFlowData = { asOf: data.asOf, days: [day('2026-10-02', [row('28', 'x', 3), row('25', 'y', -10)])] }
     await mount({ kind: 'ok', data: d })
     expect(await screen.findByText(/10\/02\s+三大法人合計淨賣超/)).toBeTruthy()
     expect(screen.getByText('-7.0 億')).toBeTruthy()
     cleanup()
     await mount({ kind: 'ok', data: { asOf: data.asOf, days: [day('2026-10-02', [row('28', 'x', 3)])] } })
-    expect(await screen.findByText('這段期間沒有賣超的類股。')).toBeTruthy()
+    expect((await screen.findByText(/^買進的產業/)).textContent).toContain('（0 個類股）')
   })
 
   it('offers a window only when the file holds enough days to fill it, and says why not', async () => {
@@ -271,17 +259,22 @@ describe('SectorFlowPage: the day', () => {
   })
 })
 
-describe('SectorFlowPage: opening a sector in place', () => {
-  it('opens under a legend row: a sentence, the four groups, the share, and the five biggest buyers', async () => {
-    const user = await mount({ kind: 'ok', data })
-    const row1 = legendRow(await buyList(), /電子零組件/)
-    expect(row1.getAttribute('aria-expanded')).toBe('false')
-    await user.click(row1)
-    expect(row1.getAttribute('aria-expanded')).toBe('true')
+describe('SectorFlowPage: opening a sector from the map', () => {
+  it('asks for a press while nothing is picked', async () => {
+    await mount({ kind: 'ok', data })
+    await screen.findByRole('group', { name: /類股方塊圖/ })
+    expect(within(aside()).getByText('點一塊方塊，看那個類股的法人買賣與主力個股。')).toBeTruthy()
+  })
 
-    const detail = screen.getByRole('group', { name: '電子零組件細節' })
-    // The detail sits inside the row's own list item, i.e. under the row that was pressed.
-    expect(row1.closest('li')!.contains(detail)).toBe(true)
+  it('opens beside the map: a name, a sentence, the four groups, the share, and the five biggest buyers', async () => {
+    const user = await mount({ kind: 'ok', data })
+    await screen.findByRole('group', { name: /類股方塊圖/ })
+    expect(tile('電子零組件').getAttribute('aria-pressed')).toBe('false')
+    await user.click(tile('電子零組件'))
+    expect(tile('電子零組件').getAttribute('aria-pressed')).toBe('true')
+
+    expect(within(aside()).getByRole('heading', { name: '電子零組件' })).toBeTruthy()
+    const detail = within(aside()).getByRole('group', { name: '電子零組件細節' })
     expect(within(detail).getByText('法人合計買超 234.0 億，主要是外資買超 115.0 億。')).toBeTruthy()
     expect(within(detail).getByText('+85.0 億')).toBeTruthy()
     expect(within(detail).getByText(/成交 100\.0 億，佔全市場 10\.0%/)).toBeTruthy()
@@ -295,65 +288,56 @@ describe('SectorFlowPage: opening a sector in place', () => {
 
   it('lists the sellers for a sector that sold, and only the side the figure points to', async () => {
     const user = await mount({ kind: 'ok', data })
-    await user.click(legendRow(await sellList(), /電腦及週邊/))
-    const detail = screen.getByRole('group', { name: '電腦及週邊細節' })
+    await user.click(await screen.findByRole('button', { name: /^電腦及週邊，買賣超/ }))
+    const detail = within(aside()).getByRole('group', { name: '電腦及週邊細節' })
     expect(within(detail).getByText('賣超主力前 5')).toBeTruthy()
     expect(within(detail).getByText('電股1')).toBeTruthy()
     expect(within(detail).queryByText('買超主力前 5')).toBeNull()
   })
 
-  it('closes on a second press, and opens one sector at a time', async () => {
+  it('opens one sector at a time, and closes on a second press or on the close button', async () => {
     const user = await mount({ kind: 'ok', data })
-    const first = legendRow(await buyList(), /電子零組件/)
-    await user.click(first)
+    await user.click(await screen.findByRole('button', { name: /^電子零組件，買賣超/ }))
     expect(screen.getAllByRole('group', { name: /細節$/ })).toHaveLength(1)
-    await user.click(legendRow(await sellList(), /電腦及週邊/))
-    expect(first.getAttribute('aria-expanded')).toBe('false')
+    await user.click(tile('電腦及週邊'))
+    expect(tile('電子零組件').getAttribute('aria-pressed')).toBe('false')
     expect(screen.getAllByRole('group', { name: /細節$/ })).toHaveLength(1)
-    await user.click(legendRow(await sellList(), /電腦及週邊/))
+    expect(screen.getByRole('group', { name: '電腦及週邊細節' })).toBeTruthy()
+    await user.click(tile('電腦及週邊'))
     expect(screen.queryByRole('group', { name: /細節$/ })).toBeNull()
+
+    await user.click(tile('電子零組件'))
+    await user.click(screen.getByRole('button', { name: '關閉電子零組件細節' }))
+    expect(screen.queryByRole('group', { name: /細節$/ })).toBeNull()
+    expect(window.location.hash).toBe('#/sector-flow')
   })
 
-  it('opens the same row when the ring itself is pressed, and brings it into view', async () => {
+  it('brings the detail into view, since on a phone it sits under the map', async () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
-    await mount({ kind: 'ok', data })
-    const panel = await screen.findByRole('region', { name: '錢進了哪些產業' })
-    fireEvent.click(panel.querySelectorAll('circle')[0])
-    expect(await screen.findByRole('group', { name: '電子零組件細節' })).toBeTruthy()
-    await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
-    // The numeral is a shortcut for the same thing.
-    fireEvent.click(panel.querySelectorAll('.sf-rank')[0])
-    expect(screen.queryByRole('group', { name: '電子零組件細節' })).toBeNull()
+    try {
+      const user = await mount({ kind: 'ok', data })
+      await user.click(await screen.findByRole('button', { name: /^電子零組件，買賣超/ }))
+      await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' }))
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+    }
   })
 
-  it('dims the other slices of the ring once one is picked', async () => {
+  it('opens a semiconductor part, and the 半導體 header for the whole', async () => {
     const user = await mount({ kind: 'ok', data })
-    const panel = await screen.findByRole('region', { name: '錢進了哪些產業' })
-    expect(panel.querySelectorAll('.sf-slice-dim')).toHaveLength(0)
-    await user.click(legendRow(await buyList(), /電子零組件/))
-    expect(panel.querySelectorAll('.sf-slice-dim')).toHaveLength(5)
-    const other = screen.getByRole('region', { name: '錢出了哪些產業' })
-    expect(other.querySelectorAll('.sf-slice-dim')).toHaveLength(0)
-  })
-
-  it('opens 其他 into the sectors that were folded into it, and gives it no link of its own', async () => {
-    const user = await mount({ kind: 'ok', data })
-    const other = legendRow(await buyList(), /其他 7 個類股/)
-    await user.click(other)
-    expect(other.getAttribute('aria-expanded')).toBe('true')
-    const folded = screen.getByRole('list', { name: '其他 7 個類股' })
-    expect(within(folded).getAllByRole('listitem')).toHaveLength(7)
-    expect(within(folded).getByText('類股17')).toBeTruthy()
-    expect(within(folded).getByText('+7.0 億')).toBeTruthy()
-    expect(window.location.hash).toBe('#/sector-flow')
+    await user.click(await screen.findByRole('button', { name: /^IC 設計，買賣超/ }))
+    const detail = within(aside()).getByRole('group', { name: 'IC 設計細節' })
+    expect(within(detail).getByText('賣超主力前 5')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /^半導體合計，買賣超/ }))
+    expect(within(aside()).getByRole('group', { name: '半導體細節' })).toBeTruthy()
   })
 
   it('follows the chosen investor group for the stocks, and says when a group has none', async () => {
     const user = await mount({ kind: 'ok', data })
     await user.click(screen.getByRole('button', { name: '外資' }))
-    await user.click(legendRow(await buyList(), /電子零組件/))
-    let detail = screen.getByRole('group', { name: '電子零組件細節' })
+    await user.click(tile('電子零組件'))
+    let detail = within(aside()).getByRole('group', { name: '電子零組件細節' })
     expect(within(detail).getByText('外資買超主力前 5')).toBeTruthy()
     expect(within(detail).getByText('依外資排名')).toBeTruthy()
     expect(within(detail).getByText('外股1')).toBeTruthy()
@@ -361,7 +345,7 @@ describe('SectorFlowPage: opening a sector in place', () => {
 
     // The pick stays open when the group changes; 自營商 has no buyers or sellers listed for it.
     await user.click(screen.getByRole('button', { name: '自營商' }))
-    detail = screen.getByRole('group', { name: '電子零組件細節' })
+    detail = within(aside()).getByRole('group', { name: '電子零組件細節' })
     expect(within(detail).queryByText(/主力前/)).toBeNull()
     expect(within(detail).getByText('法人合計買超 234.0 億，主要是外資買超 115.0 億。')).toBeTruthy()
   })
@@ -373,40 +357,54 @@ describe('SectorFlowPage: opening a sector in place', () => {
     }
     const user = await mount({ kind: 'ok', data: old })
     await user.click(screen.getByRole('button', { name: '外資' }))
-    await user.click(legendRow(await buyList(), /電子零組件/))
+    await user.click(tile('電子零組件'))
     expect(screen.getByText(/這份資料還沒有外資各自的個股排名/)).toBeTruthy()
   })
 
   it('lists no stocks for a window of several days, and says why', async () => {
     const user = await mount({ kind: 'ok', data: daysOf(3) })
     await user.click(screen.getByRole('button', { name: '近 3 日' }))
-    await user.click(legendRow(await buyList(), /電子零組件/))
+    await user.click(tile('電子零組件'))
     expect(screen.getByText('個股只列單日的主力，切回「今日」就會看到。')).toBeTruthy()
+  })
+
+  it('does not repeat the date inside a detail for a single day, and names the window for several', async () => {
+    const user = await mount({ kind: 'ok', data: daysOf(3) })
+    await user.click(tile('電子零組件'))
+    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).queryByText(/09\/26/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: '近 3 日' }))
+    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).getByText(/09\/24–09\/26（3 個交易日）/)).toBeTruthy()
   })
 
   it('puts the pick in the address bar without adding a history entry, and clears it again', async () => {
     const user = await mount({ kind: 'ok', data })
     const before = window.history.length
-    await user.click(legendRow(await buyList(), /電子零組件/))
+    await user.click(await screen.findByRole('button', { name: /^電子零組件，買賣超/ }))
     expect(window.location.hash).toBe('#/sector-flow/28')
     expect(window.history.length).toBe(before)
-    await user.click(legendRow(await buyList(), /電子零組件/))
+    await user.click(tile('電子零組件'))
     expect(window.location.hash).toBe('#/sector-flow')
   })
 
-  it('opens a link to a named slice under its legend row, with the table left closed', async () => {
+  it('opens a link to a sector beside the map, with the table left closed', async () => {
     await mount({ kind: 'ok', data }, '24:design')
     const detail = await screen.findByRole('group', { name: 'IC 設計細節' })
-    expect(within(await sellList()).getByText(/IC 設計/).closest('li')!.contains(detail)).toBe(true)
+    expect(aside().contains(detail)).toBe(true)
     expect(within(detail).getByText('賣超主力前 5')).toBeTruthy()
+    expect(tile('IC 設計').getAttribute('aria-pressed')).toBe('true')
     expect((screen.getByText('看詳細數字').closest('details') as HTMLDetailsElement).open).toBe(false)
   })
 
-  it('opens a link to a sector that has no slice in the table, and opens the table', async () => {
-    // 類股11 (+1.0) is one of the sectors folded into 其他 on the buy side.
-    await mount({ kind: 'ok', data }, '51')
-    const detail = await screen.findByRole('group', { name: '類股11細節' })
+  it('opens a link to a sector with no tile under its table row, and opens the table', async () => {
+    // A sector nobody traded in the window has no area on the map, but it is in the table.
+    const d: SectorFlowData = {
+      asOf: data.asOf,
+      days: [day('2026-10-02', [row('28', '電子零組件', 10), row('77', '無成交類股', 5, { turnoverTwd: 0 })])],
+    }
+    await mount({ kind: 'ok', data: d }, '77')
+    const detail = await screen.findByRole('group', { name: '無成交類股細節' })
     expect(detail.closest('tr')).not.toBeNull()
+    expect(aside().contains(detail)).toBe(false)
     expect((screen.getByText('看詳細數字').closest('details') as HTMLDetailsElement).open).toBe(true)
   })
 
@@ -429,24 +427,18 @@ describe('SectorFlowPage: the table', () => {
     expect(fold.open).toBe(false)
   })
 
-  it('shows the signed 億 figure per sector, with the bar and the turnover share', async () => {
+  it('shows the signed 億 figure and the turnover share per sector, with no bar', async () => {
     const user = await mount({ kind: 'ok', data })
     const table = await openTable(user)
     const elec = within(table).getByText('電子零組件').closest('tr')!
     expect(within(elec).getByText('+234.0 億')).toBeTruthy()
     expect(within(elec).getByText('10.0%')).toBeTruthy()
     expect(screen.getByText('點類股名稱，看那個產業的細節。')).toBeTruthy()
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['類股', '買賣超', '佔成交'])
+    expect(table.querySelector('.sf-bar')).toBeNull()
   })
 
-  it('does not repeat the date inside a detail for a single day, and names the window for several', async () => {
-    const user = await mount({ kind: 'ok', data: daysOf(3) })
-    await user.click(legendRow(await buyList(), /電子零組件/))
-    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).queryByText(/09\/26/)).toBeNull()
-    await user.click(screen.getByRole('button', { name: '近 3 日' }))
-    expect(within(screen.getByRole('group', { name: '電子零組件細節' })).getByText(/09\/24–09\/26（3 個交易日）/)).toBeTruthy()
-  })
-
-  it('opens a sector under its own row when the name is pressed, and not under a ring', async () => {
+  it('opens a sector under its own row when the name is pressed, and not beside the map', async () => {
     const user = await mount({ kind: 'ok', data })
     const table = await openTable(user)
     const name = within(table).getByRole('button', { name: '電子零組件' })
@@ -454,11 +446,21 @@ describe('SectorFlowPage: the table', () => {
     expect(name.getAttribute('aria-expanded')).toBe('true')
     const detail = within(table).getByRole('group', { name: '電子零組件細節' })
     expect(detail.closest('tr')!.previousElementSibling).toBe(name.closest('tr'))
-    // One place at a time: the legend row of the same sector stays closed.
+    // One place at a time: the panel beside the map stays on its prompt, though the tile shows the pick.
     expect(screen.getAllByRole('group', { name: '電子零組件細節' })).toHaveLength(1)
-    expect(legendRow(await buyList(), /電子零組件/).getAttribute('aria-expanded')).toBe('false')
+    expect(within(aside()).queryByRole('group')).toBeNull()
+    expect(tile('電子零組件').getAttribute('aria-pressed')).toBe('true')
     await user.click(name)
     expect(within(table).queryByRole('group', { name: '電子零組件細節' })).toBeNull()
+  })
+
+  it('moves the detail to the map when a tile is pressed after a table row', async () => {
+    const user = await mount({ kind: 'ok', data })
+    const table = await openTable(user)
+    await user.click(within(table).getByRole('button', { name: '電子零組件' }))
+    await user.click(tile('電子零組件'))
+    expect(within(table).queryByRole('group', { name: '電子零組件細節' })).toBeNull()
+    expect(within(aside()).getByRole('group', { name: '電子零組件細節' })).toBeTruthy()
   })
 
   it('opens 半導體 into its parts by default and can fold them, separate from opening its detail', async () => {

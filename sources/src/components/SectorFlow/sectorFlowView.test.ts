@@ -7,6 +7,7 @@ import {
   buildView,
   leadClause,
   reconciliationGap,
+  sideTotals,
   signedBillion,
   toneOf,
   windowLabel,
@@ -185,6 +186,24 @@ describe('buildView', () => {
 
   it('has nothing to show for an empty file', () => {
     expect(buildView([], 'day', 'total')).toBeNull()
+  })
+})
+
+describe('sideTotals', () => {
+  it('adds buyers and sellers up separately, counting 半導體 by its four parts', () => {
+    const t = sideTotals(buildView([D2], 'day', 'total')!)
+    // Buys: 電子零組件 234 + 晶圓製造 32 + 封裝測試 10. Sells: 電腦及週邊 114 + IC 設計 70 + 設備材料 42 + ETF 80.
+    // The parent 半導體 (−70) is not counted on top of its parts.
+    expect(t.buyTwd).toBe(276 * E8)
+    expect(t.buyCount).toBe(3)
+    expect(t.sellTwd).toBe(-306 * E8)
+    expect(t.sellCount).toBe(4)
+    expect(t.netTwd).toBe(-30 * E8)
+  })
+
+  it('has an empty side when nothing moved that way', () => {
+    const t = sideTotals(buildView([day('2026-10-02', [row('28', 'x', 3)])], 'day', 'total')!)
+    expect(t).toEqual({ buyTwd: 3 * E8, buyCount: 1, sellTwd: 0, sellCount: 0, netTwd: 3 * E8 })
   })
 })
 

@@ -2,21 +2,22 @@
  * 資金流向: which industries the three institutional investors (外資、投信、自營商) bought and sold,
  * from the after-hours file `market/sector_flow.json`.
  *
- * Top to bottom: the day's net in one figure with the two totals beside it, then two rings — where
- * the buying went and where the selling came from, each its own 100% — and, folded away, the full
- * table. Picking a ring slice, a legend row or a table row opens that sector's detail in place, under
- * the thing that was picked. The picked sector lives in the URL (`#/sector-flow/24`), so a link opens
- * the page with that sector already open. Picking replaces the URL instead of pushing, so the back
- * button leaves the page rather than stepping through every row the reader touched.
+ * Top to bottom: the day's net on one line, a treemap (one tile per industry, area = turnover, colour =
+ * what the institutions did there) with the picked industry's detail beside it, and — folded away —
+ * the full table. A tile opens the detail beside the map (under it on a phone); a table row opens it
+ * under that row. One industry is open at a time. The picked industry lives in the URL
+ * (`#/sector-flow/24`), so a link opens the page with it already open. Picking replaces the URL instead
+ * of pushing, so the back button leaves the page rather than stepping through every tile touched.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { fetchSectorFlow, type SectorFlowData } from '../../services/sectorFlowProxy'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { formatViewHash } from '../viewRoute'
-import { buildSides } from './flowSides'
 import { SectorDetail } from './SectorDetail'
 import { SectorFlowTable } from './SectorFlowTable'
-import { SectorSides } from './SectorSides'
+import { SectorTreemap } from './SectorTreemap'
 import {
   METRIC_LABEL,
   RANGES,
@@ -25,6 +26,7 @@ import {
   buildView,
   rangeHint,
   reconciliationGap,
+  sideTotals,
   signedBillion as signed,
   toneOf,
   windowLabel,
@@ -35,13 +37,12 @@ import {
 
 const METRICS: Metric[] = ['total', 'foreign', 'trust', 'dealer']
 
-/** Where a picked sector's detail opens: under a ring's legend row, or under a table row. */
-type Origin = 'ring' | 'table'
+/** Where a picked sector's detail opens: beside (or under) the treemap, or under a table row. */
+type Origin = 'map' | 'table'
 
 /** Put the picked sector (or none) in the address bar without adding a history entry. */
 function writeSelectionToUrl(code: string | null) {
-  // 其他 is not a sector: it has no link of its own.
-  const hash = formatViewHash({ view: 'sector-flow', ticker: code && !code.startsWith('other:') ? code : undefined })
+  const hash = formatViewHash({ view: 'sector-flow', ticker: code ?? undefined })
   if (window.location.hash !== hash) window.history.replaceState(null, '', hash)
 }
 
@@ -57,6 +58,8 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
   /** Set by a press; a sector arriving from a link has none and is placed by `detailIn` below. */
   const [origin, setOrigin] = useState<Origin | null>(null)
   const [tableOpen, setTableOpen] = useState(false)
+  const narrow = useMediaQuery('(max-width: 720px)')
+  const detailRef = useRef<HTMLElement | null>(null)
 
   // A pasted link or the back/forward buttons change the route's argument from outside.
   useEffect(() => {
@@ -84,7 +87,7 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
   }, [])
 
   const view = useMemo(() => (data ? buildView(data.days, range, metric) : null), [data, range, metric])
-  const sides = useMemo(() => (view ? buildSides(view) : null), [view])
+  const totals = useMemo(() => (view ? sideTotals(view) : null), [view])
   const dayCount = data?.days.length ?? 0
   const hint = data ? rangeHint(dayCount) : null
 
@@ -96,20 +99,13 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
     }
     return m
   }, [view])
-  /** The codes that have a row in a legend, i.e. the named slices of either ring. */
-  const ringCodes = useMemo(
-    () => new Set([...(sides?.buy.slices ?? []), ...(sides?.sell.slices ?? [])].filter((s) => !s.other).map((s) => s.code)),
-    [sides],
-  )
+  /** The codes that have a tile: a sector with no turnover in the window is left off the map. */
+  const mapCodes = useMemo(() => new Set([...rows.values()].filter((r) => r.turnoverTwd > 0).map((r) => r.code)), [rows])
 
   // A code from a stale link that this file does not have is ignored, not shown as an error.
-  const isOther = selected !== null && selected.startsWith('other:')
-  const picked = selected !== null && !isOther ? (rows.get(selected) ?? null) : null
-  const sectorPicked = picked !== null
-  /** Under a ring when pressed there (or linked to a named slice); otherwise in the table. */
-  const detailIn: Origin | null = !sectorPicked
-    ? null
-    : origin ?? (ringCodes.has(picked.code) ? 'ring' : 'table')
+  const picked = selected !== null ? (rows.get(selected) ?? null) : null
+  const defaultOrigin = (code: string): Origin => (mapCodes.has(code) ? 'map' : 'table')
+  const detailIn: Origin | null = picked === null ? null : (origin ?? defaultOrigin(picked.code))
 
   // A sector that opens in the table needs the table open.
   useEffect(() => {
@@ -117,10 +113,17 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
   }, [detailIn])
 
   const pick = (code: string, from: Origin) => {
-    const next = code === selected && (origin ?? (ringCodes.has(code) ? 'ring' : 'table')) === from ? null : code
+    const next = code === selected && (origin ?? defaultOrigin(code)) === from ? null : code
     setSelected(next)
     setOrigin(next === null ? null : from)
     writeSelectionToUrl(next)
+    // The detail sits under the map on a phone, possibly below the fold: bring it into view.
+    if (next !== null && from === 'map') {
+      requestAnimationFrame(() => {
+        const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        detailRef.current?.scrollIntoView?.({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' })
+      })
+    }
   }
 
   const renderDetail = (code: string) => {
@@ -177,40 +180,73 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
         <p className="hint" style={{ marginTop: 8 }}>
           資料格式不符，無法顯示
         </p>
-      ) : !view || !sides ? (
+      ) : !view || !totals ? (
         <p className="hint" style={{ marginTop: 8 }}>
           尚無類股資金流向資料，盤後三大法人資料公布後會自動產生。
         </p>
       ) : (
         <>
-          <div className="sf-strip">
-            <div className="sf-strip-lead">
-              <div className="sf-strip-label">
+          <div className="sf-summary">
+            <div className="sf-summary-net">
+              <span className="sf-summary-label">
                 {windowLabel(view.dates)}　{who}
-                {sides.netTwd >= 0 ? '淨買超' : '淨賣超'}
-              </div>
-              <div className={`sf-hero ${chipClass(toneOf(sides.netTwd))}`}>{signed(sides.netTwd)}</div>
-              <p className="sf-strip-note">買進的產業減掉賣出的產業</p>
+                {totals.netTwd >= 0 ? '淨買超' : '淨賣超'}
+              </span>
+              <strong className={`sf-summary-figure ${chipClass(toneOf(totals.netTwd))}`}>{signed(totals.netTwd)}</strong>
             </div>
-            <div className="sf-strip-cell">
-              <div className="sf-strip-label">買進的產業</div>
-              <div className={`sf-figure ${chipClass(sides.buy.totalTwd)}`}>{signed(sides.buy.totalTwd)}</div>
-              <p className="sf-strip-note">共 {sides.buy.count} 個類股</p>
-            </div>
-            <div className="sf-strip-cell">
-              <div className="sf-strip-label">賣出的產業</div>
-              <div className={`sf-figure ${chipClass(sides.sell.totalTwd)}`}>{signed(sides.sell.totalTwd)}</div>
-              <p className="sf-strip-note">共 {sides.sell.count} 個類股</p>
-            </div>
+            <p className="sf-summary-sides">
+              買進的產業 <span className={chipClass(totals.buyTwd)}>{signed(totals.buyTwd)}</span>（{totals.buyCount} 個類股）
+              <span className="sf-summary-gap" aria-hidden="true" />
+              賣出的產業 <span className={chipClass(totals.sellTwd)}>{signed(totals.sellTwd)}</span>（{totals.sellCount} 個類股）
+            </p>
           </div>
 
-          <SectorSides
-            sides={sides}
-            selected={isOther ? selected : sectorPicked && detailIn === 'ring' ? picked.code : null}
-            detailHere={detailIn === 'ring'}
-            onSelect={(code) => pick(code, 'ring')}
-            renderDetail={renderDetail}
-          />
+          <ul className="sf-legend" aria-label="怎麼看方塊圖">
+            <li>一塊是一個類股，面積是成交金額</li>
+            <li>
+              <span className="sf-swatch sf-swatch-buy" aria-hidden="true" />
+              紅色：買超
+            </li>
+            <li>
+              <span className="sf-swatch sf-swatch-sell" aria-hidden="true" />
+              綠色：賣超
+            </li>
+            <li>顏色越深，買賣越多</li>
+            <li>點一塊看細節</li>
+          </ul>
+
+          <div className="sf-stage">
+            <SectorTreemap
+              view={view}
+              selected={picked?.code ?? null}
+              onSelect={(code) => pick(code, 'map')}
+              narrow={narrow}
+            />
+            <aside
+              className={detailIn === 'map' ? 'sf-aside' : 'sf-aside sf-aside-empty'}
+              ref={detailRef}
+              aria-label="類股細節"
+            >
+              {detailIn === 'map' && picked ? (
+                <>
+                  <div className="sf-aside-head">
+                    <h3>{picked.name}</h3>
+                    <button
+                      type="button"
+                      className="sf-close"
+                      aria-label={`關閉${picked.name}細節`}
+                      onClick={() => pick(picked.code, 'map')}
+                    >
+                      <X size={16} aria-hidden />
+                    </button>
+                  </div>
+                  {renderDetail(picked.code)}
+                </>
+              ) : (
+                <p className="hint">點一塊方塊，看那個類股的法人買賣與主力個股。</p>
+              )}
+            </aside>
+          </div>
 
           <details
             className="chart-more sf-fold"
@@ -221,7 +257,7 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
             <p className="hint sf-table-hint">點類股名稱，看那個產業的細節。</p>
             <SectorFlowTable
               view={view}
-              selected={sectorPicked && detailIn === 'table' ? picked.code : null}
+              selected={picked !== null && detailIn === 'table' ? picked.code : null}
               detailHere={detailIn === 'table'}
               onSelect={(code) => pick(code, 'table')}
               renderDetail={renderDetail}
@@ -229,7 +265,7 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
           </details>
 
           <p className="hint">
-            金額是「法人買賣超股數 × 當日均價（成交金額 ÷ 成交股數）」的估算，單位億元。左右兩個圓各自是 100%：左邊只看買超的產業，右邊只看賣超的產業，兩邊的總額不同；這兩個圖不表示資金從賣出的產業轉到買進的產業。
+            金額是「法人買賣超股數 × 當日均價（成交金額 ÷ 成交股數）」的估算，單位億元。買進與賣出的產業各自加總，兩邊的總額不同；方塊圖不表示資金從賣出的產業轉到買進的產業。
             {view.allOtc ? '涵蓋上市與上櫃。' : '部分日期只含上市（當時上櫃資料還沒公布）。'}
             半導體拆成 IC 設計、晶圓製造、封裝測試、設備材料與其他四塊計算（依櫃買中心產業價值鏈歸類），所以 IC 設計的賣壓不會被半導體合計蓋住；ETF 與受益證券另列。
           </p>
@@ -244,4 +280,3 @@ export function SectorFlowPage({ focus }: { focus?: string }) {
     </div>
   )
 }
-

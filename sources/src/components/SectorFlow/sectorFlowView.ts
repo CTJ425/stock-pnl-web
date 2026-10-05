@@ -169,6 +169,31 @@ export function buildView(days: SectorFlowDay[], range: Range, metric: Metric): 
   }
 }
 
+/** What was bought and what was sold, each side added up on its own. */
+export interface SideTotals {
+  buyTwd: number
+  buyCount: number
+  /** Negative. */
+  sellTwd: number
+  sellCount: number
+  /** Buy plus sell. */
+  netTwd: number
+}
+
+/**
+ * Sectors that bought and sectors that sold, added up separately. Semiconductors count by their four
+ * parts, not as one parent: the parent can hide a big seller inside a small net (2026-10-02: 半導體
+ * +3.4 億, of which IC 設計 −69.9 億). The two sides are never matched against each other.
+ */
+export function sideTotals(view: FlowView): SideTotals {
+  const leaves = view.sectors.flatMap((s) => (s.children.length > 0 ? s.children : [s]))
+  const buys = leaves.filter((r) => r.netTwd > 0)
+  const sells = leaves.filter((r) => r.netTwd < 0)
+  const buyTwd = buys.reduce((sum, r) => sum + r.netTwd, 0)
+  const sellTwd = sells.reduce((sum, r) => sum + r.netTwd, 0)
+  return { buyTwd, buyCount: buys.length, sellTwd, sellCount: sells.length, netTwd: buyTwd + sellTwd }
+}
+
 /**
  * 億 with a sign, one decimal. A figure that rounds to zero reads "0.0 億", never "-0.0 億": a
  * negative zero says "sold" about a sector nobody sold.

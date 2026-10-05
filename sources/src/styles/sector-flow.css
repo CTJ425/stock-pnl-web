@@ -18,304 +18,227 @@
   margin: 8px 0 0;
 }
 
-/*
- * Slice colours. Two tones per side, alternating, so neighbouring slices differ in lightness and not
- * only in hue; the numerals and the numbered list carry which slice is which. Checked with the
- * dataviz palette validator against each theme's surface (the dark theme is the base, as in tokens.css).
- */
-.sf-page {
-  --sf-buy-deep: #b93a28;
-  --sf-buy-soft: #ea6878;
-  --sf-sell-deep: #12784a;
-  --sf-sell-soft: #3dac7a;
-  --sf-other: #4a5560;
-}
-
-:root[data-theme='light'] .sf-page {
-  --sf-buy-deep: #b02a26;
-  --sf-buy-soft: #e07a74;
-  --sf-sell-deep: #0f6b40;
-  --sf-sell-soft: #52b183;
-  --sf-other: #aab3be;
-}
-
-.sf-slice-buy-deep {
-  stroke: var(--sf-buy-deep);
-  background: var(--sf-buy-deep);
-}
-
-.sf-slice-buy-soft {
-  stroke: var(--sf-buy-soft);
-  background: var(--sf-buy-soft);
-}
-
-.sf-slice-sell-deep {
-  stroke: var(--sf-sell-deep);
-  background: var(--sf-sell-deep);
-}
-
-.sf-slice-sell-soft {
-  stroke: var(--sf-sell-soft);
-  background: var(--sf-sell-soft);
-}
-
-.sf-slice-buy-other,
-.sf-slice-sell-other {
-  stroke: var(--sf-other);
-  background: var(--sf-other);
-}
-
-/* ----- the day in three figures, closed by the double rule a statement uses for a total ----- */
-.sf-strip {
+/* ----- the day on one line, closed by the double rule a statement uses for a total ----- */
+.sf-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
+  align-items: baseline;
+  gap: 4px 28px;
   margin-top: 16px;
-  padding-bottom: 18px;
+  padding-bottom: 12px;
   border-bottom: 3px double var(--cds-text-primary);
 }
 
-.sf-strip-lead {
-  flex: 1.4 1 280px;
-  min-width: 0;
-  padding-right: 24px;
+.sf-summary-net {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
 }
 
-.sf-strip-cell {
-  flex: 1 1 200px;
-  min-width: 0;
-  padding: 0 24px;
-  border-left: 1px solid var(--cds-border-subtle);
-}
-
-.sf-strip-cell:last-child {
-  padding-right: 0;
-}
-
-.sf-strip-label {
-  font-size: var(--type-label-01);
-  font-weight: 500;
-  color: var(--cds-text-helper);
-}
-
-.sf-hero {
-  font-size: 2.5rem;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-}
-
-.sf-figure {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.sf-strip-note {
-  margin: 6px 0 0;
-  font-size: 0.8125rem;
+.sf-summary-label {
+  font-size: var(--type-body-01);
   color: var(--ink-secondary);
 }
 
-/* ----- two rings, each its own 100% ----- */
-.sf-sides {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
-  gap: 28px 32px;
-  margin-top: 22px;
+.sf-summary-figure {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
-.sf-panel {
+.sf-summary-sides {
+  margin: 0;
+  font-size: var(--type-body-01);
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-summary-sides span {
+  font-weight: 600;
+}
+
+.sf-summary-gap {
+  display: inline-block;
+  width: 20px;
+}
+
+/* How to read the picture, one line. */
+.sf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-01);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+.sf-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius);
+}
+
+.sf-swatch-buy {
+  background: color-mix(in srgb, var(--up) 45%, var(--cds-layer-01));
+}
+
+.sf-swatch-sell {
+  background: color-mix(in srgb, var(--down) 45%, var(--cds-layer-01));
+}
+
+/* ----- the treemap, with the picked sector's detail beside it ----- */
+.sf-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+
+.sf-treemap {
+  position: relative;
+  width: 100%;
+  container-type: inline-size;
+  background: var(--cds-layer-01);
+}
+
+.sf-tile,
+.sf-parent-head {
+  appearance: none;
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--cds-layer-01);
+  border-radius: 0;
+  color: var(--cds-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sf-tile:hover,
+.sf-parent-head:hover {
+  border-color: var(--cds-text-primary);
+}
+
+.sf-tile:focus-visible,
+.sf-parent-head:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.sf-tile-selected {
+  border-color: var(--cds-text-primary);
+  outline: 2px solid var(--cds-text-primary);
+  outline-offset: -3px;
+  z-index: 1;
+}
+
+.sf-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 6px;
+  line-height: 1.25;
+}
+
+.sf-tile-name {
+  font-size: clamp(11px, 1.45cqw, 14px);
+  font-weight: 600;
+}
+
+.sf-tile-figure {
+  font-size: clamp(11px, 1.3cqw, 13px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 半導體: a header strip on top, its four sub-sectors below. */
+.sf-parent {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.sf-parent-head {
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.sf-parent-head .sf-tile-name,
+.sf-parent-head .sf-tile-figure {
+  font-size: 13px;
+}
+
+.sf-parent-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.sf-aside {
   min-width: 0;
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--cds-text-primary);
 }
 
-.sf-panel-title {
+.sf-aside-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sf-aside-head h3 {
+  margin: 0;
   font-size: var(--type-body-02);
 }
 
-.sf-panel-sub {
-  margin-top: 2px;
-}
-
-.sf-panel-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.sf-ring {
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.sf-ring svg {
-  display: block;
-}
-
-/* The hole: its box is the ring's centre ± 60 px (see RING in flowSides.ts). */
-.sf-ring-center {
-  /* The square's corners reach into the ring (85 px out, the ring spans 62–98); it must not catch their clicks. */
-  pointer-events: none;
-  position: absolute;
-  left: 62px;
-  top: 62px;
-  width: 120px;
-  height: 120px;
-  display: flex;
-  flex-direction: column;
+.sf-close {
+  appearance: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-}
-
-.sf-ring-label {
-  font-size: var(--type-label-01);
-  color: var(--cds-text-helper);
-}
-
-.sf-ring-total {
-  font-size: 1.375rem;
-  font-weight: 700;
-}
-
-.sf-rank {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  box-sizing: border-box;
-  border: 1px solid var(--cds-border-strong);
-  border-radius: var(--radius);
-  background: var(--cds-layer-01);
-  color: var(--cds-text-primary);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-  text-align: center;
-}
-
-.sf-side-list {
-  align-self: stretch;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.sf-side-item {
-  border-top: 1px solid var(--cds-border-subtle);
-}
-
-.sf-side-btn {
-  appearance: none;
-  display: grid;
-  grid-template-columns: 12px 18px minmax(0, 1fr) 56px 76px 16px;
-  gap: 0 8px;
-  align-items: center;
-  width: 100%;
-  min-height: 36px;
+  width: 36px;
+  height: 36px;
+  margin-right: -8px;
   padding: 0;
   border: none;
+  border-radius: var(--radius);
   background: none;
-  color: inherit;
-  font: inherit;
-  font-size: var(--type-body-01);
-  text-align: left;
+  color: var(--ink-secondary);
   cursor: pointer;
 }
 
-.sf-side-btn:hover,
-.sf-side-open > .sf-side-btn {
+.sf-close:hover {
   background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
-.sf-side-btn:focus-visible,
+.sf-close:focus-visible,
 .sf-name-btn:focus-visible {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
 }
-
-.sf-side-btn svg {
-  color: var(--ink-secondary);
-}
-
-/* The detail opens under the row that was picked, indented under the name. */
-.sf-side-detail,
-.sf-detail-row > td {
-  padding: 4px 0 14px 38px;
-}
-
-.sf-folded {
-  margin: 0;
-  padding: 2px 0 10px 38px;
-  list-style: none;
-}
-
-.sf-folded li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 56px 76px;
-  gap: 0 8px;
-  align-items: center;
-  min-height: 32px;
-  font-size: var(--type-body-01);
-}
-
-/* A ring slice and its numeral are a pointer shortcut for the row; they are not tab stops. */
-.sf-slice,
-.sf-rank {
-  cursor: pointer;
-}
-
-.sf-slice {
-  transition: opacity var(--cds-dur-fast) var(--cds-ease-productive);
-}
-
-.sf-slice-dim {
-  opacity: 0.3;
-}
-
-.sf-swatch-box {
-  width: 12px;
-  height: 12px;
-}
-
-.sf-side-rank {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-secondary);
-}
-
-.sf-side-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.sf-side-share {
-  text-align: right;
-  color: var(--ink-secondary);
-}
-
-.sf-side-amount {
-  text-align: right;
-}
-
-.sf-tag {
-  height: 20px;
-  padding: 0 6px;
-  border: 1px solid var(--cds-border-strong);
-  border-radius: var(--radius);
-  color: var(--ink-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
 
 /* ----- the detail itself ----- */
 .sf-detail {
@@ -416,6 +339,7 @@
 }
 
 .sector-flow-table .sf-detail-row > td {
+  padding: 4px 0 14px 12px;
   white-space: normal;
   background: var(--cds-layer-01);
 }
@@ -456,44 +380,6 @@
   outline-offset: 2px;
 }
 
-.sf-bar-head,
-.sf-bar-cell {
-  width: 34%;
-  min-width: 120px;
-}
-
-.sf-bar {
-  position: relative;
-  height: 12px;
-}
-
-/* The zero line the bars grow from. */
-.sf-bar::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: -6px;
-  bottom: -6px;
-  width: 1px;
-  background: var(--cds-border-strong);
-}
-
-.sf-fill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-}
-
-.sf-buy {
-  left: 50%;
-  background: var(--up);
-}
-
-.sf-sell {
-  right: 50%;
-  background: var(--down);
-}
-
 /* ----- the link card in 台股市場 ----- */
 .sf-link {
   display: flex;
@@ -509,39 +395,40 @@
   margin-top: 2px;
 }
 
+@media (max-width: 960px) {
+  .sf-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Nothing picked: the hint beside the map has no place to sit under it, and the legend already says it. */
+  .sf-aside-empty {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .sf-page {
     padding: 14px 12px;
   }
 
-  .sf-strip-lead {
-    flex: 1 1 100%;
-    padding: 0 0 14px;
+  .sf-summary-gap {
+    display: block;
+    width: 0;
+    height: 0;
   }
 
-  .sf-strip-lead + .sf-strip-cell {
-    padding-left: 0;
-    border-left: none;
+  .sf-tile-name {
+    font-size: 12px;
   }
 
-  .sf-strip-cell {
-    flex: 1 1 40%;
-    padding: 12px 0 0 12px;
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  .sf-strip-lead + .sf-strip-cell,
-  .sf-strip-cell:last-child {
-    padding-right: 0;
-  }
-
-    .sf-tag {
-    height: 18px;
-    padding: 0 4px;
+  .sf-tile-figure {
     font-size: 11px;
-    line-height: 16px;
   }
 
+  .sf-close {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -549,15 +436,8 @@
     display: none;
   }
 
-  .sf-bar-head,
-  .sf-bar-cell {
-    width: 38%;
-    min-width: 104px;
-  }
-
   .sector-flow-table .sf-name {
     min-width: 6.5em;
     max-width: 9em;
   }
-
 }

@@ -1,7 +1,7 @@
 /**
- * The numbers behind the rings: every sector with its signed 億 figure, a bar and its share of the
+ * The numbers behind the treemap: every sector with its signed 億 figure and its share of the
  * market's turnover. Pressing a sector's name opens its detail right under the row, the same detail
- * a ring's legend row opens. It is the complete, screen-reader-friendly version of the rings, so
+ * a tile opens beside the map. It is the complete, screen-reader-friendly version of the treemap, so
  * nothing is only in the picture.
  *
  * Shows the biggest buyers and sellers (and 半導體, always) first; the rest on request.
@@ -18,21 +18,10 @@ const SEMICONDUCTOR = '24'
 
 const pct = (share: number | null) => (share === null ? '—' : `${(share * 100).toFixed(1)}%`)
 
-function Bar({ net, scale }: { net: number; scale: number }) {
-  const width = scale > 0 ? Math.min(50, (Math.abs(net) / scale) * 50) : 0
-  return (
-    <td className="sf-bar-cell" aria-hidden="true">
-      <div className="sf-bar">
-        {net !== 0 && <span className={net > 0 ? 'sf-fill sf-buy' : 'sf-fill sf-sell'} style={{ width: `${width}%` }} />}
-      </div>
-    </td>
-  )
-}
-
 interface Props {
   view: FlowView
   selected: string | null
-  /** Whether a picked sector opens here (otherwise it opens under a ring). */
+  /** Whether a picked sector opens here (otherwise it opens beside the treemap). */
   detailHere: boolean
   onSelect: (code: string) => void
   renderDetail: (code: string) => ReactNode
@@ -71,12 +60,11 @@ export function SectorFlowTable({ view, selected, detailHere, onSelect, renderDe
             </button>
           </td>
           <td className={`num ${chipClass(toneOf(r.netTwd))}`}>{signed(r.netTwd)}</td>
-          <Bar net={r.netTwd} scale={view.scale} />
           <td className="num sf-share">{pct(r.turnoverShare)}</td>
         </tr>
         {open && (
           <tr className="sf-detail-row">
-            <td colSpan={4}>{renderDetail(r.code)}</td>
+            <td colSpan={3}>{renderDetail(r.code)}</td>
           </tr>
         )}
       </Fragment>
@@ -92,9 +80,6 @@ export function SectorFlowTable({ view, selected, detailHere, onSelect, renderDe
               <th scope="col">類股</th>
               <th scope="col" className="num">
                 買賣超
-              </th>
-              <th scope="col" className="sf-bar-head">
-                <span className="sr-only">買賣超大小，紅色向右為買超，綠色向左為賣超</span>
               </th>
               <th scope="col" className="num sf-share">
                 佔成交

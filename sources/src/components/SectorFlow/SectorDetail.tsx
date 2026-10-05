@@ -1,6 +1,6 @@
 /**
- * What one sector did, opened under the row that was picked (a legend row under a ring, or a row of
- * the table): one plain sentence, the four investor figures, its share of the market, and the five
+ * What one sector did, opened where it was picked (beside the treemap, or under a row of the
+ * table): one plain sentence, the four investor figures, its share of the market, and the five
  * biggest buyers or sellers behind the number.
  *
  * Which side's stocks it lists follows the sign of the figure on screen: a sector that bought lists
