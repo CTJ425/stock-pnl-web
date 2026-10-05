@@ -19,13 +19,13 @@
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
 - **Status**: 🔄 OPEN REMAINDER — **released as 0.10.30** (`6c25488`) and 0.10.31 (`872e620`, `main` = `dev`; 資金流向 windows 今日 / 近 3 日 / 近 5 日). PROD DDL applied and PROD Edge deployed (`stock-report` v29 `6cf00d27dc3d` = DEV v50, `verify_jwt` false kept); `verify_setup()` 11/11 PASS on PROD; Release 0.10.30 created by CI, body correct; production serves the build (live bundle carries `sector-flow` and `保持登入`).
 - **Agent**: Claude
-- **Timestamp**: 2026-10-05 14:40:00 Asia/Taipei
+- **Timestamp**: 2026-10-05 14:52:00 Asia/Taipei
 - **Spec**: docs/agent/specs/194-login-remember-and-sector-flow.md
 - **Done**: items 1–3, 4a, 6, 7, 8 — password reveal, 保持登入 7 天, 資金流向 page (layout B, in-place details, per-group top-5 stocks, treemap removed), the 手動更新 button, the three free-tier optimisations on DEV **and PROD**. Full text in `TASK_ARCHIVE.md`.
 - **Items**:
   4. **No `market/sector_flow.json` exists on DEV or PROD yet** — the page shows 尚無類股資金流向資料. The first automatic run is the first chips round after the probe sees T86 (Mon 2026-10-05, ~16:00 Taipei), or the 手動更新 button (`sync-sector-flow`) on either environment. Then check the page on PROD, and that the TPEx half arrives (`coverage.otc`) ⏳
   5. Real-login browser check: 保持登入 across a close/reopen on iOS Safari and Windows (the 7-day cap itself is unit-tested only) ⏳
-  10. 資金流向 rebuilt as a treemap, **0.10.32-dev.1, on `dev` (`03467ee`, pushed)** (user: 「改用方塊圖…請幫我commit DEV」, 「push dev」). Open: look at it on the real file once item 4 produces one; release when the user says so ⏳
+  10. 資金流向 rebuilt as a treemap, **released as 0.10.32** (`1e8b24f`, `main` = `dev`; frontend only, no Edge or DDL). Open: look at it on the real file once item 4 produces one ⏳
   9. Probe schedule proof: on Mon 2026-10-05, `source_probe_tick` on DEV and PROD should show ticks only between 12:00 and 23:30 Taipei, none outside; the only proof today is structural (schedule read back, and a test ties `schema.sql` to every probe window) ⏳
 
 ### Task 193: Codebase review 2026-10-04 — fix the findings (B1–B4)
