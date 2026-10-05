@@ -25,7 +25,7 @@
 - **Items**:
   4. **No `market/sector_flow.json` exists on DEV or PROD yet** — the page shows 尚無類股資金流向資料. The first automatic run is the first chips round after the probe sees T86 (Mon 2026-10-05, ~16:00 Taipei), or the 手動更新 button (`sync-sector-flow`) on either environment. Then check the page on PROD, and that the TPEx half arrives (`coverage.otc`) ⏳
   5. Real-login browser check: 保持登入 across a close/reopen on iOS Safari and Windows (the 7-day cap itself is unit-tested only) ⏳
-  10. 資金流向 rebuilt as a treemap, **0.10.32-dev.1, committed to `dev`, not pushed** (user: 「改用方塊圖…請幫我commit DEV」). Open: push `dev`, then look at it on the real file once item 4 produces one; release when the user says so ⏳
+  10. 資金流向 rebuilt as a treemap, **0.10.32-dev.1, on `dev` (`03467ee`, pushed)** (user: 「改用方塊圖…請幫我commit DEV」, 「push dev」). Open: look at it on the real file once item 4 produces one; release when the user says so ⏳
   9. Probe schedule proof: on Mon 2026-10-05, `source_probe_tick` on DEV and PROD should show ticks only between 12:00 and 23:30 Taipei, none outside; the only proof today is structural (schedule read back, and a test ties `schema.sql` to every probe window) ⏳
 
 ### Task 193: Codebase review 2026-10-04 — fix the findings (B1–B4)
