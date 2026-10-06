@@ -2,8 +2,8 @@
 
 - Agent: Claude
 - Action: **0.10.33 released** — Fugle MarketData legs (intraday / 5y / syncDaily first, quotes MIS → Fugle → Yahoo); inert on PROD until `FUGLE_API_KEY` is set.
-- Status: ✅ `main` = `dev` = `5f3bb01`; CI green on `main`; Release 0.10.33 by CI with the final body; production serves 0.10.33. PROD `stock-price` v19 `e9afe755c455`, `stock-report` v30 `f1c09b7bc978` (= DEV v32 / v53). **No `FUGLE_API_KEY` on PROD**, and the local / DEV key answers 401 since ~17:50 — Fugle is inert on PROD and falls back on DEV. Left: user checks the key on Fugle; then set PROD secret and run spec 195 §12.
-- Timestamp: 2026-10-06 18:07:08 Asia/Taipei
+- Status: ✅ `main` = 0.10.33 (`5f3bb01`); Fugle **live on PROD and DEV** since 19:23 with new keys set by the user (one per project), proven by `fugle-eval` rows. Left: judge after the 2026-10-07 session with spec 195 §12; optional TWSE incremental daily for `syncDaily` (discussed, not specced).
+- Timestamp: 2026-10-06 19:23:35 Asia/Taipei
 
 ---
 
@@ -17,6 +17,7 @@
 - **Egress proven** on DEV: `fugle-eval` rows 17:32–17:37 (`intraday 1d fugle` 0050 / 6560 / 009828 / 2303, 73–288 ms; `syncDaily fugle=1 … onDemand`). Watchlist "missing" on DEV was the user signed in as another account (`dem…`, 0 rows); `tw_watchlist` intact (10 rows under `zrc…`).
 - **Key 401**: from ~17:50 every Fugle path (incl. `intraday/quote/2330`) answers 401 with the unchanged `sources/.env` key; cause unknown — user to check Fugle's console.
 - **Released** (2026-10-06 18:07:08, user: 「把既有DEV的部分合併到main去，合併之前確認一下還有沒有什麼問題，如果沒問題就直接合併上線」): pre-merge review found the `prices` eval row was written even without a key → gated on `fugleConfigured()` (0.10.33-dev.2, `5a5e2ad`, DEV `stock-price` v32). Gates: npm test 3,123 pass / 7 skipped, build, typecheck:edge, oxlint. Release commit `5f3bb01`, `main` fast-forwarded, `dev` synced; CI green; Release 0.10.33 body final. PROD deploy from the clean tree: hashes equal DEV, `verify_jwt` true / false kept; PROD `app_log` 0 warn/error in 15 min, 0 `fugle-eval` rows. Production check by content: live `appLog` chunk carries `0.10.33`.
+- **Keys live** (2026-10-06 19:23:35): user set new `FUGLE_API_KEY` on PROD (19:11) and DEV (19:15), different keys; checked by sha256 prefix only. After the user opened charts: DEV `intraday 1d fugle` 0050 (106 / 452 ms); PROD `intraday 1d fugle` 6560 (315 ms), `daily 5y fugle` 6560 (102 ms), `syncDaily fugle=1 synced=1 onDemand` (1,096 ms); no `fugle http` rows on either.
 - Also answered (no code): free-plan usage vs PROD load (3 users, 19 nightly tickers, 15 quoted/24h → fits); realtime options (REST only; WebSocket needs a long-lived holder — CF Worker + Durable Object would fit the free DO quota, but 5 subscriptions and the 轉接 clause block it).
 - **Not verified**: Edge egress to Fugle from Supabase; any DEV call (not deployed); a live session; capital reductions / stock dividends. No version bump on the feature branch.
 
