@@ -22,9 +22,9 @@
 - **Timestamp**: 2026-10-06 17:03:22 Asia/Taipei
 - **Spec**: docs/architecture/1006.md (branch `feat/fugle-marketdata`, never pushed to `dev`)
 1. ~~Research: plans, terms, units, limits measured with the free key~~ ✅ (1006.md §1–§3)
-2. ~~Code: `_shared/fugle.ts`, `stock-price/fugleParse.ts`, `stock-report/fugleDaily.ts`; prices / intraday 1d+5d / daily 5y / syncDaily; `max` stays on Yahoo~~ ✅ `f573f53`
+2. ~~Code: `_shared/fugle.ts`, `stock-price/fugleParse.ts`, `stock-report/fugleDaily.ts`; prices / intraday 1d+5d / daily 5y / syncDaily; `max` stays on Yahoo~~ ✅ `ceb539e`, `f00092a` (prevClose = referencePrice, spec §3.1)
 3. ~~`FUGLE_API_KEY` set on DEV (name verified in `secrets list`)~~ ✅
-4. Deploy `stock-price` and `stock-report --no-verify-jwt` to DEV from `f573f53` — ⏳ the agent's deploy was denied by the permission classifier; user runs it
+4. Deploy `stock-price` and `stock-report --no-verify-jwt` to DEV from `f00092a` — ⏳ the agent's deploy was denied by the permission classifier; user runs it
 5. DEV verify: first call proves Edge egress to Fugle; `app_log` action `prices` / `intraday` with `fugle …` messages; a live session (trial phase, 5d catch-up) — ⏳
 6. Decide merge to `dev` + version (`-dev.N` bump happens then, not on the feature branch) — ⏳ user
 7. PROD: secret + deploy + terms decision — ⏳ user, not authorised
