@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 195 on `feat/fugle-marketdata`** — Fugle MarketData first for TW prices / intraday / daily 5y / syncDaily, MIS / Yahoo as fallback.
-- Status: 🔄 0.10.33-dev.1 on `dev` (`eafc817`, fast-forward from `feat/fugle-marketdata`); DEV `stock-price` v31 `b8590c0441da`, `stock-report` v52 `f1c09b7bc978`; `FUGLE_API_KEY` on DEV only. Left: methods 2/3 (need a DEV token), evaluation after the 2026-10-07 session (spec 195 §12), PROD.
-- Timestamp: 2026-10-06 17:03:22 Asia/Taipei
+- Action: **0.10.33 released** — Fugle MarketData legs (intraday / 5y / syncDaily first, quotes MIS → Fugle → Yahoo); inert on PROD until `FUGLE_API_KEY` is set.
+- Status: ✅ `main` = `dev` = `5f3bb01`; CI green on `main`; Release 0.10.33 by CI with the final body; production serves 0.10.33. PROD `stock-price` v19 `e9afe755c455`, `stock-report` v30 `f1c09b7bc978` (= DEV v32 / v53). **No `FUGLE_API_KEY` on PROD**, and the local / DEV key answers 401 since ~17:50 — Fugle is inert on PROD and falls back on DEV. Left: user checks the key on Fugle; then set PROD secret and run spec 195 §12.
+- Timestamp: 2026-10-06 18:07:08 Asia/Taipei
 
 ---
 
@@ -14,6 +14,10 @@
 - **Verified**: vitest 3,121 pass / 7 skipped (+23 new), `npm run build`, `typecheck:edge`, oxlint. Live comparison vs Yahoo: 5y closes within 0.26% (0050, split handled) / 0.39% (2330) / 0.18% (00878); 1d prevClose/open/high/low equal on 2330; 5d prevClose Fugle 2475 (true 9/29 close) vs Yahoo 2480.
 - **Follow-up** (user: 「先按照你原本的建議，MIS -> Fugle -> Yahoo 試試看」): quotes reordered to MIS → Fugle → Yahoo; Fugle now only replaces Yahoo's TW leg for quotes, and stays first for intraday / 5y / syncDaily. vitest 3,122 pass / 7 skipped (one SectorFlowPage test failed once in the full run, passed 3/3 alone; unrelated to this change), build, `typecheck:edge`, oxlint.
 - **Merged + deployed** (2026-10-06 17:30:28, user: 「直接先幫我合併到dev，然後方法二跟三都幫我跑，記得相關log紀錄的方式要存下來」): `fugle-eval` info rows added (one per request a Fugle leg could answer; message formats and the three evaluation queries in spec 195 §12); 0.10.33-dev.1 + changelog; gates npm test 3,123 pass / 7 skipped, build, typecheck:edge, oxlint; `dev` fast-forwarded to `eafc817` and pushed; DEV deploy from the clean tree as above.
+- **Egress proven** on DEV: `fugle-eval` rows 17:32–17:37 (`intraday 1d fugle` 0050 / 6560 / 009828 / 2303, 73–288 ms; `syncDaily fugle=1 … onDemand`). Watchlist "missing" on DEV was the user signed in as another account (`dem…`, 0 rows); `tw_watchlist` intact (10 rows under `zrc…`).
+- **Key 401**: from ~17:50 every Fugle path (incl. `intraday/quote/2330`) answers 401 with the unchanged `sources/.env` key; cause unknown — user to check Fugle's console.
+- **Released** (2026-10-06 18:07:08, user: 「把既有DEV的部分合併到main去，合併之前確認一下還有沒有什麼問題，如果沒問題就直接合併上線」): pre-merge review found the `prices` eval row was written even without a key → gated on `fugleConfigured()` (0.10.33-dev.2, `5a5e2ad`, DEV `stock-price` v32). Gates: npm test 3,123 pass / 7 skipped, build, typecheck:edge, oxlint. Release commit `5f3bb01`, `main` fast-forwarded, `dev` synced; CI green; Release 0.10.33 body final. PROD deploy from the clean tree: hashes equal DEV, `verify_jwt` true / false kept; PROD `app_log` 0 warn/error in 15 min, 0 `fugle-eval` rows. Production check by content: live `appLog` chunk carries `0.10.33`.
+- Also answered (no code): free-plan usage vs PROD load (3 users, 19 nightly tickers, 15 quoted/24h → fits); realtime options (REST only; WebSocket needs a long-lived holder — CF Worker + Durable Object would fit the free DO quota, but 5 subscriptions and the 轉接 clause block it).
 - **Not verified**: Edge egress to Fugle from Supabase; any DEV call (not deployed); a live session; capital reductions / stock dividends. No version bump on the feature branch.
 
 ## 📅 Log: 2026-10-05 14:40:00 Asia/Taipei (Task 194 — sector flow back to a treemap, 0.10.32-dev.1)
