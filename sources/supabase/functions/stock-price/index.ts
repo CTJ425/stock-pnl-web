@@ -452,7 +452,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   }
 
   const twMissing = missing.filter((i) => i.market === 'TPE')
-  if (twMissing.length > 0) {
+  if (twMissing.length > 0 && fugleConfigured()) {
     const yahooTw = twMissing.filter((i) => yahooResults.has(`TPE:${i.ticker}`)).length
     const none = twMissing.length - fromMis.size - fromFugle.size - yahooTw
     await fugleEval(

@@ -308,12 +308,12 @@ Measured with the free key on this host; full numbers in `docs/architecture/1006
 ## 12. Evaluation trail — how to judge a full trading day
 
 Added for the DEV trial (user, 2026-10-06: judge it after the 2026-10-07 session). Every request a Fugle
-leg could answer writes one `app_log` row: `level = 'info'`, `action = 'fugle-eval'`. Rows are pruned
+leg could answer writes one `app_log` row (none at all while `FUGLE_API_KEY` is unset): `level = 'info'`, `action = 'fugle-eval'`. Rows are pruned
 after 30 days (`app-log-prune`). Remove the `fugleEval` calls once the decision is made.
 
 | `message` | Written by | Meaning |
 |---|---|---|
-| `prices mis=N fugle=N yahoo=N none=N [closed]` | `stock-price` `handlePrices`, only when a TW symbol missed the cache | who answered each TW symbol of that batch |
+| `prices mis=N fugle=N yahoo=N none=N [closed]` | `stock-price` `handlePrices`, only when a TW symbol missed the cache and `FUGLE_API_KEY` is set | who answered each TW symbol of that batch |
 | `intraday 1d\|5d fugle\|yahoo\|none` | `handleIntraday` (TPE only) | which source drew the chart |
 | `daily 5y fugle\|yahoo\|none` | `handleDailyRange` (TPE only) | same, 近 5 年 |
 | `syncDaily fugle=N synced=N skipped=N of=N [onDemand]` | `stock-report` `syncDaily` | files written from Fugle vs Yahoo in one run |
