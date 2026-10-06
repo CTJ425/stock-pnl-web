@@ -2,6 +2,16 @@
 
 
 
+### Task 196: Discord 持股日報 headline — each workspace's own unrealized, not a merged total
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-10-06 21:12:50 Asia/Taipei
+1. ✅ Code + tests + changelog, gates green — `dd6414e` (0.10.34-dev.1)
+2. ✅ DEV `stock-report` v56 `2313613a94c8` (`--no-verify-jwt`)
+3. ✅ Released 0.10.34 to `main` — `acd3fde`
+4. ✅ PROD `stock-report` v32 `2313613a94c8`, deployed by the user (2026-10-06 21:12:50 Asia/Taipei)
+- Left (not a task): read the first real post at the next 18:00 run.
+
 ### Task 194 — completed work (rolled from TASK.md 2026-10-05 00:41:08 Asia/Taipei, released as 0.10.30)
 
 #### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
