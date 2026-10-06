@@ -161,9 +161,9 @@ describe('runHoldingsDaily', () => {
     expect(rec.posts.map((p) => p.url)).toEqual([HOOK_1, HOOK_2])
     expect(rec.posts[0].payload.content).toBe('📒 持股日報 09/17（四）')
     expect(rec.posts[0].payload.embeds.map((e) => e.title)).toEqual(['玉山｜台股持股・09/17 收盤'])
-    // Task 192: two workspaces → one section each, plus the grand total in the headline
+    // Task 192: two workspaces → one section each, plus each workspace's own unrealized in the headline
     expect(rec.posts[1].payload.embeds.map((e) => e.title)).toEqual(['元大｜台股持股・09/17 收盤', '複委託｜美股持股・美東 09/17 收盤'])
-    expect(rec.posts[1].payload.content).toMatch(/^📒 持股日報 09\/17（四）\n合計未實現 台股 \*\*[+-][\d,]+\*\*（[+-][\d.]+%）｜美股 \*\*[+-][\d,.]+\*\*（[+-][\d.]+%）$/)
+    expect(rec.posts[1].payload.content).toMatch(/^📒 持股日報 09\/17（四）\n未實現\n・元大：台股 \*\*[+-][\d,]+\*\*（[+-][\d.]+%）\n・複委託：美股 \*\*[+-][\d,.]+\*\*（[+-][\d.]+%）$/)
     expect(rec.posts[0].payload.embeds[0].description).toContain('2330 2330')
     expect(rec.posts[0].payload.embeds[0].description).toContain('**2330 2330**｜1 張｜均價 900｜未實現 **')
     expect(rec.finishes).toEqual([

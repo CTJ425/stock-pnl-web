@@ -651,17 +651,29 @@ describe('Task 192 — one section per workspace', () => {
     expect(p.embeds.some((e) => (e.description ?? '').includes('1,200 股'))).toBe(false)
   })
 
-  it('puts the cross-workspace total in the headline only when there is more than one section', () => {
+  it('lists each workspace\'s own unrealized in the headline, never a merged total, only when there is more than one section', () => {
     const card = aggregateCard(named, QUOTES, YMD)
-    const twd = card.total.twd
     const p = buildHoldingsPayload(card, { generatedAt: GEN, preview: true })!
-    const [head, total] = p.content!.split('\n')
-    expect(head).toBe('【預覽】📒 持股日報 09/17（四）')
-    expect(total.startsWith(`合計未實現 台股 **+${Math.round(twd.unrealized!).toLocaleString('en-US')}**（`)).toBe(true)
-    expect(total).toContain('｜美股 **+')
+    const lines = p.content!.split('\n')
+    expect(lines.slice(0, 2)).toEqual(['【預覽】📒 持股日報 09/17（四）', '未實現'])
+    expect(lines).toHaveLength(4)
+    const [a, b] = card.sections.map((s) => s.summary)
+    expect(lines[2].startsWith(`・玉山：台股 **+${Math.round(a.twd.unrealized!).toLocaleString('en-US')}**（`)).toBe(true)
+    expect(lines[2]).toContain('｜美股 **+')
+    expect(lines[3].startsWith(`・元大：台股 **+${Math.round(b.twd.unrealized!).toLocaleString('en-US')}**（`)).toBe(true)
+    expect(lines[3]).not.toContain('美股')
+    expect(p.content).not.toContain('合計')
 
     const single = buildHoldingsPayload(aggregateCard([named[0]], QUOTES, YMD), { generatedAt: GEN, preview: false })!
     expect(single.content).toBe('📒 持股日報 09/17（四）')
+  })
+
+  it('cuts the headline workspace lines to fit the 2,000-char content cap', () => {
+    const card = many(40, 1)
+    const longNamed = { ...card, sections: card.sections.map((s) => ({ ...s, name: '長'.repeat(40) })) }
+    const p = buildHoldingsPayload(longNamed, { generatedAt: GEN, preview: false })!
+    expect(p.content!.length).toBeLessThanOrEqual(2000)
+    expect(p.content).toMatch(/\n…另 \d+ 個工作區，完整明細請見網站$/)
   })
 
   it('leaves out a workspace with no open position', () => {

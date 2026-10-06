@@ -570,6 +570,8 @@ const MAX_BUDGET = (TOTAL_EMBED_LIMIT - CARD_OVERHEAD * 2) / 2
 const EMBEDS_LIMIT = 10
 // Task 192: a workspace name is user input; it is cut to this many characters in a card title.
 const NAME_MAX = 40
+// Discord's cap on a message's `content`.
+const CONTENT_LIMIT = 2000
 
 function budgetFor(cards: number): number {
   return Math.min(MAX_BUDGET, Math.floor((TOTAL_EMBED_LIMIT - CARD_OVERHEAD * cards) / cards))
@@ -754,17 +756,30 @@ function currenciesOf(summary: HoldingsSummary): Currency[] {
   return out
 }
 
-/** Task 192 D2: `合計未實現 台股 **<signed>**（<pct>）｜美股 …` over every workspace, for a
- * message with more than one section; only the currencies that have rows. */
-function grandTotalLine(total: HoldingsSummary): string {
-  const parts = currenciesOf(total).map((c) => {
-    const cur = c === 'TWD' ? total.twd : total.usd
+/** `・<workspace>：台股 **<signed>**（<pct>）｜美股 …` — one workspace's own unrealized, only the
+ * currencies it holds. Nothing is added across workspaces (the old 合計未實現 line did). */
+function workspaceTotalLine(name: string, summary: HoldingsSummary): string {
+  const parts = currenciesOf(summary).map((c) => {
+    const cur = c === 'TWD' ? summary.twd : summary.usd
     const decimals = c === 'TWD' ? 0 : 2
     const amt = cur.unrealized == null ? '--' : `**${fmtSigned(cur.unrealized, decimals)}**`
     const pct = cur.unrealizedPct == null ? '' : `（${pctSigned(cur.unrealizedPct)}）`
     return `${c === 'TWD' ? '台股' : '美股'} ${amt}${pct}`
   })
-  return `合計未實現 ${parts.join('｜')}`
+  return `・${name}：${parts.join('｜')}`
+}
+
+/** Headline + `未實現` + one line per workspace, dropping whole lines from the end until the
+ * message fits Discord's 2,000-char `content` cap. */
+function headlineContent(head: string, sections: Array<{ name: string; summary: HoldingsSummary }>): string {
+  let kept = sections.length
+  for (;;) {
+    const lines = sections.slice(0, kept).map((s) => workspaceTotalLine(s.name, s.summary))
+    if (kept < sections.length) lines.push(`…另 ${sections.length - kept} 個工作區，完整明細請見網站`)
+    const content = [head, '未實現', ...lines].join('\n')
+    if (content.length <= CONTENT_LIMIT || kept === 1) return content
+    kept--
+  }
 }
 
 /**
@@ -809,7 +824,7 @@ export function buildHoldingsPayload(card: HoldingsCard, opts: { generatedAt: st
   const head = opts.preview ? `【預覽】${base}` : base
   return {
     username: '持股日報',
-    content: sections.length > 1 ? `${head}\n${grandTotalLine(card.total)}` : head,
+    content: sections.length > 1 ? headlineContent(head, sections) : head,
     allowed_mentions: { parse: [] },
     embeds: clampCurrencyBlocksTotal(embeds),
   }
