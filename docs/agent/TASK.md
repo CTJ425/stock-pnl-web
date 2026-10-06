@@ -24,9 +24,9 @@
 1. ~~Research: plans, terms, units, limits measured with the free key~~ ✅ (1006.md §1–§3)
 2. ~~Code: `_shared/fugle.ts`, `stock-price/fugleParse.ts`, `stock-report/fugleDaily.ts`; prices / intraday 1d+5d / daily 5y / syncDaily; `max` stays on Yahoo~~ ✅ `ceb539e`, `f00092a` (prevClose = referencePrice, spec §3.1)
 3. ~~`FUGLE_API_KEY` set on DEV (name verified in `secrets list`)~~ ✅
-4. Deploy `stock-price` and `stock-report --no-verify-jwt` to DEV from `5d6e82a` (quotes MIS → Fugle → Yahoo) — ⏳ the agent's deploy was denied by the permission classifier; user runs it
-5. DEV verify: first call proves Edge egress to Fugle; `app_log` action `prices` / `intraday` with `fugle …` messages; a live session (trial phase, 5d catch-up) — ⏳
-6. Decide merge to `dev` + version (`-dev.N` bump happens then, not on the feature branch) — ⏳ user
+4. ~~Deploy to DEV from `eafc817` (0.10.33-dev.1, merged to `dev` by fast-forward)~~ ✅ 2026-10-06 17:30:28: `stock-price` v31 `b8590c0441da` (verify_jwt true), `stock-report` v52 `f1c09b7bc978` (verify_jwt false)
+5. DEV verify — method 2 (response fingerprints, `fugle-check.sh`) and method 3 (garbage key → Yahoo values + `fugle http` 401, then restore) — ⏳ needs a signed-in DEV token in `~/.fugle-check-token`
+6. Judge after the 2026-10-07 session with the `fugle-eval` queries in spec 195 §12 — ⏳
 7. PROD: secret + deploy + terms decision — ⏳ user, not authorised
 
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)

@@ -2,17 +2,18 @@
 
 - Agent: Claude
 - Action: **Task 195 on `feat/fugle-marketdata`** — Fugle MarketData first for TW prices / intraday / daily 5y / syncDaily, MIS / Yahoo as fallback.
-- Status: 🔄 `ceb539e` + `f00092a` committed on the feature branch; `FUGLE_API_KEY` set on DEV; Edge **not deployed** (agent deploy denied by the permission classifier). `main` = `dev` = `1e8b24f` unchanged. Left: DEV deploy + verify, merge decision, PROD.
+- Status: 🔄 0.10.33-dev.1 on `dev` (`eafc817`, fast-forward from `feat/fugle-marketdata`); DEV `stock-price` v31 `b8590c0441da`, `stock-report` v52 `f1c09b7bc978`; `FUGLE_API_KEY` on DEV only. Left: methods 2/3 (need a DEV token), evaluation after the 2026-10-07 session (spec 195 §12), PROD.
 - Timestamp: 2026-10-06 17:03:22 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-10-06 17:03:22 Asia/Taipei (Task 195 — Fugle MarketData, branch feat/fugle-marketdata)
+## 📅 Log: 2026-10-06 17:03:22 Asia/Taipei (Task 195 — Fugle MarketData, 0.10.33-dev.1)
 - **Ask**: research feasibility of docs/architecture/1006.md; then 「以上內容都允許，讓我們嘗試看看」 (terms risk accepted, all call sites, DEV authorised).
 - **Measured** (free key in `sources/.env`): snapshot 403 on free; quote one symbol per call, `tradeVolume` in 張, times in µs; historical span < 1 year for every timeframe (400), empty range 404; daily volume = TWSE STOCK_DAY 成交股數 exactly (Yahoo lower); `adjusted=true` removes dividends too, Yahoo only splits; monthly history starts 2004 (Yahoo 2000). Details in 1006.md §3.
 - **Done** `ceb539e` (+ `f00092a`: prevClose = referencePrice, trial price, µs/ms/s; deviations listed in spec 195 §11): `_shared/fugle.ts` (key from `FUGLE_API_KEY`, per-family park on 429 / 401 / 403, never throws); `stock-price`: prices (≤ 20 tickers with cached industry, 6 s deadline, then MIS, then Yahoo; skipped on closed days like MIS), intraday 1d (candles + quote) and 5d (5-min history, guard for today's session), daily 5y (6 pieces + `splitAdjust`); `stock-report` `syncDaily` Fugle one year before Yahoo. `max` stays on Yahoo.
 - **Verified**: vitest 3,121 pass / 7 skipped (+23 new), `npm run build`, `typecheck:edge`, oxlint. Live comparison vs Yahoo: 5y closes within 0.26% (0050, split handled) / 0.39% (2330) / 0.18% (00878); 1d prevClose/open/high/low equal on 2330; 5d prevClose Fugle 2475 (true 9/29 close) vs Yahoo 2480.
 - **Follow-up** (user: 「先按照你原本的建議，MIS -> Fugle -> Yahoo 試試看」): quotes reordered to MIS → Fugle → Yahoo; Fugle now only replaces Yahoo's TW leg for quotes, and stays first for intraday / 5y / syncDaily. vitest 3,122 pass / 7 skipped (one SectorFlowPage test failed once in the full run, passed 3/3 alone; unrelated to this change), build, `typecheck:edge`, oxlint.
+- **Merged + deployed** (2026-10-06 17:30:28, user: 「直接先幫我合併到dev，然後方法二跟三都幫我跑，記得相關log紀錄的方式要存下來」): `fugle-eval` info rows added (one per request a Fugle leg could answer; message formats and the three evaluation queries in spec 195 §12); 0.10.33-dev.1 + changelog; gates npm test 3,123 pass / 7 skipped, build, typecheck:edge, oxlint; `dev` fast-forwarded to `eafc817` and pushed; DEV deploy from the clean tree as above.
 - **Not verified**: Edge egress to Fugle from Supabase; any DEV call (not deployed); a live session; capital reductions / stock dividends. No version bump on the feature branch.
 
 ## 📅 Log: 2026-10-05 14:40:00 Asia/Taipei (Task 194 — sector flow back to a treemap, 0.10.32-dev.1)
