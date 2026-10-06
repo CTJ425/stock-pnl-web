@@ -17,6 +17,8 @@
  *   Request shapes are validated in symbols.ts (Task 185 / B1); there is no per-user rate limit.
  *
  * interface:
+ *   Task 195: Taiwan symbols try Fugle MarketData first (`FUGLE_API_KEY`) for `prices`, `intraday`
+ *   and `daily` 5y; MIS / Yahoo below stay as the fallback whenever Fugle has no key or no answer.
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
  *     → { prices: { 'TPE:2330': { price, prevClose, open, high, low, volume,
  *                                 tradeDate, tradeTime, trial, asOf }, ... },
@@ -60,13 +62,16 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { logEvent, safeStack } from '../_shared/log.ts'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
-import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
+import { intradayInterval, parseYahooChart, type IntradayRange, type IntradaySeries } from './intradayParse.ts'
 import { twIsClosedDay, twIsClosedDate, twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyRange.ts'
-import { extractDaily } from '../stock-report/twDaily.ts'
+import { extractDaily, tradingDateOf, type DailyRow } from '../stock-report/twDaily.ts'
 import { buildTwList } from './twList.ts'
 import { TPEX_FALLBACK_GENERATED_AT, TPEX_FALLBACK_ROWS } from './tpexFallback.ts'
 import { isValidSymbol, sanitizeSymbols, type SymbolItem } from './symbols.ts'
+import { fugleConfigured, fugleGet, type FugleResult } from '../_shared/fugle.ts'
+import { fugleIntraday1d, fugleIntraday5d, parseFugleQuote } from './fugleParse.ts'
+import { FUGLE_DAILY_FIELDS, fugleDailyRows, fugleDateRanges, yearsBack, type FugleCandlesResponse } from '../stock-report/fugleDaily.ts'
 
 /**
  * First price quote. `prevClose` is **yesterday's closing**, which is used by the front-end to determine whether the current price is red or green.
@@ -108,6 +113,14 @@ const CACHE_TTL_IDX_MS = 60 * 1000
  * Symbols still unresolved when this fires are skipped and reported back in `truncated`.
  */
 const PRICES_YAHOO_DEADLINE_MS = 20_000
+
+/**
+ * Task 195: Fugle `intraday/quote` is one symbol per call and the free plan allows 60 a minute,
+ * shared with the intraday chart. Beyond this many symbols a batch goes to MIS, which takes a
+ * whole batch in one request. Every symbol Fugle does not answer in time goes to MIS too.
+ */
+const PRICES_FUGLE_MAX = 20
+const PRICES_FUGLE_DEADLINE_MS = 6_000
 
 /** The cache validity period of this key at this moment. Taiwan stocks will last for more than ten hours after the market closes, and the lower bound for coarse screening must follow it. */
 function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null, fetchedAt: Date | null): number {
@@ -176,6 +189,55 @@ async function tryYahooCandidates<T>(
     }
   }
   return null
+}
+
+/**
+ * Fugle call that logs the failures worth a look (Task 195). 404 is "no such symbol / no data",
+ * and no-key / cooldown are already-known states, so none of those is logged; 401/403/429 park
+ * the endpoint family (see `_shared/fugle.ts`), so each is logged about once per park.
+ */
+async function fugle<T>(action: string, path: string): Promise<T | null> {
+  const result: FugleResult<T> = await fugleGet<T>(path)
+  if (result.ok) return result.data
+  if (result.reason === 'http' ? result.status !== 404 : result.reason === 'network') {
+    await logEvent(db, {
+      level: 'warn',
+      action,
+      message: `fugle ${result.reason}`,
+      detail: { status: result.status ?? undefined, path: path.split('?')[0] },
+    })
+  }
+  return null
+}
+
+/**
+ * Fugle quotes for Taiwan tickers whose industry is already cached (Task 195). Fugle has no
+ * industry name, MIS does, and the watchlist groups by it, so a ticker never quoted before still
+ * goes to MIS once. Returns what Fugle answered before the deadline; the rest is MIS's.
+ */
+async function fetchFuglePrices(tickers: string[]): Promise<Map<string, Quote>> {
+  const resolved = new Map<string, Quote>()
+  if (!fugleConfigured() || tickers.length === 0 || tickers.length > PRICES_FUGLE_MAX) return resolved
+  const industries = new Map<string, string>()
+  try {
+    const { data } = await db
+      .from('price_cache')
+      .select('key, industry')
+      .in('key', tickers.map((t) => `TPE:${t}`))
+      .not('industry', 'is', null)
+    for (const row of data ?? []) industries.set(String(row.key).slice(4), String(row.industry))
+  } catch {
+    return resolved
+  }
+  const known = tickers.filter((t) => industries.has(t))
+  const all = Promise.all(
+    known.map(async (ticker) => {
+      const quote = parseFugleQuote(await fugle('prices', `intraday/quote/${encodeURIComponent(ticker)}`))
+      if (quote !== null) resolved.set(ticker, { ...quote, industry: industries.get(ticker) ?? null })
+    }),
+  )
+  await Promise.race([all, new Promise<void>((resolve) => setTimeout(resolve, PRICES_FUGLE_DEADLINE_MS))])
+  return new Map(resolved)
 }
 
 /**
@@ -325,19 +387,26 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     // When the cache table is unavailable (for example, the table has not been created yet), all external APIs are used directly.
   }
 
-  // 2) Those with missing information on Taiwan stocks should go to MIS real-time quotes first (asOf = the time confirmed by the source, not the last transaction time,
+  // 2) Those with missing information on Taiwan stocks should go to Fugle (Task 195), then MIS real-time quotes (asOf = the time confirmed by the source, not the last transaction time,
   //    To avoid treating the cache as expired and making repeated requests after the market opens)
   //    BUG-110: not on a closed day (weekend or `TW_HOLIDAYS`). TWSE never trades then, but MIS can serve test-session matches
-  //    as today's trades (2026-10-04, mostly at the limit-up price); Yahoo still has Friday's close.
+  //    as today's trades (2026-10-04, mostly at the limit-up price); Yahoo still has Friday's close. Fugle is held to the same rule.
   const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
-  const fromMis = twIsClosedDay(now)
+  const closedDay = twIsClosedDay(now)
+  const fromFugle = closedDay
     ? new Map<string, Quote>()
-    : await fetchMisPrices(missing.filter((i) => i.market === 'TPE').map((i) => i.ticker))
+    : await fetchFuglePrices(missing.filter((i) => i.market === 'TPE').map((i) => i.ticker))
+  for (const [ticker, quote] of fromFugle) {
+    prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
+  }
+  const fromMis = closedDay
+    ? new Map<string, Quote>()
+    : await fetchMisPrices(missing.filter((i) => i.market === 'TPE' && !fromFugle.has(i.ticker)).map((i) => i.ticker))
   for (const [ticker, quote] of fromMis) {
     prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
   }
 
-  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed MIS) go to Yahoo,
+  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed Fugle and MIS) go to Yahoo,
   //    bounded by an overall batch deadline (EP-04) — each item already races its own candidates
   //    through tryYahooCandidates (EP-06), but a big batch with no outer bound could still walk
   //    the function up to the platform's own timeout during an upstream outage.
@@ -368,6 +437,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
 
   // 4) The newly captured price is written back to the cache for sharing by the entire site (updated_at records the actual quotation time, and TTL is calculated from this point)
   const fetchedKeys = [
+    ...[...fromFugle.keys()].map((t) => `TPE:${t}`),
     ...[...fromMis.keys()].map((t) => `TPE:${t}`),
     ...yahooResults.keys(),
   ]
@@ -701,6 +771,10 @@ async function handleFx(codes: unknown): Promise<Response> {
  * is large and per-range, caching is the client's job (see intradayProxy.ts).
  */
 async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise<Response> {
+  if (symbol.market === 'TPE' && fugleConfigured()) {
+    const fromFugle = await fugleIntradaySeries(symbol.ticker, range)
+    if (fromFugle !== null) return json({ series: fromFugle })
+  }
   const interval = intradayInterval(range)
   const series = await tryYahooCandidates('intraday', yahooSymbols(symbol), async (yahooSymbol) => {
     const res = await fetch(
@@ -715,6 +789,53 @@ async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise
 }
 
 /**
+ * Task 195. 1d = today's 1-minute bars + the quote for prevClose (two `intraday` calls).
+ * 5d = 5-minute history over 3 weeks (one `historical` call); while today's session is on, the
+ * history must already hold today, or Yahoo answers.
+ */
+async function fugleIntradaySeries(ticker: string, range: IntradayRange): Promise<IntradaySeries | null> {
+  const t = encodeURIComponent(ticker)
+  if (range === '1d') {
+    const [candles, quote] = await Promise.all([
+      fugle('intraday', `intraday/candles/${t}?timeframe=1`),
+      fugle('intraday', `intraday/quote/${t}`),
+    ])
+    return fugleIntraday1d(ticker, candles, quote)
+  }
+  const now = new Date()
+  const today = tradingDateOf(Math.floor(now.getTime() / 1000), 28800)
+  const taipei = new Date(now.getTime() + 8 * 3600_000)
+  const sessionStarted = !twIsClosedDay(now) && taipei.getUTCHours() >= 9
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - 21 * 86_400_000).toISOString().slice(0, 10)
+  const candles = await fugle('intraday', `historical/candles/${t}?timeframe=5&sort=asc&from=${from}&to=${today}`)
+  return fugleIntraday5d(ticker, candles, sessionStarted ? today : null)
+}
+
+/**
+ * Task 195: `5y` from Fugle daily bars in year-long pieces (six `historical` calls). `max` stays on
+ * Yahoo: Fugle's monthly history starts 2004 where Yahoo's starts 2000 (2330, measured 2026-10-06),
+ * monthly bars cannot be split-adjusted from `change`, and it would cost 23 calls.
+ * Any piece failing other than 404 (no data in that year) makes the whole answer Yahoo's.
+ */
+async function fugleFiveYears(ticker: string): Promise<DailyRow[] | null> {
+  const now = new Date()
+  const today = tradingDateOf(Math.floor(now.getTime() / 1000), 28800)
+  const t = encodeURIComponent(ticker)
+  const pieces = await Promise.all(
+    fugleDateRanges(yearsBack(now, 5), today).map(async ([from, to]) => {
+      const r = await fugleGet<FugleCandlesResponse>(
+        `historical/candles/${t}?timeframe=D&adjusted=false&fields=${FUGLE_DAILY_FIELDS}&from=${from}&to=${to}`,
+      )
+      if (r.ok) return r.data
+      return r.reason === 'http' && r.status === 404 ? { data: [] } : null
+    }),
+  )
+  if (pieces.some((p) => p === null)) return null
+  const rows = fugleDailyRows(pieces as FugleCandlesResponse[], now)
+  return rows.length > 0 ? rows : null
+}
+
+/**
  * Long-range daily/monthly bars for `近 5 年` / `全部` on the 技術 tab (Route A, 0.9.41).
  * No price_cache write, same reasoning as handleIntraday: the series is per-range and
  * caching is the client's job (see dailyProxy.ts).
@@ -722,6 +843,10 @@ async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise
 async function handleDailyRange(symbol: SymbolItem, range: DailyRangeKey): Promise<Response> {
   const interval = dailyRangeInterval(range)
   const granularity = interval
+  if (range === '5y' && symbol.market === 'TPE' && fugleConfigured()) {
+    const fromFugle = await fugleFiveYears(symbol.ticker)
+    if (fromFugle !== null) return json({ rows: fromFugle, granularity })
+  }
   const rows = await tryYahooCandidates('daily', yahooSymbols(symbol), async (yahooSymbol) => {
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
