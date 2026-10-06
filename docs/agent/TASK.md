@@ -20,13 +20,13 @@
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
 - **Timestamp**: 2026-10-06 18:07:08 Asia/Taipei
-- **Spec**: docs/architecture/1006.md (branch `feat/fugle-marketdata`, never pushed to `dev`)
+- **Spec**: docs/agent/specs/195-fugle-marketdata.md (§11 deviations, §12 evaluation queries); research notes docs/architecture/1006.md
 1. ~~Research: plans, terms, units, limits measured with the free key~~ ✅ (1006.md §1–§3)
 2. ~~Code: `_shared/fugle.ts`, `stock-price/fugleParse.ts`, `stock-report/fugleDaily.ts`; prices / intraday 1d+5d / daily 5y / syncDaily; `max` stays on Yahoo~~ ✅ `ceb539e`, `f00092a` (prevClose = referencePrice, spec §3.1)
 3. ~~`FUGLE_API_KEY` set on DEV (name verified in `secrets list`)~~ ✅
 4. ~~Deploy to DEV from `eafc817` (0.10.33-dev.1, merged to `dev` by fast-forward)~~ ✅ 2026-10-06 17:30:28: `stock-price` v31 `b8590c0441da` (verify_jwt true), `stock-report` v52 `f1c09b7bc978` (verify_jwt false)
 5. DEV verify — Edge egress ✅ (17:32–17:37 `fugle-eval` rows); method 2 (response fingerprints, `fugle-check.sh`) and method 3 (garbage key → Yahoo values + `fugle http` 401, then restore) — ⏳ needs a signed-in DEV token in `~/.fugle-check-token`
-6. Judge after the 2026-10-07 session with the `fugle-eval` queries in spec 195 §12 — ⏳
+6. ~~Merge to `dev` and release~~ ✅ 0.10.33 `5f3bb01`; PROD Edge deployed without `FUGLE_API_KEY` (inert). The 2026-10-07 judgement moved to item 8 (needs a working key)
 7. PROD secret — ⏳ user: the key answers 401 since ~17:50 2026-10-06; check it on Fugle, then set `FUGLE_API_KEY` on PROD (own key if Fugle allows) and on DEV if regenerated
 8. Judge with spec 195 §12 after a full session with a working key — ⏳
 
