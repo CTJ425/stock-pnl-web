@@ -304,3 +304,56 @@ Measured with the free key on this host; full numbers in `docs/architecture/1006
 | §4.4 pacing above 50 tickers | none; a 429 parks `historical` and the rest use Yahoo | Same outcome, no added wall time. |
 | §7 order test with mocked `fetch` | not written | Only the pure parsers are tested (`fugleParse.test.ts`, `fugleDaily.test.ts`). |
 | §6.2 user sets the secret | set by the agent from `sources/.env` via `secrets set --env-file` (temp file deleted, value never printed) | DEV secrets were authorised. One key is shared by local and DEV. |
+
+## 12. Evaluation trail — how to judge a full trading day
+
+Added for the DEV trial (user, 2026-10-06: judge it after the 2026-10-07 session). Every request a Fugle
+leg could answer writes one `app_log` row: `level = 'info'`, `action = 'fugle-eval'`. Rows are pruned
+after 30 days (`app-log-prune`). Remove the `fugleEval` calls once the decision is made.
+
+| `message` | Written by | Meaning |
+|---|---|---|
+| `prices mis=N fugle=N yahoo=N none=N [closed]` | `stock-price` `handlePrices`, only when a TW symbol missed the cache | who answered each TW symbol of that batch |
+| `intraday 1d\|5d fugle\|yahoo\|none` | `handleIntraday` (TPE only) | which source drew the chart |
+| `daily 5y fugle\|yahoo\|none` | `handleDailyRange` (TPE only) | same, 近 5 年 |
+| `syncDaily fugle=N synced=N skipped=N of=N [onDemand]` | `stock-report` `syncDaily` | files written from Fugle vs Yahoo in one run |
+
+`detail` carries `ticker` and `duration_ms`. Fugle failures are separate rows: `level = 'warn'`, action
+`prices` / `intraday`, message `fugle http` / `fugle network`, `detail.status`, `detail.path`
+(`stock-price` only; `syncDaily` failures show only as a low `fugle=`).
+
+Queries (DEV, from `sources/`, `supabase db query --linked --file <file>`; read-only):
+
+```sql
+-- 1. Quotes per hour, Taipei: how often MIS missed and who filled in.
+SELECT to_char(at AT TIME ZONE 'Asia/Taipei', 'MM-DD HH24') AS hour, count(*) AS batches,
+       sum((regexp_match(message, 'mis=(\d+)'))[1]::int)   AS mis,
+       sum((regexp_match(message, 'fugle=(\d+)'))[1]::int) AS fugle,
+       sum((regexp_match(message, 'yahoo=(\d+)'))[1]::int) AS yahoo,
+       sum((regexp_match(message, 'none=(\d+)'))[1]::int)  AS none
+FROM app_log WHERE action = 'fugle-eval' AND message LIKE 'prices %' AND at >= '2026-10-07 00:00+08'
+GROUP BY 1 ORDER BY 1;
+
+-- 2. Charts / 5y / syncDaily: share per source and latency.
+SELECT regexp_replace(message, ' (fugle|yahoo|none)$', '') AS kind,
+       substring(message from '(fugle|yahoo|none)$') AS source, count(*),
+       percentile_disc(0.5)  WITHIN GROUP (ORDER BY (detail->>'duration_ms')::int) AS p50_ms,
+       percentile_disc(0.95) WITHIN GROUP (ORDER BY (detail->>'duration_ms')::int) AS p95_ms
+FROM app_log WHERE action = 'fugle-eval' AND message NOT LIKE 'prices %' AND message NOT LIKE 'syncDaily %'
+  AND at >= '2026-10-07 00:00+08'
+GROUP BY 1, 2 ORDER BY 1, 2;
+
+SELECT at AT TIME ZONE 'Asia/Taipei' AS at_tpe, message, detail->>'duration_ms' AS ms
+FROM app_log WHERE action = 'fugle-eval' AND message LIKE 'syncDaily %' ORDER BY at DESC LIMIT 20;
+
+-- 3. Fugle failures: 429 = minute limit, 401/403 = key or plan, network = egress / timeout.
+SELECT action, message, detail->>'status' AS status, count(*),
+       min(at AT TIME ZONE 'Asia/Taipei') AS first_tpe, max(at AT TIME ZONE 'Asia/Taipei') AS last_tpe
+FROM app_log WHERE level = 'warn' AND message LIKE 'fugle %' AND at >= '2026-10-07 00:00+08'
+GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+```
+
+What "good" looks like after a session: query 2 shows `fugle` for nearly every chart with p95 below
+Yahoo's; query 3 is empty or only a few 429s; query 1's `none` stays 0. Baseline values that tell the
+sources apart in a response (2330): 5y volume on 2026-10-05 is 26,800,187 from Fugle (= TWSE) and
+24,042,447 from Yahoo.

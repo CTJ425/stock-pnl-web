@@ -1107,6 +1107,8 @@ async function syncDaily(
   const targetDate = dashDate(dataYmd)
   let synced = 0
   let skipped = 0
+  let fromFugle = 0
+  const startedAt = Date.now()
   for (const { ticker } of tickers) {
     try {
       const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
@@ -1132,6 +1134,7 @@ async function syncDaily(
 
       // Task 195: Fugle first (one `historical` call, volume = TWSE 成交股數); Yahoo when it has no answer.
       let rows: ReturnType<typeof extractDaily> = await fugleOneYear(ticker)
+      if (rows.length > 0) fromFugle++
       for (const symbol of rows.length > 0 ? [] : yahooDailySymbols(ticker)) {
         const resp = await fetchJsonRetry<ChartResponse>(dailyUrl(symbol))
         rows = extractDaily(resp)
@@ -1173,6 +1176,15 @@ async function syncDaily(
     } catch {
       // The failure of a single file does not affect other files, nor does it affect the chip report (consistent with the fault tolerance of borrow / margin)
     }
+  }
+  // Task 195 evaluation trail (see stock-price `fugleEval`): Fugle vs Yahoo per run.
+  if (synced + skipped < tickers.length || fromFugle > 0 || synced > 0) {
+    await logEvent(db, {
+      level: 'info',
+      action: 'fugle-eval',
+      message: `syncDaily fugle=${fromFugle} synced=${synced} skipped=${skipped} of=${tickers.length}${opts?.onDemand ? ' onDemand' : ''}`,
+      detail: { duration_ms: Date.now() - startedAt },
+    })
   }
   return { synced, skipped }
 }

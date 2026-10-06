@@ -197,6 +197,20 @@ async function tryYahooCandidates<T>(
  * and no-key / cooldown are already-known states, so none of those is logged; 401/403/429 park
  * the endpoint family (see `_shared/fugle.ts`), so each is logged about once per park.
  */
+/**
+ * Task 195 evaluation trail: one `app_log` info row per request that a Fugle leg could answer,
+ * action `fugle-eval`, message `<kind> <source>` (or `prices mis=… fugle=… yahoo=… none=…`).
+ * Read with the queries in docs/agent/specs/195-fugle-marketdata.md §12; drop it once decided.
+ */
+async function fugleEval(message: string, startedAt: number, ticker?: string): Promise<void> {
+  await logEvent(db, {
+    level: 'info',
+    action: 'fugle-eval',
+    message,
+    detail: { ticker, duration_ms: Date.now() - startedAt },
+  })
+}
+
 async function fugle<T>(action: string, path: string): Promise<T | null> {
   const result: FugleResult<T> = await fugleGet<T>(path)
   if (result.ok) return result.data
@@ -394,6 +408,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   //    as today's trades (2026-10-04, mostly at the limit-up price); Yahoo still has Friday's close. Fugle is held to the same rule.
   const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
   const closedDay = twIsClosedDay(now)
+  const twStartedAt = Date.now()
   const fromMis = closedDay
     ? new Map<string, Quote>()
     : await fetchMisPrices(missing.filter((i) => i.market === 'TPE').map((i) => i.ticker))
@@ -434,6 +449,16 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   }
   for (const [key, quote] of yahooResults) {
     prices[key] = quote
+  }
+
+  const twMissing = missing.filter((i) => i.market === 'TPE')
+  if (twMissing.length > 0) {
+    const yahooTw = twMissing.filter((i) => yahooResults.has(`TPE:${i.ticker}`)).length
+    const none = twMissing.length - fromMis.size - fromFugle.size - yahooTw
+    await fugleEval(
+      `prices mis=${fromMis.size} fugle=${fromFugle.size} yahoo=${yahooTw} none=${none}${closedDay ? ' closed' : ''}`,
+      twStartedAt,
+    )
   }
 
   // 4) The newly captured price is written back to the cache for sharing by the entire site (updated_at records the actual quotation time, and TTL is calculated from this point)
@@ -772,9 +797,14 @@ async function handleFx(codes: unknown): Promise<Response> {
  * is large and per-range, caching is the client's job (see intradayProxy.ts).
  */
 async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise<Response> {
-  if (symbol.market === 'TPE' && fugleConfigured()) {
+  const startedAt = Date.now()
+  const tw = symbol.market === 'TPE' && fugleConfigured()
+  if (tw) {
     const fromFugle = await fugleIntradaySeries(symbol.ticker, range)
-    if (fromFugle !== null) return json({ series: fromFugle })
+    if (fromFugle !== null) {
+      await fugleEval(`intraday ${range} fugle`, startedAt, symbol.ticker)
+      return json({ series: fromFugle })
+    }
   }
   const interval = intradayInterval(range)
   const series = await tryYahooCandidates('intraday', yahooSymbols(symbol), async (yahooSymbol) => {
@@ -786,6 +816,7 @@ async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise
     const data = await res.json()
     return parseYahooChart(data, range)
   })
+  if (tw) await fugleEval(`intraday ${range} ${series ? 'yahoo' : 'none'}`, startedAt, symbol.ticker)
   return json({ series })
 }
 
@@ -844,9 +875,14 @@ async function fugleFiveYears(ticker: string): Promise<DailyRow[] | null> {
 async function handleDailyRange(symbol: SymbolItem, range: DailyRangeKey): Promise<Response> {
   const interval = dailyRangeInterval(range)
   const granularity = interval
-  if (range === '5y' && symbol.market === 'TPE' && fugleConfigured()) {
+  const startedAt = Date.now()
+  const tw = range === '5y' && symbol.market === 'TPE' && fugleConfigured()
+  if (tw) {
     const fromFugle = await fugleFiveYears(symbol.ticker)
-    if (fromFugle !== null) return json({ rows: fromFugle, granularity })
+    if (fromFugle !== null) {
+      await fugleEval('daily 5y fugle', startedAt, symbol.ticker)
+      return json({ rows: fromFugle, granularity })
+    }
   }
   const rows = await tryYahooCandidates('daily', yahooSymbols(symbol), async (yahooSymbol) => {
     const res = await fetch(
@@ -858,6 +894,7 @@ async function handleDailyRange(symbol: SymbolItem, range: DailyRangeKey): Promi
     const parsed = range === '5y' ? extractDaily(data) : extractMonthly(data)
     return parsed.length > 0 ? parsed : null
   })
+  if (tw) await fugleEval(`daily 5y ${rows ? 'yahoo' : 'none'}`, startedAt, symbol.ticker)
   return json({ rows: rows ?? [], granularity })
 }
 
