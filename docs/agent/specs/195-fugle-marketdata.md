@@ -295,8 +295,9 @@ Measured with the free key on this host; full numbers in `docs/architecture/1006
 | §3.3 decide historical volume unit from `turnover` | hard-coded shares | Daily `volume` equals TWSE STOCK_DAY 成交股數 exactly (2330, 2026-10-01..06). |
 | §3.3 `adjusted` unset, note the split difference | raw + `splitAdjust` (reference / prev close outside 0.8–1.25) | 0050's 1:4 split would show a 75% cliff; with the adjustment 5y closes match Yahoo within 0.26%. |
 | §3.3 `max` via `M`, chunk if refused | `max` stays on Yahoo | `M` is refused over 1 year too (400); Fugle monthly starts 2004 vs Yahoo 2000; 23 calls; monthly bars cannot be split-adjusted. |
-| §4.1 snapshot above 20 symbols | MIS above 20 | Free plan: `snapshot/quotes/TSE` → 403 (measured). |
-| §4.2 one `intraday/ticker` call for an unknown industry | the ticker goes to MIS once | Saves a call; MIS fills `industry`, Fugle is used from the next poll. |
+| §4.3 Fugle before MIS for quotes | **MIS → Fugle → Yahoo** (user, 2026-10-06) | MIS is already the exchange's live data and takes a whole batch in one call; Fugle first cost one call per symbol of the shared 60/min and lost `industry`. Fugle now only replaces Yahoo's TW leg. |
+| §4.1 snapshot above 20 symbols | Yahoo above 20 | Free plan: `snapshot/quotes/TSE` → 403 (measured). Only reached when MIS fails. |
+| §4.2 one `intraday/ticker` call for an unknown industry | cached `industry` carried forward, else null | MIS normally fills it; Fugle only answers when MIS failed, and Yahoo has no industry either. |
 | §3.2 1d prevClose from `price_cache` first | always one `intraday/quote` call | Simpler; costs one intraday call per chart load. |
 | §3.2 5d with today's `intraday/candles` merged | Yahoo when today's session is missing from history | Not yet known whether minute history includes the live session; one call instead of two. |
 | §4.3 one log line per call naming the source | only failures are logged (`app_log`, action `prices` / `intraday`, `fugle <reason>`) | Avoids an `app_log` row per poll. Verify the source by comparing values instead (§8.3). |

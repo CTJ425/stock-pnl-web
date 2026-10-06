@@ -17,8 +17,8 @@
  *   Request shapes are validated in symbols.ts (Task 185 / B1); there is no per-user rate limit.
  *
  * interface:
- *   Task 195: Taiwan symbols try Fugle MarketData first (`FUGLE_API_KEY`) for `prices`, `intraday`
- *   and `daily` 5y; MIS / Yahoo below stay as the fallback whenever Fugle has no key or no answer.
+ *   Task 195: Taiwan symbols try Fugle MarketData (`FUGLE_API_KEY`) first for `intraday` and `daily` 5y,
+ *   with Yahoo as the fallback; for `prices` the order is MIS → Fugle → Yahoo.
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
  *     → { prices: { 'TPE:2330': { price, prevClose, open, high, low, volume,
  *                                 tradeDate, tradeTime, trial, asOf }, ... },
@@ -115,9 +115,10 @@ const CACHE_TTL_IDX_MS = 60 * 1000
 const PRICES_YAHOO_DEADLINE_MS = 20_000
 
 /**
- * Task 195: Fugle `intraday/quote` is one symbol per call and the free plan allows 60 a minute,
- * shared with the intraday chart. Beyond this many symbols a batch goes to MIS, which takes a
- * whole batch in one request. Every symbol Fugle does not answer in time goes to MIS too.
+ * Task 195: Fugle sits between MIS and Yahoo for quotes — only symbols MIS left unanswered reach
+ * it. `intraday/quote` is one symbol per call and the free plan allows 60 a minute, shared with
+ * the intraday chart, so beyond this many symbols (a MIS outage) the batch goes straight to Yahoo.
+ * Every symbol Fugle does not answer in time goes to Yahoo too.
  */
 const PRICES_FUGLE_MAX = 20
 const PRICES_FUGLE_DEADLINE_MS = 6_000
@@ -211,9 +212,9 @@ async function fugle<T>(action: string, path: string): Promise<T | null> {
 }
 
 /**
- * Fugle quotes for Taiwan tickers whose industry is already cached (Task 195). Fugle has no
- * industry name, MIS does, and the watchlist groups by it, so a ticker never quoted before still
- * goes to MIS once. Returns what Fugle answered before the deadline; the rest is MIS's.
+ * Fugle quotes for the Taiwan tickers MIS did not answer (Task 195). Fugle has no industry name,
+ * so the one already in `price_cache` is carried forward (null if none — Yahoo has none either).
+ * Returns what Fugle answered before the deadline; the rest is Yahoo's.
  */
 async function fetchFuglePrices(tickers: string[]): Promise<Map<string, Quote>> {
   const resolved = new Map<string, Quote>()
@@ -227,11 +228,10 @@ async function fetchFuglePrices(tickers: string[]): Promise<Map<string, Quote>> 
       .not('industry', 'is', null)
     for (const row of data ?? []) industries.set(String(row.key).slice(4), String(row.industry))
   } catch {
-    return resolved
+    // No cached industry: the quote is still worth having.
   }
-  const known = tickers.filter((t) => industries.has(t))
   const all = Promise.all(
-    known.map(async (ticker) => {
+    tickers.map(async (ticker) => {
       const quote = parseFugleQuote(await fugle('prices', `intraday/quote/${encodeURIComponent(ticker)}`))
       if (quote !== null) resolved.set(ticker, { ...quote, industry: industries.get(ticker) ?? null })
     }),
@@ -387,26 +387,27 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     // When the cache table is unavailable (for example, the table has not been created yet), all external APIs are used directly.
   }
 
-  // 2) Those with missing information on Taiwan stocks should go to Fugle (Task 195), then MIS real-time quotes (asOf = the time confirmed by the source, not the last transaction time,
+  // 2) Those with missing information on Taiwan stocks should go to MIS real-time quotes first, then Fugle for what MIS left (Task 195)
+  //    (asOf = the time confirmed by the source, not the last transaction time,
   //    To avoid treating the cache as expired and making repeated requests after the market opens)
   //    BUG-110: not on a closed day (weekend or `TW_HOLIDAYS`). TWSE never trades then, but MIS can serve test-session matches
   //    as today's trades (2026-10-04, mostly at the limit-up price); Yahoo still has Friday's close. Fugle is held to the same rule.
   const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
   const closedDay = twIsClosedDay(now)
-  const fromFugle = closedDay
-    ? new Map<string, Quote>()
-    : await fetchFuglePrices(missing.filter((i) => i.market === 'TPE').map((i) => i.ticker))
-  for (const [ticker, quote] of fromFugle) {
-    prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
-  }
   const fromMis = closedDay
     ? new Map<string, Quote>()
-    : await fetchMisPrices(missing.filter((i) => i.market === 'TPE' && !fromFugle.has(i.ticker)).map((i) => i.ticker))
+    : await fetchMisPrices(missing.filter((i) => i.market === 'TPE').map((i) => i.ticker))
   for (const [ticker, quote] of fromMis) {
     prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
   }
+  const fromFugle = closedDay
+    ? new Map<string, Quote>()
+    : await fetchFuglePrices(missing.filter((i) => i.market === 'TPE' && !fromMis.has(i.ticker)).map((i) => i.ticker))
+  for (const [ticker, quote] of fromFugle) {
+    prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
+  }
 
-  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed Fugle and MIS) go to Yahoo,
+  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed MIS and Fugle) go to Yahoo,
   //    bounded by an overall batch deadline (EP-04) — each item already races its own candidates
   //    through tryYahooCandidates (EP-06), but a big batch with no outer bound could still walk
   //    the function up to the platform's own timeout during an upstream outage.
@@ -437,8 +438,8 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
 
   // 4) The newly captured price is written back to the cache for sharing by the entire site (updated_at records the actual quotation time, and TTL is calculated from this point)
   const fetchedKeys = [
-    ...[...fromFugle.keys()].map((t) => `TPE:${t}`),
     ...[...fromMis.keys()].map((t) => `TPE:${t}`),
+    ...[...fromFugle.keys()].map((t) => `TPE:${t}`),
     ...yahooResults.keys(),
   ]
   if (fetchedKeys.length > 0) {
