@@ -16,6 +16,16 @@
 
 ## 📋 Active Tasks
 
+### Task 196: Discord 持股日報 headline — each workspace's own unrealized, not a merged total
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-10-06 20:50:09 Asia/Taipei
+- **Done**: items 1–3 — `dd6414e` / `acd3fde`, 0.10.34 released; DEV `stock-report` v56.
+1. ~~Code + tests + changelog, gates green~~ ✅
+2. ~~Deploy `stock-report` to DEV (`--no-verify-jwt`)~~ ✅
+3. ~~Release 0.10.34 to `main`~~ ✅
+4. Deploy `stock-report` to PROD (`hrilemueiqyaoiwnkeuu`, `--no-verify-jwt`) — ⏳ needs the user's explicit OK; then compare `ezbr_sha256` and look at the next 18:00 post
+
 ### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

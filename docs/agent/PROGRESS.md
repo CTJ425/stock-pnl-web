@@ -1,11 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.33 released** — Fugle MarketData legs (intraday / 5y / syncDaily first, quotes MIS → Fugle → Yahoo); inert on PROD until `FUGLE_API_KEY` is set.
-- Status: ✅ `main` = 0.10.33 (`5f3bb01`); Fugle **live on PROD and DEV** since 19:23 with new keys set by the user (one per project), proven by `fugle-eval` rows. Left: judge after the 2026-10-07 session with spec 195 §12; optional TWSE incremental daily for `syncDaily` (discussed, not specced).
-- Timestamp: 2026-10-06 19:23:35 Asia/Taipei
+- Action: **0.10.34 released** — Discord 持股日報 headline lists each workspace's own unrealized instead of one merged total.
+- Status: ✅ `main` = 0.10.34 (`acd3fde`), GitHub Release live. DEV `stock-report` deployed (v56 `2313613a94c8`). **PROD `stock-report` NOT deployed** — the new headline shows on Discord only after it is (needs the user's explicit OK, `--no-verify-jwt`).
+- Timestamp: 2026-10-06 20:50:02 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-10-06 20:50:02 Asia/Taipei (Task 196 — Discord headline split by workspace, 0.10.34)
+- **Ask**: 「在DC推播的部分，未實現損益我想要拆開，不要合併在一起」 → demo string first → 「好，請幫我直接改，然後給我看demo 樣子」 → 「直接幫我合併到main」.
+- **Done** `dd6414e` (0.10.34-dev.1) + `acd3fde` (release): `holdingsCard.ts` `grandTotalLine` → `workspaceTotalLine` + `headlineContent` (one `・<name>：台股 **±n**（pct）｜美股 …` line per workspace; single workspace unchanged; whole lines dropped from the end to stay ≤ 2,000 chars, `…另 N 個工作區`). `card.total` is no longer read by the payload but kept (still computed and tested in `aggregateCard`).
+- **Verified**: real `buildHoldingsPayload` on the screenshot's figures printed the intended 4-line content; `stock-report` vitest 998 pass; full `npm test` 3,124 pass / 7 skipped (the first full run had one SectorFlowPage failure — passed alone with and without the change, and on the rerun), build, `typecheck:edge`. DEV `stock-report` v55 `f1c09b7bc978` → v56 `2313613a94c8`, verify_jwt false kept. Release body read back from GitHub.
+- **Not verified**: a real Discord post with the new headline (a send needs `CRON_SECRET` or the admin preview); PROD Edge still runs the old code.
 
 ## 📅 Log: 2026-10-06 17:03:22 Asia/Taipei (Task 195 — Fugle MarketData, 0.10.33-dev.1)
 - **Ask**: research feasibility of docs/architecture/1006.md; then 「以上內容都允許，讓我們嘗試看看」 (terms risk accepted, all call sites, DEV authorised).
@@ -20,9 +26,3 @@
 - **Keys live** (2026-10-06 19:23:35): user set new `FUGLE_API_KEY` on PROD (19:11) and DEV (19:15), different keys; checked by sha256 prefix only. After the user opened charts: DEV `intraday 1d fugle` 0050 (106 / 452 ms); PROD `intraday 1d fugle` 6560 (315 ms), `daily 5y fugle` 6560 (102 ms), `syncDaily fugle=1 synced=1 onDemand` (1,096 ms); no `fugle http` rows on either.
 - Also answered (no code): free-plan usage vs PROD load (3 users, 19 nightly tickers, 15 quoted/24h → fits); realtime options (REST only; WebSocket needs a long-lived holder — CF Worker + Durable Object would fit the free DO quota, but 5 subscriptions and the 轉接 clause block it).
 - **Not verified**: Edge egress to Fugle from Supabase; any DEV call (not deployed); a live session; capital reductions / stock dividends. No version bump on the feature branch.
-
-## 📅 Log: 2026-10-05 14:40:00 Asia/Taipei (Task 194 — sector flow back to a treemap, 0.10.32-dev.1)
-- **Ask**: after a list of other ways to show the flow (heatmap by day, sparklines, stacked investor bars, scatter, waterfall, bump chart; Sankey rejected because the two sides are never matched), user: 「那我們改用方塊圖，把既有的都打掉重弄，請幫我commit DEV」. Scope question answered 「只留方塊圖 + 明細」. My scope question wrongly implied the treemap still existed; it had been removed in `2e79ed2` (0.10.30-dev.7), so this is a rebuild from `2e79ed2^`.
-- **Done**: restored `treemapLayout.ts` (+test), `useMediaQuery.ts` from `2e79ed2^`; `SectorTreemap.tsx` with `tint` / `labelFor` moved to `tileStyle.ts` (lint's only-export-components); deleted `SectorSides.tsx`, `flowSides.ts` (+test) and the table's bar column; new `sideTotals()` in `sectorFlowView.ts` (semis counted by parts, as `buildSides` did); `SectorFlowPage.tsx` rewritten: one-line summary, legend, treemap with the detail in an aside (under the map ≤ 960 px, scrolled into view), numbers table folded. Origin of a pick is `map` or `table`; a sector with no turnover has no tile and opens in the table. `sector-flow.css` rewritten (rings, strip, bars removed).
-- **Verified**: `npm run build`, oxlint clean, vitest 3,098 pass / 7 skipped; SectorFlow suites 76 pass. Browser (temporary harness, deleted; synthetic 5-day file with the 2026-10-02 semiconductor figures, `sector_flow.json` intercepted): 1280 / 820 / 390 px, light and dark, a tile picked: no horizontal overflow, no console messages, detail beside the map on desktop and under it on a phone.
-- **Not verified**: a real sector-flow file (none on DEV or PROD yet, Task 194 item 4); text contrast on the new tints was not measured this round (dev.4 measured ≥ 4.9:1 with the same `tint` function and `MAX_TINT`); tiles under ~44×26 px carry no text by design (title / aria-label and the table cover them). Pushed to `dev` (user: 「push dev」). **Released** (2026-10-05 14:52:00 Asia/Taipei, user: 「合併到main並發布」): gates on the release state — vitest 3,098 pass / 7 skipped, build, `typecheck:edge`; release commit `1e8b24f`, `main` fast-forwarded and `dev` already equal; CI green on both; Release 0.10.32 by CI, title and body from the finalized changelog, no pending wording. `git diff 872e620..HEAD -- sources/supabase` was empty, so nothing to deploy. Production check by content: the live `SectorFlowPage` chunk contains `怎麼看方塊圖` and not `錢進了哪些產業`.
