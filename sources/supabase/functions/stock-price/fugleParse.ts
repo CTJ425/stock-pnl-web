@@ -30,12 +30,16 @@ export interface FugleQuoteResult {
 interface FugleQuoteJson {
   date?: unknown
   market?: unknown
+  referencePrice?: unknown
   previousClose?: unknown
   openPrice?: unknown
   highPrice?: unknown
   lowPrice?: unknown
   lastPrice?: unknown
+  closePrice?: unknown
   total?: { tradeVolume?: unknown }
+  lastTrade?: { time?: unknown }
+  lastTrial?: { price?: unknown }
   isTrial?: unknown
   lastUpdated?: unknown
 }
@@ -51,10 +55,11 @@ function positive(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
 
-/** Epoch microseconds → HH:mm:ss Taipei. */
-function taipeiTime(micros: unknown): string | null {
-  if (typeof micros !== 'number' || !Number.isFinite(micros) || micros <= 0) return null
-  return new Date(Math.floor(micros / 1000) + 8 * 3600_000).toISOString().slice(11, 19)
+/** Epoch time → HH:mm:ss Taipei. Real bodies carry µs; the SDK's doc comment says ms, so go by magnitude. */
+export function taipeiTime(epoch: unknown): string | null {
+  if (typeof epoch !== 'number' || !Number.isFinite(epoch) || epoch <= 0) return null
+  const ms = epoch > 1e14 ? epoch / 1000 : epoch > 1e11 ? epoch : epoch * 1000
+  return new Date(Math.floor(ms) + 8 * 3600_000).toISOString().slice(11, 19)
 }
 
 /** Yahoo-style symbol, so the chart title reads the same whichever source answered. */
@@ -70,19 +75,22 @@ export function parseFugleQuote(json: unknown): FugleQuoteResult | null {
   if (typeof json !== 'object' || json === null) return null
   const q = json as FugleQuoteJson
   if (!BOARD_LOT_MARKETS.has(q.market as string)) return null
-  const price = positive(q.lastPrice)
+  const trial = q.isTrial === true
+  const price = (trial ? positive(q.lastTrial?.price) : null) ?? positive(q.lastPrice) ?? positive(q.closePrice)
   if (price === null) return null
   const volume = q.total?.tradeVolume
   return {
     price,
-    prevClose: positive(q.previousClose),
+    // 平盤價, as MIS `y` is: on an ex-rights day it is below the previous close (spec 195 §3.1:
+    // 2330 2026-09-16 referencePrice 2380, previousClose 2385), and 漲跌 / limits are measured from it.
+    prevClose: positive(q.referencePrice) ?? positive(q.previousClose),
     open: positive(q.openPrice),
     high: positive(q.highPrice),
     low: positive(q.lowPrice),
     volume: typeof volume === 'number' && Number.isFinite(volume) && volume >= 0 ? volume : null,
     tradeDate: typeof q.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(q.date) ? q.date.replaceAll('-', '') : null,
-    tradeTime: taipeiTime(q.lastUpdated),
-    trial: q.isTrial === true,
+    tradeTime: taipeiTime(q.lastTrade?.time) ?? taipeiTime(q.lastUpdated),
+    trial,
   }
 }
 

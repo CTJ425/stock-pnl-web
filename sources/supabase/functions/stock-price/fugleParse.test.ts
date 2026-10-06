@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { fugleIntraday1d, fugleIntraday5d, fugleMinutePoints, parseFugleQuote } from './fugleParse'
+import { fugleIntraday1d, fugleIntraday5d, fugleMinutePoints, parseFugleQuote, taipeiTime } from './fugleParse'
 
 // Trimmed from the real 2330 `intraday/quote` answer, 2026-10-06 after the close.
 const QUOTE = {
   date: '2026-10-06',
   market: 'TSE',
   symbol: '2330',
+  referencePrice: 2575,
   previousClose: 2575,
   openPrice: 2575,
   highPrice: 2590,
@@ -32,12 +33,23 @@ describe('parseFugleQuote', () => {
     })
   })
 
-  it('keeps the trial flag', () => {
-    expect(parseFugleQuote({ ...QUOTE, isTrial: true })?.trial).toBe(true)
+  it('takes the trial price and flag during a trial match', () => {
+    expect(parseFugleQuote({ ...QUOTE, isTrial: true, lastTrial: { price: 2590 } })).toMatchObject({ price: 2590, trial: true })
+  })
+
+  it('uses the reference price, not the previous close, on an ex-dividend day', () => {
+    // 2330 2026-09-16 (spec 195 §3.1): referencePrice 2380, previousClose 2385.
+    expect(parseFugleQuote({ ...QUOTE, referencePrice: 2380, previousClose: 2385 })?.prevClose).toBe(2380)
+  })
+
+  it('reads µs, ms and s timestamps alike', () => {
+    expect(taipeiTime(1791264600000000)).toBe('13:30:00')
+    expect(taipeiTime(1791264600000)).toBe('13:30:00')
+    expect(taipeiTime(1791264600)).toBe('13:30:00')
   })
 
   it('returns null with no trade price yet, so MIS answers', () => {
-    expect(parseFugleQuote({ ...QUOTE, lastPrice: undefined })).toBeNull()
+    expect(parseFugleQuote({ ...QUOTE, lastPrice: undefined, closePrice: undefined })).toBeNull()
   })
 
   it('returns null outside TSE / OTC (other volume units)', () => {

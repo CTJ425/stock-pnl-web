@@ -1,5 +1,6 @@
 /**
  * Taiwan stock daily OHLCV capture and analysis (Yahoo Finance chart endpoint).
+ * Task 195: `syncDaily` asks Fugle first (`fugleDaily.ts`); this Yahoo path is the fallback.
  *
  * Why Yahoo and not TWSE: TWSE's `exchangeReport/STOCK_DAY` is a "stock by stock and month by month" file.
  * To complete the 60 trading days required for the season line, you need to play 4 to 5 times, each time. Yahoo's chart endpoint returns an entire year at a time,
