@@ -16,6 +16,19 @@
 
 ## 📋 Active Tasks
 
+### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-10-06 17:03:22 Asia/Taipei
+- **Spec**: docs/architecture/1006.md (branch `feat/fugle-marketdata`, never pushed to `dev`)
+1. ~~Research: plans, terms, units, limits measured with the free key~~ ✅ (1006.md §1–§3)
+2. ~~Code: `_shared/fugle.ts`, `stock-price/fugleParse.ts`, `stock-report/fugleDaily.ts`; prices / intraday 1d+5d / daily 5y / syncDaily; `max` stays on Yahoo~~ ✅ `f573f53`
+3. ~~`FUGLE_API_KEY` set on DEV (name verified in `secrets list`)~~ ✅
+4. Deploy `stock-price` and `stock-report --no-verify-jwt` to DEV from `f573f53` — ⏳ the agent's deploy was denied by the permission classifier; user runs it
+5. DEV verify: first call proves Edge egress to Fugle; `app_log` action `prices` / `intraday` with `fugle …` messages; a live session (trial phase, 5d catch-up) — ⏳
+6. Decide merge to `dev` + version (`-dev.N` bump happens then, not on the feature branch) — ⏳ user
+7. PROD: secret + deploy + terms decision — ⏳ user, not authorised
+
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)
 - **Status**: 🔄 OPEN REMAINDER — **released as 0.10.30** (`6c25488`) and 0.10.31 (`872e620`, `main` = `dev`; 資金流向 windows 今日 / 近 3 日 / 近 5 日). PROD DDL applied and PROD Edge deployed (`stock-report` v29 `6cf00d27dc3d` = DEV v50, `verify_jwt` false kept); `verify_setup()` 11/11 PASS on PROD; Release 0.10.30 created by CI, body correct; production serves the build (live bundle carries `sector-flow` and `保持登入`).
 - **Agent**: Claude
