@@ -461,6 +461,8 @@ describe('WhatIfTab 賣出試算＋補進試算（Task 197）', () => {
     expect(screen.getByTestId('addon-cash').textContent).toMatch(/480,684/)
     expect(screen.getByTestId('addon-avg-after').textContent).toBe('502.25')
     expect(screen.getByTestId('addon-total-cost').textContent).toMatch(/1,506,744/)
+    // 502.248 ÷ 513.03 − 1 = −2.10%
+    expect(screen.getByTestId('addon-avg-delta').textContent).toBe('-NT$10.78（-2.10%）')
   })
 
   it('用漲跌幅換算補進價，取最近的可下單價位', () => {

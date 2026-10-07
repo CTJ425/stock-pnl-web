@@ -351,7 +351,9 @@ export function AddOnWhatIf({ ticker, currentPrice, rawAvgCost, avgCost, heldQty
                 <th scope="row">均價（含手續費）</th>
                 <td className="num">{avgBefore.toFixed(2)}</td>
                 <td className="num">{averaging.avgCost.toFixed(2)}</td>
-                <td className="num addon-col-delta">{fmtSignedMoney(avgDelta, 'TWD', 2)}</td>
+                <td className="num addon-col-delta" data-testid="addon-avg-delta">
+                  {fmtSignedMoney(avgDelta, 'TWD', 2)}（{fmtSignedPercent(averaging.avgCost / avgBefore - 1)}）
+                </td>
               </tr>
               {pnlBefore !== null && after?.pnl != null && (
                 <tr>
