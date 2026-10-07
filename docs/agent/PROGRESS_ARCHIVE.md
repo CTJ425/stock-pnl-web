@@ -1,5 +1,12 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-10-06 20:50:02 Asia/Taipei (Task 196 — Discord headline split by workspace, 0.10.34)
+- **Ask**: 「在DC推播的部分，未實現損益我想要拆開，不要合併在一起」 → demo string first → 「好，請幫我直接改，然後給我看demo 樣子」 → 「直接幫我合併到main」.
+- **Done** `dd6414e` (0.10.34-dev.1) + `acd3fde` (release): `holdingsCard.ts` `grandTotalLine` → `workspaceTotalLine` + `headlineContent` (one `・<name>：台股 **±n**（pct）｜美股 …` line per workspace; single workspace unchanged; whole lines dropped from the end to stay ≤ 2,000 chars, `…另 N 個工作區`). `card.total` is no longer read by the payload but kept (still computed and tested in `aggregateCard`).
+- **Verified**: real `buildHoldingsPayload` on the screenshot's figures printed the intended 4-line content; `stock-report` vitest 998 pass; full `npm test` 3,124 pass / 7 skipped (the first full run had one SectorFlowPage failure — passed alone with and without the change, and on the rerun), build, `typecheck:edge`. DEV `stock-report` v55 `f1c09b7bc978` → v56 `2313613a94c8`, verify_jwt false kept. Release body read back from GitHub.
+- **PROD deploy** (2026-10-06 21:12:50 Asia/Taipei, user ran it with `!` after the auto-mode classifier denied the agent's own PROD deploy): `stock-report` v31 `f1c09b7bc978` → v32 `2313613a94c8` (= DEV v56), `--no-verify-jwt`, verify_jwt false confirmed by `functions list`.
+- **Not verified**: a real Discord post with the new headline (a send needs `CRON_SECRET` or the admin preview).
+
 ## 📅 Log: 2026-10-06 17:03:22 Asia/Taipei (Task 195 — Fugle MarketData, 0.10.33-dev.1)
 - **Ask**: research feasibility of docs/architecture/1006.md; then 「以上內容都允許，讓我們嘗試看看」 (terms risk accepted, all call sites, DEV authorised).
 - **Measured** (free key in `sources/.env`): snapshot 403 on free; quote one symbol per call, `tradeVolume` in 張, times in µs; historical span < 1 year for every timeframe (400), empty range 404; daily volume = TWSE STOCK_DAY 成交股數 exactly (Yahoo lower); `adjusted=true` removes dividends too, Yahoo only splits; monthly history starts 2004 (Yahoo 2000). Details in 1006.md §3.

@@ -90,6 +90,18 @@ function tickSizeFor(price: number): number {
   return 5
 }
 
+/**
+ * Nearest price an order can actually be placed at. ETFs (code starting `00`) have only two
+ * bands — under NT$50 the tick is 0.01, from 50 up it is 0.05 (臺灣證券交易所營業細則, 升降單位;
+ * checked 2026-10-07). Everything else uses the stock bands above. The 1,000+ band moving from
+ * 5 to 1 was approved 2026-08-25 but is not in force before 2027-07, so it is not applied here.
+ */
+export function snapToTick(price: number, ticker: string): number {
+  if (!(Number.isFinite(price) && price > 0)) return price
+  const tick = ticker.startsWith('00') ? (price < 50 ? 0.01 : 0.05) : tickSizeFor(price)
+  return roundPrice(Math.round(price / tick + 1e-9) * tick)
+}
+
 export interface PriceLimits {
   limitUp: number
   limitDown: number

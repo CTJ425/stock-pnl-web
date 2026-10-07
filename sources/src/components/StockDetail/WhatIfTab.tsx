@@ -6,8 +6,11 @@
  * holdings / P&L reports. It is a sandbox, not a form.
  */
 import { Fragment, useEffect, useState } from 'react'
-import { whatIf, sellLadder, averageDown, sharesForTargetAvg } from './whatIf'
-import type { AveragingBase, LadderRow } from './whatIf'
+import type { KeyboardEvent } from 'react'
+import { whatIf, sellLadder } from './whatIf'
+import { AddOnWhatIf } from './AddOnWhatIf'
+import type { CarriedPosition } from './AddOnWhatIf'
+import type { LadderRow } from './whatIf'
 import {
   fmtMoney,
   fmtPercent,
@@ -82,7 +85,23 @@ function PriceScale({
   )
 }
 
-export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, heldQty }: WhatIfTabProps) {
+interface SellWhatIfProps extends WhatIfTabProps {
+  /** Set when 補進試算 handed over its merged position; the buy side is then locked to it. */
+  carried?: CarriedPosition | null
+  onClearCarried?: () => void
+}
+
+function SellWhatIf({
+  ticker,
+  currentPrice,
+  rawAvgCost,
+  avgCost = null,
+  heldQty,
+  carried = null,
+  onClearCarried,
+}: SellWhatIfProps) {
+  const locked = carried !== null
+  const avgLabel = locked ? '補進後均價' : '持有均價'
   const { current } = useWorkspace()
   const hasQuote = currentPrice !== null && currentPrice > 0
   const isHeld = rawAvgCost !== null
@@ -108,11 +127,6 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
   // Sell price is now a real, visible input — the exit price used to be an invisible
   // assumption (silently the current quote), so the result read as a broken number.
   const [sellPrice, setSellPrice] = useState(hasQuote ? String(currentPrice) : '')
-  // 攤平試算 (held stocks only): one hypothetical add-on buy merged into the holding.
-  const [addPrice, setAddPrice] = useState('')
-  const [addQty, setAddQty] = useState('')
-  const [addUnit, setAddUnit] = useState<Unit>('張')
-  const [targetAvg, setTargetAvg] = useState('')
 
   // The same ticker can be held in different workspaces with different cost bases.
   // Switching workspace changes these props without remounting the component, so the
@@ -123,9 +137,6 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
     setBuyPriceEdited(false)
     setUnit(isHeld && heldQty !== null && heldQty % 1000 !== 0 ? '股' : '張')
     setQty(isHeld && heldQty !== null ? String(heldQty % 1000 === 0 ? heldQty / 1000 : heldQty) : '1')
-    setAddPrice('')
-    setAddQty('')
-    setTargetAvg('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, rawAvgCost, avgCost, heldQty])
 
@@ -140,63 +151,29 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasQuote, ticker])
 
-  // Scoped to the workspace like every other caller (AnalysisPage, DashboardPage,
-  // TransactionForm): an unscoped read would price the estimate with the global rate
-  // while the workspace has its own, and the difference would be invisible.
-  // Today's rate (Task 182): the what-if asks what a trade made now would cost.
-  const feeRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
-  // Whole-lot vs odd-lot minimum fee follows the share count, same rule as the transaction form.
-  const minFeeFor = (n: number) => getMinFee(n > 0 && n % 1000 === 0 ? 'whole' : 'odd', current?.id)
-
-  // 攤平試算 (Task 197). The base is the real holding as 庫存總覽 states it — never the
-  // sandbox buy price above, which is locked while an add-on is entered.
-  const canAverage = rawAvgCost !== null && rawAvgCost > 0 && heldQty !== null && heldQty > 0
-  const basePosition: AveragingBase | null = canAverage
-    ? hasRealCost
-      ? { qty: heldQty, cost: avgCost * heldQty, rawCost: rawAvgCost * heldQty }
-      : {
-          qty: heldQty,
-          rawCost: rawAvgCost * heldQty,
-          // No fee-inclusive cost from the caller: price the buy fee the same way the
-          // sandbox does when it has none (workspace rate on the raw average).
-          cost:
-            whatIf({ ticker, buyPrice: rawAvgCost, qty: heldQty, price: rawAvgCost, feeRate, minFee: minFeeFor(heldQty) })
-              ?.cost ?? rawAvgCost * heldQty,
-        }
-    : null
-  const addPriceNum = Number(addPrice)
-  const addQtyNum = Number(addQty)
-  const addShares = addUnit === '張' ? addQtyNum * 1000 : addQtyNum
-  // Empty is a valid "no add-on" state; only a typed, unusable value is an error.
-  const addPriceError = addPrice === '' || (Number.isFinite(addPriceNum) && addPriceNum > 0) ? null : '請輸入大於 0 的價格'
-  const addQtyError = addQty === '' || (Number.isFinite(addQtyNum) && addQtyNum > 0) ? null : '請輸入大於 0 的股數'
-  const averaging =
-    basePosition && addPrice !== '' && addQty !== '' && !addPriceError && !addQtyError
-      ? averageDown(basePosition, { ticker, price: addPriceNum, qty: addShares, feeRate, minFee: minFeeFor(addShares) })
-      : null
-  const targetNum = Number(targetAvg)
-  const targetSolve =
-    basePosition && targetAvg !== '' && addPrice !== '' && !addPriceError
-      ? sharesForTargetAvg(basePosition, { ticker, price: addPriceNum, feeRate, minFeeFor }, targetNum, addUnit === '張' ? 1000 : 1)
-      : null
-
-  const buyPriceNum = averaging ? (rawAvgCost as number) : Number(buyPrice)
+  const buyPriceNum = Number(buyPrice)
   const qtyNum = Number(qty)
   const sellPriceNum = Number(sellPrice)
   // The input is a sandbox and stays in whatever unit the user typed it in; only the
   // derived share count switches with the unit selector, so an in-place rewrite never
   // fights the user mid-typing (unlike TransactionForm, which does rewrite in place).
-  const baseShares = averaging ? (heldQty as number) : unit === '張' ? qtyNum * 1000 : qtyNum
-  const shares = averaging ? averaging.totalQty : baseShares
+  const shares = unit === '張' ? qtyNum * 1000 : qtyNum
 
   // Per-field validation (DT-07): one message under the field that is actually wrong, instead
   // of a single generic sentence below the whole form. `whatIf`/`sellLadder` still gate on all
   // three together — these are only what gets displayed, not a second source of truth.
   const buyPriceError = Number.isFinite(buyPriceNum) && buyPriceNum > 0 ? null : '請輸入大於 0 的價格'
-  const qtyError = Number.isFinite(baseShares) && baseShares > 0 ? null : '請輸入大於 0 的股數'
+  const qtyError = Number.isFinite(qtyNum) && qtyNum > 0 ? null : '請輸入大於 0 的股數'
   const sellPriceError = Number.isFinite(sellPriceNum) && sellPriceNum > 0 ? null : '請輸入大於 0 的價格'
 
-  const minFee = minFeeFor(shares)
+  // Scoped to the workspace like every other caller (AnalysisPage, DashboardPage,
+  // TransactionForm): an unscoped read would price the estimate with the global rate
+  // while the workspace has its own, and the difference would be invisible.
+  // Today's rate (Task 182): the what-if asks what a trade made now would cost.
+  const feeRate = getFeeRateOn(taipeiDateKey(new Date()), current?.id)
+  // Whole-lot vs odd-lot minimum fee follows the entered qty, same rule as the transaction form.
+  const minFeeUnit = shares > 0 && shares % 1000 === 0 ? 'whole' : 'odd'
+  const minFee = getMinFee(minFeeUnit, current?.id)
 
   // Buy price untouched on a held stock with a known real cost: use the exact unrounded
   // rawAvgCost and the fee actually embedded in avgCost, so 投入成本 lands on exactly
@@ -205,73 +182,31 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
   const effectiveBuyPrice = hasRealCost && !buyPriceEdited ? rawAvgCost : buyPriceNum
   const buyFeeOverride = hasRealCost
     ? buyPriceEdited
-      ? Math.round(buyPriceNum * baseShares * ((avgCost - rawAvgCost) / rawAvgCost))
-      : (avgCost - rawAvgCost) * baseShares
+      ? Math.round(buyPriceNum * shares * ((avgCost - rawAvgCost) / rawAvgCost))
+      : (avgCost - rawAvgCost) * shares
     : undefined
 
-  // With an add-on, the sell side prices the merged position: its raw average, its total
-  // shares, and every buy fee paid (the holding's own plus the add-on's).
-  const whatIfInput = averaging
-    ? {
-        ticker,
-        buyPrice: averaging.rawAvgCost,
-        qty: averaging.totalQty,
-        price: sellPriceNum,
-        feeRate,
-        minFee,
-        buyFee: averaging.totalCost - averaging.totalRawCost,
-      }
-    : {
-        ticker,
-        buyPrice: effectiveBuyPrice,
-        qty: shares,
-        price: sellPriceNum,
-        feeRate,
-        minFee,
-        buyFee: buyFeeOverride,
-      }
+  const whatIfInput = {
+    ticker,
+    buyPrice: effectiveBuyPrice,
+    qty: shares,
+    price: sellPriceNum,
+    feeRate,
+    minFee,
+    buyFee: buyFeeOverride,
+  }
 
   const result = whatIf(whatIfInput)
-  // The real holding alone, priced the same way — the "before" of the 攤平 comparison.
-  const baseFee = basePosition ? basePosition.cost - basePosition.rawCost : 0
-  const baseBuyFee = averaging ? baseFee : (result?.buyFee ?? null)
-  const beforeAt = (price: number) =>
-    basePosition
-      ? whatIf({
-          ticker,
-          buyPrice: basePosition.rawCost / basePosition.qty,
-          qty: basePosition.qty,
-          price,
-          feeRate,
-          minFee: minFeeFor(basePosition.qty),
-          buyFee: baseFee,
-        })
-      : null
-  const compare =
-    averaging && basePosition
-      ? {
-          avgBefore: basePosition.cost / basePosition.qty,
-          avgAfter: averaging.avgCost,
-          breakEvenBefore: beforeAt(rawAvgCost as number)?.breakEven ?? null,
-          breakEvenAfter: whatIf({ ...whatIfInput, price: averaging.rawAvgCost })?.breakEven ?? null,
-          pnlBefore: hasQuote ? (beforeAt(currentPrice as number)?.pnl ?? null) : null,
-          pnlAfter: hasQuote ? (whatIf({ ...whatIfInput, price: currentPrice as number })?.pnl ?? null) : null,
-        }
-      : null
-
   // The ladder anchors on the holding average cost when there is one, never on the
   // sell-price input — it keeps its ±10% promise instead of jumping every time the user
-  // types a sell price. With an add-on it is the merged position's average.
+  // types a sell price.
   const anchorsOnAvgCost = rawAvgCost !== null && rawAvgCost > 0
-  const markAvgCost = averaging ? averaging.rawAvgCost : rawAvgCost
   // Snapped to the same 0.01 grid sellLadder uses for its rows, so the anchor row's
   // relative is exactly 0 instead of a sub-cent residual that renders as -0.00%.
-  const anchor = anchorsOnAvgCost ? roundPrice(markAvgCost as number) : (currentPrice ?? buyPriceNum)
-  const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost: markAvgCost })
+  const anchor = anchorsOnAvgCost ? roundPrice(rawAvgCost) : (currentPrice ?? buyPriceNum)
+  const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost: rawAvgCost })
 
-  const heading = anchorsOnAvgCost
-    ? `賣出階梯 · ${averaging ? '補進後均價' : '持有均價'} ±10%`
-    : '賣出階梯 · 現價 ±10%'
+  const heading = anchorsOnAvgCost ? `賣出階梯 · ${avgLabel} ±10%` : '賣出階梯 · 現價 ±10%'
 
   // Summary strip: one item per mark that actually exists, each priced by its own whatIf
   // call — never interpolated from a ladder row, since a mark can sit outside whichever
@@ -295,7 +230,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
           ? [
               {
                 kind: 'avgCost' as const,
-                label: averaging ? '補進後均價' : '持有均價',
+                label: avgLabel,
                 price: anchor,
                 relative: null,
                 pnl: markPnl(anchor),
@@ -328,34 +263,23 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
   ]
   const breakEvenPrice = markItems.find((m) => m.kind === 'breakEven')?.price ?? null
 
-  // 反推 answer, in words: the target never edits the add-on by itself — a button does,
-  // so a typed 補進股數 is never overwritten behind the user's back.
-  const targetText = (): string => {
-    if (targetAvg === '') return '輸入想要的均價，算出在補進價要補多少。'
-    if (!(Number.isFinite(targetNum) && targetNum > 0)) return '請輸入大於 0 的均價'
-    if (addPrice === '' || addPriceError) return '先填補進價，才能算要補多少。'
-    if (!targetSolve || !basePosition) return ''
-    if (targetSolve.kind === 'already') return '目前均價已經是這個數字，不需要補進。'
-    const lowering = targetNum < basePosition.cost / basePosition.qty
-    if (targetSolve.kind === 'unreachable') {
-      return `補進價 ${fmtMoney(addPriceNum, 'TWD', 2)} 加上手續費後${lowering ? '不低於' : '不高於'}目標，補再多也到不了。`
-    }
-    const after = averageDown(basePosition, {
-      ticker,
-      price: addPriceNum,
-      qty: targetSolve.qty,
-      feeRate,
-      minFee: minFeeFor(targetSolve.qty),
-    })!
-    const amount = addUnit === '張' ? `${fmtQty(targetSolve.qty / 1000)} 張` : `${fmtQty(targetSolve.qty)} 股`
-    return `在 ${fmtMoney(addPriceNum, 'TWD', 2)} 補 ${amount}，均價變成 ${fmtMoney(after.avgCost, 'TWD', 2)}，需準備 ${fmtMoney(after.addCost, 'TWD')}。`
-  }
-
   const pick = (row: LadderRow) => setSellPrice(String(row.price))
   const pickPrice = (price: number) => setSellPrice(String(price))
 
   return (
     <div className="rpt-section">
+      {carried && (
+        <div className="whatif-carried" role="status" data-testid="whatif-carried">
+          <span>
+            以<b>補進後部位</b>試算：{fmtQty(carried.qty)} 股，均價 {carried.avgCost.toFixed(2)}（含手續費；含{' '}
+            {carried.addShares % 1000 === 0 ? `${fmtQty(carried.addShares / 1000)} 張` : `${fmtQty(carried.addShares)} 股`} @{' '}
+            {carried.addPrice.toFixed(2)} 補進）
+          </span>
+          <button type="button" className="btn" onClick={onClearCarried}>
+            改回現有持股
+          </button>
+        </div>
+      )}
       {scalePoints.length > 1 && (
         <PriceScale points={scalePoints} breakEven={breakEvenPrice} sellPnl={result?.pnl ?? null} />
       )}
@@ -440,18 +364,16 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
         </>
       )}
 
-      <h3>對帳單 · {canAverage ? '補進與賣出' : '自訂賣出價'}</h3>
-      <div className={`whatif-ledger${canAverage ? ' whatif-ledger--avg' : ''}`}>
-        <div className="whatif-ledger-cell is-key" />
-        <div className="whatif-ledger-cell whatif-ledger-heading">{canAverage ? '現有持股' : '買進 · 假設'}</div>
-        {canAverage && <div className="whatif-ledger-cell whatif-ledger-heading col-add">補進 · 假設</div>}
-        {canAverage && <div className="whatif-ledger-cell whatif-ledger-heading col-total">合計</div>}
-        <div className="whatif-ledger-cell whatif-ledger-heading col-sell">賣出 · 試算</div>
+      <h3>對帳單 · 自訂賣出價</h3>
+      <div className="whatif-ledger">
+        <div className="whatif-ledger-cell" />
+        <div className="whatif-ledger-cell whatif-ledger-heading">買進 · 假設</div>
+        <div className="whatif-ledger-cell whatif-ledger-heading">賣出 · 試算</div>
 
-        <div className="whatif-ledger-cell is-key" data-testid="whatif-ledger-key">價格</div>
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">價格</div>
         <div className="whatif-ledger-cell">
           <div className="whatif-ledger-sublabel">
-            {isHeld ? (averaging ? '成交均價（未含費）· 鎖定' : '成交均價（未含費）') : '買進價'}
+            {locked ? '平均（未含費）· 已帶入' : isHeld ? '成交均價（未含費）' : '買進價'}
           </div>
           <div className="field">
             <input
@@ -459,40 +381,17 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
               step="0.01"
               min="0"
               aria-label="買進價格"
-              value={averaging ? roundPrice(rawAvgCost as number).toFixed(2) : buyPrice}
-              disabled={averaging !== null}
-              title={averaging ? '補進試算以實際持股計算；清空補進欄即可再修改' : undefined}
+              value={buyPrice}
+              disabled={locked}
               onChange={(e) => {
                 setBuyPriceEdited(true)
                 setBuyPrice(e.target.value)
               }}
             />
-            {!averaging && buyPriceError && <p className="field-error">{buyPriceError}</p>}
+            {buyPriceError && <p className="field-error">{buyPriceError}</p>}
           </div>
         </div>
-        {canAverage && (
-          <div className="whatif-ledger-cell col-add">
-            <div className="whatif-ledger-sublabel">補進價</div>
-            <div className="field">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                aria-label="補進價格"
-                value={addPrice}
-                onChange={(e) => setAddPrice(e.target.value)}
-              />
-              {addPriceError && <p className="field-error">{addPriceError}</p>}
-            </div>
-          </div>
-        )}
-        {canAverage && (
-          <div className="whatif-ledger-cell col-total">
-            <div className="whatif-ledger-sublabel">平均（未含費）</div>
-            {averaging ? fmtMoney(averaging.rawAvgCost, 'TWD', 2) : '—'}
-          </div>
-        )}
-        <div className="whatif-ledger-cell col-sell">
+        <div className="whatif-ledger-cell">
           {hasQuote && (
             <div className="whatif-ledger-sublabel">現價 {(currentPrice as number).toFixed(2)}</div>
           )}
@@ -509,7 +408,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
           </div>
         </div>
 
-        <div className="whatif-ledger-cell is-key" data-testid="whatif-ledger-key">股數</div>
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">股數</div>
         <div className="whatif-ledger-cell">
           <div className="field-row">
             <div className="field">
@@ -518,18 +417,18 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
                 step="1"
                 min="0"
                 aria-label="股數"
-                value={averaging ? String(unit === '張' ? baseShares / 1000 : baseShares) : qty}
-                disabled={averaging !== null}
+                value={qty}
+                disabled={locked}
                 onChange={(e) => setQty(e.target.value)}
               />
-              {!averaging && qtyError && <p className="field-error">{qtyError}</p>}
+              {qtyError && <p className="field-error">{qtyError}</p>}
             </div>
             <div className="field">
               <select
                 className="narrow"
                 aria-label="單位"
                 value={unit}
-                disabled={averaging !== null}
+                disabled={locked}
                 onChange={(e) => setUnit(e.target.value as Unit)}
               >
                 <option value="張">張</option>
@@ -538,179 +437,27 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
             </div>
           </div>
         </div>
-        {canAverage && (
-          <div className="whatif-ledger-cell col-add">
-            <div className="field-row">
-              <div className="field">
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  aria-label="補進股數"
-                  value={addQty}
-                  onChange={(e) => setAddQty(e.target.value)}
-                />
-                {addQtyError && <p className="field-error">{addQtyError}</p>}
-              </div>
-              <div className="field">
-                <select
-                  className="narrow"
-                  aria-label="補進單位"
-                  value={addUnit}
-                  onChange={(e) => setAddUnit(e.target.value as Unit)}
-                >
-                  <option value="張">張</option>
-                  <option value="股">股</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-        {canAverage && (
-          <div className="whatif-ledger-cell col-total" data-testid="whatif-total-qty">
-            {averaging ? `${fmtQty(averaging.totalQty)} 股` : '—'}
-          </div>
-        )}
-        <div className="whatif-ledger-cell col-sell">{fmtQty(shares)} 股</div>
+        <div className="whatif-ledger-cell">{fmtQty(shares)} 股</div>
 
-        <div className="whatif-ledger-cell is-key" data-testid="whatif-ledger-key">價金</div>
-        <div className="whatif-ledger-cell">{fmtMoney(buyPriceNum * baseShares, 'TWD')}</div>
-        {canAverage && (
-          <div className="whatif-ledger-cell col-add">{averaging ? fmtMoney(averaging.addAmount, 'TWD') : '—'}</div>
-        )}
-        {canAverage && (
-          <div className="whatif-ledger-cell col-total">
-            {averaging ? fmtMoney(averaging.totalRawCost, 'TWD') : '—'}
-          </div>
-        )}
-        <div className="whatif-ledger-cell col-sell">{fmtMoney(sellPriceNum * shares, 'TWD')}</div>
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">價金</div>
+        <div className="whatif-ledger-cell">{fmtMoney(buyPriceNum * shares, 'TWD')}</div>
+        <div className="whatif-ledger-cell">{fmtMoney(sellPriceNum * shares, 'TWD')}</div>
 
-        <div className="whatif-ledger-cell is-key" data-testid="whatif-ledger-key">費用</div>
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">費用</div>
         <div className="whatif-ledger-cell">
-          <div className="whatif-ledger-sublabel">{isHeld ? '實付手續費' : '手續費'}</div>
-          {fmtMoney(baseBuyFee, 'TWD')}
+          <div className="whatif-ledger-sublabel">{locked ? '含補進手續費' : isHeld ? '實付手續費' : '手續費'}</div>
+          {fmtMoney(result?.buyFee ?? null, 'TWD')}
         </div>
-        {canAverage && (
-          <div className="whatif-ledger-cell col-add">
-            <div className="whatif-ledger-sublabel">手續費（今日費率）</div>
-            {averaging ? fmtMoney(averaging.addFee, 'TWD') : '—'}
-          </div>
-        )}
-        {canAverage && (
-          <div className="whatif-ledger-cell col-total">
-            {averaging ? fmtMoney(averaging.totalCost - averaging.totalRawCost, 'TWD') : '—'}
-          </div>
-        )}
-        <div className="whatif-ledger-cell col-sell">{fmtMoney(result?.sellFeeTax ?? null, 'TWD')}</div>
+        <div className="whatif-ledger-cell">{fmtMoney(result?.sellFeeTax ?? null, 'TWD')}</div>
 
-        <div className="whatif-ledger-cell is-key is-last" data-testid="whatif-ledger-key">小計</div>
-        <div className="whatif-ledger-cell is-last">
-          投入成本{' '}
-          <span data-testid="whatif-cost">
-            {fmtMoney(averaging && basePosition ? basePosition.cost : (result?.cost ?? null), 'TWD')}
-          </span>
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">小計</div>
+        <div className="whatif-ledger-cell">
+          投入成本 <span data-testid="whatif-cost">{fmtMoney(result?.cost ?? null, 'TWD')}</span>
         </div>
-        {canAverage && (
-          <div className="whatif-ledger-cell col-add is-last">
-            需準備 <span data-testid="whatif-add-cost">{averaging ? fmtMoney(averaging.addCost, 'TWD') : '—'}</span>
-          </div>
-        )}
-        {canAverage && (
-          <div className="whatif-ledger-cell col-total is-last">
-            投入成本{' '}
-            <span data-testid="whatif-total-cost">{averaging ? fmtMoney(averaging.totalCost, 'TWD') : '—'}</span>
-          </div>
-        )}
-        <div className="whatif-ledger-cell col-sell is-last">
+        <div className="whatif-ledger-cell">
           實收 <span data-testid="whatif-proceeds">{fmtMoney(result?.proceeds ?? null, 'TWD')}</span>
         </div>
       </div>
-
-      {canAverage && (
-        <div className="whatif-target" data-testid="whatif-target">
-          <div className="field whatif-target-field">
-            <label htmlFor={`whatif-target-${ticker}`}>目標均價（含手續費）</label>
-            <input
-              id={`whatif-target-${ticker}`}
-              type="number"
-              step="0.01"
-              min="0"
-              value={targetAvg}
-              placeholder={basePosition ? roundPrice(basePosition.cost / basePosition.qty).toFixed(2) : undefined}
-              onChange={(e) => setTargetAvg(e.target.value)}
-            />
-          </div>
-          <p className="whatif-target-answer" data-testid="whatif-target-answer" aria-live="polite">
-            {targetText()}
-          </p>
-          {targetSolve?.kind === 'ok' && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setAddQty(String(addUnit === '張' ? targetSolve.qty / 1000 : targetSolve.qty))}
-            >
-              帶入補進股數
-            </button>
-          )}
-        </div>
-      )}
-
-      {compare && (
-        <div className="table-scroll">
-          <table className="data-table whatif-compare" data-testid="whatif-compare">
-            <caption>補進前後</caption>
-            <thead>
-              <tr>
-                <th scope="col" />
-                <th scope="col" className="num">補進前</th>
-                <th scope="col" className="num">補進後</th>
-                <th scope="col" className="num">變化</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row">均價（含手續費）</th>
-                <td className="num">{fmtMoney(compare.avgBefore, 'TWD', 2)}</td>
-                <td className="num" data-testid="whatif-avg-after">{fmtMoney(compare.avgAfter, 'TWD', 2)}</td>
-                <td className="num">
-                  {fmtSignedMoney(compare.avgAfter - compare.avgBefore, 'TWD', 2)}（
-                  {fmtSignedPercent(compare.avgAfter / compare.avgBefore - 1)}）
-                </td>
-              </tr>
-              <tr>
-                <th scope="row">回本價</th>
-                <td className="num">{fmtMoney(compare.breakEvenBefore, 'TWD', 2)}</td>
-                <td className="num">{fmtMoney(compare.breakEvenAfter, 'TWD', 2)}</td>
-                <td className="num">
-                  {compare.breakEvenBefore !== null && compare.breakEvenAfter !== null
-                    ? fmtSignedMoney(compare.breakEvenAfter - compare.breakEvenBefore, 'TWD', 2)
-                    : '—'}
-                </td>
-              </tr>
-              {compare.pnlBefore !== null && compare.pnlAfter !== null && (
-                <tr>
-                  <th scope="row">以現價試算損益</th>
-                  <td className={`num ${pnlClass(compare.pnlBefore)}`}>{fmtSignedMoney(compare.pnlBefore, 'TWD')}</td>
-                  <td className={`num ${pnlClass(compare.pnlAfter)}`}>{fmtSignedMoney(compare.pnlAfter, 'TWD')}</td>
-                  <td className="num">{fmtSignedMoney(compare.pnlAfter - compare.pnlBefore, 'TWD')}</td>
-                </tr>
-              )}
-              <tr>
-                <th scope="row">持有股數</th>
-                <td className="num">{fmtQty(basePosition!.qty)}</td>
-                <td className="num">{fmtQty(averaging!.totalQty)}</td>
-                <td className="num">+{fmtQty(averaging!.totalQty - basePosition!.qty)}</td>
-              </tr>
-              <tr>
-                <th scope="row">投入成本</th>
-                <td className="num">{fmtMoney(basePosition!.cost, 'TWD')}</td>
-                <td className="num">{fmtMoney(averaging!.totalCost, 'TWD')}</td>
-                <td className="num">+{fmtMoney(averaging!.addCost, 'TWD')}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {result && (
         <div className="whatif-ledger-settle">
@@ -756,12 +503,97 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
             : `買進價預設為現價 ${currentPrice}`}
         </div>
       )}
-      {averaging && (
-        <p className="hint">
-          補進手續費依今日工作區費率計算；均價採移動平均（含買進手續費），與庫存總覽相同。補進時現有持股以實際成本計算。
-        </p>
-      )}
       <p className="hint">此為試算工具，不會影響持股或任何損益報表。</p>
     </div>
+  )
+}
+
+type WhatIfMode = 'sell' | 'add'
+const MODES: Array<{ id: WhatIfMode; label: string }> = [
+  { id: 'sell', label: '賣出試算' },
+  { id: 'add', label: '補進試算' },
+]
+
+/**
+ * 損益試算: 賣出試算 for every stock, plus 補進試算 for a held one (Task 197). Both panels stay
+ * mounted so switching tabs never discards what was typed; 補進試算 can hand its merged position
+ * to 賣出試算, which then prices the sell against it until the user reverts.
+ */
+export function WhatIfTab(props: WhatIfTabProps) {
+  const { ticker, currentPrice, rawAvgCost, avgCost = null, heldQty } = props
+  const canAverage = rawAvgCost !== null && rawAvgCost > 0 && heldQty !== null && heldQty > 0
+  const [mode, setMode] = useState<WhatIfMode>('sell')
+  const [carried, setCarried] = useState<CarriedPosition | null>(null)
+
+  useEffect(() => {
+    setMode('sell')
+    setCarried(null)
+  }, [ticker, rawAvgCost, avgCost, heldQty])
+
+  if (!canAverage) return <SellWhatIf {...props} />
+
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    const next: WhatIfMode = mode === 'sell' ? 'add' : 'sell'
+    const target = e.key === 'Home' ? 'sell' : e.key === 'End' ? 'add' : next
+    setMode(target)
+    e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-mode="${target}"]`)?.focus()
+  }
+
+  const shownAvg = avgCost ?? rawAvgCost
+  return (
+    <>
+      <div className="whatif-modes">
+        <div className="subtabs" role="tablist" aria-label="試算方式">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              id={`whatif-mode-${m.id}`}
+              data-mode={m.id}
+              aria-selected={mode === m.id}
+              aria-controls={`whatif-panel-${m.id}`}
+              tabIndex={mode === m.id ? 0 : -1}
+              className={`subtab${mode === m.id ? ' active' : ''}`}
+              onClick={() => setMode(m.id)}
+              onKeyDown={onKeyDown}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <p className="whatif-modes-holding">
+          現有 {fmtQty(heldQty)} 股 · 均價 {shownAvg.toFixed(2)}
+          {avgCost !== null ? '（含手續費）' : '（未含手續費）'}
+          {currentPrice !== null && currentPrice > 0 ? ` · 現價 ${currentPrice.toFixed(2)}` : ''}
+        </p>
+      </div>
+      <div role="tabpanel" id="whatif-panel-sell" aria-labelledby="whatif-mode-sell" hidden={mode !== 'sell'}>
+        <SellWhatIf
+          ticker={ticker}
+          currentPrice={currentPrice}
+          rawAvgCost={carried ? carried.rawAvgCost : rawAvgCost}
+          avgCost={carried ? carried.avgCost : avgCost}
+          heldQty={carried ? carried.qty : heldQty}
+          carried={carried}
+          onClearCarried={() => setCarried(null)}
+        />
+      </div>
+      <div role="tabpanel" id="whatif-panel-add" aria-labelledby="whatif-mode-add" hidden={mode !== 'add'}>
+        <AddOnWhatIf
+          ticker={ticker}
+          currentPrice={currentPrice}
+          rawAvgCost={rawAvgCost}
+          avgCost={avgCost}
+          heldQty={heldQty}
+          onCarry={(c) => {
+            setCarried(c)
+            setMode('sell')
+          }}
+        />
+      </div>
+    </>
   )
 }

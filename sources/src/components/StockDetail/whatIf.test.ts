@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { whatIf, sellLadder, priceLimits, averageDown, sharesForTargetAvg } from './whatIf'
+import { whatIf, sellLadder, priceLimits, averageDown, sharesForTargetAvg, snapToTick } from './whatIf'
 import { breakEvenPrice, calculateFee } from '../../utils/fees'
 
 const RATE = 0.001425
@@ -476,5 +476,20 @@ describe('sharesForTargetAvg（目標均價反推）', () => {
 
   it('目前均價已等於目標時不需補進', () => {
     expect(sharesForTargetAvg(base, add, 513.03, 1000)).toEqual({ kind: 'already' })
+  })
+})
+
+describe('snapToTick（最近的可下單價位）', () => {
+  it('股票依六個級距', () => {
+    expect(snapToTick(473.575, '2330')).toBe(473.5)
+    expect(snapToTick(9.876, '2330')).toBe(9.88)
+    expect(snapToTick(1003, '2330')).toBe(1005)
+  })
+
+  // 臺灣證券交易所營業細則，ETF 升降單位：未滿 50 元 0.01 元，50 元以上 0.05 元（2026-10-07 查證）
+  it('ETF（00 開頭）只有兩個級距', () => {
+    expect(snapToTick(103.82, '0050')).toBe(103.8)
+    expect(snapToTick(103.83, '0050')).toBe(103.85)
+    expect(snapToTick(18.123, '00878')).toBe(18.12)
   })
 })

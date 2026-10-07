@@ -543,111 +543,21 @@ table.data-table {
   text-align: right;
 }
 
-/* Key column. Cells carry their column as a class rather than an nth-child position, because
-   a held stock adds the 補進 / 合計 columns and the row width changes with it. */
-.whatif-ledger-cell.is-key {
+/* Key column (1st of every 3 cells) */
+.whatif-ledger-cell:nth-child(3n + 1) {
   text-align: left;
   color: var(--ink-muted);
   font-weight: 500;
 }
 
-/* Sell column: divider against the buy side */
-.whatif-ledger-cell.col-sell {
+/* Sell column (3rd of every 3 cells): divider against the buy column */
+.whatif-ledger-cell:nth-child(3n) {
   border-left: 1px solid var(--border);
 }
 
 /* Last row: no bottom rule, the 結算 strip closes it off instead */
-.whatif-ledger-cell.is-last {
+.whatif-ledger-cell:nth-last-child(-n + 3) {
   border-bottom: none;
-}
-
-/* 攤平試算 (Task 197): key | 現有持股 | 補進 | 合計 | 賣出. The 補進 column is the only
-   hypothetical on the buy side, so it sits on the band tint the way a filled-in form field
-   would on a printed statement. */
-.whatif-ledger--avg {
-  grid-template-columns: minmax(88px, auto) repeat(4, minmax(0, 1fr));
-}
-
-.whatif-ledger--avg .col-add {
-  background: var(--cds-layer-02);
-}
-
-.whatif-ledger--avg .col-total {
-  border-left: 1px solid var(--border);
-  font-weight: 600;
-}
-
-/* 股數 + 單位 stay on one line in a quarter-width column. */
-.whatif-ledger--avg .field-row {
-  flex-wrap: nowrap;
-  gap: 4px;
-}
-
-.whatif-ledger--avg .field-row > * {
-  flex: 1 1 0;
-}
-
-.whatif-ledger--avg .field-row > :last-child {
-  flex: 0 0 64px;
-}
-
-.whatif-ledger-cell input:disabled,
-.whatif-ledger-cell select:disabled {
-  color: var(--ink-secondary);
-  -webkit-text-fill-color: var(--ink-secondary);
-  opacity: 1;
-  background: transparent;
-  cursor: not-allowed;
-}
-
-/* 反推: target average → shares to add. One line under the ledger, read left to right. */
-.whatif-target {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.whatif-target-field {
-  margin-bottom: 0;
-  width: 180px;
-}
-
-.whatif-target-field input {
-  text-align: right;
-}
-
-.whatif-target-answer {
-  flex: 1 1 240px;
-  margin: 0;
-  padding-bottom: 10px;
-  color: var(--ink-secondary);
-}
-
-.whatif-target .btn {
-  margin-bottom: 2px;
-}
-
-.whatif-compare {
-  margin-top: 12px;
-}
-
-.whatif-compare caption {
-  caption-side: top;
-  text-align: left;
-  padding: 0 0 8px;
-  font-weight: 600;
-  color: var(--ink-secondary);
-}
-
-.whatif-compare tbody th {
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  font-weight: 500;
-  color: var(--ink-muted);
-  white-space: nowrap;
 }
 
 .whatif-ledger-cell .field {
@@ -705,30 +615,328 @@ table.data-table {
     min-height: 36px;
     font-size: var(--type-body-01);
   }
+}
 
-  /* Five columns do not fit a phone. 合計 goes; the 補進前後 table under the ledger
-     carries the merged figures instead. */
-  .whatif-ledger--avg {
-    grid-template-columns: minmax(48px, auto) repeat(3, minmax(0, 1fr));
+/* ---------- 損益試算 tabs + 補進試算 (Task 197) ----------*/
+.whatif-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-06);
+}
+
+.whatif-modes .subtabs {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.whatif-modes-holding {
+  margin: 0;
+  padding-bottom: var(--sp-04);
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 賣出試算 priced against the merged position: says so, and offers the way back. */
+.whatif-carried {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: var(--sp-04) var(--sp-05);
+  margin-bottom: var(--sp-05);
+  border: 1px solid var(--border);
+  background: var(--cds-layer-02);
+  font-variant-numeric: tabular-nums;
+}
+
+.addon {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-06);
+}
+
+/* The inputs sit on the band tint, the way a filled-in slip sits on a statement page. */
+.addon-inputs {
+  background: var(--cds-layer-hover-01);
+  padding: var(--sp-05) var(--sp-06);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-05);
+}
+
+.addon-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--sp-06);
+  align-items: start;
+}
+
+.addon-grid .field {
+  margin-bottom: 0;
+}
+
+.addon .field input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.addon-help {
+  margin: var(--sp-02) 0 0;
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+.addon-pct,
+.addon-qty {
+  display: flex;
+  gap: var(--sp-03);
+  align-items: center;
+}
+
+.addon-pct select {
+  flex: 0 0 136px;
+}
+
+.addon-pct input,
+.addon-qty input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.addon-qty select {
+  flex: 0 0 76px;
+}
+
+.addon-unit {
+  color: var(--ink-secondary);
+}
+
+.addon-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: var(--sp-03);
+}
+
+.addon-chip {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--cds-background);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--type-body-01);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.addon-chip:hover {
+  background: var(--row-hover);
+}
+
+.addon-chip:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
+.addon-chip.is-on {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.addon-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-top: var(--sp-05);
+  border-top: 1px solid var(--border);
+}
+
+.addon-target label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.addon-target input {
+  width: 128px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-04);
+  font: inherit;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--cds-background);
+  color: var(--ink);
+}
+
+.addon-target input:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
+.addon-target-answer {
+  flex: 1 1 260px;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The answer: one big figure (the new average), two supporting ones, printed-rule frame. */
+.addon-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.addon-result > div {
+  padding: var(--sp-05) var(--sp-06);
+}
+
+.addon-result > .addon-result-main {
+  padding-left: 0;
+}
+
+.addon-result-side {
+  border-left: 1px solid var(--border);
+}
+
+.addon-k {
+  font-size: var(--type-label-01);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.addon-hero {
+  margin-top: 6px;
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.addon-figure {
+  margin-top: 6px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.addon-s {
+  margin-top: 6px;
+  color: var(--ink-secondary);
+}
+
+.addon-compare caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 0 var(--sp-03);
+  font-size: var(--type-body-02);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.addon-compare tbody th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.addon-compare tbody tr:last-child th {
+  border-bottom: none;
+}
+
+.addon-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-04) var(--sp-05);
+}
+
+.addon-foot .hint {
+  margin: 0;
+  max-width: 64ch;
+}
+
+@media (max-width: 720px) {
+  .addon-grid {
+    grid-template-columns: 1fr;
+    gap: var(--sp-05);
   }
 
-  .whatif-ledger--avg .col-total {
+  .addon-inputs {
+    margin: 0 calc(-1 * var(--sp-05));
+    padding: var(--sp-05);
+  }
+
+  .addon-target input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--type-body-02);
+  }
+
+  .addon-target label,
+  .addon-target-answer {
+    flex-basis: 100%;
+  }
+
+  .addon-chip {
+    flex: 1 1 0;
+    min-height: 40px;
+  }
+
+  .addon-result {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .addon-result-main {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .addon-result > div {
+    padding: var(--sp-04);
+  }
+
+  .addon-result > .addon-result-side:nth-child(2) {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  .addon-hero {
+    font-size: 2.25rem;
+  }
+
+  .addon-figure {
+    font-size: 1.25rem;
+  }
+
+  .addon-col-delta {
     display: none;
   }
 
-  /* 股數 over 單位: side by side they shrink to a sliver at phone width. */
-  .whatif-ledger--avg .field-row {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .whatif-ledger--avg .field-row > *,
-  .whatif-ledger--avg .field-row > :last-child {
-    flex: 0 0 auto;
-  }
-
-  .whatif-target-field {
+  .addon-foot .btn {
     width: 100%;
+  }
+
+  .whatif-modes .subtabs {
+    width: 100%;
+  }
+
+  .whatif-modes .subtab {
+    flex: 1 1 0;
   }
 }
 

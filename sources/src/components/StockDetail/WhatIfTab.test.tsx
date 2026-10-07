@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent, within } from '@testing-library/react'
 
 const { getFeeRateOn, getMinFee, useWorkspace } = vi.hoisted(() => ({
   getFeeRateOn: vi.fn(() => 0.001425),
@@ -271,7 +271,9 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
 
     expect(screen.getByText('成交均價（未含費）')).toBeTruthy()
     expect(screen.getByText('實付手續費')).toBeTruthy()
-    expect(screen.getByText(/現價 103.80/)).toBeTruthy()
+    // Scoped to the ledger: the 試算方式 header also states 現價 for a held stock.
+    const ledger = document.querySelector('.whatif-ledger') as HTMLElement
+    expect(within(ledger).getByText(/現價 103.80/)).toBeTruthy()
   })
 
   it('換到另一個工作區的同一檔股票時，輸入框跟著換成新的持股成本', () => {
@@ -432,66 +434,95 @@ describe('WhatIfTab 報價晚到時補上預設價', () => {
   })
 })
 
-describe('WhatIfTab 攤平試算（Task 197）', () => {
+describe('WhatIfTab 賣出試算／補進試算（Task 197）', () => {
   // 2,000 股，成交均價 512.30、含費均價 513.03 → 投入成本 1,026,060
   const held = { rawAvgCost: 512.3, avgCost: 513.03, heldQty: 2000 }
+  const addTab = () => fireEvent.click(screen.getByRole('tab', { name: '補進試算' }))
 
-  it('觀察股沒有補進欄', () => {
+  it('觀察股沒有分頁，也沒有補進試算', () => {
     render(<WhatIfTab ticker="2330" currentPrice={500} {...watched} />)
-    expect(screen.queryByLabelText('補進價格')).toBeNull()
-    expect(screen.queryByTestId('whatif-target')).toBeNull()
+    expect(screen.queryByRole('tab', { name: '補進試算' })).toBeNull()
+    expect(screen.queryByLabelText('補進價')).toBeNull()
   })
 
-  it('補進欄空白時，結果與原本的損益試算相同', () => {
+  it('庫存股預設在賣出試算，畫面與原本相同', () => {
     render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
+    expect(screen.getByRole('tab', { name: '賣出試算' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByTestId('whatif-cost').textContent).toMatch(/1,026,060/)
-    expect(screen.queryByTestId('whatif-compare')).toBeNull()
-    expect((screen.getByLabelText('買進價格') as HTMLInputElement).disabled).toBe(false)
+    expect(screen.queryByTestId('whatif-carried')).toBeNull()
   })
 
-  it('填入補進後：合計、補進前後與賣出都改用合併部位', () => {
+  it('補進價與數量 → 均價、需準備資金、補進前後', () => {
     render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
-    fireEvent.change(screen.getByLabelText('補進價格'), { target: { value: '480' } })
-    fireEvent.change(screen.getByLabelText('補進股數'), { target: { value: '1' } })
+    addTab()
+    fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '480' } })
+    fireEvent.change(screen.getByLabelText('補進數量'), { target: { value: '1' } })
 
-    // 480,000 + 手續費 684
-    expect(screen.getByTestId('whatif-add-cost').textContent).toMatch(/480,684/)
-    expect(screen.getByTestId('whatif-total-cost').textContent).toMatch(/1,506,744/)
-    expect(screen.getByTestId('whatif-total-qty').textContent).toBe('3,000 股')
-    // 1,506,744 ÷ 3,000 = 502.248
-    expect(screen.getByTestId('whatif-avg-after').textContent).toMatch(/502\.25/)
-    // 現有持股鎖定為實際持股
-    const buy = screen.getByLabelText('買進價格') as HTMLInputElement
-    expect(buy.disabled).toBe(true)
-    expect(buy.value).toBe('512.30')
+    // 480,000 + 手續費 684；1,506,744 ÷ 3,000 = 502.248
+    expect(screen.getByTestId('addon-cash').textContent).toMatch(/480,684/)
+    expect(screen.getByTestId('addon-avg-after').textContent).toBe('502.25')
+    expect(screen.getByTestId('addon-total-cost').textContent).toMatch(/1,506,744/)
   })
 
-  it('補進時鎖定的現有欄，清空補進後恢復使用者原本輸入的買進價', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
-    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '400' } })
-    fireEvent.change(screen.getByLabelText('補進價格'), { target: { value: '480' } })
-    fireEvent.change(screen.getByLabelText('補進股數'), { target: { value: '1' } })
-    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('512.30')
+  it('用漲跌幅換算補進價，取最近的可下單價位', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={498.5} {...held} />)
+    addTab()
+    fireEvent.click(screen.getByRole('button', { name: '-5%' }))
 
-    fireEvent.change(screen.getByLabelText('補進股數'), { target: { value: '' } })
-    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('400')
+    // 498.5 × 0.95 = 473.575；100–500 元的升降單位是 0.5 元 → 473.50
+    expect((screen.getByLabelText('補進價') as HTMLInputElement).value).toBe('473.50')
+    expect(screen.getByTestId('addon-snap').textContent).toMatch(/473\.575.*473\.50/)
+  })
+
+  it('直接輸入補進價時，漲跌幅跟著換算', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
+    addTab()
+    fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '475' } })
+    expect((screen.getByLabelText('或用漲跌幅換算') as HTMLInputElement).value).toBe('-5')
   })
 
   it('目標均價反推，按鈕帶入補進張數', () => {
     render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
-    fireEvent.change(screen.getByLabelText('補進價格'), { target: { value: '480' } })
-    fireEvent.change(screen.getByLabelText('目標均價（含手續費）'), { target: { value: '495' } })
+    addTab()
+    fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '480' } })
+    fireEvent.change(screen.getByLabelText('或依目標均價反推'), { target: { value: '495' } })
 
-    expect(screen.getByTestId('whatif-target-answer').textContent).toMatch(/補 3 張/)
-    fireEvent.click(screen.getByRole('button', { name: '帶入補進股數' }))
-    expect((screen.getByLabelText('補進股數') as HTMLInputElement).value).toBe('3')
+    expect(screen.getByTestId('addon-target-answer').textContent).toMatch(/補 3 張/)
+    fireEvent.click(screen.getByRole('button', { name: '帶入 3 張' }))
+    expect((screen.getByLabelText('補進數量') as HTMLInputElement).value).toBe('3')
   })
 
   it('目標均價到不了時直接說原因', () => {
     render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
-    fireEvent.change(screen.getByLabelText('補進價格'), { target: { value: '480' } })
-    fireEvent.change(screen.getByLabelText('目標均價（含手續費）'), { target: { value: '480' } })
-    expect(screen.getByTestId('whatif-target-answer').textContent).toMatch(/補再多也到不了/)
-    expect(screen.queryByRole('button', { name: '帶入補進股數' })).toBeNull()
+    addTab()
+    fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '480' } })
+    fireEvent.change(screen.getByLabelText('或依目標均價反推'), { target: { value: '480' } })
+    expect(screen.getByTestId('addon-target-answer').textContent).toMatch(/補再多也到不了/)
+  })
+
+  it('帶入賣出試算：鎖定為補進後部位，可改回現有持股', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
+    addTab()
+    fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '480' } })
+    fireEvent.change(screen.getByLabelText('補進數量'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: '用補進後部位試算賣出' }))
+
+    expect(screen.getByRole('tab', { name: '賣出試算' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('whatif-carried').textContent).toMatch(/3,000 股/)
+    expect(screen.getByTestId('whatif-cost').textContent).toMatch(/1,506,744/)
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).disabled).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: '改回現有持股' }))
+    expect(screen.queryByTestId('whatif-carried')).toBeNull()
+    expect(screen.getByTestId('whatif-cost').textContent).toMatch(/1,026,060/)
+  })
+
+  it('切換分頁不會清掉補進的輸入', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
+    addTab()
+    fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '480' } })
+    fireEvent.click(screen.getByRole('tab', { name: '賣出試算' }))
+    addTab()
+    expect((screen.getByLabelText('補進價') as HTMLInputElement).value).toBe('480')
   })
 })
