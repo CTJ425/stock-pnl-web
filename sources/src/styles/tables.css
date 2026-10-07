@@ -721,8 +721,11 @@ table.data-table {
   align-items: center;
 }
 
-.addon-pct select {
-  flex: 0 0 136px;
+/* Sized by its longest option (相對持有均價) so the text never runs into the arrow; scoped under
+   .addon so it outranks `.field select { width: 100% }` in controls.css. */
+.addon .addon-pct select {
+  flex: 0 0 auto;
+  width: auto;
 }
 
 .addon-pct input,
@@ -922,12 +925,6 @@ table.data-table {
     min-height: 40px;
   }
 
-  /* Sized by its longest option (相對持有均價); a fixed 136px clipped it at phone width.
-     Scoped under .addon so it outranks `.field select { width: 100% }` in controls.css. */
-  .addon .addon-pct select {
-    flex: 0 0 auto;
-    width: auto;
-  }
 
   .addon-result {
     grid-template-columns: repeat(2, minmax(0, 1fr));

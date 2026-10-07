@@ -465,8 +465,17 @@ describe('WhatIfTab 賣出試算＋補進試算（Task 197）', () => {
     expect(screen.getByTestId('addon-avg-delta').textContent).toBe('-NT$10.78（-2.10%）')
   })
 
-  it('用漲跌幅換算補進價，取最近的可下單價位', () => {
+  it('預設以持有均價換算：513.03 跌 5%', () => {
     render(<WhatIfTab ticker="2330" currentPrice={498.5} {...held} />)
+    fireEvent.click(screen.getByRole('button', { name: '-5%' }))
+
+    // 513.03 × 0.95 = 487.3785；100–500 元的升降單位是 0.5 元 → 487.50
+    expect((screen.getByLabelText('補進價') as HTMLInputElement).value).toBe('487.50')
+  })
+
+  it('改用現價換算，取最近的可下單價位', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={498.5} {...held} />)
+    fireEvent.change(screen.getByLabelText('漲跌幅基準'), { target: { value: 'current' } })
     fireEvent.click(screen.getByRole('button', { name: '-5%' }))
 
     // 498.5 × 0.95 = 473.575；100–500 元的升降單位是 0.5 元 → 473.50
@@ -477,7 +486,8 @@ describe('WhatIfTab 賣出試算＋補進試算（Task 197）', () => {
   it('直接輸入補進價時，漲跌幅跟著換算', () => {
     render(<WhatIfTab ticker="2330" currentPrice={500} {...held} />)
     fireEvent.change(screen.getByLabelText('補進價'), { target: { value: '475' } })
-    expect((screen.getByLabelText('或用漲跌幅換算') as HTMLInputElement).value).toBe('-5')
+    // 相對持有均價：475 ÷ 513.03 − 1 = −7.41%
+    expect((screen.getByLabelText('或用漲跌幅換算') as HTMLInputElement).value).toBe('-7.41')
   })
 
   it('目標均價反推，按鈕帶入補進張數', () => {
@@ -513,13 +523,13 @@ describe('WhatIfTab 賣出試算＋補進試算（Task 197）', () => {
   })
 })
 
-describe('WhatIfTab 補進試算：漲跌幅基準跟著報價', () => {
-  it('報價晚到時，基準從持有均價改為現價（使用者沒選過）', () => {
+describe('WhatIfTab 補進試算：漲跌幅基準', () => {
+  it('預設相對持有均價，報價到了也不會自己換', () => {
     const held = { rawAvgCost: 512.3, avgCost: 513.03, heldQty: 2000 }
     const { rerender } = render(<WhatIfTab ticker="2330" currentPrice={null} {...held} />)
     expect((screen.getByLabelText('漲跌幅基準') as HTMLSelectElement).value).toBe('avg')
 
     rerender(<WhatIfTab ticker="2330" currentPrice={498.5} {...held} />)
-    expect((screen.getByLabelText('漲跌幅基準') as HTMLSelectElement).value).toBe('current')
+    expect((screen.getByLabelText('漲跌幅基準') as HTMLSelectElement).value).toBe('avg')
   })
 })

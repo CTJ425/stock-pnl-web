@@ -49,10 +49,10 @@ export function AddOnWhatIf({ ticker, currentPrice, rawAvgCost, avgCost, heldQty
   const [pct, setPct] = useState('')
   // Which of the two linked fields the user typed last; the other one is derived from it.
   const [lastEdited, setLastEdited] = useState<'price' | 'pct'>('price')
-  // Null until the user picks one: the default follows the quote, which usually lands after
-  // this panel mounts (seen on DEV — a fixed initial value stuck on 持有均價).
-  const [pickedBase, setPickedBase] = useState<PctBase | null>(null)
-  const pctBase: PctBase = pickedBase ?? (hasQuote ? 'current' : 'avg')
+  // 持有均價 by default (user's call, 2026-10-07): "how far below my cost do I add" is the
+  // question here. 現價 is only offered once a quote exists.
+  const [pickedBase, setPickedBase] = useState<PctBase>('avg')
+  const pctBase: PctBase = pickedBase === 'current' && hasQuote ? 'current' : 'avg'
   const [qty, setQty] = useState('')
   const [unit, setUnit] = useState<Unit>('張')
   const [targetAvg, setTargetAvg] = useState('')
@@ -64,7 +64,7 @@ export function AddOnWhatIf({ ticker, currentPrice, rawAvgCost, avgCost, heldQty
     setLastEdited('price')
     setQty('')
     setTargetAvg('')
-    setPickedBase(null)
+    setPickedBase('avg')
   }, [ticker, rawAvgCost, avgCost, heldQty])
 
   // Today's rate, scoped to the workspace (Task 182): the add-on is a trade made now.
@@ -206,8 +206,8 @@ export function AddOnWhatIf({ ticker, currentPrice, rawAvgCost, avgCost, heldQty
             <label htmlFor={`addon-pct-${ticker}`}>或用漲跌幅換算</label>
             <div className="addon-pct">
               <select aria-label="漲跌幅基準" value={pctBase} onChange={(e) => changeBase(e.target.value as PctBase)}>
-                {hasQuote && <option value="current">相對現價</option>}
                 <option value="avg">相對持有均價</option>
+                {hasQuote && <option value="current">相對現價</option>}
               </select>
               <input
                 id={`addon-pct-${ticker}`}
