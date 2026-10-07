@@ -594,87 +594,111 @@ npm run build                              # 產出於 sources/dist/
 
 ## 💾 資料庫備份與移轉
 
-兩支維運腳本，用來把 Supabase 資料庫整份備份到本機，以及把備份灌進另一個 Supabase（換區域的新 cloud 專案，或自架）。
+把一個 Supabase（cloud 或自架）整份搬到另一個 Supabase：換區域、換帳號、cloud ↔ 自架都適用。
+兩支腳本只需要資料庫連線字串，**不需要 Supabase CLI、也不需要 Docker**。
 
-> ⚠️ **備份檔絕不可進版控。** 內容包含所有帳號的密碼雜湊、`cron.job` 裡的明文 `x-cron-secret` 與全部交易紀錄。
-> `docs/dbak/` 已列入 `.gitignore`，且 `db-backup.sh` 在寫入前會用 `git check-ignore` 確認，未被忽略就拒絕執行。
+> ⚠️ **備份檔絕不可進版控。** 內容包含所有帳號的密碼雜湊、排程裡的明文 `x-cron-secret` 與全部交易紀錄。
+> `docs/dbak/` 已列入 `.gitignore`；在 git 工作目錄內，`db-backup.sh` 寫入前會確認該路徑被忽略，否則拒絕執行。
 
 ### 前置需求
 
 | 項目 | 用途 |
 |---|---|
-| `pg_dump` / `psql`（`postgresql-client`，版本 ≥ 資料庫版本） | 實際匯出與匯入；不需要 Docker |
-| Supabase CLI + `SUPABASE_ACCESS_TOKEN` | 只有備份需要：由 `supabase db dump --dry-run` 取得臨時登入帳號，不需要資料庫密碼 |
+| `bash`、`python3` | 執行腳本 |
+| `pg_dump` / `psql`（`postgresql-client`，版本 ≥ 資料庫版本） | 匯出與匯入。Ubuntu：`sudo apt install postgresql-client`；macOS：`brew install libpq`（再把 `$(brew --prefix libpq)/bin` 加入 PATH） |
+| 來源與目標的資料庫連線字串 | cloud：Dashboard → **Connect** → **Session pooler**（port 5432；不要用 6543 的 transaction pooler）；自架：主機的 5432 |
+| Supabase CLI（選用） | 只有在不知道來源資料庫密碼時，用來取得臨時登入帳號 |
 
-### 備份：`db-backup.sh`
+連線字串裡的 `[YOUR-PASSWORD]` 可以原樣保留，腳本會另外以不顯示的方式詢問密碼。
+
+### 完整流程
+
+#### 1. 備份來源：`db-backup.sh`
 
 ```bash
-export SUPABASE_ACCESS_TOKEN=<你的 access token>
-bash sources/scripts/db-backup.sh dev     # 或 prod / all
+bash sources/scripts/db-backup.sh          # 互動模式：選連線方式、輸入連線字串與密碼、命名資料夾
 ```
 
-輸出到 `docs/dbak/<dev|prod>/<YYYYMMDD-HHMMSS>/`（台北時間），每份包含：
+非互動用法：`SOURCE_DB_URL='postgresql://...' bash sources/scripts/db-backup.sh --name prod`，
+或以 CLI 免密碼：`bash sources/scripts/db-backup.sh --project-ref <ref> --name prod`。
+
+輸出到 `docs/dbak/<名稱>/<YYYYMMDD-HHMMSS>/`（台北時間）：
 
 | 檔案 | 內容 |
 |---|---|
-| `roles.sql` | 自訂資料庫角色設定（Supabase 內建角色由 CLI 過濾） |
+| `roles.sql` | 自訂資料庫角色設定（Supabase 內建角色已過濾） |
 | `schema.sql` | `public` 等非平台 schema 的結構（`auth` / `storage` 結構由 Supabase 本身提供） |
-| `data.sql` | `public`、`auth`、`storage` 等的資料（COPY 格式）；不含 session / token 與 cron、網路請求紀錄 |
+| `data.sql` | `public`、`auth`、`storage` 等的資料（COPY 格式）；不含 session / token 與排程、網路請求紀錄 |
 | `cron.sql` | 每個排程一行 `cron.schedule(...)`，含明文 `x-cron-secret` |
 | `counts.tsv` | 備份當下 `public` / `auth` 各表筆數，移轉後用來比對 |
-| `manifest.txt` | 來源專案、時間、`pg_dump` 與資料庫版本、排除的表 |
-| `SHA256SUMS` | 檔案校驗碼；移轉前會先檢查 |
+| `manifest.txt` | 來源、排程呼叫的 API 網址、時間、`pg_dump` 與資料庫版本 |
+| `SHA256SUMS` | 校驗碼；移轉前會先檢查 |
 
-不包含：Storage bucket 裡的**檔案本體**（只有 `storage.objects` 這張清單表）、Edge Functions 與其 secrets。
+不包含：Storage bucket 裡的**檔案本體**（只有 `storage.objects` 清單）、Edge Functions 與其 secrets。
 
-### 移轉：`db-migrate.sh`
+#### 2. 建立空的目標
 
-把一份備份灌進**新建、空的** Supabase 資料庫。目標可以是 cloud 專案或自架：
+- **cloud**：New project 即可。**不要**執行 `schema.sql`——結構會由備份帶過去，目標必須是空的。
+- **自架**：依 [Supabase 自架文件](https://supabase.com/docs/guides/self-hosting/docker) 啟動官方 Docker stack。
 
-| 目標 | 連線字串 |
-|---|---|
-| Supabase cloud | Dashboard → Connect → Session pooler（port 5432），使用者 `postgres.<ref>` |
-| 自架 Supabase | 主機的 5432；經 Supavisor 時使用者為 `postgres.<POOLER_TENANT_ID>`，密碼為 `.env` 的 `POSTGRES_PASSWORD` |
+#### 3. 匯入目標：`db-migrate.sh`
 
 ```bash
-# 連線字串放環境變數，避免留在 shell history
-export TARGET_DB_URL='postgresql://<user>:<password>@<host>:5432/postgres'
+bash sources/scripts/db-migrate.sh         # 互動模式
+```
 
-# 1. 先預演：檢查備份校驗碼與目標，列出計畫，不寫入
-bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> --skip-cron --dry-run
+依序詢問：要還原的備份、目標連線方式（cloud 貼連線字串／自架逐項輸入）與密碼、排程要指向的新 API 網址
+（cloud 預設 `https://<新ref>.supabase.co`；自架可填 `http://kong:8000` 或對外網址）、Storage 檔案是否另外搬
+（不搬就略過 `storage.objects`）。列出計畫後，要輸入目標主機名稱才會正式寫入。
 
-# 2. 正式執行；cron 的網址改指向新環境
-bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> \
-  --cron-base-url https://<新的-project-ref>.supabase.co    # 自架可用 http://kong:8000
+非互動用法：
+
+```bash
+export TARGET_DB_URL='postgresql://...'
+bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> --cron-base-url https://<新ref>.supabase.co \
+  --exclude storage.objects --dry-run       # 拿掉 --dry-run 才會寫入
 ```
 
 | 選項 | 說明 |
 |---|---|
 | `--from <dir>` | 備份資料夾 |
 | `--to <url>` | 目標連線字串；省略時讀 `TARGET_DB_URL` |
-| `--cron-base-url <url>` | 把排程裡的 `https://<舊ref>.supabase.co` 換成這個網址並建立排程 |
-| `--skip-cron` | 不建立排程（例如舊專案還在跑，避免批次重複執行）；與上一項二選一 |
+| `--cron-base-url <url>` | 把排程呼叫的舊 API 網址換成這個並建立排程 |
+| `--skip-cron` | 不建立排程（舊環境還在跑時用，避免批次重複執行）；與上一項二選一 |
+| `--new-cron-secret` | 排程改用新產生的 `x-cron-secret`，存到 `docs/dbak/secrets/`（0600，不顯示），再設為 Edge 的 `CRON_SECRET` |
+| `--exclude <schema.table>` | 不匯入該表資料，可重複；Storage 檔案沒搬時用 `storage.objects` |
 | `--dry-run` | 只檢查與列出計畫，不寫入 |
-| `--allow-prod` | 允許以目前的 PROD 專案為目標（預設拒絕） |
 | `--yes` | 略過「輸入目標主機名稱」的確認 |
 
-腳本的保護與流程：
+保護與流程：校驗碼不符就拒絕；目標必須是 Supabase（有 `auth` / `storage` schema 與所需擴充）且**沒有任何帳號與交易**——
+這條規則讓它不可能覆蓋一個正在使用的資料庫。角色、結構、資料在**同一個 transaction** 寫入，中途出錯整批還原；
+結構載入後先收回所有權限、再重放備份裡的 GRANT/REVOKE（Supabase 新專案的預設權限會把新建的函數與表開放給 `anon` / `authenticated`，不這樣做，來源上鎖住的函數到了目標會變成瀏覽器可呼叫）；
+平台表（`auth.*`、`storage.*`）只在有資料且可寫入時載入，空表、目標不存在的表、綁定已排除 session 的 `auth.mfa_amr_claims` 自動略過；最後比對筆數與 `counts.tsv`。
 
-1. 校驗碼不符就拒絕；目標必須有 `auth` / `storage` schema 與需要的擴充（確認是 Supabase），且 `auth.users`、`public.transactions` 皆為空。
-2. 角色、結構、資料在**同一個 transaction** 寫入（寫入資料時暫停 trigger），中途出錯整批還原。
-3. 目標缺少的平台表（例如較舊的自架版本沒有某些 `storage` 表）自動略過並列出。
-4. 建立排程後比對各表筆數與 `counts.tsv`。
+#### 4. Edge Functions 與 secrets（腳本不處理）
 
-資料庫以外仍需手動完成，腳本結束時會列出：
+| 目標 | 部署方式 |
+|---|---|
+| cloud，有 Node.js | `cd sources && npx supabase login && npx supabase functions deploy <name> --project-ref <ref>`（`stock-report`、`backup-transactions` 加 `--no-verify-jwt`，見步驟 5）。不需另外安裝 CLI |
+| cloud，只用瀏覽器 | Dashboard 逐檔建立（見 [`sources/supabase/README.md`](sources/supabase/README.md) 方式 A），檔案多、容易漏 |
+| 自架 | 把 `sources/supabase/functions/` 底下的資料夾（含 `_shared/`）放進 stack 的 `volumes/functions/`，重啟 functions 服務；secrets 寫在 stack 的環境變數 |
 
-- 部署 Edge Functions（步驟 5），並設定 secrets；`CRON_SECRET` 必須等於備份排程內的值。
-- 搬 Storage 檔案（`sources/scripts/backup-download.cjs`）。
-- 設定 Auth 的 Site URL / Redirect URLs（自架另需 SMTP）；新專案的 JWT secret 不同，使用者需重新登入。
-- 更新 Cloudflare Pages 的 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` 與 `sources/public/_headers` 的 `connect-src`。
-- 執行 `sources/supabase/verify.sql`。
-- 先停掉舊專案的排程，否則每個批次會跑兩次。
+Secrets（cloud：Dashboard → Edge Functions → **Secrets**）：
 
-> `db-migrate.sh` 尚未對真實的新專案完整演練過；正式搬遷前請先以 `--dry-run` 與一個測試用專案驗證。
+- `CRON_SECRET` **必須等於排程裡的值**，否則排程全數 401。用了 `--new-cron-secret` 就取 `docs/dbak/secrets/` 裡的檔案；沿用舊值時，不印到螢幕的取法：
+  `grep -oP "x-cron-secret'', ''\K[^']+" docs/dbak/<名稱>/<時間>/cron.sql | head -1 | xclip -selection clipboard`
+  （macOS 把 `xclip …` 換成 `pbcopy`），再貼進 Secrets。
+- `FUGLE_API_KEY`（選用）。
+
+#### 5. 收尾
+
+- Storage 檔案：來源還在時以 `sources/scripts/backup-download.cjs` 下載後上傳；`reports` 會由盤後批次重新產生。
+- Auth：Site URL / Redirect URLs 設為前端網址（自架另需 SMTP）；新環境的 JWT secret 不同，使用者需重新登入（密碼不變）。
+- 前端：Cloudflare Pages（或你的靜態主機）的 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`；自架網域需加入 `sources/public/_headers` 的 `connect-src`。
+- 執行 `sources/supabase/verify.sql`：`SELECT * FROM verify_setup();`、`SELECT assert_setup_ok();`。
+- 舊環境若還在，先停掉它的排程，否則每個批次會跑兩次。
+
+> 2026-10-07 實測：備份（連線字串與 CLI 兩種方式，產出與 `supabase db dump` 一致）；把 DEV 備份移轉到全新的 cloud 專案（孟買 → 東京），`verify_setup()` 全數 PASS、排程實際執行回 200，前端以還原的帳號登入後持股、損益、交易紀錄皆正常。正式搬遷前仍建議先 `--dry-run`。
 
 ---
 
