@@ -543,21 +543,111 @@ table.data-table {
   text-align: right;
 }
 
-/* Key column (1st of every 3 cells) */
-.whatif-ledger-cell:nth-child(3n + 1) {
+/* Key column. Cells carry their column as a class rather than an nth-child position, because
+   a held stock adds the 補進 / 合計 columns and the row width changes with it. */
+.whatif-ledger-cell.is-key {
   text-align: left;
   color: var(--ink-muted);
   font-weight: 500;
 }
 
-/* Sell column (3rd of every 3 cells): divider against the buy column */
-.whatif-ledger-cell:nth-child(3n) {
+/* Sell column: divider against the buy side */
+.whatif-ledger-cell.col-sell {
   border-left: 1px solid var(--border);
 }
 
 /* Last row: no bottom rule, the 結算 strip closes it off instead */
-.whatif-ledger-cell:nth-last-child(-n + 3) {
+.whatif-ledger-cell.is-last {
   border-bottom: none;
+}
+
+/* 攤平試算 (Task 197): key | 現有持股 | 補進 | 合計 | 賣出. The 補進 column is the only
+   hypothetical on the buy side, so it sits on the band tint the way a filled-in form field
+   would on a printed statement. */
+.whatif-ledger--avg {
+  grid-template-columns: minmax(88px, auto) repeat(4, minmax(0, 1fr));
+}
+
+.whatif-ledger--avg .col-add {
+  background: var(--cds-layer-02);
+}
+
+.whatif-ledger--avg .col-total {
+  border-left: 1px solid var(--border);
+  font-weight: 600;
+}
+
+/* 股數 + 單位 stay on one line in a quarter-width column. */
+.whatif-ledger--avg .field-row {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.whatif-ledger--avg .field-row > * {
+  flex: 1 1 0;
+}
+
+.whatif-ledger--avg .field-row > :last-child {
+  flex: 0 0 64px;
+}
+
+.whatif-ledger-cell input:disabled,
+.whatif-ledger-cell select:disabled {
+  color: var(--ink-secondary);
+  -webkit-text-fill-color: var(--ink-secondary);
+  opacity: 1;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+/* 反推: target average → shares to add. One line under the ledger, read left to right. */
+.whatif-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.whatif-target-field {
+  margin-bottom: 0;
+  width: 180px;
+}
+
+.whatif-target-field input {
+  text-align: right;
+}
+
+.whatif-target-answer {
+  flex: 1 1 240px;
+  margin: 0;
+  padding-bottom: 10px;
+  color: var(--ink-secondary);
+}
+
+.whatif-target .btn {
+  margin-bottom: 2px;
+}
+
+.whatif-compare {
+  margin-top: 12px;
+}
+
+.whatif-compare caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 0 8px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.whatif-compare tbody th {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-muted);
+  white-space: nowrap;
 }
 
 .whatif-ledger-cell .field {
@@ -614,6 +704,31 @@ table.data-table {
     padding: 8px 8px;
     min-height: 36px;
     font-size: var(--type-body-01);
+  }
+
+  /* Five columns do not fit a phone. 合計 goes; the 補進前後 table under the ledger
+     carries the merged figures instead. */
+  .whatif-ledger--avg {
+    grid-template-columns: minmax(48px, auto) repeat(3, minmax(0, 1fr));
+  }
+
+  .whatif-ledger--avg .col-total {
+    display: none;
+  }
+
+  /* 股數 over 單位: side by side they shrink to a sliver at phone width. */
+  .whatif-ledger--avg .field-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .whatif-ledger--avg .field-row > *,
+  .whatif-ledger--avg .field-row > :last-child {
+    flex: 0 0 auto;
+  }
+
+  .whatif-target-field {
+    width: 100%;
   }
 }
 

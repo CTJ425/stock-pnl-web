@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-04 17:41:06 Asia/Taipei
+- Timestamp: 2026-10-07 09:47:34 Asia/Taipei
 
 ---
 
@@ -15,6 +15,15 @@
 - Front end deploys from `main` via Cloudflare Pages; Edge Functions and DDL never travel with a push (see CLAUDE.md § Release workflow).
 
 ## 📋 Active Tasks
+
+### Task 197: 攤平試算 in 損益試算 — add-on buy merged into the holding, target-average solver (/impeccable)
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-10-07 09:47:34 Asia/Taipei
+1. ~~Shape with the user: ledger gains 補進 / 合計 columns, forward + target-average solve, one tranche only; base column locks while an add-on is entered; phone hides 合計~~ ✅
+2. ~~Code: `whatIf.ts` `averageDown` / `sharesForTargetAvg`; `WhatIfTab.tsx` columns, 補進前後 table, 反推 row; `tables.css` ledger switched from nth-child to column classes~~ ✅ 0.10.35-dev.1, pushed to `dev`
+3. Release to `main` — ⏳ waits for the user's OK
+4. Check on a real held stock in the app (DEV cloud mode) — ⏳ only verified in a temporary harness with fixed props
 
 ### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
 - **Status**: 🔄 IN PROGRESS

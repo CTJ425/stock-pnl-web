@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { whatIf, sellLadder, priceLimits } from './whatIf'
+import { whatIf, sellLadder, priceLimits, averageDown, sharesForTargetAvg } from './whatIf'
 import { breakEvenPrice, calculateFee } from '../../utils/fees'
 
 const RATE = 0.001425
@@ -410,5 +410,71 @@ describe('priceLimits（DT-02/03：昨收 ±10% 取到升降單位）', () => {
     expect(priceLimits(null)).toBeNull()
     expect(priceLimits(0)).toBeNull()
     expect(priceLimits(Number.NaN)).toBeNull()
+  })
+})
+
+describe('averageDown（攤平試算）', () => {
+  // 2,000 股，成交均價 512.30、含費均價 513.03（實付手續費 1,460）
+  const base = { qty: 2000, cost: 1_026_060, rawCost: 1_024_600 }
+
+  it('移動平均：(原含費成本 + 補進價金 + 補進手續費) ÷ 合計股數', () => {
+    const got = averageDown(base, { ticker: '2330', price: 480, qty: 1000, feeRate: RATE, minFee: MIN_FEE })!
+    // 480 × 1,000 × 0.1425% = 684 元（無條件捨去）
+    expect(got.addFee).toBe(684)
+    expect(got.addCost).toBe(480_684)
+    expect(got.totalQty).toBe(3000)
+    expect(got.totalCost).toBe(1_506_744)
+    expect(got.avgCost).toBeCloseTo(502.248, 6)
+    expect(got.rawAvgCost).toBeCloseTo(1_504_600 / 3000, 9)
+  })
+
+  it('補進手續費低於最低手續費時收最低手續費', () => {
+    const got = averageDown(base, { ticker: '2330', price: 50, qty: 10, feeRate: RATE, minFee: 1 })!
+    expect(got.addFee).toBe(1)
+  })
+
+  it('補進價或股數無效時回傳 null', () => {
+    expect(averageDown(base, { ticker: '2330', price: 0, qty: 1000, feeRate: RATE })).toBeNull()
+    expect(averageDown(base, { ticker: '2330', price: 480, qty: NaN, feeRate: RATE })).toBeNull()
+    expect(averageDown({ ...base, qty: 0 }, { ticker: '2330', price: 480, qty: 1000, feeRate: RATE })).toBeNull()
+  })
+})
+
+describe('sharesForTargetAvg（目標均價反推）', () => {
+  const base = { qty: 2000, cost: 1_026_060, rawCost: 1_024_600 }
+  const add = { ticker: '2330', price: 480, feeRate: RATE, minFeeFor: () => MIN_FEE }
+  const avgAt = (price: number, qty: number) =>
+    averageDown(base, { ticker: '2330', price, qty, feeRate: RATE, minFee: MIN_FEE })!.avgCost
+
+  it('整張：回傳最少的張數，少一張就到不了', () => {
+    const got = sharesForTargetAvg(base, add, 495, 1000)
+    expect(got).toEqual({ kind: 'ok', qty: 3000 })
+    expect(avgAt(480, 3000)).toBeLessThanOrEqual(495)
+    expect(avgAt(480, 2000)).toBeGreaterThan(495)
+  })
+
+  it('零股：逐股驗算，答案恰好是最少股數', () => {
+    const got = sharesForTargetAvg(base, add, 495, 1)
+    expect(got?.kind).toBe('ok')
+    const qty = (got as { qty: number }).qty
+    expect(avgAt(480, qty)).toBeLessThanOrEqual(495)
+    expect(avgAt(480, qty - 1)).toBeGreaterThan(495)
+  })
+
+  it('往上加碼：目標高於現有均價時，求均價至少到目標', () => {
+    const got = sharesForTargetAvg(base, { ...add, price: 530 }, 515, 1)
+    const qty = (got as { qty: number }).qty
+    expect(got?.kind).toBe('ok')
+    expect(avgAt(530, qty)).toBeGreaterThanOrEqual(515)
+    expect(avgAt(530, qty - 1)).toBeLessThan(515)
+  })
+
+  it('補進價含手續費不低於目標均價時，補再多也到不了', () => {
+    // 480 × (1 + 0.1425%) = 480.684 > 480
+    expect(sharesForTargetAvg(base, add, 480, 1000)).toEqual({ kind: 'unreachable' })
+  })
+
+  it('目前均價已等於目標時不需補進', () => {
+    expect(sharesForTargetAvg(base, add, 513.03, 1000)).toEqual({ kind: 'already' })
   })
 })

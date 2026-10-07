@@ -223,3 +223,115 @@ export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[]
 
   return deduped
 }
+
+/** The position before the add-on, as the holdings engine states it. */
+export interface AveragingBase {
+  qty: number
+  /** Fee-inclusive cost (庫存總覽's 投入成本). */
+  cost: number
+  /** Fee-exclusive cost (價金 only). */
+  rawCost: number
+}
+
+export interface AveragingAddOn {
+  ticker: string
+  price: number
+  qty: number
+  feeRate: number
+  /** Minimum fee for this add-on's own size; the caller picks whole-lot vs odd-lot. */
+  minFee?: number
+}
+
+export interface AveragingResult {
+  addAmount: number
+  addFee: number
+  /** addAmount + addFee — the cash the add-on needs. */
+  addCost: number
+  totalQty: number
+  totalCost: number
+  totalRawCost: number
+  /** Fee-inclusive average after the add-on, the same basis as 庫存總覽's 均價. */
+  avgCost: number
+  /** Fee-exclusive average after the add-on. */
+  rawAvgCost: number
+}
+
+/**
+ * 攤平試算: one more buy on top of an existing long, merged by moving-average cost — the
+ * basis the holdings engine and the broker use. The add-on is a new trade, so its fee is
+ * priced at the rate the caller passes (today's workspace rate), not the holding's history.
+ */
+export function averageDown(base: AveragingBase, add: AveragingAddOn): AveragingResult | null {
+  if (!(Number.isFinite(base.qty) && base.qty > 0)) return null
+  if (!(Number.isFinite(base.cost) && base.cost >= 0)) return null
+  if (!(Number.isFinite(add.price) && add.price > 0)) return null
+  if (!(Number.isFinite(add.qty) && add.qty > 0)) return null
+
+  const addAmount = add.price * add.qty
+  const addFee = calculateFee({
+    market: 'TPE',
+    txType: 'BUY',
+    price: add.price,
+    qty: add.qty,
+    feeRate: add.feeRate,
+    minFee: add.minFee,
+  })
+  const addCost = addAmount + addFee
+  const totalQty = base.qty + add.qty
+  const totalCost = base.cost + addCost
+  const totalRawCost = base.rawCost + addAmount
+  return {
+    addAmount,
+    addFee,
+    addCost,
+    totalQty,
+    totalCost,
+    totalRawCost,
+    avgCost: totalCost / totalQty,
+    rawAvgCost: totalRawCost / totalQty,
+  }
+}
+
+export type TargetSolve =
+  | { kind: 'ok'; qty: number }
+  | { kind: 'already' }
+  | { kind: 'unreachable' }
+
+/**
+ * The fewest shares (a multiple of `step`) to buy at `price` so the fee-inclusive average
+ * reaches `target`: at or below it when lowering, at or above it when raising.
+ *
+ * Fees floor to whole dollars and have a minimum, so cost is not linear in qty. The
+ * closed form (fee taken as price × feeRate) only seeds the search; every candidate is
+ * re-checked through `averageDown`, so the answer is the exact one the ledger will show.
+ */
+export function sharesForTargetAvg(
+  base: AveragingBase,
+  add: Omit<AveragingAddOn, 'qty' | 'minFee'> & { minFeeFor: (shares: number) => number | undefined },
+  target: number,
+  step: number,
+): TargetSolve | null {
+  if (!(Number.isFinite(target) && target > 0)) return null
+  if (!(Number.isFinite(add.price) && add.price > 0)) return null
+  if (!(base.qty > 0) || !(step > 0)) return null
+
+  const current = base.cost / base.qty
+  if (current === target) return { kind: 'already' }
+  const lowering = target < current
+  const reached = (avg: number) => (lowering ? avg <= target : avg >= target)
+  const avgAt = (shares: number) =>
+    averageDown(base, { ...add, qty: shares, minFee: add.minFeeFor(shares) })!.avgCost
+
+  // The average only moves toward the add-on's effective unit cost, price × (1 + feeRate);
+  // a target on the far side of it is never reached, however many shares are bought.
+  const unitCost = add.price * (1 + add.feeRate)
+  const denom = lowering ? target - unitCost : unitCost - target
+  if (!(denom > 0)) return { kind: 'unreachable' }
+
+  const estimate = Math.abs(base.cost - target * base.qty) / denom
+  let shares = Math.max(step, Math.ceil(estimate / step) * step)
+  for (let i = 0; i < 1000 && !reached(avgAt(shares)); i++) shares += step
+  if (!reached(avgAt(shares))) return { kind: 'unreachable' }
+  for (let i = 0; i < 1000 && shares > step && reached(avgAt(shares - step)); i++) shares -= step
+  return { kind: 'ok', qty: shares }
+}
