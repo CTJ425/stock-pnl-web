@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 197 on `dev`** — 損益試算 now shows 賣出試算 and 補進試算 as two stacked blocks (0.10.35-dev.6).
-- Status: ✅ `dev` = 0.10.35-dev.6, DEV-checked with a real login; `main` still 0.10.34. Left: release on the user's OK.
-- Timestamp: 2026-10-07 11:13:46 Asia/Taipei
+- Action: **Task 197 on `dev`** — 損益試算 賣出試算 + 補進試算 blocks; 均價 change now with % (0.10.35-dev.7).
+- Status: ✅ `dev` = 0.10.35-dev.7, DEV-checked; `main` still 0.10.34. Left: release on the user's OK.
+- Timestamp: 2026-10-07 11:25:10 Asia/Taipei
 
 ---
 
