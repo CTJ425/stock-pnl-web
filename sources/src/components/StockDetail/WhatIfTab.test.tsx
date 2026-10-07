@@ -526,3 +526,15 @@ describe('WhatIfTab 賣出試算／補進試算（Task 197）', () => {
     expect((screen.getByLabelText('補進價') as HTMLInputElement).value).toBe('480')
   })
 })
+
+describe('WhatIfTab 補進試算：漲跌幅基準跟著報價', () => {
+  it('報價晚到時，基準從持有均價改為現價（使用者沒選過）', () => {
+    const held = { rawAvgCost: 512.3, avgCost: 513.03, heldQty: 2000 }
+    const { rerender } = render(<WhatIfTab ticker="2330" currentPrice={null} {...held} />)
+    fireEvent.click(screen.getByRole('tab', { name: '補進試算' }))
+    expect((screen.getByLabelText('漲跌幅基準') as HTMLSelectElement).value).toBe('avg')
+
+    rerender(<WhatIfTab ticker="2330" currentPrice={498.5} {...held} />)
+    expect((screen.getByLabelText('漲跌幅基準') as HTMLSelectElement).value).toBe('current')
+  })
+})

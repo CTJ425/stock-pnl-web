@@ -23,7 +23,7 @@
 - **Mockup**: https://claude.ai/artifact/J7LrPnryNymAcHXD3g4AfQ (private canvas)
 1. ~~Shape + first build: 補進 / 合計 columns inside the ledger~~ ✅ 0.10.35-dev.1 `5573f67` — user: too cluttered, split it
 2. ~~Split: sell view restored to 0.10.34 + `carried` lock/banner; new `AddOnWhatIf.tsx`; `snapToTick` (stock bands + cited ETF bands); tabs in `WhatIfTab`~~ ✅ 0.10.35-dev.2
-3. Log in to DEV (demo account, user-supplied; never written to the repo) and check both tabs on a real holding, desktop + phone — ⏳
+3. Log in to DEV (demo account, user-supplied; never written to the repo) and check both tabs on a real holding, desktop + phone — dev.2 checked on 0050 (8,000 sh): found the % base stuck on 持有均價 (quote lands after mount) and the base select clipped on phone → fixed in dev.3; ⏳ re-check dev.3
 4. Release to `main` — ⏳ waits for the user's OK
 
 ### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
