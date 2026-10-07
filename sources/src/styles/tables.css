@@ -899,8 +899,9 @@ table.data-table {
     min-height: 40px;
   }
 
-  /* Sized by its longest option (相對持有均價); a fixed 136px clipped it at phone width. */
-  .addon-pct select {
+  /* Sized by its longest option (相對持有均價); a fixed 136px clipped it at phone width.
+     Scoped under .addon so it outranks `.field select { width: 100% }` in controls.css. */
+  .addon .addon-pct select {
     flex: 0 0 auto;
     width: auto;
   }
