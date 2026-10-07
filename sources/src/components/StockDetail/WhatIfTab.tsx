@@ -5,8 +5,7 @@
  * localStorage, Supabase, or any store, so this tab never reflects or affects real
  * holdings / P&L reports. It is a sandbox, not a form.
  */
-import { Fragment, useEffect, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { whatIf, sellLadder } from './whatIf'
 import { AddOnWhatIf } from './AddOnWhatIf'
 import type { CarriedPosition } from './AddOnWhatIf'
@@ -508,69 +507,30 @@ function SellWhatIf({
   )
 }
 
-type WhatIfMode = 'sell' | 'add'
-const MODES: Array<{ id: WhatIfMode; label: string }> = [
-  { id: 'sell', label: '賣出試算' },
-  { id: 'add', label: '補進試算' },
-]
-
 /**
- * 損益試算: 賣出試算 for every stock, plus 補進試算 for a held one (Task 197). Both panels stay
- * mounted so switching tabs never discards what was typed; 補進試算 can hand its merged position
- * to 賣出試算, which then prices the sell against it until the user reverts.
+ * 損益試算: 賣出試算 for every stock; a held one also gets 補進試算 below it (Task 197). The two
+ * are stacked blocks on one scrolling page. 補進試算 can hand its merged position up to
+ * 賣出試算, which then prices the sell against it until the user reverts.
  */
 export function WhatIfTab(props: WhatIfTabProps) {
   const { ticker, currentPrice, rawAvgCost, avgCost = null, heldQty } = props
   const canAverage = rawAvgCost !== null && rawAvgCost > 0 && heldQty !== null && heldQty > 0
-  const [mode, setMode] = useState<WhatIfMode>('sell')
   const [carried, setCarried] = useState<CarriedPosition | null>(null)
+  const sellRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    setMode('sell')
     setCarried(null)
   }, [ticker, rawAvgCost, avgCost, heldQty])
 
   if (!canAverage) return <SellWhatIf {...props} />
 
-  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return
-    e.preventDefault()
-    const next: WhatIfMode = mode === 'sell' ? 'add' : 'sell'
-    const target = e.key === 'Home' ? 'sell' : e.key === 'End' ? 'add' : next
-    setMode(target)
-    e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-mode="${target}"]`)?.focus()
-  }
-
   const shownAvg = avgCost ?? rawAvgCost
   return (
     <>
-      <div className="whatif-modes">
-        <div className="subtabs" role="tablist" aria-label="試算方式">
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              id={`whatif-mode-${m.id}`}
-              data-mode={m.id}
-              aria-selected={mode === m.id}
-              aria-controls={`whatif-panel-${m.id}`}
-              tabIndex={mode === m.id ? 0 : -1}
-              className={`subtab${mode === m.id ? ' active' : ''}`}
-              onClick={() => setMode(m.id)}
-              onKeyDown={onKeyDown}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <p className="whatif-modes-holding">
-          現有 {fmtQty(heldQty)} 股 · 均價 {shownAvg.toFixed(2)}
-          {avgCost !== null ? '（含手續費）' : '（未含手續費）'}
-          {currentPrice !== null && currentPrice > 0 ? ` · 現價 ${currentPrice.toFixed(2)}` : ''}
-        </p>
-      </div>
-      <div role="tabpanel" id="whatif-panel-sell" aria-labelledby="whatif-mode-sell" hidden={mode !== 'sell'}>
+      <section className="whatif-block" aria-labelledby="whatif-sell-title" ref={sellRef}>
+        <h2 className="whatif-block-title" id="whatif-sell-title">
+          賣出試算
+        </h2>
         <SellWhatIf
           ticker={ticker}
           currentPrice={currentPrice}
@@ -580,8 +540,18 @@ export function WhatIfTab(props: WhatIfTabProps) {
           carried={carried}
           onClearCarried={() => setCarried(null)}
         />
-      </div>
-      <div role="tabpanel" id="whatif-panel-add" aria-labelledby="whatif-mode-add" hidden={mode !== 'add'}>
+      </section>
+      <section className="whatif-block" aria-labelledby="whatif-add-title">
+        <div className="whatif-block-head">
+          <h2 className="whatif-block-title" id="whatif-add-title">
+            補進試算
+          </h2>
+          <p className="whatif-block-holding">
+            現有 {fmtQty(heldQty)} 股 · 均價 {shownAvg.toFixed(2)}
+            {avgCost !== null ? '（含手續費）' : '（未含手續費）'}
+            {currentPrice !== null && currentPrice > 0 ? ` · 現價 ${currentPrice.toFixed(2)}` : ''}
+          </p>
+        </div>
         <AddOnWhatIf
           ticker={ticker}
           currentPrice={currentPrice}
@@ -590,10 +560,11 @@ export function WhatIfTab(props: WhatIfTabProps) {
           heldQty={heldQty}
           onCarry={(c) => {
             setCarried(c)
-            setMode('sell')
+            // The sell block is above: take the reader to the figures that just changed.
+            sellRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
           }}
         />
-      </div>
+      </section>
     </>
   )
 }

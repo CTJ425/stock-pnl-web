@@ -618,24 +618,47 @@ table.data-table {
 }
 
 /* ---------- 損益試算 tabs + 補進試算 (Task 197) ----------*/
-.whatif-modes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 4px 24px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: var(--sp-06);
+/* 賣出試算 and 補進試算 are two blocks on one scrolling page, each under its own printed title.
+   scroll-margin clears the sticky app header when 補進試算 scrolls up to 賣出試算. */
+.whatif-block {
+  scroll-margin-top: 72px;
 }
 
-.whatif-modes .subtabs {
+.whatif-block + .whatif-block {
+  margin-top: var(--sp-09);
+}
+
+.whatif-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 24px;
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: var(--sp-05);
+}
+
+.whatif-block-title {
+  margin: 0;
+  padding-bottom: var(--sp-03);
+  font-size: var(--type-heading-03);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.whatif-block > .whatif-block-title {
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: var(--sp-05);
+}
+
+.whatif-block-head .whatif-block-title {
   border-bottom: none;
   margin-bottom: 0;
 }
 
-.whatif-modes-holding {
+.whatif-block-holding {
   margin: 0;
-  padding-bottom: var(--sp-04);
+  padding-bottom: var(--sp-03);
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -938,14 +961,6 @@ table.data-table {
 
   .addon-foot .btn {
     width: 100%;
-  }
-
-  .whatif-modes .subtabs {
-    width: 100%;
-  }
-
-  .whatif-modes .subtab {
-    flex: 1 1 0;
   }
 }
 
