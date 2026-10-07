@@ -3,10 +3,10 @@
 # a new cloud project (e.g. another region) or a self-hosted stack.
 #
 # Usage:
-#   bash sources/scripts/db-migrate.sh            # interactive: pick the backup, target, cron and Storage choice
+#   bash scripts/db-migrate.sh            # interactive: pick the backup, target, cron and Storage choice
 #   export TARGET_DB_URL='postgresql://<user>:<password>@<host>:5432/postgres'   # keeps it out of shell history
-#   bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<stamp> --dry-run
-#   bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<stamp> --cron-base-url https://<new-ref>.supabase.co
+#   bash scripts/db-migrate.sh --from backups/prod/<stamp> --dry-run
+#   bash scripts/db-migrate.sh --from backups/prod/<stamp> --cron-base-url https://<new-ref>.supabase.co
 #
 # Target connection string:
 #   cloud      Dashboard → Connect → Session pooler (port 5432), user `postgres.<ref>`
@@ -14,13 +14,13 @@
 #              password = POSTGRES_PASSWORD from the stack's .env
 #
 # Options:
-#   --from <dir>            backup package (docs/dbak/<env>/<stamp>)
+#   --from <dir>            backup package (backups/<env>/<stamp>)
 #   --to <url>              target URL; default $TARGET_DB_URL
 #   --cron-base-url <url>   rewrite https://<old-ref>.supabase.co in cron jobs to this and install them
 #                           (cloud: https://<new-ref>.supabase.co, self-host: http://kong:8000 or the public API URL)
 #   --skip-cron             install no cron jobs (e.g. while the old project still runs its own)
 #   --new-cron-secret       give the cron jobs a newly generated x-cron-secret instead of the source's;
-#                           it is written (0600) to docs/dbak/secrets/ for the Edge CRON_SECRET, never printed
+#                           it is written (0600) to backups/secrets/ for the Edge CRON_SECRET, never printed
 #   --exclude <schema.table>  leave this table's rows out (repeatable), e.g. storage.objects when the
 #                           Storage files themselves are not being moved: rows without files point at nothing
 #   --dry-run               verify the package and the target, print the plan, write nothing
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 ask() { # ask <prompt> [default] -> answer on stdout
   local ans
@@ -74,7 +74,7 @@ interactive() {
   local pkgs=() i=0 m
   # newest first, by the <YYYYMMDD-HHMMSS> folder name across both environments
   while IFS= read -r m; do pkgs+=("$(dirname "$m")"); done < <(
-    for m in "$REPO_DIR"/docs/dbak/*/*/manifest.txt; do
+    for m in "$REPO_DIR"/backups/*/*/manifest.txt; do
       [[ -f $m ]] && echo "$(basename "$(dirname "$m")") $m"
     done | sort -r | cut -d' ' -f2-)
   echo "1) 選擇要還原的備份："
@@ -136,7 +136,7 @@ interactive() {
   if [[ $SKIP_CRON == 0 ]]; then
     echo "   排程呼叫 Edge Function 時帶的 CRON_SECRET："
     echo "   1) 沿用備份裡的值（新環境的 Edge secret 要設成同一個值）"
-    echo "   2) 產生新的（存到 docs/dbak/secrets/，不會顯示在畫面上）"
+    echo "   2) 產生新的（存到 backups/secrets/，不會顯示在畫面上）"
     [[ $(ask "   選擇" 1) == 2 ]] && NEW_SECRET=1
   fi
   echo
@@ -305,7 +305,7 @@ sys.stdout.write(sys.stdin.read().replace(os.environ["SRC_API"], os.environ["NEW
     cp "$FROM/cron.sql" "$TMP/cron.sql"   # source jobs call no URL
   fi
   if [[ $NEW_SECRET == 1 ]]; then
-    SECRET_FILE="$REPO_DIR/docs/dbak/secrets/cron-secret-$(sed -E 's#^[a-z]+://([^:/]+).*#\1#' <<<"$CRON_BASE")-$(TZ=Asia/Taipei date +%Y%m%d-%H%M%S).txt"
+    SECRET_FILE="$REPO_DIR/backups/secrets/cron-secret-$(sed -E 's#^[a-z]+://([^:/]+).*#\1#' <<<"$CRON_BASE")-$(TZ=Asia/Taipei date +%Y%m%d-%H%M%S).txt"
     # Every job carries the same secret (schema.sql §6e enforces it); swap that literal for a new one.
     python3 - "$TMP/cron.sql" "$TMP/new-secret" <<'PY' || die "could not replace the cron secret"
 import re, secrets, sys

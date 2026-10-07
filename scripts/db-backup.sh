@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Operator script: pg_dump backup of a Supabase database (cloud or self-hosted) into docs/dbak/<name>/<stamp>/.
+# Operator script: pg_dump backup of a Supabase database (cloud or self-hosted) into backups/<name>/<stamp>/.
 #
 # Needs only `pg_dump` / `psql` (postgresql-client, version >= the server's). The Supabase CLI is optional.
 #
 # Usage:
-#   bash sources/scripts/db-backup.sh                                   # interactive
-#   SOURCE_DB_URL='postgresql://...' bash sources/scripts/db-backup.sh --name prod
-#   bash sources/scripts/db-backup.sh --project-ref <ref> --name dev    # via Supabase CLI, no DB password
+#   bash scripts/db-backup.sh                                   # interactive
+#   SOURCE_DB_URL='postgresql://...' bash scripts/db-backup.sh --name prod
+#   bash scripts/db-backup.sh --project-ref <ref> --name dev    # via Supabase CLI, no DB password
 #
 # Connection string:
 #   cloud      Dashboard → Connect → Session pooler (port 5432) or Direct connection. Not the transaction
@@ -30,12 +30,12 @@
 # with or without the CLI is the same.
 #
 # The output holds password hashes, the cron secret and every user's transactions. Inside a git
-# checkout the script refuses to write unless git ignores the target (`docs/dbak/` in .gitignore).
+# checkout the script refuses to write unless git ignores the target (`backups/` in .gitignore).
 set -euo pipefail
 
-SOURCES_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-REPO_DIR=$(dirname "$SOURCES_DIR")
-DBAK_DIR="$REPO_DIR/docs/dbak"
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+SOURCES_DIR="$REPO_DIR/sources"   # the Supabase CLI runs from here (it looks for ./supabase/)
+DBAK_DIR="$REPO_DIR/backups"
 
 # Ephemeral or log tables: no recovery value, and cron.job is restored from cron.sql instead
 # (its command text must be re-pointed at the new host).
@@ -107,7 +107,7 @@ for p in json.load(sys.stdin):
       ;;
     *) die "invalid choice" ;;
   esac
-  NAME=$(ask "2) 存到 docs/dbak/<名稱>/，名稱（例如 dev、prod）" backup)
+  NAME=$(ask "2) 存到 backups/<名稱>/，名稱（例如 dev、prod）" backup)
 }
 
 if [[ -z $DB_URL && -z $REF ]]; then
@@ -115,8 +115,8 @@ if [[ -z $DB_URL && -z $REF ]]; then
   interactive
 fi
 if [[ -z $NAME ]]; then
-  [[ -t 0 ]] || die "pass --name <folder under docs/dbak/>"
-  NAME=$(ask "存到 docs/dbak/<名稱>/，名稱" backup)
+  [[ -t 0 ]] || die "pass --name <folder under backups/>"
+  NAME=$(ask "存到 backups/<名稱>/，名稱" backup)
 fi
 [[ $NAME =~ ^[a-z0-9_-]+$ ]] || die "name must be [a-z0-9_-]: $NAME"
 
@@ -151,7 +151,7 @@ out="$DBAK_DIR/$NAME/$stamp"
 mkdir -p "$out"
 chmod 700 "$DBAK_DIR" "$DBAK_DIR/$NAME" "$out"
 if git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git -C "$REPO_DIR" check-ignore -q "$out/probe" || { rm -rf "$out"; die "$out is not git-ignored; add docs/dbak/ to .gitignore"; }
+  git -C "$REPO_DIR" check-ignore -q "$out/probe" || { rm -rf "$out"; die "$out is not git-ignored; add backups/ to .gitignore"; }
 fi
 echo "== ${REF:-source} -> ${out#"$REPO_DIR"/}"
 

@@ -144,7 +144,7 @@ Newest first, in the order they stood in `BUG_FIX.md`.
 
 
 ### RISK-012 — `scripts/backup-download.cjs` 的 `--dest` 不設路徑邊界
-- **Where**: `sources/scripts/backup-download.cjs`
+- **Where**: `scripts/backup-download.cjs` (moved from `sources/scripts/` 2026-10-07; default `--dest` is now `backups/storage/`, which `.gitignore` covers)
 - **Failure scenario**: `--dest=../../..` 之類的值會把備份檔寫到預期以外的目錄。
 - **Found**: 2026-09-14, Task 144-4 reviewer 第二輪。
 - **Decision**: 不加沙箱。執行這支腳本的人本來就持有 service role key，對他設權限邊界是假安全。改為以 `path.resolve()` 正規化，並在寫入任何檔案前印出絕對路徑，以可見性取代邊界。

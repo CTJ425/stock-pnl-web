@@ -3,7 +3,7 @@
  * importable copy. D6 forbids editing `src/utils/pnlEngine.ts` / `src/types/models.ts`, so
  * this module only ever reads them and produces text for `sync-edge-engine.cjs` to write.
  *
- * No network, no filesystem, no I/O of any kind — the same discipline as `snapshotPlan.cjs`.
+ * No network, no filesystem, no I/O of any kind.
  */
 
 const ENGINE_SOURCE = 'src/utils/pnlEngine.ts'

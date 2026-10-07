@@ -13,11 +13,7 @@
     "sync:edge-engine": "node scripts/sync-edge-engine.cjs",
     "refresh:tpex-fallback": "node scripts/refresh-tpex-fallback.cjs",
     "release:sync": "node scripts/sync-github-releases.cjs",
-    "release:sync:all": "node scripts/sync-github-releases.cjs --all",
-    "backup:download": "node scripts/backup-download.cjs",
-    "snapshot": "node scripts/snapshot.cjs",
-    "restore": "node scripts/restore.cjs",
-    "wipe:dev": "node scripts/wipe-dev.cjs"
+    "release:sync:all": "node scripts/sync-github-releases.cjs --all"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

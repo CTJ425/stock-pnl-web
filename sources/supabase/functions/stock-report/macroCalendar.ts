@@ -30,7 +30,7 @@
  * - BEA <https://www.bea.gov/news/schedule> — PCE, 8:30 ET
  * - U of M <https://www.sca.isr.umich.edu/> — Consumer Confidence, **10:00** (different from the other four)
  *
- * The actual release date checked using ALFRED vintage is completely consistent with the official list (see scripts/find-release-dates.py).
+ * The actual release date checked using ALFRED vintage is completely consistent with the official list (see the repo-root scripts/find-release-dates.py).
  */
 
 /** One release: which day and issue*/

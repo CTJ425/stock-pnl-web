@@ -140,8 +140,11 @@ stock-pnl-web/
 │   │                     # csv.ts, fees.ts, formatters.ts, settings.ts
 │   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要、RLS、pg_cron 排程）
 │   │                     # + functions/（stock-price, stock-report, backup-transactions）
-│   ├── scripts/          # 維運腳本（db-backup.sh / db-migrate.sh、snapshot / restore、E2E 驗證）
+│   ├── scripts/          # 跟前端建置綁在一起的腳本：E2E 驗證（需 sources 的 playwright）、Edge 引擎同步、
+│   │                     # 上櫃清單 / 半導體分類產生器、GitHub Release 同步（release.yml 使用）
 │   └── package.json      # 版本號來源
+├── scripts/              # 維運腳本（與前端無關）：db-backup.sh / db-migrate.sh、backup-download.cjs、find-release-dates.py
+├── backups/              # 備份輸出（.gitignore 忽略，絕不進版控）
 └── README.md             # 本說明文件 (專案根目錄)
 ```
 
@@ -598,7 +601,7 @@ npm run build                              # 產出於 sources/dist/
 兩支腳本只需要資料庫連線字串，**不需要 Supabase CLI、也不需要 Docker**。
 
 > ⚠️ **備份檔絕不可進版控。** 內容包含所有帳號的密碼雜湊、排程裡的明文 `x-cron-secret` 與全部交易紀錄。
-> `docs/dbak/` 已列入 `.gitignore`；在 git 工作目錄內，`db-backup.sh` 寫入前會確認該路徑被忽略，否則拒絕執行。
+> 根目錄的 `backups/` 已列入 `.gitignore`；在 git 工作目錄內，`db-backup.sh` 寫入前會確認該路徑被忽略，否則拒絕執行。
 
 ### 前置需求
 
@@ -616,13 +619,13 @@ npm run build                              # 產出於 sources/dist/
 #### 1. 備份來源：`db-backup.sh`
 
 ```bash
-bash sources/scripts/db-backup.sh          # 互動模式：選連線方式、輸入連線字串與密碼、命名資料夾
+bash scripts/db-backup.sh          # 互動模式：選連線方式、輸入連線字串與密碼、命名資料夾
 ```
 
-非互動用法：`SOURCE_DB_URL='postgresql://...' bash sources/scripts/db-backup.sh --name prod`，
-或以 CLI 免密碼：`bash sources/scripts/db-backup.sh --project-ref <ref> --name prod`。
+非互動用法：`SOURCE_DB_URL='postgresql://...' bash scripts/db-backup.sh --name prod`，
+或以 CLI 免密碼：`bash scripts/db-backup.sh --project-ref <ref> --name prod`。
 
-輸出到 `docs/dbak/<名稱>/<YYYYMMDD-HHMMSS>/`（台北時間）：
+輸出到 `backups/<名稱>/<YYYYMMDD-HHMMSS>/`（台北時間）：
 
 | 檔案 | 內容 |
 |---|---|
@@ -644,7 +647,7 @@ bash sources/scripts/db-backup.sh          # 互動模式：選連線方式、�
 #### 3. 匯入目標：`db-migrate.sh`
 
 ```bash
-bash sources/scripts/db-migrate.sh         # 互動模式
+bash scripts/db-migrate.sh         # 互動模式
 ```
 
 依序詢問：要還原的備份、目標連線方式（cloud 貼連線字串／自架逐項輸入）與密碼、排程要指向的新 API 網址
@@ -655,7 +658,7 @@ bash sources/scripts/db-migrate.sh         # 互動模式
 
 ```bash
 export TARGET_DB_URL='postgresql://...'
-bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> --cron-base-url https://<新ref>.supabase.co \
+bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://<新ref>.supabase.co \
   --exclude storage.objects --dry-run       # 拿掉 --dry-run 才會寫入
 ```
 
@@ -665,7 +668,7 @@ bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> --cron-base-ur
 | `--to <url>` | 目標連線字串；省略時讀 `TARGET_DB_URL` |
 | `--cron-base-url <url>` | 把排程呼叫的舊 API 網址換成這個並建立排程 |
 | `--skip-cron` | 不建立排程（舊環境還在跑時用，避免批次重複執行）；與上一項二選一 |
-| `--new-cron-secret` | 排程改用新產生的 `x-cron-secret`，存到 `docs/dbak/secrets/`（0600，不顯示），再設為 Edge 的 `CRON_SECRET` |
+| `--new-cron-secret` | 排程改用新產生的 `x-cron-secret`，存到 `backups/secrets/`（0600，不顯示），再設為 Edge 的 `CRON_SECRET` |
 | `--exclude <schema.table>` | 不匯入該表資料，可重複；Storage 檔案沒搬時用 `storage.objects` |
 | `--dry-run` | 只檢查與列出計畫，不寫入 |
 | `--yes` | 略過「輸入目標主機名稱」的確認 |
@@ -685,14 +688,14 @@ bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> --cron-base-ur
 
 Secrets（cloud：Dashboard → Edge Functions → **Secrets**）：
 
-- `CRON_SECRET` **必須等於排程裡的值**，否則排程全數 401。用了 `--new-cron-secret` 就取 `docs/dbak/secrets/` 裡的檔案；沿用舊值時，不印到螢幕的取法：
-  `grep -oP "x-cron-secret'', ''\K[^']+" docs/dbak/<名稱>/<時間>/cron.sql | head -1 | xclip -selection clipboard`
+- `CRON_SECRET` **必須等於排程裡的值**，否則排程全數 401。用了 `--new-cron-secret` 就取 `backups/secrets/` 裡的檔案；沿用舊值時，不印到螢幕的取法：
+  `grep -oP "x-cron-secret'', ''\K[^']+" backups/<名稱>/<時間>/cron.sql | head -1 | xclip -selection clipboard`
   （macOS 把 `xclip …` 換成 `pbcopy`），再貼進 Secrets。
 - `FUGLE_API_KEY`（選用）。
 
 #### 5. 收尾
 
-- Storage 檔案：來源還在時以 `sources/scripts/backup-download.cjs` 下載後上傳；`reports` 會由盤後批次重新產生。
+- Storage 檔案：來源還在時以 `scripts/backup-download.cjs` 下載（預設存到 `backups/storage/`）後上傳；`reports` 會由盤後批次重新產生。
 - Auth：Site URL / Redirect URLs 設為前端網址（自架另需 SMTP）；新環境的 JWT secret 不同，使用者需重新登入（密碼不變）。
 - 前端：Cloudflare Pages（或你的靜態主機）的 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`；自架網域需加入 `sources/public/_headers` 的 `connect-src`。
 - 執行 `sources/supabase/verify.sql`：`SELECT * FROM verify_setup();`、`SELECT assert_setup_ok();`。

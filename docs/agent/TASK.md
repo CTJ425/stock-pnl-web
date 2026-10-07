@@ -243,4 +243,4 @@
 - **Status**: 🔁 **Recurring**
 - **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
 - **What to do**: Update `RELEASE_CALENDAR` in `macroCalendar.ts` with next year's dates. Also add next year to `TW_HOLIDAYS` / `TW_HOLIDAY_YEARS` in `stock-price/quoteWindow.ts` from `https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&date=<YYYY>0101` — leave out 「開始交易日」/「最後交易日」 markers and weekend days; an uncovered year loses the holiday guard (Task 191). Edge deploy needed (PROD + DEV).
-- **Why manual**: BLS schedule page returns 403, so it cannot be synced automatically. `sources/scripts/find-release-dates.py` cross-checks dates against ALFRED vintages.
+- **Why manual**: BLS schedule page returns 403, so it cannot be synced automatically. `scripts/find-release-dates.py` cross-checks dates against ALFRED vintages.

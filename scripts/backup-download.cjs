@@ -4,7 +4,7 @@
  * reach client code — and its output directory must never be committed.
  *
  * Usage:
- *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/backup-download.cjs --dest=./backups-local
+ *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/backup-download.cjs [--dest=<dir>]   # default backups/storage/
  */
 const fs = require('fs')
 const path = require('path')
@@ -13,8 +13,8 @@ const BUCKET = 'backups'
 
 function readDest() {
   const arg = process.argv.find((a) => a.startsWith('--dest='))
-  const raw = arg ? arg.slice('--dest='.length) : './backups-local'
-  return path.resolve(raw)
+  // Default under backups/, which .gitignore covers; the old './backups-local' default was not ignored.
+  return arg ? path.resolve(arg.slice('--dest='.length)) : path.join(__dirname, '..', 'backups', 'storage')
 }
 
 // Recursively walks the bucket: the Storage list API returns one level at a time, and a

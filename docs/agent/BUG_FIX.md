@@ -23,7 +23,7 @@
 - **Status**: OPEN — found 2026-09-17 while checking docs/agent/specs/discord-holdings.md; accepted for Task 165 Phase 2 pending a user decision (clear the legacy keys, or persist minimum fees to `workspaces`).
 
 ### BUG-098 — Backup restore ignores `transactions.seq` (found in the 0.10.15 review)
-- **Where**: `sources/supabase/functions/stock-report/adminHandlers.ts:575` (`handleAdminBackupRestore` upserts `select('*')` rows), `sources/scripts/restore.cjs` (no seq handling)
+- **Where**: `sources/supabase/functions/stock-report/adminHandlers.ts:575` (`handleAdminBackupRestore` upserts `select('*')` rows). (`sources/scripts/restore.cjs` was deleted 2026-10-07; `scripts/db-migrate.sh` restores `pg_dump` data, which carries `setval` for every sequence.)
 - **Root Cause**: a 0.10.15+ backup carries `seq`, and the upsert writes it back without advancing `transactions_seq_seq`; into a recreated DB the next trade gets a *smaller* seq than restored same-day rows. A pre-0.10.15 backup has no seq, so `nextval` is assigned in upsert order = file order = random uuid order. `compareTxOrder` checks seq before `created_at`, so either way same-day order can scramble — BUG-089 returns after a disaster recovery.
 - **Fix direction**: after restoring transactions, `setval` past `MAX(seq)`; for rows without seq, assign it in `compareTxOrder` order (the schema.sql backfill already does exactly that).
 - **Status**: OPEN

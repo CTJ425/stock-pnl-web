@@ -6,6 +6,10 @@ Agent rules for **stock-pnl-web** (stock P&L + after-hours TW reports). Keep thi
 
 - App root: **`sources/`** — all `npm` / vitest / playwright from here.
 - Feature code near the feature; `utils`/`lib` only for truly shared code. No template-only dirs.
+- Repo-root **`scripts/`**: operator scripts unrelated to the frontend build (`db-backup.sh`, `db-migrate.sh`,
+  `backup-download.cjs`, `find-release-dates.py`). Scripts that need `sources/node_modules` or run under its
+  vitest (E2E, edge-engine sync, release sync) stay in `sources/scripts/`.
+- Repo-root **`backups/`**: every backup output. Git-ignored; never commit, never move it under `docs/`.
 
 ## Memory (`docs/agent/`)
 
