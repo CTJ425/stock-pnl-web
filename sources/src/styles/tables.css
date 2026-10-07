@@ -726,6 +726,8 @@ table.data-table {
 .addon .addon-pct select {
   flex: 0 0 auto;
   width: auto;
+  /* Room for the native arrow on top of the text width, whatever the platform's font metrics. */
+  padding-right: var(--sp-07);
 }
 
 .addon-pct input,
