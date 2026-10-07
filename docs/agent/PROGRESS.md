@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 197 on `dev`** — 損益試算 split into 賣出試算 / 補進試算, checked on DEV with a real login (0.10.35-dev.5).
-- Status: ✅ `dev` = 0.10.35-dev.5 (`9d0747e`); `main` still 0.10.34. Left: release on the user's OK.
-- Timestamp: 2026-10-07 10:44:35 Asia/Taipei
+- Action: **Task 197 on `dev`** — 損益試算 now shows 賣出試算 and 補進試算 as two stacked blocks (0.10.35-dev.6).
+- Status: ✅ `dev` = 0.10.35-dev.6, DEV-checked with a real login; `main` still 0.10.34. Left: release on the user's OK.
+- Timestamp: 2026-10-07 11:13:46 Asia/Taipei
 
 ---
 
@@ -13,7 +13,7 @@
 - **Verified**: vitest 3,143 pass / 7 skipped, `npm run build`, `typecheck:edge`, oxlint. Temporary harness (deleted): 1280 light/dark, 390 phone — -5% → 473.50, 1 張 → 500.08 / NT$474,174 / 回本 502.31; target 495 → 2 張; carry → sell view 3,000 股, cost 1,500,234.
 - **Noticed, not changed**: `priceLimits` (漲跌停 badge / chart lines) uses the stock tick bands for ETFs too.
 - **DEV check** (2026-10-07 10:44:35 Asia/Taipei, demo account given by the user, Playwright, 1280 + 390 px): 0050 held 8,000 sh. dev.2: % base defaulted to 持有均價 because `useState` captured `hasQuote` before the quote arrived → dev.3 derives the default until the user picks. dev.3: 390 px page overflowed 39 px — the base select took the full row: `.addon-pct select { width: auto }` loses to `.field select { width: 100% }` (same specificity, `controls.css` imported after `tables.css`); dev.4's flex-basis change did not touch that; dev.5 `.addon .addon-pct select` → overflow 0 on both tabs. Final run on dev.5: -5% of 現價 116.15 = 110.343 → 110.35 (ETF ≥ 50 tick 0.05); 1 張 → 均價 105.46, 需準備 NT$110,409; target 104 → unreachable (add price above it), as expected; carry → 賣出試算 9,000 股, cost NT$949,099, 改回 works. Element screenshots show the sticky app header over the section (capture artifact).
-- **Not verified**: dark theme on DEV (checked only in the local harness).
+- **dev.6** (2026-10-07 11:13:46 Asia/Taipei, user: 「把賣出試算和補進試算都擺在損益試算中，且分成兩個block，我直接往下滑就好」): `WhatIfTab` drops the tablist; two `section.whatif-block` with `h2` 賣出試算 / 補進試算 (holding summary beside the second title); carry scrolls up to 賣出試算 (`scroll-margin-top: 72px` clears the sticky header). Gates: vitest 3,143 / 7 skipped, build, typecheck:edge, oxlint. DEV dev.6, 1280 light + dark and 390 phone: both headings, no tabs, overflow 0, after carry the 賣出試算 title sits at 72 px below the header with the banner visible.
 
 ## 📅 Log: 2026-10-07 09:47:34 Asia/Taipei (Task 197 — 攤平試算 in 損益試算, 0.10.35-dev.1)
 - **Ask**: 「在個股分析中心增一個功能…補幾張、什麼價格，平均成本會變多少，想要和損益試算整合」 → shape round (ledger 補進 column, both forward and target solve, single tranche) → 「依照你的建議直接進行開發，然後先合併上dev」.

@@ -16,7 +16,7 @@
 
 ## 📋 Active Tasks
 
-### Task 197: 攤平試算 in 損益試算 — 賣出試算 / 補進試算 tabs, % → order price, target-average solver (/impeccable)
+### Task 197: 攤平試算 in 損益試算 — 賣出試算 + 補進試算 blocks, % → order price, target-average solver (/impeccable)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
 - **Timestamp**: 2026-10-07 10:44:35 Asia/Taipei
@@ -24,6 +24,7 @@
 1. ~~Shape + first build: 補進 / 合計 columns inside the ledger~~ ✅ 0.10.35-dev.1 `5573f67` — user: too cluttered, split it
 2. ~~Split: sell view restored to 0.10.34 + `carried` lock/banner; new `AddOnWhatIf.tsx`; `snapToTick` (stock bands + cited ETF bands); tabs in `WhatIfTab`~~ ✅ 0.10.35-dev.2
 3. ~~Log in to DEV and check both tabs on a real holding, desktop + phone~~ ✅ 2026-10-07 10:44:35 Asia/Taipei, 0.10.35-dev.5 on 0050 (8,000 sh, ETF ticks): dev.2 → % base stuck on 持有均價 (fixed dev.3); phone pct row 39px overflow (dev.4 flex-basis did not fix it, dev.5 specificity did)
+5. ~~Tabs → two stacked blocks on one page (user: 「分成兩個block，我直接往下滑就好」)~~ ✅ 0.10.35-dev.6 `e8e931d`, DEV-checked 2026-10-07 11:13:46 Asia/Taipei
 4. Release to `main` — ⏳ waits for the user's OK
 
 ### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
