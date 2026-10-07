@@ -19,11 +19,11 @@
 ### Task 197: 攤平試算 in 損益試算 — 賣出試算 / 補進試算 tabs, % → order price, target-average solver (/impeccable)
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
-- **Timestamp**: 2026-10-07 10:23:07 Asia/Taipei
+- **Timestamp**: 2026-10-07 10:44:35 Asia/Taipei
 - **Mockup**: https://claude.ai/artifact/J7LrPnryNymAcHXD3g4AfQ (private canvas)
 1. ~~Shape + first build: 補進 / 合計 columns inside the ledger~~ ✅ 0.10.35-dev.1 `5573f67` — user: too cluttered, split it
 2. ~~Split: sell view restored to 0.10.34 + `carried` lock/banner; new `AddOnWhatIf.tsx`; `snapToTick` (stock bands + cited ETF bands); tabs in `WhatIfTab`~~ ✅ 0.10.35-dev.2
-3. Log in to DEV (demo account, user-supplied; never written to the repo) and check both tabs on a real holding, desktop + phone — dev.2 checked on 0050 (8,000 sh): found the % base stuck on 持有均價 (quote lands after mount) and the base select clipped on phone → fixed in dev.3; ⏳ re-check dev.3
+3. ~~Log in to DEV and check both tabs on a real holding, desktop + phone~~ ✅ 2026-10-07 10:44:35 Asia/Taipei, 0.10.35-dev.5 on 0050 (8,000 sh, ETF ticks): dev.2 → % base stuck on 持有均價 (fixed dev.3); phone pct row 39px overflow (dev.4 flex-basis did not fix it, dev.5 specificity did)
 4. Release to `main` — ⏳ waits for the user's OK
 
 ### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)

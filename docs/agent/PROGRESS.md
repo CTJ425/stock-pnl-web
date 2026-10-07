@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 197 on `dev`** — 損益試算 split into 賣出試算 / 補進試算 (0.10.35-dev.2).
-- Status: ✅ `dev` = 0.10.35-dev.2 after push; `main` still 0.10.34. Left: DEV check with a real login; release on the user's OK.
-- Timestamp: 2026-10-07 10:23:07 Asia/Taipei
+- Action: **Task 197 on `dev`** — 損益試算 split into 賣出試算 / 補進試算, checked on DEV with a real login (0.10.35-dev.5).
+- Status: ✅ `dev` = 0.10.35-dev.5 (`9d0747e`); `main` still 0.10.34. Left: release on the user's OK.
+- Timestamp: 2026-10-07 10:44:35 Asia/Taipei
 
 ---
 
@@ -12,7 +12,8 @@
 - **Done**: `WhatIfTab.tsx` restored from `acd3fde` as `SellWhatIf` (+ `carried` prop: buy side locked, banner, 改回現有持股) under a new `WhatIfTab` that shows `subtabs` 賣出試算 / 補進試算 only for a held stock; both panels stay mounted (`hidden`). New `AddOnWhatIf.tsx`: price ↔ % linked (last-typed wins), base 現價 / 持有均價 (含費), chips -3/-5/-10/-15, `snapToTick` to the nearest order price; result block (補進後均價 hero, 需準備資金, 回本價), 補進前後 table, target solver, 用補進後部位試算賣出. `whatIf.ts` `snapToTick`: ETF bands (<50 0.01, ≥50 0.05; TWSE 營業細則, web-checked 2026-10-07); the 1,000+ band's move to 1 (approved 2026-08-25) is not in force before 2027-07, so not applied. `tables.css` ledger back to 0.10.34; new `.whatif-modes` / `.whatif-carried` / `.addon-*`.
 - **Verified**: vitest 3,143 pass / 7 skipped, `npm run build`, `typecheck:edge`, oxlint. Temporary harness (deleted): 1280 light/dark, 390 phone — -5% → 473.50, 1 張 → 500.08 / NT$474,174 / 回本 502.31; target 495 → 2 張; carry → sell view 3,000 股, cost 1,500,234.
 - **Noticed, not changed**: `priceLimits` (漲跌停 badge / chart lines) uses the stock tick bands for ETFs too.
-- **Not verified**: DEV with a real login (item 3).
+- **DEV check** (2026-10-07 10:44:35 Asia/Taipei, demo account given by the user, Playwright, 1280 + 390 px): 0050 held 8,000 sh. dev.2: % base defaulted to 持有均價 because `useState` captured `hasQuote` before the quote arrived → dev.3 derives the default until the user picks. dev.3: 390 px page overflowed 39 px — the base select took the full row: `.addon-pct select { width: auto }` loses to `.field select { width: 100% }` (same specificity, `controls.css` imported after `tables.css`); dev.4's flex-basis change did not touch that; dev.5 `.addon .addon-pct select` → overflow 0 on both tabs. Final run on dev.5: -5% of 現價 116.15 = 110.343 → 110.35 (ETF ≥ 50 tick 0.05); 1 張 → 均價 105.46, 需準備 NT$110,409; target 104 → unreachable (add price above it), as expected; carry → 賣出試算 9,000 股, cost NT$949,099, 改回 works. Element screenshots show the sticky app header over the section (capture artifact).
+- **Not verified**: dark theme on DEV (checked only in the local harness).
 
 ## 📅 Log: 2026-10-07 09:47:34 Asia/Taipei (Task 197 — 攤平試算 in 損益試算, 0.10.35-dev.1)
 - **Ask**: 「在個股分析中心增一個功能…補幾張、什麼價格，平均成本會變多少，想要和損益試算整合」 → shape round (ledger 補進 column, both forward and target solve, single tranche) → 「依照你的建議直接進行開發，然後先合併上dev」.
