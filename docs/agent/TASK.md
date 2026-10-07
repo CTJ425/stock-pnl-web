@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-07 09:47:34 Asia/Taipei
+- Timestamp: 2026-10-07 11:54:53 Asia/Taipei
 
 ---
 
@@ -15,18 +15,6 @@
 - Front end deploys from `main` via Cloudflare Pages; Edge Functions and DDL never travel with a push (see CLAUDE.md § Release workflow).
 
 ## 📋 Active Tasks
-
-### Task 197: 攤平試算 in 損益試算 — 賣出試算 + 補進試算 blocks, % → order price, target-average solver (/impeccable)
-- **Status**: 🔄 IN PROGRESS
-- **Agent**: Claude
-- **Timestamp**: 2026-10-07 10:44:35 Asia/Taipei
-- **Mockup**: https://claude.ai/artifact/J7LrPnryNymAcHXD3g4AfQ (private canvas)
-1. ~~Shape + first build: 補進 / 合計 columns inside the ledger~~ ✅ 0.10.35-dev.1 `5573f67` — user: too cluttered, split it
-2. ~~Split: sell view restored to 0.10.34 + `carried` lock/banner; new `AddOnWhatIf.tsx`; `snapToTick` (stock bands + cited ETF bands); tabs in `WhatIfTab`~~ ✅ 0.10.35-dev.2
-3. ~~Log in to DEV and check both tabs on a real holding, desktop + phone~~ ✅ 2026-10-07 10:44:35 Asia/Taipei, 0.10.35-dev.5 on 0050 (8,000 sh, ETF ticks): dev.2 → % base stuck on 持有均價 (fixed dev.3); phone pct row 39px overflow (dev.4 flex-basis did not fix it, dev.5 specificity did)
-5. ~~Tabs → two stacked blocks on one page (user: 「分成兩個block，我直接往下滑就好」)~~ ✅ 0.10.35-dev.6 `e8e931d`, DEV-checked 2026-10-07 11:13:46 Asia/Taipei
-6. ~~補進前後 均價 change shows % too~~ ✅ 0.10.35-dev.7 `a5ea256`, DEV-checked 2026-10-07 11:25:10 Asia/Taipei (`-NT$0.96（-0.91%）`)
-4. Release to `main` — ⏳ waits for the user's OK
 
 ### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
 - **Status**: 🔄 IN PROGRESS

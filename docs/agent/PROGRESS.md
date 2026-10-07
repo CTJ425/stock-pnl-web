@@ -1,11 +1,17 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 197 on `dev`** — 損益試算 賣出試算 + 補進試算 blocks; 均價 change now with % (0.10.35-dev.7).
-- Status: ✅ `dev` = 0.10.35-dev.7, DEV-checked; `main` still 0.10.34. Left: release on the user's OK.
-- Timestamp: 2026-10-07 11:25:10 Asia/Taipei
+- Action: **0.10.35 released** — 損益試算 gains 補進試算 below 賣出試算 (Task 197).
+- Status: ✅ `main` = `dev` = 0.10.35 (`df330e7`), Release live, production serves it. Nothing left on Task 197.
+- Timestamp: 2026-10-07 11:54:53 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-10-07 11:54:53 Asia/Taipei (Task 197 — 0.10.35 released)
+- **Ask**: 「最後幫我在 補進試算中，把相對持有均價改為預設，且調整文字溢出的問題，沒問題直接幫我合併到main」; then 「確認一下 https://stock-pnl-web.pages.dev/#/dashboard 然後把後續的部分都處理完，最主要是用diff確認main跟dev是否一致」.
+- **Done**: 0.10.35-dev.8 `56d0d99` — `AddOnWhatIf` base defaults to 持有均價 (`pickedBase` starts at `'avg'`; 現價 offered once a quote exists), base select `flex: 0 0 auto; width: auto` on every width; dev.9 `aa0f423` — `padding-right: var(--sp-07)` for the native arrow (DEV dev.8 still showed the text tight against it). Changelog section finalized (dev-internal notes dropped), release commit `df330e7`, `dev` pushed, `main` fast-forwarded.
+- **Verified**: gates on dev.8 — vitest 3,144 pass / 7 skipped, `npm run build`, `typecheck:edge`; dev.9 build + StockDetail suites 314 pass. DEV dev.9, 1280 + 390 px: base `avg`, select `scrollWidth <= clientWidth` (152 / 160 px), overflow 0. `git diff --quiet origin/main origin/dev` → exit 0, both `df330e7`. CI and Sync GitHub Releases green; Release 0.10.35 body = the finalized section. Production (no login): `appLog` chunk contains `0.10.35`, `AnalysisPage` chunk contains 補進試算 / 用補進後部位試算賣出. No `sources/supabase` diff since 0.10.34 → nothing to deploy to PROD.
+- **Not verified**: the analysis page on production while signed in (no production credentials used).
 
 ## 📅 Log: 2026-10-07 10:23:07 Asia/Taipei (Task 197 — 損益試算 split into 賣出試算 / 補進試算, 0.10.35-dev.2)
 - **Ask**: 「這樣畫面看起來很混亂，幫我拆成賣出試算跟補進試算，且補進試算要多一個漲跌%數」 → %: 「用 % 決定補進價」; layout 「輸入在上、結論卡、再明細」; link 「補進頁加一個按鈕」 → canvas mockup (artifact J7LrPnryNymAcHXD3g4AfQ) → 「先幫我改一版，然後commit到dev」.
@@ -14,9 +20,3 @@
 - **Noticed, not changed**: `priceLimits` (漲跌停 badge / chart lines) uses the stock tick bands for ETFs too.
 - **DEV check** (2026-10-07 10:44:35 Asia/Taipei, demo account given by the user, Playwright, 1280 + 390 px): 0050 held 8,000 sh. dev.2: % base defaulted to 持有均價 because `useState` captured `hasQuote` before the quote arrived → dev.3 derives the default until the user picks. dev.3: 390 px page overflowed 39 px — the base select took the full row: `.addon-pct select { width: auto }` loses to `.field select { width: 100% }` (same specificity, `controls.css` imported after `tables.css`); dev.4's flex-basis change did not touch that; dev.5 `.addon .addon-pct select` → overflow 0 on both tabs. Final run on dev.5: -5% of 現價 116.15 = 110.343 → 110.35 (ETF ≥ 50 tick 0.05); 1 張 → 均價 105.46, 需準備 NT$110,409; target 104 → unreachable (add price above it), as expected; carry → 賣出試算 9,000 股, cost NT$949,099, 改回 works. Element screenshots show the sticky app header over the section (capture artifact).
 - **dev.6** (2026-10-07 11:13:46 Asia/Taipei, user: 「把賣出試算和補進試算都擺在損益試算中，且分成兩個block，我直接往下滑就好」): `WhatIfTab` drops the tablist; two `section.whatif-block` with `h2` 賣出試算 / 補進試算 (holding summary beside the second title); carry scrolls up to 賣出試算 (`scroll-margin-top: 72px` clears the sticky header). Gates: vitest 3,143 / 7 skipped, build, typecheck:edge, oxlint. DEV dev.6, 1280 light + dark and 390 phone: both headings, no tabs, overflow 0, after carry the 賣出試算 title sits at 72 px below the header with the banner visible.
-
-## 📅 Log: 2026-10-07 09:47:34 Asia/Taipei (Task 197 — 攤平試算 in 損益試算, 0.10.35-dev.1)
-- **Ask**: 「在個股分析中心增一個功能…補幾張、什麼價格，平均成本會變多少，想要和損益試算整合」 → shape round (ledger 補進 column, both forward and target solve, single tranche) → 「依照你的建議直接進行開發，然後先合併上dev」.
-- **Done**: `whatIf.ts` `averageDown` (moving-average, add-on fee at today's workspace rate and the add-on's own whole/odd minimum) and `sharesForTargetAvg` (closed-form seed, then every candidate re-checked through `averageDown`; `already` / `unreachable` when price × (1 + feeRate) is on the wrong side of the target). `WhatIfTab.tsx`: held stocks get 現有持股 / 補進 · 假設 / 合計 / 賣出 · 試算; with an add-on the base column locks to the real holding, and the sell side, ladder, marks and break-even price the merged position; 補進前後 table (均價含費, 回本價, 現價試算損益, 股數, 投入成本); 目標均價 row with a 帶入補進股數 button (never overwrites the add-on by itself). Watched stocks unchanged. `tables.css`: ledger cells styled by `is-key` / `col-sell` / `is-last` classes instead of nth-child; ≤ 560 px hides 合計 and stacks 股數 over 單位.
-- **Verified**: vitest full 3,138 pass / 7 skipped (+13 new in `whatIf.test.ts` / `WhatIfTab.test.tsx`), `npm run build`, `typecheck:edge`. Temporary harness (deleted): 1280 px light/dark and 375 px with 2,000 sh @ 512.30 + 1 張 @ 480 → 合計 1,506,744, 均價 502.25, target 495 → 3 張. The 375 px page scrolls 61 px sideways in the harness both before and after the change (the ladder table; the harness has no app shell), so not attributed to this change.
-- **Not verified**: a real held stock in the running app; a holding with fee-rounding `position` mode (the add-on fee floors per trade as `calculateFee` does).
