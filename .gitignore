@@ -55,3 +55,7 @@ __pycache__/
 # push protection does not recognise a password hash, so this rule is the only gate.
 .snapshots/
 *.sql.gpg
+
+# Raw pg_dump backups (sources/scripts/db-backup.sh). They hold password hashes, the
+# x-cron-secret inside cron.job commands and every user's transactions. Never commit them.
+docs/dbak/

@@ -13,6 +13,7 @@
 - [測試](#-測試)
 - [初始化與部署](#-初始化與部署)
   - [改版後的發布流程（Cloudflare Pages 自動部署）](#步驟-9-1改版後的發布流程cloudflare-pages-自動部署)
+- [資料庫備份與移轉](#-資料庫備份與移轉)
 - [版本紀錄](#-版本紀錄)
 - [注意事項](#-注意事項)
 
@@ -42,16 +43,16 @@
 - **搜尋排名**：正股優先，權證 / 牛熊證自動排除。
 
 ### 現價與快取（三層架構）
-1. **L1 – 瀏覽器 localStorage**：台股 60 秒 / 美股 10 分鐘 TTL，重整 / 重新登入不重打 API。
+1. **L1 – 瀏覽器 localStorage**：台股盤中 60 秒、收盤定價後鎖到下一個交易日 08:25；美股 10 分鐘 TTL。重整 / 重新登入不重打 API。
 2. **L2 – Supabase `price_cache` 資料表**：全站共用，同一支股票在 TTL 內全體使用者只向外部 API 請求一次；`stock_names` 資料表快取查詢過的代號↔名稱（不設過期）。
-3. **L3 – 外部行情源**：僅在 L2 過期時由 Edge Function 伺服器端請求。台股走**證交所 MIS 即時行情**（秒級延遲），失敗時退 Yahoo Finance；美股走 Yahoo Finance。
+3. **L3 – 外部行情源**：僅在 L2 過期時由 Edge Function 伺服器端請求。台股依序走**證交所 MIS 即時行情**（秒級延遲）→ Fugle（有設定 `FUGLE_API_KEY` 時）→ Yahoo Finance；美股走 Yahoo Finance。
 
 `price_cache.updated_at` 記錄的是「報價實際取得時間」並回傳給前端，因此 L1 與 L2 的 TTL 不會疊加（同一份報價最舊即為取得時間 + 該市場 TTL）。前端另有每 60 秒背景輪詢與分頁切回前景補抓，TTL 內的代號直接命中 L1、不會真的發出請求。
 
 共用快取表僅能由 Edge Function（service role）寫入，一般使用者唯讀，防止資料污染。
 
 ### 個股分析（僅 Supabase 模式）
-- **單頁到底**：我的持股 → 籌碼 → 基本面 → 技術面，各一張卡片；頁內以下拉選單切換台股持股。
+- **報價在上、分頁在下**：上方是報價卡、走勢圖與「我的持股」，下方一排分頁切換 籌碼 / 基本面 / 技術面 / 損益試算（賣出試算、補進試算）。頁內下拉選單可切換台股持股與觀察股。
 - **垂直矩陣化數據呈現 (`inst-matrix`)**：
   - **籌碼面**：三大法人買賣超、融資融券、借券賣出 3 張獨立垂直矩陣表格，含相對熱度色彩階調 (`heatStyle`)、表尾合計/均量與自繪 SVG `SparkCell` 迷你走勢折線圖。
   - **基本面**：
@@ -71,7 +72,7 @@
 - **系統維運工具**：全量手動重跑批次與執行記錄。
 
 ### 其他
-- **每工作區手續費率**：工作區列的 `%` 按鈕可直接設定（支援 `0.0004275` 等折扣費率位數），新增交易與損益估算自動帶入。
+- **每工作區手續費率**：工作區列的「手續費設定」按鈕，或庫存總覽的費率說明列可直接設定（支援 `0.0004275` 等折扣費率位數），新增交易與損益估算自動帶入。
 - **主題切換**：跟隨系統 / 深色 / 淺色，選擇記憶於本機。
 - **手機支援**：分頁列、表單、表格皆針對小螢幕最佳化；輸入字級 16px 避免 iOS 聚焦縮放。
 - **版本標籤**：版本號顯示於頁尾免責聲明後方，方便回報問題時確認版本。
@@ -91,15 +92,17 @@
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫）。
      - **Edge Functions (Deno)**：
-       - `stock-price`：批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS。
+       - `stock-price`：批次查詢台美股現價（台股 MIS → Fugle → Yahoo；美股走 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS。
        - `stock-report`：代抓 TWSE 盤後籌碼、日線、基本面、匯率與總經資料，產生結構化報告。
-       - `backup-transactions`：由 `backup-daily` 排程觸發，每日備份使用者資料至 Storage 與 Cloudflare R2（若有設定）。
+       - `backup-transactions`：由 `backup-daily` 排程觸發，每日備份使用者資料至 Storage 的 `backups` bucket（Cloudflare R2 異地同步已於 Task 166 移除）。
      - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
-     - **精簡 7 大 pg_cron 排程與主動探針巡邏**：
-       - `source-probe`：每 5 分鐘主動巡邏 8 大資料源，命中即抓，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
+     - **12 個 pg_cron 排程與主動探針巡邏**（完整清單見步驟 6）：
+       - `source-probe`：平日台北 12:00 與 15:00–23:55 每 5 分鐘巡邏 8 大資料源，命中即抓，穩定到位後自動退休收工（MOPS 月營收 / 季報兩源不退休，平日固定跑滿 6 槽）。
        - 精準時窗優化：`BWIBBU` 估值探針縮窄至 `17:00–18:30`；`BFI82U` 支援雙時窗（`15:00–16:30` 與 `19:30–20:15` 盤後鉅額與綜合帳戶結算）；`BORROW` 借券探針調至 `21:00–23:30`。
        - `macro-daily`、`fx-daily`、`market-data-daily`、`history-daily` 定時維護非日頻數據與歷程。
        - `backup-daily`：每日凌晨 02:00 (Asia/Taipei) 自動備份全站使用者交易紀錄至 Storage。
+       - `discord-summary-brief` / `discord-summary-full` / `discord-account-tick`：Discord 盤後摘要與帳戶推播。
+       - `app-log-prune` / `run-log-prune` / `cron-history-prune`：日誌與執行紀錄定期清理（純 SQL）。
 
 ### 系統架構圖 (System Architecture)
 
@@ -112,8 +115,8 @@
 ```
 stock-pnl-web/
 ├── GEMINI.md / CLAUDE.md # Agent 操作規則（角色、流程、版本與部署規範）
-├── .github/workflows/    # release.yml（CHANGELOG 同步至 Releases）、ci.yml（0.9.51 起）
-├── .gemini/ / .claude/   # 專案技能（testing, verify, supabase-ops, versioning 等）
+├── .github/workflows/    # release.yml（CHANGELOG 同步至 Releases）、ci.yml（0.9.51 起）、e2e-dev.yml
+├── .claude/              # 專案技能（testing, verify, supabase-ops, bookkeeping 等）與 release.config.json
 ├── docs/
 │   ├── agent/            # Agent 持久化狀態：PROGRESS / TASK / BUG_FIX / FIXED_BUG
 │   ├── architecture/     # 系統設計、移轉計畫、UI 比稿與系統架構圖 (system-architecture.svg)
@@ -125,7 +128,7 @@ stock-pnl-web/
 │   │   │                 # StockDetail（個股分析）, Fx（匯率）, Macro（總經）,
 │   │   │                 # Admin（後台狀態與戰情室）, Charts（自繪 SVG 圖表）, Common（共用 UI）
 │   │   ├── context/      # AuthContext, WorkspaceContext
-│   │   ├── hooks/        # useStockPrices
+│   │   ├── hooks/        # useStockPrices, useWatchQuote, useUsdTwdRate, useTwOfficialNames, useMediaQuery
 │   │   ├── services/     # supabase client, dataProvider（雙模式儲存實作）,
 │   │   │                 # priceProxy（現價＋TTL 快取）, stockSearch, twMarketData,
 │   │   │                 # usStockNames（美股 zh-TW 譯名對照）,
@@ -137,6 +140,7 @@ stock-pnl-web/
 │   │                     # csv.ts, fees.ts, formatters.ts, settings.ts
 │   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要、RLS、pg_cron 排程）
 │   │                     # + functions/（stock-price, stock-report, backup-transactions）
+│   ├── scripts/          # 維運腳本（db-backup.sh / db-migrate.sh、snapshot / restore、E2E 驗證）
 │   └── package.json      # 版本號來源
 └── README.md             # 本說明文件 (專案根目錄)
 ```
@@ -147,10 +151,10 @@ stock-pnl-web/
 - **React**: `^19.2.7`
 - **React DOM**: `^19.2.7`
 - **Vite**: `^8.1.1`
-- **TypeScript**: `~6.0.2`
+- **TypeScript**: `^7.0.2`
 - **Supabase JS Client**: `^2.110.7`
 - **lucide-react** (圖示): `^1.24.0`
-- **Vitest** (測試框架): `^4.1.10`
+- **Vitest** (測試框架): `^5.0.1`
 - **oxlint** (Lint): `^1.71.0`
 - **Deno** (Edge Functions 執行環境): 最新 Supabase Edge Runtime
 
@@ -197,7 +201,7 @@ stock-pnl-web/
 ## 🧪 測試
 
 完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
-目前測試套件規模：**123 個測試檔案、1,976 項單元與整合測試（100% PASS）**。
+目前測試套件規模（2026-10-07）：**189 個測試檔案、3,144 項通過、7 項略過**。
 
 | 層級 | 內容 | 怎麼跑 |
 | ---- | ---- | ---- |
@@ -207,7 +211,7 @@ stock-pnl-web/
 
 ```bash
 cd sources
-npm test                              # 完整單元測試閘門（123 檔 / 1,976 tests，必跑）
+npm test                              # 完整單元測試閘門（189 檔 / 3,151 tests，必跑）
 npm run typecheck:edge                # Edge Functions 型別檢查
 npx vitest run src/utils/pnlEngine.test.ts   # 執行單一測試檔
 npm run dev                           # 本機模式 UI，供手動或 Playwright 驗證
@@ -282,20 +286,22 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### 步驟 3：套用資料庫綱要
 
-`sources/supabase/schema.sql` 會建立全部資料表、RLS 政策、兩個 Storage bucket、`pg_cron` 與 `pg_net` 擴充，以及 7 個排程。
+`sources/supabase/schema.sql` 會建立全部資料表、RLS 政策、兩個 Storage bucket、`pg_cron` 與 `pg_net` 擴充，以及 12 個排程。
 
-⚠️ **執行前必須替換兩個佔位符，共 18 處：**
+⚠️ **執行前必須替換兩種寫法，各 9 處，而且只能替換這兩種寫法：**
 
-| 佔位符 | 出現次數 | 換成 |
+| 要替換的文字 | 出現次數 | 換成 |
 |---|---|---|
-| `<PROJECT_REF>` | 8 | 步驟 1 的 Project Reference ID |
-| `<CRON_SECRET>` | 10 | 步驟 2 產生的密鑰 |
+| `https://<PROJECT_REF>.supabase.co` | 9 | 把 `<PROJECT_REF>` 換成步驟 1 的 Project Reference ID |
+| `'x-cron-secret', '<CRON_SECRET>'` | 9 | 把 `<CRON_SECRET>` 換成步驟 2 產生的密鑰 |
+
+⚠️ **不要全域取代 `<PROJECT_REF>` / `<CRON_SECRET>`。** 檔案最後的檢查區塊（§6e）用 `LIKE '%<PROJECT_REF>%'` 搜尋沒替換到的排程；這兩個字也被換掉的話，檢查會把每個排程都當成錯誤並中止整個腳本。註解裡的佔位符留著不影響。
 
 ⚠️ **`cron.schedule` 對沒替換的佔位符照單全收。「SQL 執行成功」不等於「值填對了」。** 正式區就曾因此整段時間排程從未真正執行（BUG-002）。步驟 6 的覆驗查詢是唯一能證明填對的方法。
 
 #### 做法 A：WebUI
 
-1. 用編輯器打開 `sources/supabase/schema.sql`，全域取代兩個佔位符，另存為暫存檔。
+1. 用編輯器打開 `sources/supabase/schema.sql`，只取代上表兩種寫法（搜尋 `https://<PROJECT_REF>.supabase.co` 與 `'x-cron-secret', '<CRON_SECRET>'`），另存為暫存檔。
 2. Supabase Dashboard → **SQL Editor** → **New query**。
 3. 貼上替換後的全文 → **Run**。
 4. 刪除該暫存檔，它含有明文密鑰。
@@ -306,11 +312,14 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 cd sources
 
 # 1. 產生替換後的暫存檔（不要覆蓋原檔，也不要 commit）
-sed -e 's/<PROJECT_REF>/你的ref/g' -e 's/<CRON_SECRET>/你的密鑰/g' \
+#    只替換 URL 與 x-cron-secret 兩種寫法，各應為 9 處
+sed -e "s#https://<PROJECT_REF>\.supabase\.co#https://你的ref.supabase.co#g" \
+    -e "s#'x-cron-secret', '<CRON_SECRET>'#'x-cron-secret', '你的密鑰'#g" \
     supabase/schema.sql > /tmp/schema.applied.sql
+grep -c '你的ref' /tmp/schema.applied.sql   # 應為 9
 
-# 2. 套用（連線字串見 Dashboard → Settings → Database）
-psql "<你的資料庫連線字串>" -f /tmp/schema.applied.sql
+# 2. 套用（連線字串見 Dashboard → Connect）；單一 transaction，檢查失敗就整批不生效
+psql "<你的資料庫連線字串>" -v ON_ERROR_STOP=1 --single-transaction -f /tmp/schema.applied.sql
 
 # 3. 用完立刻刪除，它含有明文密鑰
 rm /tmp/schema.applied.sql
@@ -354,7 +363,7 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 Dashboard → Edge Functions → **Create a function**。名稱必須與資料夾**完全相同**（前端以函數名呼叫，改名就對不上），然後把該資料夾下的 `.ts` 檔逐一貼上。
 
 - `*.test.ts` 是單元測試，**不要上傳**。
-- `stock-report` 有 18 個 `.ts` 檔，逐檔貼很容易漏。**多檔函數建議改用 CLI。**
+- `stock-report` 有 45 個 `.ts` 檔（不含測試），逐檔貼很容易漏。**多檔函數建議改用 CLI。**
 
 #### 做法 B：CLI（推薦）
 
@@ -384,17 +393,26 @@ FROM cron.job ORDER BY jobname;
 
 ⚠️ **不要 SELECT `command` 欄位本身** — 它含有明文 `x-cron-secret`，印出來等於外洩。
 
-應出現的 7 個排程：
+應出現的 12 個排程（schedule 為 UTC，台北 = UTC+8）：
 
 | jobname | schedule | 用途 |
 |---|---|---|
 | `market-data-daily` | `0 10,14 * * 1-5` | 盤後估值資料 |
 | `history-daily` | `30 4,13 * * 1-5` | 月營收歷史回補 |
-| `source-probe` | `*/5 * * * *` | 資料源輪詢 |
+| `source-probe` | `*/5 4,7-15 * * 1-5` | 資料源輪詢（台北平日 12:00、15:00–23:55） |
 | `macro-daily` | `*/30 12-18 * * *` | 美國總經 |
 | `fx-daily` | `0 3,9 * * *` | 匯率 |
 | `backup-daily` | `0 18 * * *` | 每日備份（台北 02:00） |
+| `discord-summary-brief` | `30 9 * * 1-5` | Discord 盤後摘要簡版（台北 17:30） |
+| `discord-summary-full` | `30 13 * * 1-5` | Discord 盤後摘要完整版（台北 21:30） |
+| `discord-account-tick` | `0,30 9-15 * * 1-5` | Discord 各帳戶推播（台北 17:00–23:30） |
 | `app-log-prune` | `20 3 * * *` | 日誌定期清理（保留 30 天） |
+| `run-log-prune` | `40 3 * * *` | 批次 / 備份 / Discord 執行紀錄清理（保留 180 天） |
+| `cron-history-prune` | `50 3 * * *` | `cron.job_run_details` 清理（保留 14 天） |
+
+`discord-summary-brief` / `discord-summary-full` 的時間可在管理員後台調整（內部以 `cron.alter_job` 改排程），線上環境與上表不同屬正常。
+
+完整檢查可改跑 `sources/supabase/verify.sql`：`SELECT * FROM verify_setup();` 與 `SELECT assert_setup_ok();`。
 
 再手動觸發一次，確認密鑰與 JWT 設定正確：
 
@@ -556,7 +574,7 @@ npm run build                              # 產出於 sources/dist/
 | 3 | 新增一筆台股交易 | 庫存出現該筆，且抓得到現價 → `stock-price` 正常 |
 | 4 | 個股「分析」→ 籌碼分頁 | 有內容 → `stock-report` 正常 |
 | 5 | 管理員後台 | 使用者選單看得到入口 → `admin` 角色生效 |
-| 6 | `cron.job` 覆驗查詢 | 7 個排程，兩個布林欄位皆 `false` |
+| 6 | `cron.job` 覆驗查詢 | 12 個排程，兩個布林欄位皆 `false` |
 | 7 | Storage | 出現 `reports`（公開）與 `backups`（私有）兩個 bucket |
 
 ---
@@ -574,6 +592,92 @@ npm run build                              # 產出於 sources/dist/
 | 管理員後台看不到 | 升級 SQL 執行後沒有重新登入 |
 | 部署時 import `./xxx.ts` 失敗 | WebUI 逐檔貼時漏檔 — 改用 CLI 部署 |
 
+## 💾 資料庫備份與移轉
+
+兩支維運腳本，用來把 Supabase 資料庫整份備份到本機，以及把備份灌進另一個 Supabase（換區域的新 cloud 專案，或自架）。
+
+> ⚠️ **備份檔絕不可進版控。** 內容包含所有帳號的密碼雜湊、`cron.job` 裡的明文 `x-cron-secret` 與全部交易紀錄。
+> `docs/dbak/` 已列入 `.gitignore`，且 `db-backup.sh` 在寫入前會用 `git check-ignore` 確認，未被忽略就拒絕執行。
+
+### 前置需求
+
+| 項目 | 用途 |
+|---|---|
+| `pg_dump` / `psql`（`postgresql-client`，版本 ≥ 資料庫版本） | 實際匯出與匯入；不需要 Docker |
+| Supabase CLI + `SUPABASE_ACCESS_TOKEN` | 只有備份需要：由 `supabase db dump --dry-run` 取得臨時登入帳號，不需要資料庫密碼 |
+
+### 備份：`db-backup.sh`
+
+```bash
+export SUPABASE_ACCESS_TOKEN=<你的 access token>
+bash sources/scripts/db-backup.sh dev     # 或 prod / all
+```
+
+輸出到 `docs/dbak/<dev|prod>/<YYYYMMDD-HHMMSS>/`（台北時間），每份包含：
+
+| 檔案 | 內容 |
+|---|---|
+| `roles.sql` | 自訂資料庫角色設定（Supabase 內建角色由 CLI 過濾） |
+| `schema.sql` | `public` 等非平台 schema 的結構（`auth` / `storage` 結構由 Supabase 本身提供） |
+| `data.sql` | `public`、`auth`、`storage` 等的資料（COPY 格式）；不含 session / token 與 cron、網路請求紀錄 |
+| `cron.sql` | 每個排程一行 `cron.schedule(...)`，含明文 `x-cron-secret` |
+| `counts.tsv` | 備份當下 `public` / `auth` 各表筆數，移轉後用來比對 |
+| `manifest.txt` | 來源專案、時間、`pg_dump` 與資料庫版本、排除的表 |
+| `SHA256SUMS` | 檔案校驗碼；移轉前會先檢查 |
+
+不包含：Storage bucket 裡的**檔案本體**（只有 `storage.objects` 這張清單表）、Edge Functions 與其 secrets。
+
+### 移轉：`db-migrate.sh`
+
+把一份備份灌進**新建、空的** Supabase 資料庫。目標可以是 cloud 專案或自架：
+
+| 目標 | 連線字串 |
+|---|---|
+| Supabase cloud | Dashboard → Connect → Session pooler（port 5432），使用者 `postgres.<ref>` |
+| 自架 Supabase | 主機的 5432；經 Supavisor 時使用者為 `postgres.<POOLER_TENANT_ID>`，密碼為 `.env` 的 `POSTGRES_PASSWORD` |
+
+```bash
+# 連線字串放環境變數，避免留在 shell history
+export TARGET_DB_URL='postgresql://<user>:<password>@<host>:5432/postgres'
+
+# 1. 先預演：檢查備份校驗碼與目標，列出計畫，不寫入
+bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> --skip-cron --dry-run
+
+# 2. 正式執行；cron 的網址改指向新環境
+bash sources/scripts/db-migrate.sh --from docs/dbak/prod/<時間> \
+  --cron-base-url https://<新的-project-ref>.supabase.co    # 自架可用 http://kong:8000
+```
+
+| 選項 | 說明 |
+|---|---|
+| `--from <dir>` | 備份資料夾 |
+| `--to <url>` | 目標連線字串；省略時讀 `TARGET_DB_URL` |
+| `--cron-base-url <url>` | 把排程裡的 `https://<舊ref>.supabase.co` 換成這個網址並建立排程 |
+| `--skip-cron` | 不建立排程（例如舊專案還在跑，避免批次重複執行）；與上一項二選一 |
+| `--dry-run` | 只檢查與列出計畫，不寫入 |
+| `--allow-prod` | 允許以目前的 PROD 專案為目標（預設拒絕） |
+| `--yes` | 略過「輸入目標主機名稱」的確認 |
+
+腳本的保護與流程：
+
+1. 校驗碼不符就拒絕；目標必須有 `auth` / `storage` schema 與需要的擴充（確認是 Supabase），且 `auth.users`、`public.transactions` 皆為空。
+2. 角色、結構、資料在**同一個 transaction** 寫入（寫入資料時暫停 trigger），中途出錯整批還原。
+3. 目標缺少的平台表（例如較舊的自架版本沒有某些 `storage` 表）自動略過並列出。
+4. 建立排程後比對各表筆數與 `counts.tsv`。
+
+資料庫以外仍需手動完成，腳本結束時會列出：
+
+- 部署 Edge Functions（步驟 5），並設定 secrets；`CRON_SECRET` 必須等於備份排程內的值。
+- 搬 Storage 檔案（`sources/scripts/backup-download.cjs`）。
+- 設定 Auth 的 Site URL / Redirect URLs（自架另需 SMTP）；新專案的 JWT secret 不同，使用者需重新登入。
+- 更新 Cloudflare Pages 的 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` 與 `sources/public/_headers` 的 `connect-src`。
+- 執行 `sources/supabase/verify.sql`。
+- 先停掉舊專案的排程，否則每個批次會跑兩次。
+
+> `db-migrate.sh` 尚未對真實的新專案完整演練過；正式搬遷前請先以 `--dry-run` 與一個測試用專案驗證。
+
+---
+
 ## 🗒️ 版本紀錄
 
 完整版本紀錄請見 [docs/agent/CHANGELOG.md](docs/agent/CHANGELOG.md)。
@@ -582,12 +686,12 @@ npm run build                              # 產出於 sources/dist/
 
 ## ⚠️ 注意事項
 1. **CORS 跨來源限制**：
-   台灣證交所（TWSE/TPEx）與 Yahoo Finance 皆不支援瀏覽器直接跨網域請求。正式環境**必須**部署 Supabase Edge Function `stock-price`，它以單一端點提供四種 action：`prices`（現價）、`search`（模糊搜尋）、`twlist`（台股全清單，中文名反查的資料來源）、`fx`（外幣即時中價）。本地開發則由 Vite dev proxy 代勞，因此「本地正常、線上失效」的問題多半出在 Edge Function 未部署或版本過舊。
+   台灣證交所（TWSE/TPEx）與 Yahoo Finance 皆不支援瀏覽器直接跨網域請求。正式環境**必須**部署 Supabase Edge Function `stock-price`，它以單一端點提供多種 action：`prices`（現價）、`search`（模糊搜尋）、`twlist`（台股全清單，中文名反查的資料來源）、`fx`（外幣即時中價）、`intraday`（盤中走勢）、`daily`（日線）。本地開發則由 Vite dev proxy 代勞，因此「本地正常、線上失效」的問題多半出在 Edge Function 未部署或版本過舊。
 2. **本機模式限制**：
-   若使用本機模式，美股現價與美股模糊搜尋會無法使用（因無後端 Edge Function 代理），需手動輸入股票代號與名稱。台股現價則退回 TWSE / TPEx OpenAPI 的**每日收盤均價清單**——不是即時價，MIS 即時行情僅在部署 Edge Function 的 Supabase 模式下生效。
+   若使用本機模式，美股現價與美股模糊搜尋會無法使用（因無後端 Edge Function 代理），需手動輸入股票代號與名稱。台股現價則退回 TWSE / TPEx OpenAPI 的**每日收盤價清單**——不是即時價，MIS 即時行情僅在部署 Edge Function 的 Supabase 模式下生效。
 3. **資安守則**：
    請勿將 `.env.local` 或任何含有 Supabase 金鑰/密碼的檔案提交到 Git 庫中（已加入 `.gitignore`）。共用快取表（`price_cache`、`stock_names`）刻意不開放一般使用者寫入。
 4. **精算同構原則**：
    台股在計算手續費/證交稅時有特定的整數向下取整限制 (`Math.floor`)。若使用 CSV 匯入舊資料，請確保金額與原試算表核對一致。
 5. **報價延遲**：
-   提供的報價並非來自所有市場的即時報價（美股來源最長可能延遲 20 分鐘），加上快取 TTL（台股 60 秒 / 美股 10 分鐘）僅供參考，不宜做為買賣依據或諮詢之用。台股即時行情在成交清淡時可能無最新成交價，此時顯示的是買一價。
+   提供的報價並非來自所有市場的即時報價（美股來源最長可能延遲 20 分鐘），加上快取 TTL（台股 60 秒 / 美股 10 分鐘）僅供參考，不宜做為買賣依據或諮詢之用。台股即時行情在盤中尚無最新成交價時，顯示的是買一價（收盤後不用買一價，改取正式收盤價）。

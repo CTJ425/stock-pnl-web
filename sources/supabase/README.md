@@ -6,10 +6,12 @@
 supabase/
 ├── schema.sql                    # 資料庫綱要 DDL（含 RLS），貼到 SQL Editor 執行
 ├── verify.sql                    # 驗收檢查：建立/重建/還原資料庫後**必跑**
+├── config.toml                   # Supabase CLI 設定（含各函數的 verify_jwt）
 └── functions/
-    ├── stock-price/              # Edge Function：現價 / 搜尋 / 匯率報價代理（7 檔）
-    ├── stock-report/             # Edge Function：盤後籌碼、技術面、基本面、匯率、總經（18 檔）
-    └── backup-transactions/      # Edge Function：每日備份使用者資料至 backups bucket 與 R2（4 檔）
+    ├── _shared/                  # 三支函數共用：cronSecret、log、fugle、fetchRetry、pagedSelect（5 檔）
+    ├── stock-price/              # Edge Function：現價 / 走勢 / 搜尋 / 匯率報價代理（9 檔）
+    ├── stock-report/             # Edge Function：盤後籌碼、技術面、基本面、匯率、總經、Discord 推播（45 檔）
+    └── backup-transactions/      # Edge Function：每日備份使用者資料至 backups bucket（2 檔）
 ```
 
 前端以**函數名稱**呼叫（`supabase.functions.invoke('stock-price')`），所以函數名必須**完全等於**資料夾名稱，不可改名。
@@ -24,11 +26,13 @@ supabase/
 
 | 函數 | 檔案 | 作用 |
 |---|---|---|
-| `stock-price` | 7 個 `.ts`（`index.ts`、`dailyRange.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`、`tpexFallback.ts`、`twList.ts`） | 伺服器端代抓現價（台股 MIS、美股 Yahoo）、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
-| `stock-report` | 18 個 `.ts`（`index.ts`、`report.ts`、`twChips.ts`、`twDaily.ts`、`twFundamental.ts`、`twProfitHistory.ts`、`twRevenueHistory.ts`、`twMarket.ts`、`twForeignTop.ts`、`usMacro.ts`、`macroCalendar.ts`、`fxRates.ts`、`pollPlan.ts`、`probeRound.ts`、`sourceProbePlan.ts`、`batchTickers.ts`、`backupAdmin.ts`、`cronSecret.ts`） | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history） |
-| `backup-transactions` | 4 個 `.ts`（`index.ts`、`backupPlan.ts`、`cronSecret.ts`、`r2.ts`） | 由 `backup-daily` 排程觸發，把每個帳號的 `workspaces` / `transactions` / `user_settings` 匯出成 JSON 存進私有的 `backups` bucket 與 Cloudflare R2（若有設定），每帳號保留最新 7 份 |
+| `stock-price` | 9 個 `.ts`（`index.ts`、`dailyRange.ts`、`fugleParse.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`、`symbols.ts`、`tpexFallback.ts`、`twList.ts`） | 伺服器端代抓現價（台股 MIS → Fugle → Yahoo、美股 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
+| `stock-report` | 45 個 `.ts`（`index.ts` 為入口；籌碼、日線、基本面、月營收 / 季報回補、總經、匯率、類股資金流、資料源探針、Discord 推播、管理員後台各有模組） | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history），並負責 Discord 推播與管理員後台 |
+| `backup-transactions` | 2 個 `.ts`（`index.ts`、`backupPlan.ts`） | 由 `backup-daily` 排程觸發，把每個帳號的 `workspaces` / `transactions` / `user_settings` 匯出成 JSON 存進私有的 `backups` bucket，每帳號保留最新 7 份（Cloudflare R2 異地同步已於 Task 166 移除） |
 
-> **環境變數**：即點即產只用到 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（Supabase 內建自動注入，不用設）。若要啟用「盤後自動產報」，需**額外**設一個 `CRON_SECRET`（見下方章節）。
+三支函數都會 import `../_shared/` 的共用模組，部署時必須一起帶上。
+
+> **環境變數**：`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase 自動注入，不用設。需要手動設的：`CRON_SECRET`（排程與手動批次的密鑰，見下方章節）；`FUGLE_API_KEY`（選用，台股報價與日線優先走 Fugle，未設則略過 Fugle）。
 
 ---
 
@@ -38,7 +42,7 @@ supabase/
 
 1. 左側選單 → **Edge Functions** → 右上 **Create a function**。
 2. 名稱填 `stock-price`（全小寫、連字號，與資料夾同名）。
-3. 進編輯器，把 `functions/stock-price/` 下的 4 個 `.ts` 檔（`index.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`）**全文**貼上（覆蓋範本）。
+3. 進編輯器，把 `functions/stock-price/` 下的 9 個非測試 `.ts` 檔**全文**貼上（覆蓋範本），並依原本的相對路徑建立它 import 的 `../_shared/` 檔案。路徑重建容易出錯，**建議改用方式 B 的 CLI**。
 4. **JWT 驗證維持開啟**（預設值）—— Supabase 模式一定是登入後才用，前端 `functions.invoke` 會帶使用者 JWT。
    關掉只會讓它變成誰都能打的公開端點，白送 Edge Function 額度。
 5. **Deploy**。
@@ -46,12 +50,9 @@ supabase/
 ### 建立 `stock-report`（多檔，重點）
 
 1. 一樣 Create a function，名稱 `stock-report`。
-2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的**所有** `.ts` 檔（檔名一字不差）：
-   `index.ts`、`report.ts`、`twChips.ts`、`twDaily.ts`、`twFundamental.ts`、`twProfitHistory.ts`、
-   `twRevenueHistory.ts`、`twMarket.ts`、`twForeignTop.ts`、`usMacro.ts`、`macroCalendar.ts`、
-   `fxRates.ts`、`pollPlan.ts`、`probeRound.ts`、`sourceProbePlan.ts`、`batchTickers.ts`、`backupAdmin.ts`、`cronSecret.ts`
+2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的**所有**非測試 `.ts` 檔（檔名一字不差），以及它 import 的 `../_shared/` 檔案。
    - ⚠️ 所有 `*.test.ts` 是單元測試，**不要上傳**。
-   - ⚠️ 檔案共 **18 個**，逐檔貼幾乎必漏；**強烈建議改用下方方式 B 的 CLI**。
+   - ⚠️ 檔案共 **45 個**，逐檔貼幾乎必漏；**強烈建議改用下方方式 B 的 CLI**。
    - ℹ️ v0.3.7-dev.3 起已無 `reportHtml.ts`（畫面改由前端 React 繪製）。若函數是舊版部署上去的，
      請把該檔**刪除**，否則會留下沒人引用的死碼。
 3. 這支**要**關閉 **Enforce JWT Verification** → **Deploy** —— pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT，
@@ -60,7 +61,7 @@ supabase/
 ### 建立 `backup-transactions`
 
 1. Create a function，名稱 `backup-transactions`。
-2. 貼上 `functions/backup-transactions/` 下的 4 個檔案：`index.ts`、`backupPlan.ts`、`cronSecret.ts` 與 `r2.ts`（`*.test.ts` 不要上傳）。
+2. 貼上 `functions/backup-transactions/` 下的 `index.ts`、`backupPlan.ts`，以及它 import 的 `../_shared/cronSecret.ts`、`../_shared/log.ts`、`../_shared/pagedSelect.ts`（`*.test.ts` 不要上傳）。
 3. 這支**也要**關閉 **Enforce JWT Verification** → **Deploy** —— 它同樣由 pg_cron 帶 `CRON_SECRET` 呼叫。
 
 ---
@@ -97,7 +98,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 
 ## 盤後自動產報（選用）：排程產生 + Storage 保留 7 天
 
-除了「即點即產」，`stock-report` 另有 `action: 'generate-all'`：盤後由 pg_cron 觸發，一次產出全體使用者持有台股的**共用**報告（三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。前端改為 **Storage-first** 讀取（快、免每次打 TWSE），查無再 fallback 即點即產；個人「持股概況」不進共用報告，由前端自行渲染。只保留最近 **7 天**，同批次順便清掉更舊的報告與 `chip_raw_cache`。
+除了「即點即產」，`stock-report` 另有 `action: 'generate-all'`（手動或批次呼叫），一次產出全體使用者持有台股的**共用**報告（三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。前端改為 **Storage-first** 讀取（快、免每次打 TWSE），查無再 fallback 即點即產；個人「持股概況」不進共用報告，由前端自行渲染。只保留最近 **7 天**，同批次順便清掉更舊的報告與 `chip_raw_cache`。
 
 **啟用步驟：**
 
@@ -106,7 +107,8 @@ supabase functions deploy backup-transactions --no-verify-jwt
    supabase secrets set CRON_SECRET=<自訂一長串隨機字串>
    ```
    （或 Dashboard → Edge Functions → stock-report → Secrets）
-2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 **16:00–23:45 每 15 分鐘**（台北，＝ UTC 8:00–15:45）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
+2. **執行 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`，並建立 `source-probe` 等排程（全部 12 個見根目錄 README 步驟 6）。`source-probe` 在平日台北 12:00 與 15:00–23:55 每 5 分鐘巡邏各資料源，偵測到資料源到位就觸發對應的產報動作（`PROBE_FOLLOW_UP`：`t86` / `margin` / `borrow` / `twt38u` → `generate-chips`，`bwibbu` → `generate-market-data`，MOPS → `generate-history`，`bfi82u` → `sync-market`）。
+   執行前只替換 `https://<PROJECT_REF>.supabase.co` 與 `'x-cron-secret', '<CRON_SECRET>'` 兩種寫法（各 9 處）；**不要全域取代**，否則檔尾 §6e 的檢查會誤判並中止（做法見根目錄 README 步驟 3）。
    **只是要改時間**的話用 `cron.alter_job`，它保留原本的 command，密鑰碰都不用碰。
 3. **執行 `verify.sql`，然後 `SELECT assert_setup_ok();`** —— 這一步不可略過。
    `cron.schedule` 會照單全收 `<PROJECT_REF>` 與 `<CRON_SECRET>` 這種字串，
@@ -128,6 +130,8 @@ supabase functions deploy backup-transactions --no-verify-jwt
    `historyDays` 是這次組到幾個交易日（滿載為 7）；**第一次執行通常只有 5**，見下方「歷史回補」。
    `dailySynced` 是這次更新了幾檔日線；**第二次執行應為 0**（已是最新就跳過，見下方「日線」）。
 
+> **排程的演進**：0.6.1 起由固定班次改為每 15 分鐘輪詢 `generate-all`；0.7.13 再移除該輪詢班次（`stock-report-nightly`），改由 `source-probe` 偵測到資料源到位才產報（`schema.sql` §6c）。以下說明保留 0.6.1 的設計理由，「一天 32 次」是當時輪詢的次數；三道閘門（`pollPlan.ts`）仍在使用。
+>
 > **為什麼是輪詢而不是排幾班**（0.6.1 改）：原本排三班（17:30 / 22:30 / 23:30），
 > 時間點是照「各源大約幾點公布」的認知訂的，而那個認知在 2026-07-27 一天內被實測推翻三處
 > （T86 的時間窗被與 BFI82U 混為一談、借券 17:07 就有了、借券那份資料的語意也記錯）。
@@ -194,7 +198,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 
 | 項目 | 說明 |
 |---|---|
-| 來源 | Yahoo `query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y`，上市 `.TW` 先試、查無再試 `.TWO` |
+| 來源 | 有設定 `FUGLE_API_KEY` 時先走 Fugle `historical/candles`（一年日線，Task 195）；否則或失敗時走 Yahoo `query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y`，上市 `.TW` 先試、查無再試 `.TWO` |
 | 體積 | 實測 **10.8KB / 檔**（243 個交易日） |
 | 跳過條件 | 既有檔案的 `lastDate >= 本次資料日` 就不重抓 —— 一天 32 輪只有第一次真的去抓 |
 | 失敗處理 | 單檔失敗跳過，不影響其他檔，也不影響籌碼報告 |
@@ -253,7 +257,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 | 來源 | `https://openapi.twse.com.tw/v1/opendata/t187ap17_L`（上市公司營益分析查詢彙總表） |
 | 欄位 | 毛利率 / 營業利益率 / 稅前純益率 / 稅後純益率（**單位 %，證交所已算好**） |
 | 頻率 | 季更，**只回最新一季** |
-| 累積 | 檔內自累積，最多 8 季（`PROFIT_QUARTERS_CAP`），**不做歷史回補** |
+| 累積 | 檔內自累積，最多 12 季（`PROFIT_QUARTERS_CAP`）；缺的季別由 `twProfitHistory.ts` 從公開資訊觀測站一次回補 |
 
 > 選它而不是綜合損益表 `t187ap06_L_ci`：比率是現成欄位，不必分五張產業別表
 > 自己抓分子分母做除法。`PLAN.md §N2` 當初以「欄位解析繁瑣」否決季報，
@@ -289,7 +293,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 | 來源 | `https://fred.stlouisfed.org/graph/fredgraph.csv?id={序列}&cosd={起始日}` |
 | 序列 | `CPILFESL` / `PPIFES` / `PCEPILFE` / `PAYEMS` / `UMCSENT` |
 | 金鑰 | **不需要**（FRED 的 REST API 要，fredgraph 的 CSV 匯出不用） |
-| 觸發 | 獨立的 `macro-daily` cron（`0 13,15 * * *`）打 `{"action":"sync-macro"}`，**不進 tickers 迴圈、不進 warm**（0.6.5-dev.1 曾掛在 `generate-all` 內，dev.2 拆出來） |
+| 觸發 | 獨立的 `macro-daily` cron（`*/30 12-18 * * *`，由 `decideMacroScan` 依發布行事曆決定是否真的抓）打 `{"action":"sync-macro"}`，**不進 tickers 迴圈、不進 warm**（0.6.5-dev.1 曾掛在 `generate-all` 內，dev.2 拆出來） |
 | 跳過 | **內容指紋一樣才跳過**，不看日期（0.6.11 起，見下方 BUG-008） |
 | 快取 | **不寫 `chip_raw_cache`**（月份鍵會被 prune 依 8 碼日期字典序刪光） |
 
@@ -356,7 +360,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 
 ## 部署後驗證
 
-1. **列表**：Edge Functions 頁應出現四支函數，狀態 Deployed；JWT 驗證 `stock-price` 與 `ai-proxy` 為**開啟**，`stock-report` 與 `backup-transactions` 為**關閉**。
+1. **列表**：Edge Functions 頁應出現三支函數，狀態 Deployed；JWT 驗證 `stock-price` 為**開啟**，`stock-report` 與 `backup-transactions` 為**關閉**（與 `config.toml` 一致）。
 2. **實測**（前端 `.env.local` 填好 URL/anon key 後）：
    - Dashboard 持股能抓到現價 → `stock-price` 正常。
    - 台股個股按「分析」→ 個股分析頁的籌碼分頁有內容 → `stock-report` 正常。
@@ -368,7 +372,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 |---|---|
 | 盤後批次全數 **401** | `stock-report` 忘了關 Enforce JWT Verification（或 CLI 少了 `--no-verify-jwt`） |
 | 前端呼叫 `stock-price` 回 **401** | 未登入就呼叫（Supabase 模式應登入後使用），或函數被改成不吃 JWT 又沒帶授權標頭 |
-| 部署/執行 import `./xxx.ts` 失敗 | `stock-report` 漏貼了某個檔（共 17 個 `.ts`，建議用 CLI 部署） |
+| 部署/執行 import `./xxx.ts` 或 `../_shared/xxx.ts` 失敗 | 漏貼了某個檔（`stock-report` 共 45 個 `.ts`，另有 `_shared/`；建議用 CLI 部署） |
 | 報告功能點了沒反應 / 找不到函數 | 函數被改名，前端 `invoke('stock-report')` 對不上 |
 | 前端顯示「伺服器回傳的報告格式不符」 | 函數還是舊版（產 HTML 的 schema 1）。重新部署 `stock-report` 即可 |
 | 走勢圖只有幾天 | 正常，歷史回補中（見上）。隔日排程會補齊，或重跑一次 `generate-all` |
