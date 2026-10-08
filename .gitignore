@@ -58,3 +58,6 @@ backups/
 
 # Throwaway agent / design files. 2026-10-07: 13 of them had been committed by mistake and were removed.
 scratchpad/
+
+# Impeccable engine binary: downloaded by the launcher, never committed
+.claude/skills/impeccable/scripts/bin/
