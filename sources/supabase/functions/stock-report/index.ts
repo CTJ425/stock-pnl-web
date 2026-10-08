@@ -41,8 +41,6 @@
  * --no-verify-jwt; see 0.3.9 for what happens with no gate at all.
  */
 import { logEvent } from '../_shared/log.ts'
-import { fugleGet } from '../_shared/fugle.ts'
-import { FUGLE_DAILY_FIELDS, fugleDailyRows, yearsBack, type FugleCandlesResponse } from './fugleDaily.ts'
 import { classifyFetchError, fetchWithRetry } from '../_shared/fetchRetry.ts'
 import {
   UA,
@@ -87,7 +85,6 @@ import {
   yahooDailySymbols,
   type ChartResponse,
   type DailyFile,
-  type DailyRow,
 } from './twDaily.ts'
 import {
   bwibbuDatedUrl,
@@ -1089,16 +1086,6 @@ async function uploadJson(path: string, payload: unknown): Promise<boolean> {
  * Re-fetch only when the file is missing, stale, or schema-mismatched — never wipe a good file
  * because a later fetch failed (failure is per-ticker catch; existing object stays).
  */
-/** One year of daily bars from Fugle (Task 195); [] on no key, no data or any failure. */
-async function fugleOneYear(ticker: string): Promise<DailyRow[]> {
-  const now = new Date()
-  const today = tradingDateOf(Math.floor(now.getTime() / 1000), 28800)
-  const r = await fugleGet<FugleCandlesResponse>(
-    `historical/candles/${encodeURIComponent(ticker)}?timeframe=D&adjusted=false&fields=${FUGLE_DAILY_FIELDS}&from=${yearsBack(now, 1)}&to=${today}`,
-  )
-  return r.ok ? fugleDailyRows([r.data], now) : []
-}
-
 async function syncDaily(
   tickers: Array<{ ticker: string; name: string }>,
   dataYmd: string,
@@ -1107,8 +1094,6 @@ async function syncDaily(
   const targetDate = dashDate(dataYmd)
   let synced = 0
   let skipped = 0
-  let fromFugle = 0
-  const startedAt = Date.now()
   for (const { ticker } of tickers) {
     try {
       const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
@@ -1132,10 +1117,8 @@ async function syncDaily(
         }
       }
 
-      // Task 195: Fugle first (one `historical` call, volume = TWSE 成交股數); Yahoo when it has no answer.
-      let rows: ReturnType<typeof extractDaily> = await fugleOneYear(ticker)
-      if (rows.length > 0) fromFugle++
-      for (const symbol of rows.length > 0 ? [] : yahooDailySymbols(ticker)) {
+      let rows: ReturnType<typeof extractDaily> = []
+      for (const symbol of yahooDailySymbols(ticker)) {
         const resp = await fetchJsonRetry<ChartResponse>(dailyUrl(symbol))
         rows = extractDaily(resp)
         if (rows.length > 0) break
@@ -1176,15 +1159,6 @@ async function syncDaily(
     } catch {
       // The failure of a single file does not affect other files, nor does it affect the chip report (consistent with the fault tolerance of borrow / margin)
     }
-  }
-  // Task 195 evaluation trail (see stock-price `fugleEval`): Fugle vs Yahoo per run.
-  if (synced + skipped < tickers.length || fromFugle > 0 || synced > 0) {
-    await logEvent(db, {
-      level: 'info',
-      action: 'fugle-eval',
-      message: `syncDaily fugle=${fromFugle} synced=${synced} skipped=${skipped} of=${tickers.length}${opts?.onDemand ? ' onDemand' : ''}`,
-      detail: { duration_ms: Date.now() - startedAt },
-    })
   }
   return { synced, skipped }
 }

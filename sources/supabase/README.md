@@ -8,7 +8,7 @@ supabase/
 ├── verify.sql                    # 驗收檢查：建立/重建/還原資料庫後**必跑**
 ├── config.toml                   # Supabase CLI 設定（含各函數的 verify_jwt）
 └── functions/
-    ├── _shared/                  # 三支函數共用：cronSecret、log、fugle、fetchRetry、pagedSelect（5 檔）
+    ├── _shared/                  # 三支函數共用：cronSecret、log、fetchRetry、pagedSelect（4 檔）
     ├── stock-price/              # Edge Function：現價 / 走勢 / 搜尋 / 匯率報價代理（9 檔）
     ├── stock-report/             # Edge Function：盤後籌碼、技術面、基本面、匯率、總經、Discord 推播（45 檔）
     └── backup-transactions/      # Edge Function：每日備份使用者資料至 backups bucket（2 檔）
@@ -26,13 +26,13 @@ supabase/
 
 | 函數 | 檔案 | 作用 |
 |---|---|---|
-| `stock-price` | 9 個 `.ts`（`index.ts`、`dailyRange.ts`、`fugleParse.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`、`symbols.ts`、`tpexFallback.ts`、`twList.ts`） | 伺服器端代抓現價（台股 MIS → Fugle → Yahoo、美股 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
+| `stock-price` | 8 個 `.ts`（`index.ts`、`dailyRange.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`、`symbols.ts`、`tpexFallback.ts`、`twList.ts`） | 伺服器端代抓現價（台股 MIS → Yahoo、美股 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
 | `stock-report` | 45 個 `.ts`（`index.ts` 為入口；籌碼、日線、基本面、月營收 / 季報回補、總經、匯率、類股資金流、資料源探針、Discord 推播、管理員後台各有模組） | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history），並負責 Discord 推播與管理員後台 |
 | `backup-transactions` | 2 個 `.ts`（`index.ts`、`backupPlan.ts`） | 由 `backup-daily` 排程觸發，把每個帳號的 `workspaces` / `transactions` / `user_settings` 匯出成 JSON 存進私有的 `backups` bucket，每帳號保留最新 7 份（Cloudflare R2 異地同步已於 Task 166 移除） |
 
 三支函數都會 import `../_shared/` 的共用模組，部署時必須一起帶上。
 
-> **環境變數**：`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase 自動注入，不用設。需要手動設的：`CRON_SECRET`（排程與手動批次的密鑰，見下方章節）；`FUGLE_API_KEY`（選用，台股報價與日線優先走 Fugle，未設則略過 Fugle）。
+> **環境變數**：`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase 自動注入，不用設。需要手動設的：`CRON_SECRET`（排程與手動批次的密鑰，見下方章節）。
 
 ---
 
@@ -198,7 +198,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 
 | 項目 | 說明 |
 |---|---|
-| 來源 | 有設定 `FUGLE_API_KEY` 時先走 Fugle `historical/candles`（一年日線，Task 195）；否則或失敗時走 Yahoo `query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y`，上市 `.TW` 先試、查無再試 `.TWO` |
+| 來源 | Yahoo `query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y`，上市 `.TW` 先試、查無再試 `.TWO` |
 | 體積 | 實測 **10.8KB / 檔**（243 個交易日） |
 | 跳過條件 | 既有檔案的 `lastDate >= 本次資料日` 就不重抓 —— 一天 32 輪只有第一次真的去抓 |
 | 失敗處理 | 單檔失敗跳過，不影響其他檔，也不影響籌碼報告 |

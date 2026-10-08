@@ -2,6 +2,20 @@
 
 
 
+### Task 195: Fugle MarketData first for TW quotes, intraday and daily (MIS / Yahoo stay as fallback)
+- **Status**: ❌ CANCELLED 2026-10-08 13:07:25 Asia/Taipei — user: 「把之前富果的功能給刪掉，一樣維持在MIS->Yahoo就好」; code removed in 0.10.36-dev.1 (Task 198). Items 5 and 8 are void, not done.
+- **Agent**: Claude
+- **Timestamp**: 2026-10-06 19:23:35 Asia/Taipei
+- **Spec**: docs/agent/specs/195-fugle-marketdata.md (§11 deviations, §12 evaluation queries); research notes docs/architecture/1006.md
+1. ~~Research: plans, terms, units, limits measured with the free key~~ ✅ (1006.md §1–§3)
+2. ~~Code: `_shared/fugle.ts`, `stock-price/fugleParse.ts`, `stock-report/fugleDaily.ts`; prices / intraday 1d+5d / daily 5y / syncDaily; `max` stays on Yahoo~~ ✅ `ceb539e`, `f00092a` (prevClose = referencePrice, spec §3.1)
+3. ~~`FUGLE_API_KEY` set on DEV (name verified in `secrets list`)~~ ✅
+4. ~~Deploy to DEV from `eafc817` (0.10.33-dev.1, merged to `dev` by fast-forward)~~ ✅ 2026-10-06 17:30:28: `stock-price` v31 `b8590c0441da` (verify_jwt true), `stock-report` v52 `f1c09b7bc978` (verify_jwt false)
+5. DEV verify — Edge egress ✅ (17:32–17:37 `fugle-eval` rows); method 2 (response fingerprints, `fugle-check.sh`) and method 3 (garbage key → Yahoo values + `fugle http` 401, then restore) — ⏳ needs a signed-in DEV token in `~/.fugle-check-token`
+6. ~~Merge to `dev` and release~~ ✅ 0.10.33 `5f3bb01`; PROD Edge deployed without `FUGLE_API_KEY` (inert). The 2026-10-07 judgement moved to item 8 (needs a working key)
+7. ~~PROD / DEV secrets~~ ✅ 2026-10-06 19:23:35: user set new keys (different on DEV `ec1193db…` and PROD `6a7aef1d…`, sha256 prefixes); proven by `fugle-eval` rows — DEV `intraday 1d fugle` 0050, PROD `intraday 1d fugle` + `daily 5y fugle` 6560 and `syncDaily fugle=1 onDemand`, no `fugle http`. `sources/.env` still holds the old 401 key (local tests only)
+8. Judge with spec 195 §12 after a full session with a working key — ⏳
+
 ### Task 197: 攤平試算 in 損益試算 — 賣出試算 + 補進試算 blocks, % → order price, target-average solver (/impeccable)
 - **Status**: ✅ DONE
 - **Agent**: Claude

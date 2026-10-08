@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.10.35**（版本號顯示於頁尾免責聲明後方）
+> **目前版本：0.10.36-dev.1**（版本號顯示於頁尾免責聲明後方）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -45,7 +45,7 @@
 ### 現價與快取（三層架構）
 1. **L1 – 瀏覽器 localStorage**：台股盤中 60 秒、收盤定價後鎖到下一個交易日 08:25；美股 10 分鐘 TTL。重整 / 重新登入不重打 API。
 2. **L2 – Supabase `price_cache` 資料表**：全站共用，同一支股票在 TTL 內全體使用者只向外部 API 請求一次；`stock_names` 資料表快取查詢過的代號↔名稱（不設過期）。
-3. **L3 – 外部行情源**：僅在 L2 過期時由 Edge Function 伺服器端請求。台股依序走**證交所 MIS 即時行情**（秒級延遲）→ Fugle（有設定 `FUGLE_API_KEY` 時）→ Yahoo Finance；美股走 Yahoo Finance。
+3. **L3 – 外部行情源**：僅在 L2 過期時由 Edge Function 伺服器端請求。台股依序走**證交所 MIS 即時行情**（秒級延遲）→ Yahoo Finance；美股走 Yahoo Finance。
 
 `price_cache.updated_at` 記錄的是「報價實際取得時間」並回傳給前端，因此 L1 與 L2 的 TTL 不會疊加（同一份報價最舊即為取得時間 + 該市場 TTL）。前端另有每 60 秒背景輪詢與分頁切回前景補抓，TTL 內的代號直接命中 L1、不會真的發出請求。
 
@@ -92,7 +92,7 @@
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫）。
      - **Edge Functions (Deno)**：
-       - `stock-price`：批次查詢台美股現價（台股 MIS → Fugle → Yahoo；美股走 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS。
+       - `stock-price`：批次查詢台美股現價（台股 MIS → Yahoo；美股走 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS。
        - `stock-report`：代抓 TWSE 盤後籌碼、日線、基本面、匯率與總經資料，產生結構化報告。
        - `backup-transactions`：由 `backup-daily` 排程觸發，每日備份使用者資料至 Storage 的 `backups` bucket（Cloudflare R2 異地同步已於 Task 166 移除）。
      - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
@@ -713,7 +713,6 @@ Secrets（cloud：Dashboard → Edge Functions → **Secrets**）：
 - `CRON_SECRET` **必須等於排程裡的值**，否則排程全數 401。用了 `--new-cron-secret` 就取 `backups/secrets/` 裡的檔案；沿用舊值時，不印到螢幕的取法：
   `grep -oP "x-cron-secret'', ''\K[^']+" backups/<名稱>/<時間>/cron.sql | head -1 | xclip -selection clipboard`
   （macOS 把 `xclip …` 換成 `pbcopy`），再貼進 Secrets。
-- `FUGLE_API_KEY`（選用）。
 
 #### 5. 收尾
 
