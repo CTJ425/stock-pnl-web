@@ -78,11 +78,9 @@ import {
 } from './report.ts'
 import {
   DAILY_SCHEMA,
-  dailyUrl,
-  extractDaily,
   isTwMarketClosed,
   tradingDateOf,
-  yahooDailySymbols,
+  yahooDailyRows,
   type ChartResponse,
   type DailyFile,
 } from './twDaily.ts'
@@ -1117,12 +1115,7 @@ async function syncDaily(
         }
       }
 
-      let rows: ReturnType<typeof extractDaily> = []
-      for (const symbol of yahooDailySymbols(ticker)) {
-        const resp = await fetchJsonRetry<ChartResponse>(dailyUrl(symbol))
-        rows = extractDaily(resp)
-        if (rows.length > 0) break
-      }
+      const rows = await yahooDailyRows(ticker, (url) => fetchJsonRetry<ChartResponse>(url))
 
       // Even if there is no data to be found, a file must be written (empty shell + query date): it can be used to produce instant results without re-fetching every time the page is opened.
       // See the emptyCheckedDate annotation of twDaily.ts for the reason and why the batch will still be retried.

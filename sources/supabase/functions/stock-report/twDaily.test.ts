@@ -4,6 +4,7 @@ import {
   extractDaily,
   isTwMarketClosed,
   tradingDateOf,
+  yahooDailyRows,
   yahooDailySymbols,
   type ChartResponse,
 } from './twDaily.ts'
@@ -185,3 +186,39 @@ describe('dailyUrl / yahooDailySymbols', () => {
   })
 })
 
+
+describe('yahooDailyRows', () => {
+  const notFound = () => Promise.reject(new Error('HTTP 404'))
+  const fake = (answers: Record<string, () => Promise<ChartResponse>>) => {
+    const asked: string[] = []
+    const fetchChart = (url: string) => {
+      const symbol = decodeURIComponent(url.split('/chart/')[1].split('?')[0])
+      asked.push(symbol)
+      return answers[symbol]()
+    }
+    return { asked, fetchChart }
+  }
+
+  it('上櫃：.TW 回 404 時改問 .TWO（2026-10-08 實測 6560.TW 404、6560.TWO 200）', async () => {
+    const f = fake({ '6560.TW': notFound, '6560.TWO': () => Promise.resolve(REAL) })
+    const rows = await yahooDailyRows('6560', f.fetchChart)
+    expect(f.asked).toEqual(['6560.TW', '6560.TWO'])
+    expect(rows).toEqual(extractDaily(REAL))
+  })
+
+  it('上市：.TW 有資料就不再問 .TWO', async () => {
+    const f = fake({ '2330.TW': () => Promise.resolve(REAL), '2330.TWO': notFound })
+    expect(await yahooDailyRows('2330', f.fetchChart)).toEqual(extractDaily(REAL))
+    expect(f.asked).toEqual(['2330.TW'])
+  })
+
+  it('.TW 空回應、.TWO 404：有一個候選回答過，回空陣列（寫空殼）', async () => {
+    const f = fake({ '9999.TW': () => Promise.resolve({ chart: { result: [] } }), '9999.TWO': notFound })
+    expect(await yahooDailyRows('9999', f.fetchChart)).toEqual([])
+  })
+
+  it('兩個候選都失敗就拋錯，不把斷線當成「沒有資料」', async () => {
+    const f = fake({ 'X.TW': () => Promise.reject(new Error('network')), 'X.TWO': notFound })
+    await expect(yahooDailyRows('X', f.fetchChart)).rejects.toThrow('HTTP 404')
+  })
+})

@@ -70,6 +70,34 @@ export function yahooDailySymbols(ticker: string): string[] {
   return [`${ticker}.TW`, `${ticker}.TWO`]
 }
 
+/**
+ * Daily rows from the first Yahoo candidate that has any. A candidate that throws moves on to the next:
+ * Yahoo answers `.TW` with HTTP 404 for an OTC (上櫃) code, and that throw used to escape the loop, so
+ * `.TWO` was never asked and the ticker got no daily file at all (6560 on 2026-10-08).
+ * Throws only when every candidate threw, so a network outage still leaves the existing file alone
+ * instead of being written down as an empty `emptyCheckedDate` shell.
+ */
+export async function yahooDailyRows(
+  ticker: string,
+  fetchChart: (url: string) => Promise<ChartResponse>,
+): Promise<DailyRow[]> {
+  let answered = false
+  let lastError: unknown = null
+  for (const symbol of yahooDailySymbols(ticker)) {
+    let rows: DailyRow[]
+    try {
+      rows = extractDaily(await fetchChart(dailyUrl(symbol)))
+    } catch (err) {
+      lastError = err
+      continue
+    }
+    answered = true
+    if (rows.length > 0) return rows
+  }
+  if (!answered && lastError) throw lastError
+  return []
+}
+
 interface ChartQuote {
   open?: Array<number | null>
   high?: Array<number | null>

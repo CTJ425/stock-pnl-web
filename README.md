@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.10.36-dev.1**（版本號顯示於頁尾免責聲明後方）
+> **目前版本：0.10.36-dev.2**（版本號顯示於頁尾免責聲明後方）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -673,7 +673,9 @@ bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://
 | `--exclude <schema.table>` | 不匯入該表資料，可重複；Storage 檔案沒搬時用 `storage.objects` |
 | `--dry-run` | 只檢查與列出計畫，不寫入 |
 | `--yes` | 略過寫入前的 yes / n 確認 |
-| `--deploy-functions` | 寫入資料庫後部署三個 Edge Functions 並設定 `CRON_SECRET`（僅 cloud；用 `SUPABASE_ACCESS_TOKEN`，不需 `supabase login`；寫入前先檢查權杖，見步驟 4） |
+| `--skip-functions` | cloud 目標預設會一併部署 Edge Functions、設定 `CRON_SECRET` 與 Auth 網址（見步驟 4）；加這個就只做資料庫與排程 |
+| `--site-url <url>` | Auth 的 Site URL（Redirect URLs 由它推出：網站本身、`*.` 預覽網址、localhost 5173–5175）；省略時沿用來源專案的設定，讀不到就詢問，Enter 略過 |
+| `--functions-only` | 不碰資料庫，只部署 Edge Functions、設定 `CRON_SECRET` 與 Auth 網址；搭配 `--ref <ref>` 與 `--from <備份>` / `--secret-file <檔案>` / `--keep-secret` 其中之一 |
 | `--force-overwrite` | 目標已有資料時清空後覆蓋（非互動用；互動模式會先詢問、要求輸入 `overwrite`，並提議先備份目標） |
 | `--keep-admins` | 搭配覆蓋：目標上原本是管理員、備份裡有同 email 的帳號，還原後重新設為管理員（互動模式會列出名單詢問，非互動要加此選項才會做；見下方說明） |
 
@@ -688,41 +690,52 @@ bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://
 
 #### 4. Edge Functions 與 secrets
 
-**cloud 目標可以讓腳本一起做：** 匯入時加 `--deploy-functions`（互動模式偵測到環境變數時會詢問），寫入資料庫後腳本會部署
-`stock-price`、`stock-report`、`backup-transactions`（JWT 旗標已依步驟 5 設好）、設定 `CRON_SECRET`（有建立排程時；值不顯示），並確認三個函數已上線。
-它**不用 `supabase login`**，改讀環境變數 `SUPABASE_ACCESS_TOKEN`（Dashboard → Account → Access Tokens，要用專案擁有者的帳號建立），所以沙箱與 CI 也能跑：
+**cloud 目標由腳本一起完成，不需要另外的步驟。** 寫入資料庫後，腳本依序：部署 `stock-price`、`stock-report`、`backup-transactions`
+（JWT 旗標已依步驟 5 設好）→ 把 Edge 的 `CRON_SECRET` 設成排程裡的值（值不顯示）→ 建立排程 → 設定 Auth 的 Site URL / Redirect URLs → 驗證。
+驗證包括：三個函數 ACTIVE 且 `verify_jwt` 正確、未登入呼叫不是 404/5xx、Edge `CRON_SECRET` 的摘要等於排程送的值、每張表筆數與備份一致、
+**實際執行一次 `fx-daily` 排程的指令並等到 Edge 回 200**（401 代表密鑰不符）、`verify_setup()` 沒有 FAIL。任一項沒過，腳本以狀態 1 結束。
+
+需要 Supabase access token（Dashboard → Account → Access Tokens，用專案擁有者的帳號建立）：環境變數 `SUPABASE_ACCESS_TOKEN` 有就用，沒有就詢問
+（`sbuse` 之類的工具設定了卻沒有 `export` 時也會詢問）。不用 `supabase login`，沙箱與 CI 也能跑。
+Supabase CLI 依序找：PATH 上的 `supabase` → `npx supabase@2`（有 Node.js 時）→ 下載官方 v2.117.0 執行檔到 `~/.cache/stock-pnl-web/`（核對 release 的 `checksums.txt`），
+所以**新環境沒有 CLI、也沒有 Node.js 也能部署**。
 
 ```bash
-export SUPABASE_ACCESS_TOKEN='sbp_…'
-bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://<新ref>.supabase.co --deploy-functions
+bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://<新ref>.supabase.co --site-url https://stock-pnl-web.pages.dev/
 ```
 
-權杖是否有效、能否管理該專案、CLI 是否支援所需旗標、排程裡是否恰好有一個 `x-cron-secret`，都會在**寫入資料庫之前**就檢查。
-順序是先部署函數並設定 `CRON_SECRET`、再建立排程，排程不會打到還沒準備好的函數。部署後只有 2xx / 4xx 才算上線（404 = 不存在、5xx = 啟動失敗）。
-萬一部署在寫入後失敗，腳本不會中途結束：會照常建立排程、在結尾列出手動完成的指令，並以非零狀態結束（CI 會看到失敗）。
-不加此選項時，腳本結尾會印出同樣步驟的指令（一律帶 `--workdir`，**在哪個資料夾執行都可以**；單獨執行 `supabase functions deploy` 則必須在 `sources/` 之下，因為 CLI 只會從目前位置往上找 `supabase/` 資料夾）。
+權杖是否有效、能否管理該專案、CLI 是否可用、排程裡是否恰好有一個 `x-cron-secret`，都在**寫入資料庫之前**檢查；不過關就停，什麼都不寫。
+萬一部署在寫入後失敗，腳本不會中途結束：照常建立排程、在結尾印出補做的那一行指令（`--functions-only`），並以非零狀態結束。
+
+資料庫已經還原、只需要補部署（或換了程式碼要重新部署）時：
+
+```bash
+bash scripts/db-migrate.sh --functions-only --ref <ref> --from backups/<名稱>/<時間>          # 密鑰取自備份的排程
+bash scripts/db-migrate.sh --functions-only --ref <ref> --secret-file backups/secrets/<檔案>  # 還原時產生了新密鑰
+```
 
 | 目標 | 手動部署方式 |
 |---|---|
-| cloud，有 Node.js | `npx supabase functions deploy <name> --use-api --workdir <repo>/sources --project-ref <ref>`（需先 `npx supabase login` 或設定 `SUPABASE_ACCESS_TOKEN`；`stock-report`、`backup-transactions` 加 `--no-verify-jwt`，見步驟 5）。`--use-api` 不需要 Docker。不需另外安裝 CLI |
+| cloud | `bash scripts/db-migrate.sh --functions-only …`（上方）；不需要 Docker、CLI 或 Node.js |
 | cloud，只用瀏覽器 | Dashboard 逐檔建立（見 [`sources/supabase/README.md`](sources/supabase/README.md) 方式 A），檔案多、容易漏 |
 | 自架 | 把 `sources/supabase/functions/` 底下的資料夾（含 `_shared/`）放進 stack 的 `volumes/functions/`，重啟 functions 服務；secrets 寫在 stack 的環境變數 |
 
 Secrets（cloud：Dashboard → Edge Functions → **Secrets**）：
 
-- `CRON_SECRET` **必須等於排程裡的值**，否則排程全數 401。用了 `--new-cron-secret` 就取 `backups/secrets/` 裡的檔案；沿用舊值時，不印到螢幕的取法：
-  `grep -oP "x-cron-secret'', ''\K[^']+" backups/<名稱>/<時間>/cron.sql | head -1 | xclip -selection clipboard`
-  （macOS 把 `xclip …` 換成 `pbcopy`），再貼進 Secrets。
+- `CRON_SECRET` **必須等於排程裡的值**，否則排程全數 401。cloud 由腳本設定並驗證；自架時用了 `--new-cron-secret` 就取 `backups/secrets/` 裡的檔案，
+  沿用舊值則取 `backups/<名稱>/<時間>/cron.sql` 裡 `x-cron-secret` 的值（不要印到螢幕上）。
 
 #### 5. 收尾
 
 - Storage 檔案：來源還在時以 `scripts/backup-download.cjs` 下載（預設存到 `backups/storage/`）後上傳；`reports` 會由盤後批次重新產生。
-- Auth：Site URL / Redirect URLs 設為前端網址（自架另需 SMTP）；新環境的 JWT secret 不同，使用者需重新登入（密碼不變）。
+- Auth：cloud 由腳本設定（`--site-url` 或沿用來源專案）；自架設 `GOTRUE_SITE_URL` / `ADDITIONAL_REDIRECT_URLS`，另需 SMTP。新環境的 JWT secret 不同，使用者需重新登入（密碼不變）。
 - 前端：Cloudflare Pages（或你的靜態主機）的 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`；自架網域需加入 `sources/public/_headers` 的 `connect-src`。
-- 執行 `sources/supabase/verify.sql`：`SELECT * FROM verify_setup();`、`SELECT assert_setup_ok();`。
+- `verify_setup()` 由腳本執行；自架或想再確認時：`SELECT * FROM verify_setup();`、`SELECT assert_setup_ok();`。
 - 舊環境若還在，先停掉它的排程，否則每個批次會跑兩次。
 
 > 2026-10-07 實測：備份（連線字串與 CLI 兩種方式，產出與 `supabase db dump` 一致）；把 DEV 備份移轉到全新的 cloud 專案（孟買 → 東京），`verify_setup()` 全數 PASS、排程實際執行回 200，前端以還原的帳號登入後持股、損益、交易紀錄皆正常。正式搬遷前仍建議先 `--dry-run`。
+> 2026-10-08 實測（合併 Edge 部署後）：以單一指令把 DEV 備份覆蓋還原到 cloud 專案，部署三個函數、設定 `CRON_SECRET`、建立 12 個排程、設定 Auth 網址，
+> `fx-daily` 實際呼叫回 200、`verify_setup()` 11 項 PASS；前端金鑰呼叫 `stock-price` 取得上市、上櫃與美股報價。`--functions-only` 與無 CLI / 無 Node.js 的兩種情境也實測通過。
 
 ---
 

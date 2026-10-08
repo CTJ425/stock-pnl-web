@@ -23,11 +23,17 @@
 #                           it is written (0600) to backups/secrets/ for the Edge CRON_SECRET, never printed
 #   --exclude <schema.table>  leave this table's rows out (repeatable), e.g. storage.objects when the
 #                           Storage files themselves are not being moved: rows without files point at nothing
-#   --deploy-functions      after the load, deploy stock-price / stock-report / backup-transactions to the target
-#                           (cloud only) and set CRON_SECRET. Logs in with the SUPABASE_ACCESS_TOKEN environment
-#                           variable (Dashboard → Account → Access Tokens), never `supabase login`, so it also
-#                           runs in a sandbox or CI. Checked before anything is written. Needs the supabase CLI
-#                           or Node.js (npx); the sources are taken from sources/supabase/ whatever the cwd is.
+#   --skip-functions        cloud targets get everything by default: after the load the script deploys
+#                           stock-price / stock-report / backup-transactions, sets CRON_SECRET to what the jobs
+#                           send, installs the jobs, sets the Auth Site URL / Redirect URLs, and proves each one
+#                           (functions ACTIVE, secret digest, one real cron call answering 200). This flag
+#                           leaves the functions and CRON_SECRET out.
+#   --site-url <url>        Auth Site URL for the target (Redirect URLs are derived from it). Default: copied
+#                           from the source project when the token can read it, else asked; empty = untouched.
+#   --functions-only        no database work: deploy the functions, set CRON_SECRET and the Auth URLs on a
+#                           project whose database is already restored. Takes --ref <ref> plus one secret
+#                           source: --from <backup dir> (its cron jobs' value), --secret-file <file> (a value
+#                           --new-cron-secret wrote), or --keep-secret.
 #   --dry-run               verify the package and the target, print the plan, write nothing
 #   --yes                   do not ask for the typed confirmation
 #   --force-overwrite       the target already has data: wipe it and load the backup (same transaction,
@@ -42,12 +48,19 @@
 #                           is gone either way; the plan lists them before anything is written.
 #   -i, --interactive       ask for everything (the default when run with no options in a terminal)
 #
-# Order: checksums → target checks (Supabase schemas present, empty) → one transaction of
-# roles + schema + data (triggers off) → cron jobs → row counts compared with counts.tsv.
+# Edge Functions and the Auth URLs need SUPABASE_ACCESS_TOKEN (Dashboard → Account → Access Tokens): taken from
+# the environment, else asked for. It is checked before anything is written. The Supabase CLI is taken from
+# PATH, else `npx supabase@2`, else the official v2.117.0 binary is downloaded (checksum-verified) into
+# ~/.cache/stock-pnl-web/. Function sources come from sources/supabase/ whatever the cwd is.
+#
+# Order: checksums → target checks (Supabase schemas present, empty) and the token / CLI → one transaction
+# of roles + schema + data (triggers off) → Edge Functions + CRON_SECRET → cron jobs → Auth URLs → checks
+# (row counts against counts.tsv, one real cron call, verify_setup()).
 # The main load is a single transaction: any error leaves the target untouched.
 #
-# Not covered here (printed at the end): Edge Functions, Edge secrets, Storage files,
-# Auth URL settings, Cloudflare Pages env vars, CSP connect-src, verify.sql.
+# Not covered here (printed at the end): Storage files, Cloudflare Pages env vars, CSP connect-src.
+# Self-hosted targets: the functions and Auth URLs too. The functions read no secret but CRON_SECRET and
+# the platform's own SUPABASE_*.
 set -euo pipefail
 
 die() { echo "db-migrate: $*" >&2; exit 1; }
@@ -58,7 +71,7 @@ USER_EXCLUDES=()
 INTERACTIVE=0
 NEW_SECRET=0
 FORCE=0
-DEPLOY_FUNCTIONS=0
+DEPLOY_FUNCTIONS=0 SKIP_FUNCTIONS=0 FUNCTIONS_ONLY=0 ONLY_REF= SECRET_FILE_ARG= KEEP_SECRET=0 SITE_URL=
 FUNCTIONS_DEPLOYED=0
 KEEP_ADMINS=0
 while [[ $# -gt 0 ]]; do
@@ -71,7 +84,13 @@ while [[ $# -gt 0 ]]; do
     --exclude) USER_EXCLUDES+=("$2"); shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --force-overwrite) FORCE=1; shift ;;
-    --deploy-functions) DEPLOY_FUNCTIONS=1; shift ;;
+    --deploy-functions) shift ;; # the default now; kept so older command lines still parse
+    --skip-functions) SKIP_FUNCTIONS=1; shift ;;
+    --functions-only) FUNCTIONS_ONLY=1; shift ;;
+    --ref) ONLY_REF=${2:-}; shift 2 ;;
+    --secret-file) SECRET_FILE_ARG=${2:-}; shift 2 ;;
+    --keep-secret) KEEP_SECRET=1; shift ;;
+    --site-url) SITE_URL=${2:-}; shift 2 ;;
     --keep-admins) KEEP_ADMINS=1; shift ;;
     --yes) YES=1; shift ;;
     -i|--interactive) INTERACTIVE=1; shift ;;
@@ -148,22 +167,113 @@ find_pooler() {
   rm -rf "$dir"
 }
 
-# Deploys the three functions, sets CRON_SECRET, then checks each function answers. Needs SB, TARGET_REF and
-# SUPABASE_ACCESS_TOKEN (preflight) and, when cron jobs are installed, $TMP/secrets.env (prepared before the
-# write). It runs after the database load, so a failure must not end the script: it reports, returns 1, and
-# the caller still prints the manual commands. The sources come from --workdir, so the current directory does
-# not matter (the CLI otherwise searches upward from the cwd for supabase/, and only sources/ has one).
-# --use-api bundles server-side, so Docker is not needed. JWT verification follows README step 5: on for
-# stock-price, off for the two functions that check x-cron-secret themselves.
-deploy_functions() {
-  local spec fn flags code i bad=0
-  say "部署 Edge Functions 到 $TARGET_REF（用 SUPABASE_ACCESS_TOKEN，不需要 supabase login）..."
-  for spec in stock-price: stock-report:--no-verify-jwt backup-transactions:--no-verify-jwt; do
-    fn=${spec%%:*}
-    flags=${spec#*:}
+# --- Edge Functions, CRON_SECRET and Auth URLs (cloud targets) -----------------------------------------
+# All of it goes through the Management API with SUPABASE_ACCESS_TOKEN, never `supabase login`, so it also runs
+# in a sandbox or CI. The token reaches curl through a 0600 header file, never a command line.
+CLI_VERSION=2.117.0
+# slug:extra deploy flags. stock-report and backup-transactions check x-cron-secret themselves; pg_cron calls
+# them without a JWT, so verify_jwt must be off (README step 5).
+FUNCTIONS=(stock-price: stock-report:--no-verify-jwt backup-transactions:--no-verify-jwt)
+
+api() { # api <method> <path> [json body] -> body on stdout; the HTTP code is read with api_code
+  local m=$1 path=$2 body=${3:-}
+  local args=(-s -m 30 -X "$m" -H @"$TMP/auth.hdr" -o "$TMP/api.out" -w '%{http_code}')
+  [[ -n $body ]] && args+=(-H 'Content-Type: application/json' --data "$body")
+  curl "${args[@]}" "https://api.supabase.com/v1$path" >"$TMP/api.code" 2>/dev/null || echo 000 >"$TMP/api.code"
+  cat "$TMP/api.out" 2>/dev/null || true
+}
+api_code() { cat "$TMP/api.code"; }
+
+# edge_token <ref>: SUPABASE_ACCESS_TOKEN from the environment or typed in (`sbuse` sets it without exporting
+# it, which is how a PROD restore once skipped the functions silently), then proven able to manage <ref>.
+edge_token() {
+  if [[ -z ${SUPABASE_ACCESS_TOKEN:-} ]]; then
+    { : </dev/tty; } 2>/dev/null \
+      || die "Edge Functions 需要 SUPABASE_ACCESS_TOKEN（Dashboard → Account → Access Tokens），或加 --skip-functions；沒有寫入任何東西"
+    SUPABASE_ACCESS_TOKEN=$(read_secret "Supabase access token（Dashboard → Account → Access Tokens）: ")
+  fi
+  export SUPABASE_ACCESS_TOKEN
+  (umask 077; printf 'Authorization: Bearer %s\n' "$SUPABASE_ACCESS_TOKEN" >"$TMP/auth.hdr")
+  api GET "/projects/$1" >/dev/null
+  case $(api_code) in
+    200) say "access token 可以管理專案 $1" ;;
+    401) die "access token 無效或已撤銷；沒有寫入任何東西" ;;
+    403 | 404) die "這個 access token 的帳號不能管理專案 $1（要用擁有該專案的帳號建立）；沒有寫入任何東西" ;;
+    *) die "查不到專案 $1（網路或 api.supabase.com 的問題）；沒有寫入任何東西" ;;
+  esac
+}
+
+# edge_cli: the Supabase CLI on PATH; else `npx supabase@2`; else the official release binary, downloaded once
+# into ~/.cache/stock-pnl-web/ and checked against the release's checksums.txt. Each must know every flag the
+# deploy uses: an old CLI would otherwise only fail after the database has been written.
+cli_ok() {
+  "$@" functions deploy --help >"$TMP/cli-help.txt" 2>&1 || return 1
+  local f
+  for f in --use-api --workdir --no-verify-jwt --project-ref; do grep -q -- "$f" "$TMP/cli-help.txt" || return 1; done
+}
+download_cli() {
+  local os arch name want got dir="${XDG_CACHE_HOME:-$HOME/.cache}/stock-pnl-web/supabase-$CLI_VERSION"
+  case $(uname -s) in Linux) os=linux ;; Darwin) os=darwin ;; *) return 1 ;; esac
+  case $(uname -m) in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) return 1 ;; esac
+  if [[ ! -x $dir/supabase ]]; then
+    name="supabase_${CLI_VERSION}_${os}_${arch}.tar.gz"
+    say "下載 Supabase CLI v$CLI_VERSION（$os/$arch）..." >&2
+    curl -fsSL -m 120 -o "$TMP/$name" "https://github.com/supabase/cli/releases/download/v$CLI_VERSION/$name" || return 1
+    curl -fsSL -m 30 -o "$TMP/checksums.txt" "https://github.com/supabase/cli/releases/download/v$CLI_VERSION/checksums.txt" || return 1
+    want=$(awk -v n="$name" '$2 == n { print $1 }' "$TMP/checksums.txt")
+    got=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$TMP/$name")
+    [[ -n $want && $want == "$got" ]] || { echo "db-migrate: checksum mismatch for $name" >&2; return 1; }
+    mkdir -p "$dir"
+    tar -xzf "$TMP/$name" -C "$dir" supabase
+  fi
+  echo "$dir/supabase"
+}
+SB=()
+edge_cli() {
+  local bin
+  [[ -f $REPO_DIR/sources/supabase/functions/stock-report/index.ts ]] || die "function sources not found under $REPO_DIR/sources/supabase/functions"
+  if command -v supabase >/dev/null && cli_ok supabase; then
+    SB=(supabase)
+  elif command -v npx >/dev/null && cli_ok npx --yes supabase@2; then
+    SB=(npx --yes supabase@2)
+  elif bin=$(download_cli) && cli_ok "$bin"; then
+    SB=("$bin")
+  else
+    die "找不到可用的 Supabase CLI：PATH 上沒有（或版本太舊）、沒有 Node.js 的 npx，下載官方執行檔也失敗；沒有寫入任何東西"
+  fi
+  say "Supabase CLI：${SB[*]}（$("${SB[@]}" --version 2>/dev/null | tail -1)）"
+}
+
+# secret_env <file> <cron.sql|plain>: the one CRON_SECRET into $TMP/secrets.env (0600) and its sha256 into
+# SECRET_SHA. Only the hash is ever printed.
+SECRET_SHA=
+secret_env() {
+  (umask 077; python3 -I - "$1" "$2" "$TMP/secrets.env" <<'PY') || return 1
+import re, sys
+src, kind, out = sys.argv[1:]
+text = open(src).read()
+if kind == "cron.sql":
+    found = set(re.findall(r"x-cron-secret'', ''([^']+)''", text))
+else:
+    found = {text.strip()} if text.strip() and not re.search(r"\s", text.strip()) else set()
+if len(found) != 1:
+    sys.exit("expected exactly one CRON_SECRET value, found %d" % len(found))
+open(out, "w").write("CRON_SECRET=%s\n" % found.pop())
+PY
+  SECRET_SHA=$(python3 -I -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1]).read().strip().split("=",1)[1].encode()).hexdigest())' "$TMP/secrets.env")
+}
+
+# edge_deploy <ref>: deploy the three functions, set CRON_SECRET when $TMP/secrets.env exists, then prove it:
+# each function ACTIVE with the right verify_jwt and answering (2xx/4xx, not 404/5xx), and the Edge secret's
+# digest equal to SECRET_SHA. Runs after the database load, so it reports and returns 1 instead of ending the
+# script. Sources come from --workdir, so the cwd does not matter; --use-api bundles server-side (no Docker).
+edge_deploy() {
+  local ref=$1 spec fn flags want got code i bad=0
+  say "部署 Edge Functions 到 $ref ..."
+  for spec in "${FUNCTIONS[@]}"; do
+    fn=${spec%%:*} flags=${spec#*:}
     # shellcheck disable=SC2086
-    if ! "${SB[@]}" functions deploy "$fn" $flags --use-api --project-ref "$TARGET_REF" \
-      --workdir "$REPO_DIR/sources" >"$TMP/deploy-$fn.log" 2>&1; then
+    if ! "${SB[@]}" functions deploy "$fn" $flags --use-api --project-ref "$ref" --workdir "$REPO_DIR/sources" >"$TMP/deploy-$fn.log" 2>&1; then
       tail -5 "$TMP/deploy-$fn.log" | sed 's/^/     /' >&2
       echo "   ✗ 部署 $fn 失敗" >&2
       return 1
@@ -171,31 +281,102 @@ deploy_functions() {
     echo "   ✓ 已部署 $fn"
   done
   if [[ -s $TMP/secrets.env ]]; then
-    if ! "${SB[@]}" secrets set --env-file "$TMP/secrets.env" --project-ref "$TARGET_REF" >"$TMP/secrets.log" 2>&1; then
+    if ! "${SB[@]}" secrets set --env-file "$TMP/secrets.env" --project-ref "$ref" --workdir "$REPO_DIR/sources" >"$TMP/secrets.log" 2>&1; then
       tail -3 "$TMP/secrets.log" | sed 's/^/     /' >&2
       echo "   ✗ 設定 CRON_SECRET 失敗" >&2
       return 1
     fi
     echo "   ✓ 已設定 CRON_SECRET（值不顯示）"
   fi
-  # Deployed means the platform routes to a running function: a 2xx or 4xx answer (401 / 400 without a login).
-  # 404 is "no such function", 5xx a function that does not boot, 000 no answer.
-  for fn in stock-price stock-report backup-transactions; do
+  "${SB[@]}" functions list --project-ref "$ref" --workdir "$REPO_DIR/sources" --output json >"$TMP/list.json" 2>/dev/null || { echo "   ✗ functions list 失敗" >&2; return 1; }
+  for spec in "${FUNCTIONS[@]}"; do
+    fn=${spec%%:*} flags=${spec#*:}
+    want=true; [[ $flags == *--no-verify-jwt* ]] && want=false
+    got=$(python3 -I -c 'import json,sys; f=[x for x in json.load(open(sys.argv[1])) if x["slug"]==sys.argv[2]]; print(f[0]["status"], str(f[0]["verify_jwt"]).lower()) if f else print("missing")' "$TMP/list.json" "$fn")
+    if [[ $got == "ACTIVE $want" ]]; then echo "   ✓ $fn ACTIVE，verify_jwt=$want"; else echo "   ✗ $fn：$got（要 ACTIVE $want）" >&2; bad=1; fi
+    # Up = the platform routes to a running function: 2xx/4xx without a login. 404 none, 5xx no boot, 000 no answer.
     code=000
     for i in 1 2 3 4 5; do
-      code=$(curl -s -m 15 -o /dev/null -w '%{http_code}' -X POST "https://$TARGET_REF.supabase.co/functions/v1/$fn" || true)
+      code=$(curl -s -m 15 -o /dev/null -w '%{http_code}' -X POST "https://$ref.supabase.co/functions/v1/$fn" || true)
       [[ $code =~ ^[24][0-9][0-9]$ && $code != 404 ]] && break
       sleep 2
     done
-    if [[ $code =~ ^[24][0-9][0-9]$ && $code != 404 ]]; then
-      echo "   ✓ $fn 已上線（未帶登入呼叫回 HTTP $code）"
-    else
-      echo "   ✗ $fn 部署後回 HTTP $code（404 = 不存在、5xx = 啟動失敗、000 = 沒有回應）" >&2
-      bad=1
-    fi
+    if [[ $code =~ ^[24][0-9][0-9]$ && $code != 404 ]]; then echo "   ✓ $fn 有回應（未登入呼叫回 HTTP $code）"; else echo "   ✗ $fn 回 HTTP $code（404 不存在、5xx 啟動失敗、000 沒有回應）" >&2; bad=1; fi
   done
+  if [[ -n $SECRET_SHA ]]; then
+    "${SB[@]}" secrets list --project-ref "$ref" --workdir "$REPO_DIR/sources" --output json >"$TMP/secrets.json" 2>/dev/null || { echo "   ✗ secrets list 失敗" >&2; return 1; }
+    got=$(python3 -I -c 'import json,sys; print(next((s["value"] for s in json.load(open(sys.argv[1])) if s["name"]=="CRON_SECRET"), ""))' "$TMP/secrets.json")
+    if [[ $got == "$SECRET_SHA" ]]; then echo "   ✓ Edge 的 CRON_SECRET 摘要 = ${SECRET_SHA:0:16}…（和排程送的值相同）"; else echo "   ✗ Edge 的 CRON_SECRET 摘要 ${got:0:16}… ≠ 排程的 ${SECRET_SHA:0:16}…" >&2; bad=1; fi
+  fi
   [[ $bad == 0 ]] || return 1
   FUNCTIONS_DEPLOYED=1
+}
+
+# auth_plan <target ref>: the Site URL and Redirect URLs the target should get, into AUTH_SITE / AUTH_ALLOW. They
+# live in the project's Auth config, not in the database, so a backup does not carry them (a restored PROD once
+# kept the new project's http://localhost:3000 and sent password-reset mail there). Source, in order: --site-url;
+# the source project's own config when this token can read it; asked for. Empty = leave the target as it is.
+AUTH_SITE= AUTH_ALLOW= AUTH_DONE=0
+auth_plan() {
+  local cur host
+  if [[ -z $SITE_URL && -n ${SRC_REF:-} && ${SRC_REF:-} != "$1" ]]; then
+    cur=$(api GET "/projects/$SRC_REF/config/auth")
+    if [[ $(api_code) == 200 ]]; then
+      AUTH_SITE=$(python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("site_url") or "")' <<<"$cur")
+      AUTH_ALLOW=$(python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("uri_allow_list") or "")' <<<"$cur")
+      [[ -n $AUTH_SITE ]] && say "Auth URL：沿用來源專案 $SRC_REF 的設定（$AUTH_SITE）"
+    fi
+  fi
+  if [[ -z $AUTH_SITE && -z $SITE_URL && $YES == 0 ]] && { : </dev/tty; } 2>/dev/null; then
+    SITE_URL=$(ask "前端網址（Auth 的 Site URL，例如 https://stock-pnl-web.pages.dev/；Enter 略過）")
+  fi
+  if [[ -z $AUTH_SITE && -n $SITE_URL ]]; then
+    [[ $SITE_URL =~ ^https?://[^/]+ ]] || die "--site-url 不是網址：$SITE_URL"
+    AUTH_SITE=${SITE_URL%/}/
+    # the site, its preview deployments (Cloudflare Pages: <hash>.<project>.pages.dev) and local dev ports
+    host=${AUTH_SITE#*://}
+    host=${host%%/*}
+    AUTH_ALLOW=$(printf '%s\n' "${AUTH_SITE}**" "${AUTH_SITE%%://*}://*.$host/**" http://localhost:5173/** http://localhost:5174/** http://localhost:5175/** \
+      | awk '!seen[$0]++' | paste -sd, -)
+  fi
+  return 0
+}
+# auth_apply <ref>: write AUTH_SITE / AUTH_ALLOW, then read them back.
+auth_apply() {
+  local body got
+  [[ -n $AUTH_SITE ]] || return 0
+  body=$(python3 -I -c 'import json,sys; print(json.dumps({"site_url": sys.argv[1], "uri_allow_list": sys.argv[2]}))' "$AUTH_SITE" "$AUTH_ALLOW")
+  api PATCH "/projects/$1/config/auth" "$body" >/dev/null
+  [[ $(api_code) == 200 ]] || { echo "   ✗ 設定 Auth URL 失敗（HTTP $(api_code)）" >&2; return 1; }
+  got=$(api GET "/projects/$1/config/auth" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); print(d.get("site_url"), d.get("uri_allow_list"))')
+  if [[ $got == "$AUTH_SITE $AUTH_ALLOW" ]]; then
+    echo "   ✓ Auth Site URL = $AUTH_SITE；Redirect URLs $(tr ',' '\n' <<<"$AUTH_ALLOW" | wc -l | tr -d ' ') 條"
+    AUTH_DONE=1
+  else
+    echo "   ✗ Auth URL 回讀不符：$got" >&2
+    return 1
+  fi
+}
+
+# cron_probe: run one cron job's own command now and wait for its HTTP answer, the only proof that the secret
+# the jobs send is the one the Edge Function accepts (401 = mismatch). fx-daily only refreshes exchange rates.
+CRON_PROBE=
+cron_probe() {
+  local id code i
+  [[ $(q -c "SELECT count(*) FROM cron.job WHERE jobname = 'fx-daily'") == 1 ]] || { CRON_PROBE="略過（沒有 fx-daily）"; return 0; }
+  id=$(q -c "SELECT coalesce(max(id), 0) FROM net._http_response")
+  q -c "DO \$p\$ BEGIN EXECUTE (SELECT command FROM cron.job WHERE jobname = 'fx-daily'); END \$p\$" >/dev/null
+  for i in $(seq 1 30); do
+    code=$(q -c "SELECT status_code FROM net._http_response WHERE id > $id ORDER BY id LIMIT 1")
+    [[ -n $code ]] && break
+    sleep 2
+  done
+  case $code in
+    200) CRON_PROBE="✓ 排程 fx-daily 實際呼叫 Edge 回 HTTP 200（排程密鑰與 CRON_SECRET 相符）"; echo "   $CRON_PROBE" ;;
+    401) CRON_PROBE="✗ 排程 fx-daily 實際呼叫 Edge 回 HTTP 401：排程密鑰與 Edge 的 CRON_SECRET 不符"; echo "   $CRON_PROBE" >&2; return 1 ;;
+    "") CRON_PROBE="✗ 排程 fx-daily 60 秒內沒有回應"; echo "   $CRON_PROBE" >&2; return 1 ;;
+    *) CRON_PROBE="✗ 排程 fx-daily 實際呼叫 Edge 回 HTTP $code"; echo "   $CRON_PROBE" >&2; return 1 ;;
+  esac
 }
 
 BLOCKED_MSG="Supabase 因為短時間內多次密碼錯誤，暫時封鎖了這個專案來自這台電腦的新連線（ECIRCUITBREAKER）。請等 5–10 分鐘再執行，並確認輸入的是「資料庫密碼」"
@@ -392,9 +573,10 @@ interactive() {
   fi
   echo
 
-  if [[ -n ${SUPABASE_ACCESS_TOKEN:-} && -n $ref ]]; then
-    echo "5) Edge Functions 不會跟著資料庫搬過去。偵測到環境變數 SUPABASE_ACCESS_TOKEN，可以用它直接部署（不需要 supabase login）。"
-    [[ $(ask "   寫入資料庫後，順便部署三個 Edge Functions 並設定 CRON_SECRET 嗎？(Y/n)" Y) =~ ^[Nn] ]] || DEPLOY_FUNCTIONS=1
+  if [[ -n $ref ]]; then
+    echo "5) 寫入資料庫後會一併部署三個 Edge Functions、設定 CRON_SECRET 與 Auth 網址，並逐項驗證"
+    echo "   （需要 Supabase access token；環境變數裡沒有的話，下一步會請你輸入）"
+    [[ $(ask "   要這樣做嗎？(Y/n)" Y) =~ ^[Nn] ]] && SKIP_FUNCTIONS=1
     echo
   fi
 }
@@ -402,6 +584,72 @@ interactive() {
 TMP=$(mktemp -d)
 chmod 700 "$TMP"
 trap 'rm -rf "$TMP"' EXIT
+
+# --- --functions-only: Edge Functions, CRON_SECRET and Auth URLs on a project whose database is already in place
+pick() { # pick <prompt> <item...> -> the chosen item on stdout
+  local p=$1 n; shift
+  n=$(ask "$p" 1)
+  [[ $n =~ ^[0-9]+$ && $n -ge 1 && $n -le $# ]] || die "沒有這個選項：$n"
+  echo "${!n}"
+}
+if [[ $FUNCTIONS_ONLY == 1 ]]; then
+  TTY=0; { : </dev/tty; } 2>/dev/null && TTY=1
+  ref=${ONLY_REF:-$(sed -nE 's#^[a-z]+://postgres\.([a-z0-9]{20})[:@].*#\1#p' <<<"$TO")}
+  if [[ -z $ref && $TTY == 1 ]]; then
+    ref=$(ask "專案 ref（Dashboard 網址 /project/<ref>，或 https://<ref>.supabase.co）")
+  fi
+  ref=${ref#https://}
+  ref=${ref%%.supabase.co*}
+  [[ $ref =~ ^[a-z]{20}$ ]] || die "--functions-only needs --ref <project ref> (20 lowercase letters), got: ${ref:-nothing}"
+  sources=$(( (${#FROM} > 0) + (${#SECRET_FILE_ARG} > 0) + KEEP_SECRET ))
+  [[ $sources -le 1 ]] || die "pass only one of --from / --secret-file / --keep-secret"
+  if [[ $sources == 0 ]]; then
+    [[ $TTY == 1 ]] || die "--functions-only needs --from <backup dir>, --secret-file <file> or --keep-secret"
+    echo "CRON_SECRET 要設成目標排程帶的那個值："
+    echo "  1) 從還原用的備份取（還原時選了「沿用備份裡的值」）"
+    echo "  2) 從 backups/secrets/ 的檔案取（還原時產生了新密鑰）"
+    echo "  3) 不動 CRON_SECRET"
+    case $(ask "選擇" 1) in
+      1)
+        pkgs=() # no mapfile: macOS ships bash 3.2
+        while IFS= read -r d; do pkgs+=("$d"); done < <(for m in "$REPO_DIR"/backups/*/*/cron.sql; do
+          [[ -f $m ]] && echo "$(basename "$(dirname "$m")") $(dirname "$m")"; done | sort -r | cut -d' ' -f2-)
+        [[ ${#pkgs[@]} -gt 0 ]] || die "backups/ 底下沒有含 cron.sql 的備份"
+        for i in "${!pkgs[@]}"; do echo "  $((i + 1))) ${pkgs[$i]#"$REPO_DIR"/}"; done
+        FROM=$(pick "備份" "${pkgs[@]}") ;;
+      2)
+        files=()
+        while IFS= read -r d; do files+=("$d"); done < <(ls -1t "$REPO_DIR"/backups/secrets/cron-secret-*.txt 2>/dev/null)
+        [[ ${#files[@]} -gt 0 ]] || die "backups/secrets/ 底下沒有 cron-secret-*.txt"
+        for i in "${!files[@]}"; do echo "  $((i + 1))) ${files[$i]#"$REPO_DIR"/}"; done
+        SECRET_FILE_ARG=$(pick "檔案" "${files[@]}") ;;
+      3) KEEP_SECRET=1 ;;
+      *) die "沒有這個選項" ;;
+    esac
+  fi
+  SRC_REF=
+  if [[ -n $FROM ]]; then
+    [[ -f $FROM/cron.sql ]] || die "$FROM/cron.sql not found"
+    SRC_REF=$(sed -n 's/^ref=//p' "$FROM/manifest.txt" 2>/dev/null || true)
+    secret_env "$FROM/cron.sql" cron.sql || die "備份的排程裡 x-cron-secret 不是恰好一個值"
+  elif [[ -n $SECRET_FILE_ARG ]]; then
+    [[ -f $SECRET_FILE_ARG ]] || die "$SECRET_FILE_ARG not found"
+    secret_env "$SECRET_FILE_ARG" plain || die "密鑰檔是空的或含有空白"
+  fi
+  [[ -n $SECRET_SHA ]] && say "CRON_SECRET 來源：${FROM:-$SECRET_FILE_ARG}（sha256 ${SECRET_SHA:0:16}…；目標排程送的值也要是這個雜湊）"
+  edge_token "$ref"
+  edge_cli
+  auth_plan "$ref"
+  if [[ $DRY == 1 ]]; then
+    say "--dry-run：權杖、CLI、密鑰${AUTH_SITE:+、Auth 網址（$AUTH_SITE）}都檢查過了，沒有寫入任何東西"
+    exit 0
+  fi
+  rc=0
+  edge_deploy "$ref" || rc=1
+  [[ -n $AUTH_SITE ]] && { auth_apply "$ref" || rc=1; }
+  [[ $rc == 0 ]] && say "完成。排程是否通過驗證：下一輪排程後 net._http_response 應為 200（verify_setup() 的 cron http 一項）"
+  exit $rc
+fi
 
 if [[ ${INTERACTIVE:-0} == 1 || -z $FROM ]]; then
   # Interactive prompts read the keyboard from /dev/tty; without a terminal (an IDE "run" pane, a
@@ -453,33 +701,14 @@ fi
 say "目標版本  PostgreSQL $(q -c "SELECT current_setting('server_version')")，以 $(q -c "SELECT current_user") 身分寫入"
 
 # Edge Functions preflight: everything that could make the deploy impossible is checked now, while the
-# target is still untouched, so a missing token cannot surface after the database has been overwritten.
-SB=()
+# target is still untouched, so a missing token or CLI cannot surface after the database has been overwritten.
+[[ -n $TARGET_REF && $SKIP_FUNCTIONS == 0 ]] && DEPLOY_FUNCTIONS=1
 if [[ $DEPLOY_FUNCTIONS == 1 ]]; then
-  [[ -n $TARGET_REF ]] || die "--deploy-functions only works for a Supabase cloud target (user postgres.<ref>); deploy by hand for self-host"
-  [[ -n ${SUPABASE_ACCESS_TOKEN:-} ]] || die "--deploy-functions needs the SUPABASE_ACCESS_TOKEN environment variable (Dashboard → Account → Access Tokens)"
-  [[ -f $REPO_DIR/sources/supabase/functions/stock-report/index.ts ]] || die "function sources not found under $REPO_DIR/sources/supabase/functions"
-  if command -v supabase >/dev/null; then
-    SB=(supabase)
-  elif command -v npx >/dev/null; then
-    SB=(npx --yes supabase@2)
-  else
-    die "--deploy-functions needs the supabase CLI or Node.js (npx)"
-  fi
-  # An old CLI on PATH lacks the flags the deploy relies on; that would only show after the overwrite.
-  "${SB[@]}" functions deploy --help >"$TMP/cli-help.txt" 2>&1 || true
-  for flag in --use-api --workdir --no-verify-jwt; do
-    grep -q -- "$flag" "$TMP/cli-help.txt" \
-      || die "${SB[*]} 不支援 $flag（版本太舊）：請更新 supabase CLI（或移除 PATH 上的舊版改用 npx），沒有寫入任何東西"
-  done
-  # The token goes to curl through a 0600 file, not onto its command line.
-  (umask 077; printf 'Authorization: Bearer %s\n' "$SUPABASE_ACCESS_TOKEN" >"$TMP/auth.hdr")
-  case $(curl -s -m 20 -o /dev/null -w '%{http_code}' -H @"$TMP/auth.hdr" "https://api.supabase.com/v1/projects/$TARGET_REF" || true) in
-    200) say "Edge Functions：權杖可以管理專案 $TARGET_REF" ;;
-    401) die "SUPABASE_ACCESS_TOKEN 無效或已撤銷" ;;
-    403 | 404) die "SUPABASE_ACCESS_TOKEN 對應的帳號不能管理專案 $TARGET_REF（要用專案擁有者帳號建立的權杖）" ;;
-    *) die "查不到專案 $TARGET_REF 的狀態（網路或 api.supabase.com 的問題），沒有寫入任何東西" ;;
-  esac
+  edge_token "$TARGET_REF"
+  edge_cli
+  auth_plan "$TARGET_REF"
+elif [[ -z $TARGET_REF ]]; then
+  say "目標不是 Supabase cloud（使用者不是 postgres.<ref>）：Edge Functions 與 Auth 網址要手動設定，結尾會列出"
 fi
 
 for s in auth storage; do
@@ -724,16 +953,10 @@ open(path, "w").write(sql)
 open(out, "w").write(new + "\n")
 PY
   fi
-  # --deploy-functions sets the Edge CRON_SECRET to what the jobs send. Read it now, before anything is
-  # written: a package whose jobs carry no secret, or two different ones, has to stop here.
+  # The Edge CRON_SECRET is set to what the jobs send. Read it now, before anything is written: a package
+  # whose jobs carry no secret, or two different ones, has to stop here.
   if [[ $DEPLOY_FUNCTIONS == 1 ]]; then
-    (umask 077; python3 - "$TMP/cron.sql" "$TMP/secrets.env" <<'PY') || die "排程裡的 x-cron-secret 不是恰好一個值，無法設定 CRON_SECRET；沒有寫入任何東西"
-import re, sys
-found = set(re.findall(r"x-cron-secret'', ''([^']+)''", open(sys.argv[1]).read()))
-if len(found) != 1:
-    sys.exit("expected exactly one x-cron-secret value, found %d" % len(found))
-open(sys.argv[2], "w").write("CRON_SECRET=%s\n" % found.pop())
-PY
+    secret_env "$TMP/cron.sql" cron.sql || die "排程裡的 x-cron-secret 不是恰好一個值，無法設定 CRON_SECRET；沒有寫入任何東西"
   fi
 fi
 
@@ -773,11 +996,16 @@ else
 fi
 echo "  3. 比對每張表的筆數是否和備份一致"
 if [[ $DEPLOY_FUNCTIONS == 1 ]]; then
-  echo "  4. 部署 Edge Functions 到 $TARGET_REF：stock-price、stock-report、backup-transactions（用 SUPABASE_ACCESS_TOKEN）"
+  echo "  4. 部署 Edge Functions 到 $TARGET_REF：stock-price、stock-report、backup-transactions"
   if [[ $SKIP_CRON == 0 ]]; then
-    echo "     並把 Edge secret CRON_SECRET 設成排程裡的值（不顯示）"
+    echo "     並把 Edge secret CRON_SECRET 設成排程裡的值（sha256 ${SECRET_SHA:0:16}…，值不顯示），再實際觸發 fx-daily 確認回 200"
   else
     echo "     因為不建立排程，不設定 CRON_SECRET"
+  fi
+  if [[ -n $AUTH_SITE ]]; then
+    echo "  5. Auth Site URL → $AUTH_SITE；Redirect URLs $(tr ',' '\n' <<<"$AUTH_ALLOW" | wc -l | tr -d ' ') 條"
+  else
+    echo "  5. Auth 網址不變（沒有 --site-url，也讀不到來源專案的設定）"
   fi
 fi
 echo
@@ -832,11 +1060,11 @@ if [[ -s $TMP/admins.list ]]; then
 fi
 
 # Functions and CRON_SECRET go in before the cron jobs, so no job fires at a function that would answer 401.
-# A failed deploy does not stop the run: the database is already written, and the end of the script prints
-# the commands to finish by hand.
-DEPLOY_FAILED=0
+# A failed step does not stop the run: the database is already written. It is reported, the end of the script
+# prints the one command that finishes the job, and the exit status is 1.
+STEP_FAILED=0
 if [[ $DEPLOY_FUNCTIONS == 1 ]]; then
-  deploy_functions || { DEPLOY_FAILED=1; say "注意：自動部署沒有完成（原因見上方）。資料庫已寫入；結尾會列出手動完成的指令"; }
+  edge_deploy "$TARGET_REF" || { STEP_FAILED=1; say "注意：Edge Functions 沒有全部完成（原因見上方）；資料庫已寫入"; }
 fi
 
 if [[ $SKIP_CRON == 0 ]]; then
@@ -846,15 +1074,17 @@ if [[ $SKIP_CRON == 0 ]]; then
     mkdir -p "$(dirname "$SECRET_FILE")"
     chmod 700 "$(dirname "$SECRET_FILE")"
     install -m 600 "$TMP/new-secret" "$SECRET_FILE"
-    if [[ $FUNCTIONS_DEPLOYED == 1 ]]; then
-      say "新的 CRON_SECRET 已存到 ${SECRET_FILE#"$REPO_DIR"/}（Edge secret 已設成同一個值）"
-    else
-      say "新的 CRON_SECRET 已存到 ${SECRET_FILE#"$REPO_DIR"/}，請把它設成 Edge Functions → Secrets 的 CRON_SECRET"
-    fi
+    say "新的 CRON_SECRET 已存到 ${SECRET_FILE#"$REPO_DIR"/}"
   fi
 fi
 
+if [[ $DEPLOY_FUNCTIONS == 1 && -n $AUTH_SITE ]]; then
+  say "設定 Auth 網址..."
+  auth_apply "$TARGET_REF" || STEP_FAILED=1
+fi
+
 # --- verify --------------------------------------------------------------------------------------
+say "驗證..."
 cat >"$TMP/counts.q.sql" <<'SQL'
 SELECT table_schema || '.' || table_name,
        (xpath('/row/c/text()',
@@ -870,51 +1100,56 @@ while IFS=$'\t' read -r tbl n; do
   grep -qx "$tbl" "$TMP/skipped" "$TMP/excluded" "$TMP/kept" && continue
   got=$(awk -F'\t' -v t="$tbl" '$1 == t { print $2 }' "$TMP/counts.target")
   if [[ $got != "$n" ]]; then
-    echo "  筆數不一致：$tbl 備份=$n 目標=${got:-（沒有這張表）}"
+    echo "   ✗ 筆數不一致：$tbl 備份=$n 目標=${got:-（沒有這張表）}"
     mismatch=1
   fi
 done <"$FROM/counts.tsv"
-[[ $mismatch == 0 ]] && say "每張表的筆數都和備份一致" || say "注意：有表格筆數不一致（見上方）"
+[[ $mismatch == 0 ]] && echo "   ✓ 每張表的筆數都和備份一致" || STEP_FAILED=1
 
+# The cron path end to end: only meaningful once the functions and the jobs are both in place.
+if [[ $FUNCTIONS_DEPLOYED == 1 && $SKIP_CRON == 0 ]]; then
+  cron_probe || STEP_FAILED=1
+fi
 
-# What is left to do by hand. The Edge Function commands carry absolute paths and --workdir, so they work
-# from any directory, and a secret is read from its file inside the command, never printed.
+# verify.sql's checks ride in schema.sql (public.verify_setup); a package without them skips this.
+if [[ $(q -c "SELECT to_regprocedure('public.verify_setup()') IS NOT NULL") == t ]]; then
+  q -c "SELECT check_name, status, detail FROM public.verify_setup()" >"$TMP/verify.tsv"
+  fails=$(awk -F'\t' '$2 == "FAIL"' "$TMP/verify.tsv")
+  if [[ -z $fails ]]; then
+    echo "   ✓ verify_setup()：$(awk -F'\t' '$2 == "PASS"' "$TMP/verify.tsv" | wc -l | tr -d ' ') 項 PASS，沒有 FAIL$(awk -F'\t' '$2 != "PASS" { printf "；%s %s", $1, $2 }' "$TMP/verify.tsv")"
+  else
+    echo "   ✗ verify_setup() 有 FAIL：" >&2
+    sed 's/^/     /' <<<"$fails" >&2
+    STEP_FAILED=1
+  fi
+fi
+
+# --- what is left by hand --------------------------------------------------------------------------
 n=0
 step() { n=$((n + 1)); echo "  $n. $*"; }
-SB_DIR=$(printf '%q' "$REPO_DIR/sources")
 echo
-if [[ $FUNCTIONS_DEPLOYED == 1 ]]; then
-  say "資料庫與 Edge Functions 都已完成。接下來要手動做的："
-  [[ $SKIP_CRON == 1 ]] && step "CRON_SECRET：這次沒有建立排程所以沒有設定；之後建立排程時，再把 Edge secret 設成排程裡的值"
-elif [[ -n $TARGET_REF ]]; then
-  say "資料庫部分完成。Edge Functions 不會跟著資料庫搬過去：沒部署之前，管理員頁面會顯示「讀不到…」、排程會失敗。接下來要手動做的："
-  step "部署 Edge Functions（JWT 旗標不能錯，見 README 步驟 5）。不能互動登入的環境（沙箱、CI）先 export SUPABASE_ACCESS_TOKEN=<權杖>，不需要 supabase login："
-  echo "       npx supabase functions deploy stock-price --use-api --workdir $SB_DIR --project-ref $TARGET_REF"
-  echo "       npx supabase functions deploy stock-report --no-verify-jwt --use-api --workdir $SB_DIR --project-ref $TARGET_REF"
-  echo "       npx supabase functions deploy backup-transactions --no-verify-jwt --use-api --workdir $SB_DIR --project-ref $TARGET_REF"
+if [[ -n $TARGET_REF && $FUNCTIONS_DEPLOYED == 0 ]]; then
   if [[ $SKIP_CRON == 1 ]]; then
-    step "CRON_SECRET：這次沒有建立排程；之後建立排程時，再把 Edge secret 設成排程裡的值"
+    secret_arg=--keep-secret
   elif [[ $NEW_SECRET == 1 ]]; then
-    step "設定 CRON_SECRET（值從檔案讀入，不會顯示在畫面上）："
-    echo "       npx supabase secrets set CRON_SECRET=\"\$(cat $(printf '%q' "$SECRET_FILE"))\" --project-ref $TARGET_REF"
+    secret_arg="--secret-file $(printf '%q' "$SECRET_FILE")"
   else
-    step "設定 CRON_SECRET，沿用備份排程裡的值（不會顯示在畫面上）："
-    echo "       npx supabase secrets set CRON_SECRET=\"\$(grep -oP \"x-cron-secret'', ''\\K[^']+\" $(printf '%q' "$FROM/cron.sql") | head -1)\" --project-ref $TARGET_REF"
+    secret_arg="--from $(printf '%q' "$FROM")"
   fi
-  step "確認函數已部署（部署前是 404；部署後不再是 404，通常是 401，stock-report 可能是 400）："
-  echo "       curl -s -o /dev/null -w '%{http_code}\\n' -X POST https://$TARGET_REF.supabase.co/functions/v1/stock-report"
-else
-  say "資料庫部分完成。Edge Functions 不會跟著資料庫搬過去，接下來要手動做的："
-  step "部署 Edge Functions：把 sources/supabase/functions/ 底下的資料夾（含 _shared/）放進 stack 的 volumes/functions/，重啟 functions 服務（README 步驟 4）"
+  say "Edge Functions 還沒完成：沒部署之前，報價、管理後台與排程都無法運作。補做（會詢問 access token）："
+  echo "       bash $(printf '%q' "$REPO_DIR/scripts/db-migrate.sh") --functions-only --ref $TARGET_REF $secret_arg"
+elif [[ -z $TARGET_REF ]]; then
+  say "自架目標，Edge Functions 要手動部署："
+  step "把 sources/supabase/functions/ 底下的資料夾（含 _shared/）放進 stack 的 volumes/functions/，重啟 functions 服務（README 步驟 4）"
   step "把 CRON_SECRET 設成排程裡的值（自架：寫在 stack 的環境變數）"
-  step "確認函數已部署：對 ${CRON_BASE:-<你的 API 網址>}/functions/v1/stock-report 送 POST，部署前是 404，部署後不再是 404（通常 401，stock-report 可能 400）"
+  step "Auth：GOTRUE_SITE_URL / ADDITIONAL_REDIRECT_URLS 設成前端網址"
 fi
-step "Supabase → Authentication → URL Configuration：Site URL / Redirect URLs 設成前端網址；使用者需重新登入（密碼不變）"
+say "接下來要手動做的："
+[[ -n $TARGET_REF && $AUTH_DONE == 0 ]] && step "Supabase → Authentication → URL Configuration：Site URL / Redirect URLs 設成前端網址（或重跑時加 --site-url）"
 step "Cloudflare Pages → Settings → Environment variables（Production）："
 echo "       VITE_SUPABASE_URL${TARGET_REF:+ = https://$TARGET_REF.supabase.co}"
 echo "       VITE_SUPABASE_ANON_KEY = 新專案的 anon / publishable key（Settings → API）"
 echo "     VITE_ 開頭的值是建置時寫進程式碼的：改完要重新部署（Deployments → Retry，或推 commit 到 main）才會生效"
-step "SQL Editor 執行 sources/supabase/verify.sql，再跑 SELECT * FROM verify_setup();"
-step "舊環境如果還在跑，先停掉它的排程，否則批次會跑兩次"
-# A requested deploy that did not finish is a failed run for whoever called it (CI, a wrapper script).
-[[ $DEPLOY_FAILED == 0 ]] || exit 1
+step "使用者需重新登入（密碼不變）；舊環境如果還在跑，先停掉它的排程，否則批次會跑兩次"
+# Any step that did not finish makes this a failed run for whoever called it (CI, a wrapper script).
+[[ $STEP_FAILED == 0 ]] || exit 1
