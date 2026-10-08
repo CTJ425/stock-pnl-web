@@ -106,10 +106,6 @@ dev  0.10.16-dev.1    ← next cycle picks the next x.y.z, once
 The **`ship`** skill owns this order end to end and the **`versioning`** skill owns the number
 itself; neither is optional, and neither decides the other's part.
 
-This was violated on 2026-10-02 — `c820676`, `e17b60d` and `aa1b361` all shipped as
-`0.10.15-dev.1`, so the footer version could not tell three different builds apart and the user
-had to notice it.
-
 Checklist for **every** commit to `dev` that changes behaviour, in this order:
 
 1. Bump `N` in **all** of `version.syncFiles` (`npm version <v> --no-git-tag-version
