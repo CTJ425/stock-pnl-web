@@ -609,10 +609,11 @@ npm run build                              # 產出於 sources/dist/
 |---|---|
 | `bash`、`python3` | 執行腳本 |
 | `pg_dump` / `psql`（`postgresql-client`，版本 ≥ 資料庫版本） | 匯出與匯入。Ubuntu：`sudo apt install postgresql-client`；macOS：`brew install libpq`（再把 `$(brew --prefix libpq)/bin` 加入 PATH） |
-| 來源與目標的資料庫連線字串 | cloud：Dashboard → **Connect** → **Session pooler**（port 5432；不要用 6543 的 transaction pooler）；自架：主機的 5432 |
+| 來源與目標的連線資訊 | cloud：只要 **Project URL**（Project Settings → Data API）與建專案時設定的**資料庫密碼**，腳本會自動找出 Session pooler 位址；自架：主機、port、帳號與密碼 |
 | Supabase CLI（選用） | 只有在不知道來源資料庫密碼時，用來取得臨時登入帳號 |
 
-連線字串裡的 `[YOUR-PASSWORD]` 可以原樣保留，腳本會另外以不顯示的方式詢問密碼。
+密碼輸入時每個字元顯示一個 `*`，打錯會提示原因並可重打。不要使用 Dashboard 的 **Direct connection**（`db.<ref>.supabase.co`）：它只走 IPv6，多數網路連不到。
+短時間內多次密碼錯誤，Supabase 會暫時封鎖新連線（`ECIRCUITBREAKER`），等幾分鐘再試即可。
 
 ### 完整流程
 
@@ -650,9 +651,9 @@ bash scripts/db-backup.sh          # 互動模式：選連線方式、輸入連�
 bash scripts/db-migrate.sh         # 互動模式
 ```
 
-依序詢問：要還原的備份、目標連線方式（cloud 貼連線字串／自架逐項輸入）與密碼、排程要指向的新 API 網址
-（cloud 預設 `https://<新ref>.supabase.co`；自架可填 `http://kong:8000` 或對外網址）、Storage 檔案是否另外搬
-（不搬就略過 `storage.objects`）。列出計畫後，要輸入目標主機名稱才會正式寫入。
+依序詢問：要還原的備份、目標（cloud 貼 Project URL 再輸入資料庫密碼，位址自動找；自架逐項輸入）、排程是否建立
+（cloud 自動指向 `https://<新ref>.supabase.co`；自架可填 `http://kong:8000` 或對外網址）與 CRON_SECRET 要沿用或新產生、Storage 檔案是否另外搬
+（不搬就略過 `storage.objects`）。列出計畫後，輸入 `yes` 才會正式寫入（`n` 取消）。
 
 非互動用法：
 
@@ -671,18 +672,39 @@ bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://
 | `--new-cron-secret` | 排程改用新產生的 `x-cron-secret`，存到 `backups/secrets/`（0600，不顯示），再設為 Edge 的 `CRON_SECRET` |
 | `--exclude <schema.table>` | 不匯入該表資料，可重複；Storage 檔案沒搬時用 `storage.objects` |
 | `--dry-run` | 只檢查與列出計畫，不寫入 |
-| `--yes` | 略過「輸入目標主機名稱」的確認 |
+| `--yes` | 略過寫入前的 yes / n 確認 |
+| `--deploy-functions` | 寫入資料庫後部署三個 Edge Functions 並設定 `CRON_SECRET`（僅 cloud；用 `SUPABASE_ACCESS_TOKEN`，不需 `supabase login`；寫入前先檢查權杖，見步驟 4） |
+| `--force-overwrite` | 目標已有資料時清空後覆蓋（非互動用；互動模式會先詢問、要求輸入 `overwrite`，並提議先備份目標） |
+| `--keep-admins` | 搭配覆蓋：目標上原本是管理員、備份裡有同 email 的帳號，還原後重新設為管理員（互動模式會列出名單詢問，非互動要加此選項才會做；見下方說明） |
 
 保護與流程：校驗碼不符就拒絕；目標必須是 Supabase（有 `auth` / `storage` schema 與所需擴充）且**沒有任何帳號與交易**——
-這條規則讓它不可能覆蓋一個正在使用的資料庫。角色、結構、資料在**同一個 transaction** 寫入，中途出錯整批還原；
+目標已有資料時不會直接寫入：互動模式會列出目標上的帳號與交易數，要求輸入 `overwrite` 才清空覆蓋，並預設先把目標備份到 `backups/<ref>-before-overwrite/`；清空與寫入在同一個 transaction，途中出錯目標維持原樣。覆蓋會刪除目標 `public` 的表格 / 函數 / 型別、所有帳號與排程，保留 Storage 與平台的事件觸發器（例如 `ensure_rls`）。
+管理員旗標（`app_metadata.role = 'admin'`）存在帳號本身；來源備份自己的管理員照舊保留。目標上原本的管理員可依 **email** 對備份裡同 email 的帳號重新授予（用戶 id 在不同專案不同，不能用 id 比對），在同一個 transaction 寫入。
+**這是要人決定的事，不是預設：** 同 email 不代表同一個人（關閉信箱驗證時，任何人都能用別人的信箱註冊），所以互動模式會列出名單並詢問，非互動（`--yes`）要加 `--keep-admins` 才會做，沒加就列出「沒有重新設為管理員」的名單。
+**備份裡沒有該 email 的管理員無法還原**（帳號本身被刪了），計畫畫面會在寫入前就列出這些 email，寫入後也會再提醒一次；要保留該帳號，需先讓它存在於備份來源。還原後所有人仍需重新登入。
+角色、結構、資料在**同一個 transaction** 寫入，中途出錯整批還原；
 結構載入後先收回所有權限、再重放備份裡的 GRANT/REVOKE（Supabase 新專案的預設權限會把新建的函數與表開放給 `anon` / `authenticated`，不這樣做，來源上鎖住的函數到了目標會變成瀏覽器可呼叫）；
 平台表（`auth.*`、`storage.*`）只在有資料且可寫入時載入，空表、目標不存在的表、綁定已排除 session 的 `auth.mfa_amr_claims` 自動略過；最後比對筆數與 `counts.tsv`。
 
-#### 4. Edge Functions 與 secrets（腳本不處理）
+#### 4. Edge Functions 與 secrets
 
-| 目標 | 部署方式 |
+**cloud 目標可以讓腳本一起做：** 匯入時加 `--deploy-functions`（互動模式偵測到環境變數時會詢問），寫入資料庫後腳本會部署
+`stock-price`、`stock-report`、`backup-transactions`（JWT 旗標已依步驟 5 設好）、設定 `CRON_SECRET`（有建立排程時；值不顯示），並確認三個函數已上線。
+它**不用 `supabase login`**，改讀環境變數 `SUPABASE_ACCESS_TOKEN`（Dashboard → Account → Access Tokens，要用專案擁有者的帳號建立），所以沙箱與 CI 也能跑：
+
+```bash
+export SUPABASE_ACCESS_TOKEN='sbp_…'
+bash scripts/db-migrate.sh --from backups/prod/<時間> --cron-base-url https://<新ref>.supabase.co --deploy-functions
+```
+
+權杖是否有效、能否管理該專案、CLI 是否支援所需旗標、排程裡是否恰好有一個 `x-cron-secret`，都會在**寫入資料庫之前**就檢查。
+順序是先部署函數並設定 `CRON_SECRET`、再建立排程，排程不會打到還沒準備好的函數。部署後只有 2xx / 4xx 才算上線（404 = 不存在、5xx = 啟動失敗）。
+萬一部署在寫入後失敗，腳本不會中途結束：會照常建立排程、在結尾列出手動完成的指令，並以非零狀態結束（CI 會看到失敗）。
+不加此選項時，腳本結尾會印出同樣步驟的指令（一律帶 `--workdir`，**在哪個資料夾執行都可以**；單獨執行 `supabase functions deploy` 則必須在 `sources/` 之下，因為 CLI 只會從目前位置往上找 `supabase/` 資料夾）。
+
+| 目標 | 手動部署方式 |
 |---|---|
-| cloud，有 Node.js | `cd sources && npx supabase login && npx supabase functions deploy <name> --project-ref <ref>`（`stock-report`、`backup-transactions` 加 `--no-verify-jwt`，見步驟 5）。不需另外安裝 CLI |
+| cloud，有 Node.js | `npx supabase functions deploy <name> --use-api --workdir <repo>/sources --project-ref <ref>`（需先 `npx supabase login` 或設定 `SUPABASE_ACCESS_TOKEN`；`stock-report`、`backup-transactions` 加 `--no-verify-jwt`，見步驟 5）。`--use-api` 不需要 Docker。不需另外安裝 CLI |
 | cloud，只用瀏覽器 | Dashboard 逐檔建立（見 [`sources/supabase/README.md`](sources/supabase/README.md) 方式 A），檔案多、容易漏 |
 | 自架 | 把 `sources/supabase/functions/` 底下的資料夾（含 `_shared/`）放進 stack 的 `volumes/functions/`，重啟 functions 服務；secrets 寫在 stack 的環境變數 |
 
