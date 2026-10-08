@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-08 13:07:25 Asia/Taipei
+- Timestamp: 2026-10-08 15:07:18 Asia/Taipei
 
 ---
 
@@ -21,8 +21,11 @@
 - **Agent**: Claude
 - **Timestamp**: 2026-10-08 13:07:25 Asia/Taipei
 1. ~~Remove every Fugle leg (prices, intraday, daily, `syncDaily`, `fugle-eval`); Edge files restored to `ceb539e^`~~ ✅ 0.10.36-dev.1
-2. Deploy `stock-price` + `stock-report` to DEV, then PROD — until then both still run the Fugle code (it falls back on its own when the key is gone) — ⏳ needs the user's OK
-3. User: delete `FUGLE_API_KEY` from DEV and PROD secrets (no longer read) — ⏳
+2. ~~Deploy to DEV~~ ✅ 0.10.36 on `accmczhrqsilzrtyhyxa` (2026-10-08 15:00) · **PROD**: released as **0.10.36** (`cc07a8d`, `main` = `dev`) but PROD Edge **not deployed** — the agent's deploy was blocked by the permission classifier. User runs: `bash -ic 'sbuse stock; export SUPABASE_ACCESS_TOKEN; bash scripts/db-migrate.sh --functions-only --ref zizndnzibubcqdvnuhwr --from backups/prod-20261008/20261008-133230 --site-url https://stock-pnl-web.pages.dev/'` (also sets PROD Auth URLs, BUG-118) — ⏳
+3. User: delete `FUGLE_API_KEY` from DEV and PROD secrets (no longer read) — ⏳ (neither recreated project has it as of 2026-10-08)
+5. Project refs changed: PROD is now `zizndnzibubcqdvnuhwr`, DEV `accmczhrqsilzrtyhyxa` (old `hrilemueiqyaoiwnkeuu` / `zyebvayngwrqzoaicbwd` return 404). CLAUDE.md § Branches & envs and the `supabase-ops` skill still name the old ones — ⏳ update with the user's OK
+6. Script gaps found in the 2026-10-08 review, not fixed: `db-backup.sh` does not copy Storage files (the `backups` bucket's per-user snapshots were lost with the old PROD); `cron.sql` does not keep a job's `active` flag; `db-backup.sh`/`db-migrate.sh` need GNU `sha256sum` and bash 4 (not macOS) — ⏳ user to decide
+7. User: revoke the access token and reset the DEV DB password pasted into the 2026-10-08 chat for the E2E — ⏳
 4. Quote-path improvements proposed 2026-10-08 (single-flight on L2 miss, parallel MIS groups, browser reads `price_cache` before invoking Edge, one shared poll, Yahoo concurrency cap, MIS failure logging) — ⏳ user to pick
 
 ### Task 194: Show password, keep sign-in 7 days, sector money flow (類股資金流向)

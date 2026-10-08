@@ -6,6 +6,20 @@
 
 ---
 
+### Bug ID: BUG-118 — A cloud restore left PROD with no Edge Functions and Auth URLs on localhost
+- **Date**: 2026-10-08, found by the user on the recreated PROD (`zizndnzibubcqdvnuhwr`): no quotes, admin page empty; fixed in 0.10.36
+- **Root Cause**: `db-migrate.sh` offered the Edge deploy only when `SUPABASE_ACCESS_TOKEN` was already **exported**; `sbuse` sets it without `export`, so the step was skipped silently and the new project had zero functions (all three endpoints 404). Auth `site_url` / `uri_allow_list` live in project config, not the DB, so the restore kept the new project's `http://localhost:3000` and an empty allow-list (password-reset mail would land on localhost). The manual end-of-run steps that covered both were missed.
+- **Fix (0.10.36-dev.2)**: cloud targets now always deploy the three functions, set `CRON_SECRET` (digest checked), install cron, set the Auth URLs (`--site-url`, else copied from the source project, else asked) and verify — including one real `fx-daily` call that must answer 200 and `verify_setup()` with no FAIL. Missing token → asked, or stop before writing. CLI: PATH → `npx supabase@2` → checksum-verified release binary. `--functions-only` replaces the short-lived `deploy-edge.sh`.
+- **Verification**: E2E on `accmczhrqsilzrtyhyxa` (overwrite from `backups/dev/20261007-143526`): exit 0, every check ✓, independently re-read (functions v10 ACTIVE, secret digest `de418211…` = cron, 12 jobs on the new host, counts = `counts.tsv`, Auth read-back). `--functions-only`, no-CLI and no-Node paths also run. PROD itself was fixed by hand the same day (functions deployed, `CRON_SECRET` `21d0257c…`, cron call 200); PROD Auth URLs pending the user's run (Task 198 item 2).
+- **Status**: ✅ FIXED (0.10.36)
+
+### Bug ID: BUG-117 — OTC (上櫃) tickers never got a nightly daily file
+- **Date**: 2026-10-08, seen on PROD after the restore (`daily/` had no `6560.json`, `dailySynced=4 dailySkipped=0` of 5); fixed in 0.10.36
+- **Root Cause**: `syncDaily` asked Yahoo `.TW` then `.TWO`, but `fetchJsonRetry` throws on non-2xx and Yahoo answers `6560.TW` with 404 (`6560.TWO` 200, 244 rows — measured). The throw left the candidate loop, the outer `catch {}` dropped the ticker, `.TWO` was never asked. Other `.TW→.TWO` loops (`tryYahooCandidates`, `holdingQuotes.ts:127`, fx `index.ts:2038`) catch per candidate and were not affected.
+- **Fix (0.10.36-dev.2)**: `twDaily.yahooDailyRows()` — a throwing candidate moves on; only an all-failed lookup throws, so an outage still keeps the existing file instead of writing an `emptyCheckedDate` shell.
+- **Verification**: 4 new tests (incl. `.TW` 404 → `.TWO`); gates green. DEV after deploy: `market-data-daily` answered 200 with `total=17 dailySynced=16 dailySkipped=1` (none dropped), `daily/6560.json` rewritten with 244 rows, `lastDate 2026-10-08`.
+- **Status**: ✅ FIXED (0.10.36)
+
 ### Bug ID: BUG-110 — Weekend 現價 near limit-up: MIS test-session matches cached as quotes
 - **Date**: 2026-10-04 (Sunday), found on PROD by the user; fixed in 0.10.25
 - **Root Cause**: MIS served TWSE test-session matches with today's date (`d=20261004`, `t=09:07`, mostly `z` = limit-up `u`). `quoteWindow.ts` polled every minute in weekend 08:25–13:30 like a session (since 0.6.36 `dfd5a34`) and `pickPrice()` trusts `z`, so `stock-price` cached them site-wide (PROD: 0050 124.05 vs 112.8, 2603 +10%, 2303 +9.9%, …).
