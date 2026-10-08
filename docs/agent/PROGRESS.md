@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: **0.10.36 released** — OTC daily fix (BUG-117), `db-migrate.sh` restores Edge + cron + Auth URLs in one run (BUG-118), plus the Fugle removal from dev.1.
-- Status: ✅ `main` = `dev` = `cc07a8d`, Release 0.10.36 by CI; DEV Edge deployed and verified; **PROD Edge not deployed** (agent blocked — Task 198 item 2 has the command).
+- Status: ✅ `main` = `dev` = `cc07a8d`, Release 0.10.36 by CI; Edge 0.10.36 on DEV and PROD, PROD Auth URLs set, both verified (Task 198 item 2).
 - Timestamp: 2026-10-08 15:07:18 Asia/Taipei
 
 ---
