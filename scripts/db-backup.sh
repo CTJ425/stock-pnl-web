@@ -53,8 +53,70 @@ die() { echo "db-backup: $*" >&2; exit 1; }
 ask() { # ask <prompt> [default] -> answer on stdout
   local ans
   read -r -p "$1${2:+ [$2]}: " ans </dev/tty
-  echo "${ans:-$2}"
+  echo "${ans:-${2:-}}"
 }
+read_secret() { # read_secret <prompt> -> the typed value on stdout; shows one * per character
+  local pw="" ch
+  # Drop keys already waiting in the buffer: a pasted URL that ended in a newline used to arrive here
+  # as an instant Enter, i.e. an empty password.
+  while IFS= read -r -s -n1 -t 0.05 ch </dev/tty; do :; done
+  printf '%s' "$1" >/dev/tty
+  while IFS= read -r -s -n1 ch </dev/tty; do
+    if [[ -z $ch && -z $pw ]]; then
+      printf '\n%s' "   密碼不能是空的，請輸入：" >/dev/tty # Enter on nothing: ask again
+    elif [[ -z $ch ]]; then
+      break # Enter
+    elif [[ $ch == $'\x7f' || $ch == $'\b' ]]; then
+      [[ -n $pw ]] && { pw=${pw%?}; printf '\b \b' >/dev/tty; }
+    else
+      pw+=$ch
+      printf '*' >/dev/tty
+    fi
+  done
+  printf '\n' >/dev/tty
+  printf '%s' "$pw"
+}
+
+# probe <url> -> ok | badpw | blocked | notenant | other   (password from PGPASSWORD)
+probe() {
+  local out
+  out=$(PGCONNECT_TIMEOUT=6 psql "$1" -w -X -q -At -c 'SELECT 1' 2>&1) && { echo ok; return; }
+  case $out in
+    *'password authentication failed'*) echo badpw ;;
+    *ECIRCUITBREAKER* | *'too many authentication'*) echo blocked ;;
+    *'Tenant or user not found'*) echo notenant ;;
+    *) echo other ;;
+  esac
+}
+
+# find_pooler <ref> -> "<host> <ok|badpw|blocked>" for the Session pooler that holds this cloud project,
+# or nothing. It connects with the real password (PGPASSWORD) to every regional pooler at once: the ones
+# that do not hold the project answer "Tenant or user not found" without checking any password, so only
+# the right one can ever count an authentication failure. (Probing with a dummy password did count one,
+# and a few rounds tripped Supavisor's ECIRCUITBREAKER for the project.) First hit wins.
+find_pooler() {
+  local ref=$1 dir h r i f
+  dir=$(mktemp -d)
+  for h in aws-0 aws-1; do
+    for r in ap-northeast-1 ap-northeast-2 ap-southeast-1 ap-southeast-2 ap-south-1 us-east-1 us-east-2 \
+      us-west-1 us-west-2 ca-central-1 eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1 sa-east-1; do
+      ( st=$(probe "postgresql://postgres.$ref@$h-$r.pooler.supabase.com:5432/postgres")
+        [[ $st == ok || $st == badpw || $st == blocked ]] && echo "$st" >"$dir/$h-$r" ) >/dev/null 2>&1 &
+      # (no output: the answer is the file; a probe still running after the first hit must not
+      # write into the caller's closed pipe)
+    done
+  done
+  for ((i = 0; i < 100; i++)); do
+    [[ -n $(ls "$dir") || -z $(jobs -pr) ]] && break
+    sleep 0.2
+  done
+  kill $(jobs -pr) 2>/dev/null || true
+  f=$(ls "$dir" | head -1)
+  [[ -n $f ]] && echo "$f.pooler.supabase.com $(cat "$dir/$f")"
+  rm -rf "$dir"
+}
+
+BLOCKED_MSG="Supabase 因為短時間內多次密碼錯誤，暫時封鎖了這個專案來自這台電腦的新連線（ECIRCUITBREAKER）。請等 5–10 分鐘再執行，並確認輸入的是「資料庫密碼」"
 
 command -v pg_dump >/dev/null || die "pg_dump not found (install postgresql-client)"
 command -v psql >/dev/null || die "psql not found (install postgresql-client)"
@@ -84,11 +146,65 @@ supabase_cli() {
 interactive() {
   echo "== 資料庫備份（互動模式）"
   echo "1) 來源資料庫怎麼連："
-  echo "   1) 貼上連線字串（cloud：Dashboard → Connect → Session pooler；自架：主機的 5432）"
-  echo "   2) 用 Supabase CLI（免資料庫密碼；需已 supabase login 或設定 SUPABASE_ACCESS_TOKEN）"
-  case $(ask "   選擇" 1) in
-    1) DB_URL=$(ask "   連線字串（含 [YOUR-PASSWORD] 也可以）") ;;
+  echo "   1) Supabase cloud：只要貼 Project URL，連線位址自動找（之後輸入資料庫密碼）"
+  echo "   2) 貼上連線字串（自架，或想自己指定）"
+  echo "   3) 用 Supabase CLI（免資料庫密碼；需已 supabase login 或設定 SUPABASE_ACCESS_TOKEN）"
+  local choice
+  choice=$(ask "   選擇" 1)
+  if [[ $choice == 1 ]]; then
+    local url ref host
+    while :; do
+      url=$(ask "   Project URL（Dashboard → Project Settings → Data API，例如 https://abcdefghijklmnopqrst.supabase.co）")
+      ref=$(sed -nE 's#^https?://([a-z0-9]{20})\.supabase\.co/?$#\1#p' <<<"$url")
+      [[ -n $ref ]] && break
+      echo "   格式不對：要長得像 https://<20 個英數字>.supabase.co"
+    done
+    local res st tries=0
+    host=""
+    while :; do
+      PGPASSWORD=$(read_secret "   資料庫密碼（建專案時設定的那組，不是 Supabase 帳號密碼）: ")
+      export PGPASSWORD
+      if [[ -z $host ]]; then
+        echo "   連線中（同時試各區域，找出這個專案的資料庫位址，通常幾秒內）..."
+        res=$(find_pooler "$ref")
+        [[ -n $res ]] || die "could not find the database of $ref; rerun and choose 2 to paste the Session pooler connection string"
+        host=${res%% *}
+        st=${res#* }
+      else
+        st=$(probe "postgresql://postgres.$ref@$host:5432/postgres")
+      fi
+      case $st in
+        ok) echo "   連線成功（$host）"; break ;;
+        badpw)
+          tries=$((tries + 1))
+          echo "   密碼不對（專案在 $host）。忘了可到 Project Settings → Database → Reset database password，約 1–2 分鐘後生效。"
+          [[ $tries -lt 3 ]] || die "the source refused the password 3 times"
+          ;;
+        blocked) die "$BLOCKED_MSG" ;;
+        *) die "cannot reach $host ($st)" ;;
+      esac
+    done
+    DB_URL="postgresql://postgres.$ref@$host:5432/postgres"
+    choice=done
+  fi
+  case $choice in
+    done) ;;
     2)
+      echo "   cloud：Dashboard → 上方「Connect」→ 選「Session pooler」→ 複製 URI（主機是 aws-…pooler.supabase.com、port 5432）"
+      while :; do
+        DB_URL=$(ask "   連線字串（裡面的 [YOUR-PASSWORD] 不用改，之後再輸入密碼）")
+        if [[ ! $DB_URL =~ ^postgres(ql)?:// ]]; then
+          echo "   這不是連線字串：要以 postgresql:// 開頭（你可能貼成了 Project URL）"
+        elif [[ $DB_URL =~ @db\.[a-z0-9]{20}\.supabase\.co ]]; then
+          echo "   這是「Direct connection」（db.<ref>.supabase.co），只走 IPv6，多數網路連不到；請改用 Session pooler"
+        elif [[ $DB_URL =~ :6543/ ]]; then
+          echo "   這是 Transaction pooler（6543），備份需要 Session pooler（5432）"
+        else
+          break
+        fi
+      done
+      ;;
+    3)
       local json rows=() i=0 r ref region name n
       json=$(cd "$SOURCES_DIR" && supabase_cli projects list -o json 2>/dev/null) || die "supabase projects list failed (logged in?)"
       while IFS= read -r r; do rows+=("$r"); done < <(python3 -c '
@@ -135,15 +251,27 @@ else
   DB_URL=${DB_URL//:\[YOUR-PASSWORD\]@/@}
   if [[ ! $DB_URL =~ ://[^/@]+:[^/@]+@ && -z ${PGPASSWORD:-} ]]; then
     [[ -t 0 ]] || die "the connection string has no password; set PGPASSWORD"
-    read -r -s -p "資料庫密碼（不會顯示）: " PGPASSWORD </dev/tty
-    echo
-    export PGPASSWORD
+    tries=0
+    while :; do
+      PGPASSWORD=$(read_secret "資料庫密碼（建專案時設定的那組）: ")
+      export PGPASSWORD
+      out=$(psql "$DB_URL" -w -X -q -At -c 'SELECT 1' 2>&1) && { echo "連線成功"; break; }
+      echo "連不上：$(grep -m1 -E 'FATAL|error' <<<"$out" | sed -E 's/.*FATAL: +//; s/^psql: error: //')"
+      [[ $out == *ECIRCUITBREAKER* || $out == *'too many authentication'* ]] && die "$BLOCKED_MSG"
+      if [[ $out == *'password authentication failed'* ]]; then
+        echo "→ 資料庫拒絕這組密碼：要的是「資料庫密碼」，不是 Supabase 帳號密碼；忘了可在 Project Settings → Database 重設（約 1–2 分鐘後生效）。"
+        tries=$((tries + 1))
+        [[ $tries -lt 3 ]] || die "the source refused the password 3 times"
+      else
+        die "cannot reach the source database (not a password problem); check the connection string / network"
+      fi
+    done
   fi
   REF=$(sed -nE 's#^[a-z]+://postgres\.([a-z0-9]{20})[:@].*#\1#p; s#^[a-z]+://[^@]*@db\.([a-z0-9]{20})\.supabase\.co.*#\1#p' <<<"$DB_URL" | head -1)
   CONN=(--dbname "$DB_URL")
 fi
 
-q() { psql "${CONN[@]}" -X -q -v ON_ERROR_STOP=1 -At -F $'\t' -c "SET ROLE postgres" "$@"; }
+q() { psql "${CONN[@]}" -w -X -q -v ON_ERROR_STOP=1 -At -F $'\t' -c "SET ROLE postgres" "$@"; }
 q -c "SELECT 1" >/dev/null || die "cannot connect to the source database"
 
 stamp=$(TZ=Asia/Taipei date +%Y%m%d-%H%M%S)
@@ -155,7 +283,7 @@ if git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 echo "== ${REF:-source} -> ${out#"$REPO_DIR"/}"
 
-pg_dumpall "${CONN[@]}" --roles-only --role postgres --quote-all-identifier --no-role-passwords --no-comments \
+pg_dumpall "${CONN[@]}" -w --roles-only --role postgres --quote-all-identifier --no-role-passwords --no-comments \
   | sed -E 's/^\\(un)?restrict .*$/-- &/' \
   | sed -E "s/^CREATE ROLE \"($RESERVED_ROLES)\"/-- &/" \
   | sed -E "s/^ALTER ROLE \"($RESERVED_ROLES)\"/-- &/" \
@@ -166,7 +294,7 @@ pg_dumpall "${CONN[@]}" --roles-only --role postgres --quote-all-identifier --no
   | sed -E "/^--/d" | uniq >"$out/roles.sql"
 echo "RESET ALL;" >>"$out/roles.sql"
 
-pg_dump "${CONN[@]}" --schema-only --quote-all-identifier --role postgres --exclude-schema "$SCHEMA_SKIP" \
+pg_dump "${CONN[@]}" -w --schema-only --quote-all-identifier --role postgres --exclude-schema "$SCHEMA_SKIP" \
   | sed -E 's/^\\(un)?restrict .*$/-- &/' \
   | sed -E 's/^CREATE SCHEMA "/CREATE SCHEMA IF NOT EXISTS "/' \
   | sed -E 's/^CREATE TABLE "/CREATE TABLE IF NOT EXISTS "/' \
@@ -198,7 +326,7 @@ x_flags=()
 for t in auth.schema_migrations storage.migrations supabase_functions.migrations "${DATA_EXCLUDES[@]}"; do
   x_flags+=(--exclude-table "\"${t%%.*}\".\"${t#*.}\"")
 done
-pg_dump "${CONN[@]}" --data-only --quote-all-identifier --role postgres --exclude-schema "$DATA_SKIP" \
+pg_dump "${CONN[@]}" -w --data-only --quote-all-identifier --role postgres --exclude-schema "$DATA_SKIP" \
   --schema '*' "${x_flags[@]}" \
   | sed -E 's/^\\(un)?restrict .*$/-- &/' >"$out/data.sql"
 echo "RESET ALL;" >>"$out/data.sql"
