@@ -12,7 +12,7 @@
 - **Fix**: `authPersistence.onRememberExpired()` — `expireRemembered()` notifies listeners (deferred with `setTimeout 0`, because it runs inside auth-js's storage read); `AuthContext` registers `signOut({ scope: 'local' })` while signed in. The 60 s poll and `visibilitychange` check stay.
 - **Evidence**: `AuthContext.expiry.test.tsx` E1 (real supabase-js, faked fetch) failed before the fix and passes after; `authPersistence.test.ts` P10/P11. Playwright with faked Supabase HTTP, cap 20 s ahead: before — signed-in UI through t+150 s; after — login page at t+50 s. Gates: `npm test` 3,094 pass / 7 skipped, `npm run build`, `typecheck:edge`, oxlint on `src/services` + `src/context` exit 0.
 - **Not verified**: requests a stale tab sent before the fix (expected anon key); real login on iOS Safari / Windows (Task 194 item 5).
-- **Status**: ✅ FIXED (0.10.37-dev.1, not yet released)
+- **Status**: ✅ FIXED (0.10.37)
 
 ### Bug ID: BUG-118 — A cloud restore left PROD with no Edge Functions and Auth URLs on localhost
 - **Date**: 2026-10-08, found by the user on the recreated PROD (`zizndnzibubcqdvnuhwr`): no quotes, admin page empty; fixed in 0.10.36

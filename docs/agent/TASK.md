@@ -36,7 +36,7 @@
 - **Done**: items 1–3, 4a, 6, 7, 8 — password reveal, 保持登入 7 天, 資金流向 page (layout B, in-place details, per-group top-5 stocks, treemap removed), the 手動更新 button, the three free-tier optimisations on DEV **and PROD**. Full text in `TASK_ARCHIVE.md`.
 - **Items**:
   4. **No `market/sector_flow.json` exists on DEV or PROD yet** — the page shows 尚無類股資金流向資料. The first automatic run is the first chips round after the probe sees T86 (Mon 2026-10-05, ~16:00 Taipei), or the 手動更新 button (`sync-sector-flow`) on either environment. Then check the page on PROD, and that the TPEx half arrives (`coverage.otc`) ⏳
-  5. Real-login browser check: 保持登入 across a close/reopen on iOS Safari and Windows (the 7-day cap itself is unit-tested only) ⏳ — 2026-10-09 Playwright run (faked Supabase HTTP, no real login) passed the close/reopen and cap-on-reload cases but found BUG-119 (open tab), fixed in 0.10.37-dev.1; iOS Safari / Windows still unchecked
+  5. Real-login browser check: 保持登入 across a close/reopen on iOS Safari and Windows (the 7-day cap itself is unit-tested only) ⏳ — 2026-10-09 Playwright run (faked Supabase HTTP, no real login) passed the close/reopen and cap-on-reload cases but found BUG-119 (open tab), fixed and released in 0.10.37; iOS Safari / Windows still unchecked
   10. 資金流向 rebuilt as a treemap, **released as 0.10.32** (`1e8b24f`, `main` = `dev`; frontend only, no Edge or DDL). Open: look at it on the real file once item 4 produces one ⏳
   9. Probe schedule proof: on Mon 2026-10-05, `source_probe_tick` on DEV and PROD should show ticks only between 12:00 and 23:30 Taipei, none outside; the only proof today is structural (schedule read back, and a test ties `schema.sql` to every probe window) ⏳
 

@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **BUG-119 fixed** — a visible tab that crosses the 保持登入 7 天 cap now signs itself out (0.10.37-dev.1).
-- Status: fix committed to `dev` as 0.10.37-dev.1; release 0.10.37 to `main` requested by the user (frontend only, no Edge/DDL).
-- Timestamp: 2026-10-10 00:03:40 Asia/Taipei
+- Action: **0.10.37 released** — BUG-119: a visible tab that crosses the 保持登入 7 天 cap now signs itself out.
+- Status: ✅ `main` = `dev` = `1ed1835` (`84b3866` dev.1, `1ed1835` release); Release 0.10.37 by CI, body checked; Cloudflare Pages serves 0.10.37. Frontend only — no Edge or DDL to apply on PROD.
+- Timestamp: 2026-10-10 16:03:36 Asia/Taipei
 
 ---
 
@@ -12,6 +12,7 @@
 - **Done**: `onRememberExpired()` in `authPersistence.ts`, called (deferred) from `expireRemembered()`; `AuthContext` signs out locally on it. New real-client test `AuthContext.expiry.test.tsx` E1 (failed before the fix, passes after) and `authPersistence.test.ts` P10/P11. Version 0.10.37-dev.1 in `package.json` (+lock), `version.ts`, README; CHANGELOG entry in zh-TW; BUG-119 moved to `FIXED_BUG.md`; spec 194 item 2 updated.
 - **Verified**: Playwright re-run (faked Supabase HTTP, cap 20 s ahead): login page at t+50 s, was still signed-in UI at t+150 s before; the other three scenarios unchanged. `npm test` 3,094 pass / 7 skipped, `npm run build`, `typecheck:edge`, oxlint exit 0.
 - **Gates (ship)**: first `npm test` run had 1 failure in `SectorFlowPage.test.tsx` (「opens a link to a sector with no tile…」) that passed 3× alone and on a full rerun (3,094 pass) — flaky under full-suite load, not investigated; build, `typecheck:edge` pass.
+- **Released**: user asked 「先幫我commit跟push到main」. `release: 0.10.37` fast-forwarded to `main`; `gh release view 0.10.37` body = CHANGELOG section; production `appLog-*.js` carries `0.10.37`.
 - **Not done**: Task 194 item 5 on iOS Safari and Windows.
 ## 📅 Log: 2026-10-09 23:50:00 Asia/Taipei (Task 194 item 5 — does 保持登入 7 天 work?)
 - **Ask**: 「確認一下保持登入七天這個功能到底有沒有正常」.
