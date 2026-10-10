@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const { fetchSectorFlow } = vi.hoisted(() => ({ fetchSectorFlow: vi.fn() }))
@@ -405,7 +405,9 @@ describe('SectorFlowPage: opening a sector from the map', () => {
     const detail = await screen.findByRole('group', { name: '無成交類股細節' })
     expect(detail.closest('tr')).not.toBeNull()
     expect(aside().contains(detail)).toBe(false)
-    expect((screen.getByText('看詳細數字').closest('details') as HTMLDetailsElement).open).toBe(true)
+    // The detail renders with the data; the table opens one commit later, from an effect.
+    const fold = screen.getByText('看詳細數字').closest('details') as HTMLDetailsElement
+    await waitFor(() => expect(fold.open).toBe(true))
   })
 
   it('ignores a link to a sector this file does not have', async () => {

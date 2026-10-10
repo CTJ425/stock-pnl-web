@@ -11,7 +11,7 @@
 - **Ask**: 「幫我修 BUG-119」.
 - **Done**: `onRememberExpired()` in `authPersistence.ts`, called (deferred) from `expireRemembered()`; `AuthContext` signs out locally on it. New real-client test `AuthContext.expiry.test.tsx` E1 (failed before the fix, passes after) and `authPersistence.test.ts` P10/P11. Version 0.10.37-dev.1 in `package.json` (+lock), `version.ts`, README; CHANGELOG entry in zh-TW; BUG-119 moved to `FIXED_BUG.md`; spec 194 item 2 updated.
 - **Verified**: Playwright re-run (faked Supabase HTTP, cap 20 s ahead): login page at t+50 s, was still signed-in UI at t+150 s before; the other three scenarios unchanged. `npm test` 3,094 pass / 7 skipped, `npm run build`, `typecheck:edge`, oxlint exit 0.
-- **Gates (ship)**: first `npm test` run had 1 failure in `SectorFlowPage.test.tsx` (「opens a link to a sector with no tile…」) that passed 3× alone and on a full rerun (3,094 pass) — flaky under full-suite load, not investigated; build, `typecheck:edge` pass.
+- **Gates (ship)**: first `npm test` run had 1 failure in `SectorFlowPage.test.tsx` (「opens a link to a sector with no tile…」) that passed 3× alone and on a full rerun (3,094 pass) — flaky under full-suite load; root cause found afterwards (test asserted `details.open` one commit before the effect sets it — fails 36/36 when run alone with `-t`), fixed in the test with `waitFor`; build, `typecheck:edge` pass.
 - **Released**: user asked 「先幫我commit跟push到main」. `release: 0.10.37` fast-forwarded to `main`; `gh release view 0.10.37` body = CHANGELOG section; production `appLog-*.js` carries `0.10.37`.
 - **Not done**: Task 194 item 5 on iOS Safari and Windows.
 ## 📅 Log: 2026-10-09 23:50:00 Asia/Taipei (Task 194 item 5 — does 保持登入 7 天 work?)
