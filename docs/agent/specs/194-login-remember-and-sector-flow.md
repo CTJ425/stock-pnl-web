@@ -13,7 +13,7 @@ DEV Supabase work authorised, PROD not.
 (localStorage): a timestamp = remembered until then (session in localStorage), `'session'` = sessionStorage,
 absent = default remember and the 7 days start on first read/write (covers sessions that predate this and
 email-link sessions). `AuthContext` checks the cap every 60 s and on `visibilitychange` and calls
-`signOut({ scope: 'local' })`; `SIGNED_OUT` clears the choice. The cap is **browser-side only**: the refresh
+`signOut({ scope: 'local' })`; `SIGNED_OUT` clears the choice. Whoever reads the session first past the deadline purges it and clears the marker, so `expireRemembered()` also notifies `onRememberExpired` listeners and `AuthContext` signs out from that (BUG-119, 0.10.37-dev.1). The cap is **browser-side only**: the refresh
 token stays valid on the server (a server timebox is a Pro-plan setting; not checked on DEV/PROD).
 Not remembered = per tab: a new tab asks for the password again.
 

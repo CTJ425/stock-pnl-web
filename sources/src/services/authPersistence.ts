@@ -71,10 +71,28 @@ export function isRememberExpired(now: number = Date.now()): boolean {
   return typeof meta === 'number' && meta <= now
 }
 
+const expiryListeners = new Set<() => void>()
+
+/**
+ * Called once whenever a remembered login is found past its 7 days. Whoever reads the session
+ * first after the deadline (auth-js's refresh tick, a `getSession()` behind a query, the poll)
+ * purges it, and a purge alone emits no `SIGNED_OUT`; this is how the signed-in UI hears of it.
+ * Returns the unsubscribe function.
+ */
+export function onRememberExpired(listener: () => void): () => void {
+  expiryListeners.add(listener)
+  return () => {
+    expiryListeners.delete(listener)
+  }
+}
+
 /** Drop an expired remembered login completely (the session and its refresh token). */
 export function expireRemembered() {
   purgeLocalAuthKeys()
   clearPersistence()
+  // Deferred: this runs inside auth-js's own storage read, and a listener that signs out
+  // re-enters auth-js.
+  setTimeout(() => expiryListeners.forEach((listener) => listener()), 0)
 }
 
 /** `auth.storage` for supabase-js: picks localStorage or sessionStorage per the stored choice. */

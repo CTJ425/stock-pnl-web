@@ -6,7 +6,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { isSupabaseConfigured, supabase } from '../services/supabase'
-import { clearPersistence, isRememberExpired, setRemember } from '../services/authPersistence'
+import {
+  clearPersistence,
+  isRememberExpired,
+  onRememberExpired,
+  setRemember,
+} from '../services/authPersistence'
 
 /** How often an open tab checks whether its remembered login has passed the 7-day cap. */
 const EXPIRY_CHECK_MS = 60_000
@@ -100,20 +105,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyUser])
 
-  // A tab that stays open past the 7-day cap would otherwise keep its in-memory session.
+  // A tab that stays open past the 7-day cap would otherwise keep showing its signed-in UI.
+  // Whoever reads the session first after the deadline purges it and clears the cap marker
+  // (BUG-119), so the poll below can miss it: listen for the purge as well.
   const signedIn = Boolean(user)
   useEffect(() => {
     if (!supabase || !signedIn) return
     const client = supabase
+    const signOutLocally = () => void client.auth.signOut({ scope: 'local' })
     const check = () => {
-      if (document.visibilityState !== 'hidden' && isRememberExpired()) {
-        void client.auth.signOut({ scope: 'local' })
-      }
+      if (document.visibilityState !== 'hidden' && isRememberExpired()) signOutLocally()
     }
+    const stopListening = onRememberExpired(signOutLocally)
     check()
     const timer = window.setInterval(check, EXPIRY_CHECK_MS)
     document.addEventListener('visibilitychange', check)
     return () => {
+      stopListening()
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', check)
     }

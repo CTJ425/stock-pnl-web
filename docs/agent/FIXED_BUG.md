@@ -6,6 +6,14 @@
 
 ---
 
+### Bug ID: BUG-119 — 保持登入 7 天: a visible tab that crosses the cap kept showing the signed-in UI
+- **Date**: found 2026-10-09, fixed 2026-10-10 in 0.10.37-dev.1
+- **Root Cause**: auth-js reads storage on its own 30 s refresh tick (`__loadSession`), faster than the 60 s `EXPIRY_CHECK_MS`. The first read past the deadline ran `expireRemembered()`, which purged the token **and** the meta key, so `isRememberExpired()` was false from then on and `AuthContext` never called `signOut`. `__loadSession` returns `{ session: null }` with no `SIGNED_OUT`, so React `user` stayed set. `X4` mocked the whole client and could not see it.
+- **Fix**: `authPersistence.onRememberExpired()` — `expireRemembered()` notifies listeners (deferred with `setTimeout 0`, because it runs inside auth-js's storage read); `AuthContext` registers `signOut({ scope: 'local' })` while signed in. The 60 s poll and `visibilitychange` check stay.
+- **Evidence**: `AuthContext.expiry.test.tsx` E1 (real supabase-js, faked fetch) failed before the fix and passes after; `authPersistence.test.ts` P10/P11. Playwright with faked Supabase HTTP, cap 20 s ahead: before — signed-in UI through t+150 s; after — login page at t+50 s. Gates: `npm test` 3,094 pass / 7 skipped, `npm run build`, `typecheck:edge`, oxlint on `src/services` + `src/context` exit 0.
+- **Not verified**: requests a stale tab sent before the fix (expected anon key); real login on iOS Safari / Windows (Task 194 item 5).
+- **Status**: ✅ FIXED (0.10.37-dev.1, not yet released)
+
 ### Bug ID: BUG-118 — A cloud restore left PROD with no Edge Functions and Auth URLs on localhost
 - **Date**: 2026-10-08, found by the user on the recreated PROD (`zizndnzibubcqdvnuhwr`): no quotes, admin page empty; fixed in 0.10.36
 - **Root Cause**: `db-migrate.sh` offered the Edge deploy only when `SUPABASE_ACCESS_TOKEN` was already **exported**; `sbuse` sets it without `export`, so the step was skipped silently and the new project had zero functions (all three endpoints 404). Auth `site_url` / `uri_allow_list` live in project config, not the DB, so the restore kept the new project's `http://localhost:3000` and an empty allow-list (password-reset mail would land on localhost). The manual end-of-run steps that covered both were missed.

@@ -8,6 +8,7 @@ import {
   clearPersistence,
   expireRemembered,
   isRememberExpired,
+  onRememberExpired,
   setRemember,
 } from './authPersistence'
 
@@ -103,6 +104,45 @@ describe('authPersistence', () => {
     expireRemembered()
     expect(localStorage.getItem(KEY)).toBeNull()
     expect(localStorage.getItem('stock-pnl-web/theme')).toBe('dark')
+  })
+
+  it('P10: the first read past the cap tells listeners, once, after the purge (BUG-119)', () => {
+    setRemember(true)
+    authStorage.setItem(KEY, 'S')
+    const listener = vi.fn()
+    const stop = onRememberExpired(listener)
+
+    vi.setSystemTime(T0 + REMEMBER_DAYS * DAY + 1000)
+    expect(authStorage.getItem(KEY)).toBeNull()
+    expect(listener).not.toHaveBeenCalled() // deferred: the read is still inside auth-js
+    vi.advanceTimersByTime(0)
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    authStorage.getItem(KEY) // the marker is gone, so a second read is not an expiry
+    vi.advanceTimersByTime(0)
+    expect(listener).toHaveBeenCalledTimes(1)
+    stop()
+  })
+
+  it('P11: a login inside the 7 days tells nobody, and a stopped listener hears nothing', () => {
+    setRemember(true)
+    authStorage.setItem(KEY, 'S')
+    const heard = vi.fn()
+    const stopped = vi.fn()
+    const stop = onRememberExpired(stopped)
+    const stopHeard = onRememberExpired(heard)
+    stop()
+
+    authStorage.getItem(KEY)
+    vi.advanceTimersByTime(0)
+    expect(heard).not.toHaveBeenCalled()
+
+    vi.setSystemTime(T0 + REMEMBER_DAYS * DAY + 1000)
+    authStorage.getItem(KEY)
+    vi.advanceTimersByTime(0)
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect(stopped).not.toHaveBeenCalled()
+    stopHeard()
   })
 
   it('P9: blocked storage never throws', () => {
