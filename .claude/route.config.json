@@ -1,0 +1,9 @@
+{
+  "$schema": "/home/ivan/.claude/plugins/cache/route/route/0.13.0/schema/route.config.schema.json",
+  "version": 2,
+  "paths": { "prod": ["sources/", "scripts/", "supabase/"] },
+  "models": { "scout": "haiku", "builder": "sonnet", "reviewer": "sonnet", "scribe": "haiku" },
+  "bookkeeping": { "enabled": true, "timezone": "Asia/Taipei" },
+  "language": { "artifacts": "en" },
+  "review": { "policy": "risk" }
+}
