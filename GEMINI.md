@@ -88,12 +88,12 @@ Then inspect code you will touch. Do not assume chat has full state.
 
 | Env | Branch | Supabase |
 | ---- | ---- | ---- |
-| PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
-| DEV | `dev` | cloud **`zyebvayngwrqzoaicbwd`** (project "Stock-Pnl-Web-Dev") — what `supabase link` points at |
+| PROD | `main` | cloud **`zizndnzibubcqdvnuhwr`** (project "Stock-Pnl-Web-Prod") |
+| DEV | `dev` | cloud **`accmczhrqsilzrtyhyxa`** (project "Stock-Pnl-Web-Dev") — what `supabase link` points at |
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Both PROD and DEV are Supabase Cloud projects (no Docker environment).
-- Edge Functions deployment: `supabase functions deploy <name> --project-ref <ref> --no-verify-jwt`.
+- Edge Functions deployment: `supabase functions deploy <name> --project-ref <ref>`; add `--no-verify-jwt` for `stock-report` and `backup-transactions` only — `stock-price` must keep JWT verification.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.
 
 ## This repo is public — where raw logs may go

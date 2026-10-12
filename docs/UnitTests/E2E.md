@@ -5,7 +5,7 @@
 Real browser against:
 
 1. **Native/local mode** — Vite, no Supabase env (default for agents)  
-2. **Supabase mode** — DEV (Supabase Cloud ref `zyebvayngwrqzoaicbwd`) or PROD front end + real session  
+2. **Supabase mode** — DEV (Supabase Cloud ref `accmczhrqsilzrtyhyxa`) or PROD front end + real session  
 
 > **`run-all-e2e.cjs` is the exception to "native mode by default" (BUG-083).** It seeds Supabase
 > auth tokens and answers every backend call from its own `page.route` mocks, so the app under test
@@ -30,7 +30,8 @@ Real browser against:
 | `.claude/skills/testing/SKILL.md` | Layer choice + `npm test` gate |
 | `sources/scripts/run-all-e2e.cjs` | Master runner for full verification suite — **Supabase mode only**, see below |
 | `sources/scripts/verify-admin-status.cjs` | Admin 「抓取狀況」 multi-viewport layout scan |
-| `sources/scripts/verify-watchlist-e2e.cjs` | Watchlist panel layout & modal portal verification |
+| `sources/scripts/verify-macro-turnover.cjs` | 總經 daily turnover / 三大法人 transposed matrix layout, sticky first column on mobile |
+| `sources/scripts/verify-monthly-rebate-cost-e2e.cjs` | 月退 券商 figure carries the list-price buy fee in cost (Task 189): −610 / −515, fee-panel preview and save |
 | `sources/scripts/verify-whatif-e2e.cjs` | What-If calculation & cross-screen balance agreement |
 | `sources/scripts/verify-stock-search-e2e.cjs` | TW stock search & fallback lookup verification |
 | `sources/scripts/verify-daytrade-short-e2e.cjs` | Day-trade & short sale P&L verification |
@@ -115,8 +116,8 @@ Component-level companion assertion, cheap and worth having: a modal must be por
 its caller's subtree, i.e. `container.contains(dialog) === false` and
 `document.body.contains(dialog) === true`.
 
-`scripts/verify-watchlist-e2e.cjs` is the runnable form of this for 觀察清單 (DEV only, mints
-its own session, cleans up the row it adds).
+`scripts/verify-watchlist-e2e.cjs` was the runnable form of this for 觀察清單; it was deleted on
+2026-10-01 (`9db0ae7`) and has no replacement yet.
 
 ## Cross-screen agreement — `verify-whatif-e2e.cjs`
 

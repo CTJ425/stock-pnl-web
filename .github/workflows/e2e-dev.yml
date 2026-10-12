@@ -4,7 +4,7 @@
 # configured — a missing secret must never look like a passing run.
 #
 # Required repository secrets (DEV only, never PROD):
-#   DEV_SUPABASE_URL       https://zyebvayngwrqzoaicbwd.supabase.co
+#   DEV_SUPABASE_URL       https://accmczhrqsilzrtyhyxa.supabase.co
 #   DEV_SUPABASE_ANON_KEY  the anon (publishable) key — the e2e path never needs the service role
 #
 # `run-all-e2e.cjs` drives the browser against TEST_URL and exits non-zero on any failed case;

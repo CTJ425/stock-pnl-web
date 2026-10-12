@@ -65,7 +65,7 @@ The subsequent validation query is also in the same (wrong) database, so it chec
 Pick a value that must be different between the two areas, for example:
 
 ```sql
-SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%') AS is_dev, -- see § DEV and PROD identity
+SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%accmczhrqsilzrtyhyxa%') AS is_dev, -- see § DEV and PROD identity
        jobid, schedule, (regexp_match(command, 'url\s*:=\s*''([^'']*)'''))[1] AS url
 FROM cron.job;
 ```
@@ -121,17 +121,20 @@ answering 401. Change both in the same session, then re-hash to prove they match
 ## DEV and PROD identity, and where DDL lands
 
 Both cloud projects were recreated on 2026-08-31, from setup SQL whose placeholders were
-never substituted. Any older ref returns `404 Resource has been removed`, and `sources/.env`
-may still point at a dead one. Do not check this by eye — run `verify_setup()`.
+never substituted, and again by `db-migrate.sh` restores: DEV on 2026-10-07, PROD on 2026-10-08
+(BUG-118). Any older ref (`hrilemueiqyaoiwnkeuu`, `zyebvayngwrqzoaicbwd`, `ytbgtuqeeyxlvldbzgnl`)
+returns `404 Resource has been removed`, and `sources/.env` may still point at a dead one. Do
+not check this by eye — run `supabase projects list` and `verify_setup()`.
 
-- PROD is cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web"), on branch `main`.
-- DEV is cloud **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev"), on branch `dev`. It is what
-  `supabase link` points at. `sources/.env` points at `https://zyebvayngwrqzoaicbwd.supabase.co`,
-  and DEV Edge runs there (`functions list` shows 3 ACTIVE). Verified 2026-09-01.
+- PROD is cloud **`zizndnzibubcqdvnuhwr`** (project "Stock-Pnl-Web-Prod"), on branch `main`.
+- DEV is cloud **`accmczhrqsilzrtyhyxa`** ("Stock-Pnl-Web-Dev"), on branch `dev`. It is what
+  `supabase link` should point at; re-link from `sources/` if `supabase/.temp/project-ref`
+  names anything else. Verified 2026-10-12 with `projects list` (only these two exist) and the
+  identity predicate below (true on DEV, false on PROD).
 - DEV DDL goes through `supabase db query --linked` from `sources/`, always with an identity
   value in the same query.
 - To tell DEV from PROD, use
-  `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%')`, **not** a job
+  `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%accmczhrqsilzrtyhyxa%')`, **not** a job
   count: the count is identical on both projects, and it changed from 6 to 7 on 2026-09-06
   when `app-log-prune` was added.
 - There is no local stack: both environments are cloud projects and `docker` is not installed on

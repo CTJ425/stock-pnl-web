@@ -50,13 +50,13 @@
 
 | 環境 | 分支 | Supabase |
 | ---- | ---- | ---- |
-| PROD (正式) | `main` | 雲端 **`hrilemueiqyaoiwnkeuu`**（專案「Stock-Pnl-Web」） |
-| DEV (測試) | `dev` | 雲端 **`zyebvayngwrqzoaicbwd`**（專案「Stock-Pnl-Web-Dev」）— `supabase link` 指向 |
+| PROD (正式) | `main` | 雲端 **`zizndnzibubcqdvnuhwr`**（專案「Stock-Pnl-Web-Prod」） |
+| DEV (測試) | `dev` | 雲端 **`accmczhrqsilzrtyhyxa`**（專案「Stock-Pnl-Web-Dev」）— `supabase link` 指向 |
 
 - **務必先 commit 至 `dev`**；在 DEV 環境驗證無誤後才合併至 `main`。`main` 的 push 會自動部署前端。
 - PROD 與 DEV 皆為 Supabase 雲端專案（無 Docker 環境）。
 - Edge Functions 部署：
-  - `stock-price` 與 `ai-proxy` 需開啟 JWT 驗證（`verify_jwt=true`，不加 `--no-verify-jwt` 旗標）：`supabase functions deploy <name> --project-ref <ref>`（前端以使用者 JWT 呼叫）。
+  - `stock-price` 需開啟 JWT 驗證（`verify_jwt=true`，不加 `--no-verify-jwt` 旗標）：`supabase functions deploy <name> --project-ref <ref>`（前端以使用者 JWT 呼叫）。
   - 背景排程觸發的函數（`stock-report`、`backup-transactions`）需關閉 JWT 驗證：`supabase functions deploy <name> --project-ref <ref> --no-verify-jwt`（pg_cron 帶 `x-cron-secret` 呼叫、不帶 JWT）。
 - 唯讀查詢可自由執行。操作坑洞（含 `stock-report` 於雲端需加 `--no-verify-jwt`）參見：**`supabase-ops`** skill。
 

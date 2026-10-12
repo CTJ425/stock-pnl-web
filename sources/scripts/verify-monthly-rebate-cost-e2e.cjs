@@ -99,7 +99,7 @@ const workspacePatches = []
 
 async function installMocks(page) {
   await page.addInitScript(({ session, wsId, rate }) => {
-    for (const ref of ['zyebvayngwrqzoaicbwd', 'hrilemueiqyaoiwnkeuu']) {
+    for (const ref of ['accmczhrqsilzrtyhyxa', 'zizndnzibubcqdvnuhwr']) {
       window.localStorage.setItem(`sb-${ref}-auth-token`, JSON.stringify(session))
     }
     window.localStorage.setItem('stock-pnl-web/current-workspace', wsId)

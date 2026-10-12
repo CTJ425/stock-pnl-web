@@ -147,8 +147,8 @@ the better one.
 
 | Env | Branch | Supabase |
 | ---- | ---- | ---- |
-| PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
-| DEV | `dev` | cloud **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` points at |
+| PROD | `main` | cloud **`zizndnzibubcqdvnuhwr`** (project "Stock-Pnl-Web-Prod") |
+| DEV | `dev` | cloud **`accmczhrqsilzrtyhyxa`** ("Stock-Pnl-Web-Dev") — what `supabase link` points at |
 
 Any older ref returns `404 Resource has been removed`, and `sources/.env` may still point at
 a dead one. Do not check this by eye — run `verify_setup()`. The recreation story, the

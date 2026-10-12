@@ -46,10 +46,10 @@ SELECT count(*) FROM source_probe_tick WHERE source = '<id>';
 ```
 
 Run them against DEV with `supabase db query --linked`, from `sources/`. DEV is the cloud project
-`zyebvayngwrqzoaicbwd`. `--linked` resolves against the current working directory and has silently
+`accmczhrqsilzrtyhyxa`. `--linked` resolves against the current working directory and has silently
 written to PROD before, so `cd sources/` first and put the identity predicate from `supabase-ops`
 in the same query:
-`SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%') AS is_dev, …`.
+`SELECT EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%accmczhrqsilzrtyhyxa%') AS is_dev, …`.
 
 ## A source that never fires: check both halves of the dispatch path
 
@@ -93,7 +93,7 @@ verified inside its own `DAILY_WINDOWS` slot, on a weekday. Plan the check for t
 
 ## Deploying a probe fix
 
-- **DEV**: `supabase functions deploy stock-report --project-ref zyebvayngwrqzoaicbwd --no-verify-jwt`
+- **DEV**: `supabase functions deploy stock-report --project-ref accmczhrqsilzrtyhyxa --no-verify-jwt`
   from `sources/`. **Corrected 2026-09-01** — this used to be a volume copy into
   `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/` plus a container
   recreate. DEV Edge now runs in the cloud (`functions list` shows 3 ACTIVE there), so the volume

@@ -59,8 +59,8 @@ const SCREENSHOT_PATH = path.join(__dirname, '..', 'stock-search-e2e.png')
 
   await page.addInitScript(
     ({ session, wsId }) => {
-      window.localStorage.setItem('sb-zyebvayngwrqzoaicbwd-auth-token', JSON.stringify(session))
-      window.localStorage.setItem('sb-hrilemueiqyaoiwnkeuu-auth-token', JSON.stringify(session))
+      window.localStorage.setItem('sb-accmczhrqsilzrtyhyxa-auth-token', JSON.stringify(session))
+      window.localStorage.setItem('sb-zizndnzibubcqdvnuhwr-auth-token', JSON.stringify(session))
       window.localStorage.setItem('stock-pnl-web/current-workspace', wsId)
       window.localStorage.setItem(`stock_pnl_fee_rate:${wsId}`, '0.0004275')
     },

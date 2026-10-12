@@ -54,8 +54,8 @@ const TARGET_URL = process.env.TEST_URL || 'http://localhost:5173/'
 
   // Seed session and initial workspace in localStorage
   await page.addInitScript(({ session, wsId }) => {
-    window.localStorage.setItem('sb-zyebvayngwrqzoaicbwd-auth-token', JSON.stringify(session))
-    window.localStorage.setItem('sb-hrilemueiqyaoiwnkeuu-auth-token', JSON.stringify(session))
+    window.localStorage.setItem('sb-accmczhrqsilzrtyhyxa-auth-token', JSON.stringify(session))
+    window.localStorage.setItem('sb-zizndnzibubcqdvnuhwr-auth-token', JSON.stringify(session))
     window.localStorage.setItem('stock-pnl-web/current-workspace', wsId)
   }, { session: mockSession, wsId })
 
