@@ -27,13 +27,14 @@ npm run build    # 型別檢查 + 打包（輸出 dist/）
 1. 到 [Supabase Console](https://supabase.com) 建立專案。
 2. 在 SQL Editor 執行 `supabase/schema.sql`。
 3. 複製 `.env.example` 為 `.env.local`，填入 Project Settings → API 的 URL 與 anon key。
-4. （建議）部署 Edge Functions（於 `sources/` 目錄，**只有 `stock-report` 需要關閉 Verify JWT**）：
+4. （建議）部署 Edge Functions（於 `sources/` 目錄，**`stock-report` 與 `backup-transactions` 需要關閉 Verify JWT**）：
    ```bash
    supabase functions deploy stock-price                    # 現價 / 搜尋代理（維持 verify_jwt=true）
    supabase functions deploy stock-report --no-verify-jwt   # 盤後籌碼報告
+   supabase functions deploy backup-transactions --no-verify-jwt   # 每日備份
    ```
    > `stock-price` 由前端帶 anon JWT 呼叫，關掉驗證會變成誰都能打的公開端點（Edge Function 額度濫用）；
-   > `stock-report` 一定要關，因為 pg_cron 是帶 `CRON_SECRET`、不帶 JWT 呼叫，設成 true 盤後批次會全數 401。
+   > `stock-report` 與 `backup-transactions` 一定要關，因為 pg_cron 是帶 `CRON_SECRET`、不帶 JWT 呼叫，設成 true 盤後批次與每日備份會全數 401。
    > `stock-report` 為多檔函數；Dashboard GUI 部署與常見問題見 [`supabase/README.md`](supabase/README.md)。
 5. 部署前端前，把 Supabase Auth 的 Site URL / Redirect URLs 設為實際部署後的網址。
 
@@ -52,7 +53,9 @@ supabase/
 ├── README.md                     # Edge Functions 建立 / 部署指南
 └── functions/
     ├── stock-price/              # Edge Function：TWSE MIS / Yahoo 現價 / 搜尋代理
-    └── stock-report/             # Edge Function：TWSE 盤後籌碼報告產生器
+    ├── stock-report/             # Edge Function：TWSE 盤後籌碼報告產生器
+    ├── backup-transactions/      # Edge Function：每日備份使用者資料到 Storage
+    └── _shared/                  # 三支函數共用模組
 ```
 
 ## 與 GAS 版的精算同構

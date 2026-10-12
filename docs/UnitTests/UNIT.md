@@ -13,8 +13,7 @@ cd sources
 npm test
 npx vitest run src/utils/pnlEngine.test.ts
 npx vitest run supabase/functions/stock-report/pollPlan.test.ts
-npx vitest run supabase/functions/backup-transactions/r2.test.ts
-npx vitest run supabase/functions/ai-proxy/handler.test.ts
+npx vitest run supabase/functions/backup-transactions/backupPlan.test.ts
 ```
 
 `testTimeout` is 20s for UI tests; unit cases should finish in ms — do not raise timeout to hide hangs.

@@ -1,12 +1,19 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **0.10.37 released** — BUG-119: a visible tab that crosses the 保持登入 7 天 cap now signs itself out.
-- Status: ✅ `main` = `dev` = `1ed1835` (`84b3866` dev.1, `1ed1835` release); Release 0.10.37 by CI, body checked; Cloudflare Pages serves 0.10.37. Frontend only — no Edge or DDL to apply on PROD.
-- Timestamp: 2026-10-10 16:03:36 Asia/Taipei
+- Action: **Docs audit + archive** — project refs moved to the recreated DEV/PROD; README and docs corrected; hot files rolled.
+- Status: ✅ on `dev` (docs/tooling only, no version bump); `main` still = 0.10.37 `1ed1835`. Frontend, Edge, DDL untouched.
+- Timestamp: 2026-10-12 09:39:05 Asia/Taipei
 
 ---
 
+## 📅 Log: 2026-10-12 09:39:05 Asia/Taipei (docs archive + accuracy audit)
+- **Ask**: 「幫我做一下所有文件的歸檔與查證…」, then 「都按照你的建議」.
+- **Archive** (`61c23e3`): TASK.md 23,918 → ~13.3 KB, BUG_FIX.md 9,139 → 8,370 B (both still over cap — the remaining entries are live). Tasks 188/178/179/181 moved verbatim to `TASK_ARCHIVE.md` (open items **not** done); BUG-103/107 accepted → `ACCEPTED_RISKS.md`.
+- **Refs**: `supabase projects list` shows only DEV `accmczhrqsilzrtyhyxa` and PROD `zizndnzibubcqdvnuhwr`. Old refs replaced in CLAUDE.md, GEMINI.md, CLAUDE-tw.md, `supabase-ops`/`probe-ops`, six E2E scripts, `e2e-dev.yml`, E2E.md. Identity predicate checked live: true on DEV, false on PROD. `sources/` re-linked to DEV (was dead `ytbgtuqeeyxlvldbzgnl`). Task 198 item 5 done.
+- **Docs fixed**: README test counts (186 files / 3,094 pass / 7 skipped, run today), `stock-report` 44 files (not 45), `stock-price` 8 (not 9), the 「未登入回 401」 claim (publishable key passes `verify_jwt`, Task 185 #12), removed `supabase start` steps, added 資金流向 / 休市日 / 保持登入 / Discord to features and tree; `sources/README.md` now deploys `backup-transactions` with `--no-verify-jwt`; CLAUDE-tw.md `ai-proxy` removed; GEMINI.md deploy flag; UNIT.md / E2E.md dead file names.
+- **Verified**: `npm run build`, vitest, `node --check` on all scripts, workflow YAML parses.
+- **Not done / not verified**: E2E scripts not run against the new DEV; `sources/.env` (gitignored) still points at dead `zyebvayngwrqzoaicbwd` — needs the new DEV URL + publishable key; `docs/architecture/system_design.md` (original design doc) still lists `database.types.ts`; code comments were checked only for references to missing files, not read line by line.
 ## 📅 Log: 2026-10-10 00:03:40 Asia/Taipei (BUG-119 fix, 0.10.37-dev.1)
 - **Ask**: 「幫我修 BUG-119」.
 - **Done**: `onRememberExpired()` in `authPersistence.ts`, called (deferred) from `expireRemembered()`; `AuthContext` signs out locally on it. New real-client test `AuthContext.expiry.test.tsx` E1 (failed before the fix, passes after) and `authPersistence.test.ts` P10/P11. Version 0.10.37-dev.1 in `package.json` (+lock), `version.ts`, README; CHANGELOG entry in zh-TW; BUG-119 moved to `FIXED_BUG.md`; spec 194 item 2 updated.
@@ -14,8 +21,3 @@
 - **Gates (ship)**: first `npm test` run had 1 failure in `SectorFlowPage.test.tsx` (「opens a link to a sector with no tile…」) that passed 3× alone and on a full rerun (3,094 pass) — flaky under full-suite load; root cause found afterwards (test asserted `details.open` one commit before the effect sets it — fails 36/36 when run alone with `-t`), fixed in the test with `waitFor`; build, `typecheck:edge` pass.
 - **Released**: user asked 「先幫我commit跟push到main」. `release: 0.10.37` fast-forwarded to `main`; `gh release view 0.10.37` body = CHANGELOG section; production `appLog-*.js` carries `0.10.37`.
 - **Not done**: Task 194 item 5 on iOS Safari and Windows.
-## 📅 Log: 2026-10-09 23:50:00 Asia/Taipei (Task 194 item 5 — does 保持登入 7 天 work?)
-- **Ask**: 「確認一下保持登入七天這個功能到底有沒有正常」.
-- **Found**: unit tests (18) pass but mock the whole Supabase client. Playwright against the real bundle + supabase-js 2.117.1 with the Supabase HTTP faked (no credentials; script was in the scratchpad, not kept): remember=true → token in localStorage, meta = now + 7.000 days, survives a new browser context, login page after the meta passes + reload; remember=false → sessionStorage only, new tab asks to sign in. **BUG-119**: a visible tab that crosses the cap keeps showing the signed-in UI — auth-js's 30 s refresh tick reads storage first, `expireRemembered()` clears the meta key, so the 60 s check in `AuthContext.tsx:109` never fires. Reload fixes it.
-- **Done**: recorded BUG-119 and the Task 194 item 5 result; no code changed.
-- **Not verified**: real login on iOS Safari / Windows (item 5); what requests a stale tab sends (expected anon key); tab-restore features (Chrome 「繼續瀏覽上次開啟的網頁」, iOS Safari) keep sessionStorage, so an unchecked login can survive a close and reopen.

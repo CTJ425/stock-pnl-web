@@ -61,6 +61,7 @@
 ### Task 198 — completed sub-items (rolled from TASK.md 2026-10-12 09:39:05)
 1. ~~Remove every Fugle leg (prices, intraday, daily, `syncDaily`, `fugle-eval`); Edge files restored to `ceb539e^`~~ ✅ 0.10.36-dev.1
 2. ~~Deploy to DEV, then PROD~~ ✅ 0.10.36 — DEV 2026-10-08 15:00; PROD 2026-10-08 15:20 by the user via `db-migrate.sh --functions-only` (all ✓: three functions ACTIVE, `CRON_SECRET` `21d0257c…` = cron, Auth Site URL `https://stock-pnl-web.pages.dev/` + 5 redirect URLs). Verified: PROD `market-data-daily` 200 with `total=5 dailySynced=1 dailySkipped=4`, `daily/6560.json` 244 rows; the live site (bundle points at `zizndnzibubcqdvnuhwr`) gets `stock-price` 200 for 2330 / 6560 / AAPL with its own publishable key.
+5. ~~Project refs changed: PROD is now `zizndnzibubcqdvnuhwr`, DEV `accmczhrqsilzrtyhyxa` (old `hrilemueiqyaoiwnkeuu` / `zyebvayngwrqzoaicbwd` return 404). CLAUDE.md § Branches & envs and the `supabase-ops` skill still name the old ones~~ ✅ 2026-10-12 (user OK): CLAUDE.md, GEMINI.md, docs/CLAUDE-tw.md, `supabase-ops` / `probe-ops` skills, six E2E scripts, `e2e-dev.yml`, `docs/UnitTests/E2E.md`; `sources/` re-linked to DEV (was dead `ytbgtuqeeyxlvldbzgnl`). Identity predicate re-checked: true on DEV, false on PROD.
 
 ### Task 189 — completed sub-items and background (rolled from TASK.md 2026-10-12 09:39:05)
 - **Why**: 玉山 App showed 009828 at −610, the dashboard −515. 95 = floor(107,000 × 0.1425%) 152 − recorded 57:

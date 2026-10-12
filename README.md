@@ -66,6 +66,10 @@
   - **國際指數**（0.9.56 起作為首位與預設分頁）：包含台股加權指數、日經 225、KOSPI、KOSDAQ、道瓊、S&P 500、那斯達克、費城半導體、羅素 2000，依台灣／日本／韓國／美國四區分組並標示當下時段（盤中／午休／已收盤）。點擊「加權指數（^TWII）」卡片可下鑽進入完整台股市場分析（當日走勢、歷史 K 線量能、三大法人買賣超）；外盤指數亦支援下鑽查看當日統計與 7 走勢區間。盤中每 60 秒更新，且**只向當下有開盤的市場要報價**；全部收盤時不發任何請求。美股時段以 `America/New_York` 判斷，不寫死時差，日光節約自動生效。
   - **美國經濟**：核心 CPI、核心 PPI、核心 PCE、非農就業、消費者信心等，資料來自美國聖路易聯準銀行 FRED。具備與官方 BLS/BEA 發布行事曆聯動之智能掃描閘門（`decideMacroScan`），該期未發布或已抓取則當日 0 外部請求。
 
+### 資金流向與台股休市日
+- **資金流向（類股資金流向）**：依類股彙整三大法人買賣超（可分 外資 / 投信 / 自營商），可切換 今日 / 近 3 日 / 近 5 日，以矩形樹狀圖呈現，點開類股可看最新一日的買超 / 賣超個股；資料由盤後批次產生，也可手動更新。
+- **台股休市日曆**：平日遇國定假日時，庫存總覽會顯示「今天休市」與下一個交易日，報價不會把證交所的測試撮合當成當日成交；管理員後台另有完整日曆。
+
 ### 管理員後台與盤後戰情室 (Admin Status & Probe War Room)
 - **⚡ 盤後探針命中戰情室**：即時呈現 8 大資料源（BFI82U, T86, BWIBBU, TWT38U, MARGIN, BORROW, MOPS 營收/獲利）之幾點命中、命中次數與目標進度、是否退休收工以及歷次命中時間晶片。
 - **機制圖解與排程狀態**：視覺化呈現全市場量能、法人覆蓋天數、匯率與檔案涵蓋完整度。
@@ -73,6 +77,8 @@
 
 ### 其他
 - **每工作區手續費率**：工作區列的「手續費設定」按鈕，或庫存總覽的費率說明列可直接設定（支援 `0.0004275` 等折扣費率位數），新增交易與損益估算自動帶入。
+- **登入**：可顯示密碼；勾選「保持登入 7 天」時，關閉瀏覽器再開仍維持登入，7 天後自動登出（分頁一直開著也會到期登出）；不勾選則關閉分頁即登出。
+- **Discord 通知**：使用者可設定「經濟快報」與「個人持股報告」的 Webhook，持股日報以一則訊息、每個工作區一段的方式推送。
 - **主題切換**：跟隨系統 / 深色 / 淺色，選擇記憶於本機。
 - **手機支援**：分頁列、表單、表格皆針對小螢幕最佳化；輸入字級 16px 避免 iOS 聚焦縮放。
 - **版本標籤**：版本號顯示於頁尾免責聲明後方，方便回報問題時確認版本。
@@ -115,6 +121,8 @@
 ```
 stock-pnl-web/
 ├── GEMINI.md / CLAUDE.md # Agent 操作規則（角色、流程、版本與部署規範）
+├── PRODUCT.md / DESIGN.md # 產品定位與設計系統（改前端前必讀）
+├── LICENSE
 ├── .github/workflows/    # release.yml（CHANGELOG 同步至 Releases）、ci.yml（0.9.51 起）、e2e-dev.yml
 ├── .claude/              # 專案技能（testing, verify, supabase-ops, bookkeeping 等）與 release.config.json
 ├── docs/
@@ -125,7 +133,8 @@ stock-pnl-web/
 ├── sources/              # 前端網頁應用程式原始碼 (Vite React TS)
 │   ├── src/
 │   │   ├── components/   # AppShell, Auth, Dashboard, YearlyReport, Transactions,
-│   │   │                 # StockDetail（個股分析）, Fx（匯率）, Macro（總經）,
+│   │   │                 # StockDetail（個股分析）, Fx（匯率）, Macro（總經）, SectorFlow（資金流向）,
+│   │   │                 # MarketCalendar（休市日）, Settings（Discord 設定）,
 │   │   │                 # Admin（後台狀態與戰情室）, Charts（自繪 SVG 圖表）, Common（共用 UI）
 │   │   ├── context/      # AuthContext, WorkspaceContext
 │   │   ├── hooks/        # useStockPrices, useWatchQuote, useUsdTwdRate, useTwOfficialNames, useMediaQuery
@@ -204,7 +213,7 @@ stock-pnl-web/
 ## 🧪 測試
 
 完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
-目前測試套件規模（2026-10-07）：**189 個測試檔案、3,144 項通過、7 項略過**。
+目前測試套件規模（2026-10-12）：**186 個測試檔案、3,094 項通過、7 項略過**。
 
 | 層級 | 內容 | 怎麼跑 |
 | ---- | ---- | ---- |
@@ -214,7 +223,7 @@ stock-pnl-web/
 
 ```bash
 cd sources
-npm test                              # 完整單元測試閘門（189 檔 / 3,151 tests，必跑）
+npm test                              # 完整單元測試閘門（186 檔 / 3,101 tests，必跑）
 npm run typecheck:edge                # Edge Functions 型別檢查
 npx vitest run src/utils/pnlEngine.test.ts   # 執行單一測試檔
 npm run dev                           # 本機模式 UI，供手動或 Playwright 驗證
@@ -366,7 +375,7 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 Dashboard → Edge Functions → **Create a function**。名稱必須與資料夾**完全相同**（前端以函數名呼叫，改名就對不上），然後把該資料夾下的 `.ts` 檔逐一貼上。
 
 - `*.test.ts` 是單元測試，**不要上傳**。
-- `stock-report` 有 45 個 `.ts` 檔（不含測試），逐檔貼很容易漏。**多檔函數建議改用 CLI。**
+- `stock-report` 有 44 個 `.ts` 檔（不含測試），逐檔貼很容易漏。**多檔函數建議改用 CLI。**
 
 #### 做法 B：CLI（推薦）
 
@@ -480,12 +489,6 @@ curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
   supabase db query --linked "UPDATE auth.users SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{\"role\":\"admin\"}'::jsonb WHERE email = '<目標信箱>';"
   ```
 
-- **本機開發環境（使用 `supabase start`）：**
-  ```bash
-  cd sources
-  supabase db query --local "UPDATE auth.users SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{\"role\":\"admin\"}'::jsonb WHERE email = '<目標信箱>';"
-  ```
-
 - **使用 `psql` 直連資料庫：**
   ```bash
   psql "<你的資料庫連線字串>" -c "UPDATE auth.users SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{\"role\":\"admin\"}'::jsonb WHERE email = '<目標信箱>';"
@@ -591,7 +594,7 @@ npm run build                              # 產出於 sources/dist/
 | 排程從不執行、`reports` 是空的 | 佔位符沒替換 — 跑步驟 6 的覆驗查詢 |
 | 盤後批次全數 401 | `stock-report` 沒帶 `--no-verify-jwt`，或 `CRON_SECRET` 兩邊不一致 |
 | 每日備份全數 401 | `backup-transactions` 沒帶 `--no-verify-jwt` |
-| 前端呼叫 `stock-price` 回 401 | 未登入就呼叫；Supabase 模式須登入後使用 |
+| 前端呼叫 `stock-price` 回 401 | 請求沒帶有效的專案金鑰或 JWT（多半是 `.env.local` 的 key 填錯）。注意：`verify_jwt` 只檢查 JWT 是否有效，前端公開的 publishable key 本身就能通過，**不代表一定要登入** |
 | 管理員後台看不到 | 升級 SQL 執行後沒有重新登入 |
 | 部署時 import `./xxx.ts` 失敗 | WebUI 逐檔貼時漏檔 — 改用 CLI 部署 |
 

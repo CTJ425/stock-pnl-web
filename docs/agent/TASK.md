@@ -22,9 +22,8 @@
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
 - **Timestamp**: 2026-10-08 13:07:25 Asia/Taipei
-- **Done**: items 1, 2 — full text in `TASK_ARCHIVE.md`.
+- **Done**: items 1, 2, 5 — full text in `TASK_ARCHIVE.md`.
 3. User: delete `FUGLE_API_KEY` from DEV and PROD secrets (no longer read) — ⏳ (neither recreated project has it as of 2026-10-08)
-5. Project refs changed: PROD is now `zizndnzibubcqdvnuhwr`, DEV `accmczhrqsilzrtyhyxa` (old `hrilemueiqyaoiwnkeuu` / `zyebvayngwrqzoaicbwd` return 404). CLAUDE.md § Branches & envs and the `supabase-ops` skill still name the old ones — ⏳ update with the user's OK
 6. Script gaps found in the 2026-10-08 review, not fixed: `db-backup.sh` does not copy Storage files (the `backups` bucket's per-user snapshots were lost with the old PROD); `cron.sql` does not keep a job's `active` flag; `db-backup.sh`/`db-migrate.sh` need GNU `sha256sum` and bash 4 (not macOS) — ⏳ user to decide
 7. User: revoke the access token and reset the DEV DB password pasted into the 2026-10-08 chat for the E2E — ⏳
 4. Quote-path improvements proposed 2026-10-08 (single-flight on L2 miss, parallel MIS groups, browser reads `price_cache` before invoking Edge, one shared poll, Yahoo concurrency cap, MIS failure logging) — ⏳ user to pick

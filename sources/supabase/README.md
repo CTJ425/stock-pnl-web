@@ -27,7 +27,7 @@ supabase/
 | 函數 | 檔案 | 作用 |
 |---|---|---|
 | `stock-price` | 8 個 `.ts`（`index.ts`、`dailyRange.ts`、`intradayParse.ts`、`misParse.ts`、`quoteWindow.ts`、`symbols.ts`、`tpexFallback.ts`、`twList.ts`） | 伺服器端代抓現價（台股 MIS → Yahoo、美股 Yahoo）、盤中與日線走勢、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
-| `stock-report` | 45 個 `.ts`（`index.ts` 為入口；籌碼、日線、基本面、月營收 / 季報回補、總經、匯率、類股資金流、資料源探針、Discord 推播、管理員後台各有模組） | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history），並負責 Discord 推播與管理員後台 |
+| `stock-report` | 44 個 `.ts`（`index.ts` 為入口；籌碼、日線、基本面、月營收 / 季報回補、總經、匯率、類股資金流、資料源探針、Discord 推播、管理員後台各有模組） | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history），並負責 Discord 推播與管理員後台 |
 | `backup-transactions` | 2 個 `.ts`（`index.ts`、`backupPlan.ts`） | 由 `backup-daily` 排程觸發，把每個帳號的 `workspaces` / `transactions` / `user_settings` 匯出成 JSON 存進私有的 `backups` bucket，每帳號保留最新 7 份（Cloudflare R2 異地同步已於 Task 166 移除） |
 
 三支函數都會 import `../_shared/` 的共用模組，部署時必須一起帶上。
@@ -42,8 +42,8 @@ supabase/
 
 1. 左側選單 → **Edge Functions** → 右上 **Create a function**。
 2. 名稱填 `stock-price`（全小寫、連字號，與資料夾同名）。
-3. 進編輯器，把 `functions/stock-price/` 下的 9 個非測試 `.ts` 檔**全文**貼上（覆蓋範本），並依原本的相對路徑建立它 import 的 `../_shared/` 檔案。路徑重建容易出錯，**建議改用方式 B 的 CLI**。
-4. **JWT 驗證維持開啟**（預設值）—— Supabase 模式一定是登入後才用，前端 `functions.invoke` 會帶使用者 JWT。
+3. 進編輯器，把 `functions/stock-price/` 下的 8 個非測試 `.ts` 檔**全文**貼上（覆蓋範本），並依原本的相對路徑建立它 import 的 `../_shared/` 檔案。路徑重建容易出錯，**建議改用方式 B 的 CLI**。
+4. **JWT 驗證維持開啟**（預設值）—— 前端 `functions.invoke` 會帶使用者 JWT（未登入時帶專案的 publishable key，同樣會通過驗證）。
    關掉只會讓它變成誰都能打的公開端點，白送 Edge Function 額度。
 5. **Deploy**。
 
@@ -52,7 +52,7 @@ supabase/
 1. 一樣 Create a function，名稱 `stock-report`。
 2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的**所有**非測試 `.ts` 檔（檔名一字不差），以及它 import 的 `../_shared/` 檔案。
    - ⚠️ 所有 `*.test.ts` 是單元測試，**不要上傳**。
-   - ⚠️ 檔案共 **45 個**，逐檔貼幾乎必漏；**強烈建議改用下方方式 B 的 CLI**。
+   - ⚠️ 檔案共 **44 個**，逐檔貼幾乎必漏；**強烈建議改用下方方式 B 的 CLI**。
    - ℹ️ v0.3.7-dev.3 起已無 `reportHtml.ts`（畫面改由前端 React 繪製）。若函數是舊版部署上去的，
      請把該檔**刪除**，否則會留下沒人引用的死碼。
 3. 這支**要**關閉 **Enforce JWT Verification** → **Deploy** —— pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT，
@@ -372,7 +372,7 @@ supabase functions deploy backup-transactions --no-verify-jwt
 |---|---|
 | 盤後批次全數 **401** | `stock-report` 忘了關 Enforce JWT Verification（或 CLI 少了 `--no-verify-jwt`） |
 | 前端呼叫 `stock-price` 回 **401** | 未登入就呼叫（Supabase 模式應登入後使用），或函數被改成不吃 JWT 又沒帶授權標頭 |
-| 部署/執行 import `./xxx.ts` 或 `../_shared/xxx.ts` 失敗 | 漏貼了某個檔（`stock-report` 共 45 個 `.ts`，另有 `_shared/`；建議用 CLI 部署） |
+| 部署/執行 import `./xxx.ts` 或 `../_shared/xxx.ts` 失敗 | 漏貼了某個檔（`stock-report` 共 44 個 `.ts`，另有 `_shared/`；建議用 CLI 部署） |
 | 報告功能點了沒反應 / 找不到函數 | 函數被改名，前端 `invoke('stock-report')` 對不上 |
 | 前端顯示「伺服器回傳的報告格式不符」 | 函數還是舊版（產 HTML 的 schema 1）。重新部署 `stock-report` 即可 |
 | 走勢圖只有幾天 | 正常，歷史回補中（見上）。隔日排程會補齊，或重跑一次 `generate-all` |
