@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-02 14:20:00 Asia/Taipei
+- Timestamp: 2026-10-12 09:39:05 Asia/Taipei
 
 ---
 
@@ -11,6 +11,7 @@
 > **Accepted risks and won't-fix decisions moved out on 2026-09-30** → `ACCEPTED_RISKS.md`.
 > They were 13 KB of this file and nothing ever acted on them, so they cost tokens at every
 > session start and returned nothing. `grep` that file before you "discover" one of them again.
+> BUG-103 and BUG-107 were accepted as low severity on 2026-10-12 → `ACCEPTED_RISKS.md`.
 > Fixed bugs are in `FIXED_BUG.md`. Only things that still need doing belong here.
 
 ### BUG-084 — Stale per-workspace 最低手續費 in localStorage still drives estimates, with no UI to see or change it
@@ -49,11 +50,6 @@
 - **Root Cause**: both sort by `tx_date, created_at` instead of `compareTxOrder`, so after a bulk import they show a same-day sequence in uuid order while the engine uses seq. Display only.
 - **Status**: OPEN
 
-### BUG-103 — Two 0.10.15 paths fail badly if code runs ahead of the DDL
-- **Where**: `stock-report/discordHandlers.ts:332` (`HOLDINGS_TX_COLUMNS` selects and orders by `seq`, no degrade step); `schema.sql` `apply_transaction_updates` (an older RPC ignores `tx_nature` but returns the full count)
-- **Impact**: the nightly holdings card dies for every user, or 標記當沖 reports success while storing nothing. Both DBs have the DDL today (`verify_setup()` 10/10), so this only bites if the deploy order is ever reversed.
-- **Status**: OPEN (low urgency)
-
 ### BUG-112 — Task 193 review items deferred (need a decision or data, not fixed this round)
 - **Where / what** (details in `specs/193-codebase-review-2026-10-04.md` §3):
   - public `reports` bucket answers 200/404 per `daily/<code>.json`, so anyone can enumerate the held/watched TW tickers (`schema.sql:407-409`) — accept as a RISK or move to signed URLs;
@@ -74,7 +70,3 @@
   - the CI step `gh release create 0.7.25 --target 5550979… --title "0.7.25 — 修正 \`computeLedger()\` …"` fails on every `main` push (the workflow still reports success); before Task 193 it died on the backticks in the shell string, now it fails for a reason not yet read from the log — no `0.7.25` tag or Release exists.
 - **Status**: OPEN — found 2026-10-04 (Task 193).
 
-### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)
-- **Where**: `YearlyPage.tsx:433-434`
-- **Root Cause**: 「11」 broken down as 買入 6・賣出 3・股利 1 = 10; the stock dividend is counted in the total but not in any part.
-- **Status**: OPEN (low)

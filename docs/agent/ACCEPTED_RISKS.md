@@ -20,6 +20,16 @@ Newest first, in the order they stood in `BUG_FIX.md`.
 
 ## 🧾 Accepted risks
 
+### BUG-103 — Two 0.10.15 paths fail badly if code runs ahead of the DDL
+- **Where**: `stock-report/discordHandlers.ts:332` (`HOLDINGS_TX_COLUMNS` selects and orders by `seq`, no degrade step); `schema.sql` `apply_transaction_updates` (an older RPC ignores `tx_nature` but returns the full count)
+- **Impact**: the nightly holdings card dies for every user, or 標記當沖 reports success while storing nothing. Both DBs have the DDL today (`verify_setup()` 10/10), so this only bites if the deploy order is ever reversed.
+- **Status**: ACCEPTED 2026-10-12 (user, on the clean-docs recommendation: low severity, left unfixed; moved out of BUG_FIX.md) — was: OPEN (low urgency)
+
+### BUG-107 — 年度收益 trade-count breakdown omits stock dividends (2026-10-02 DEV E2E)
+- **Where**: `YearlyPage.tsx:433-434`
+- **Root Cause**: 「11」 broken down as 買入 6・賣出 3・股利 1 = 10; the stock dividend is counted in the total but not in any part.
+- **Status**: ACCEPTED 2026-10-12 (user, on the clean-docs recommendation: low severity, left unfixed; moved out of BUG_FIX.md) — was: OPEN (low)
+
 ### RISK-023 — Free-tier headroom is large today; the limits that can bind are not the metered ones
 - **Date**: 2026-10-04, measured read-only on PROD `hrilemueiqyaoiwnkeuu` (3 accounts); limits from supabase.com/pricing and /docs/guides/functions/limits the same day. Plan assumed Free (user's statement; the billing plan itself was not queried).
 - **Status**: ACCEPTED — re-measure when accounts pass ~20 or before any feature that polls or stores per user.
