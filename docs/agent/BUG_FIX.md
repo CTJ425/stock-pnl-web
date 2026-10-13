@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-10-12 09:39:05 Asia/Taipei
+- Timestamp: 2026-10-13 11:09:47 Asia/Taipei
 
 ---
 
@@ -13,6 +13,28 @@
 > session start and returned nothing. `grep` that file before you "discover" one of them again.
 > BUG-103 and BUG-107 were accepted as low severity on 2026-10-12 → `ACCEPTED_RISKS.md`.
 > Fixed bugs are in `FIXED_BUG.md`. Only things that still need doing belong here.
+
+### BUG-120 — 「加入觀察」 often shows 「台股清單載入失敗」: TWSE OpenAPI outlasts the Edge timeout
+- **Date**: 2026-10-13 (reported by the user: 「這功能為什麼很常失敗」)
+- **Symptom**: the add-to-watch modal, stock search and name lookups fail with 「台股清單載入失敗」, mostly in trading hours.
+- **Evidence**: PROD `app_log`, 30 days to 2026-10-13: ~13 user-visible failures (09-23, 10-05 … 10-13 10:25), every Edge entry `台股清單來源不完整：TWSE Signal timed out.`; each followed by web `fetchDirect: TypeError: Failed to fetch`. DEV identical. Separate: 10-08 13:44–13:49 `Failed to send a request to the Edge Function` (Edge unreachable). 09-24 `writeCache: The quota has been exceeded.`
+- **Root Cause**:
+  1. TWSE OpenAPI `STOCK_DAY_AVG_ALL` is 29,739 rows, 28,360 of them warrants. Measured 2026-10-13 10:30 Asia/Taipei: 528 KB gzipped in 10.19 s; uncompressed 3 MB+ unfinished at 40 s. `handleTwList` aborted at 10 s, `buildTwList` correctly refused the half list (BUG-075/076) → HTTP 502.
+  2. The client's second leg in production, `fetchDirect`, always fails on CORS.
+  3. `readCache` ignored an expired localStorage list, so nothing caught the failure; the ~3 MB list also overflowed localStorage quota.
+  4. Every `twlist` call hit both exchanges live — no server-side copy.
+- **Assumption hits (grep `STOCK_DAY_AVG_ALL`)**: `stock-price/index.ts` `handleTwList`; `stock-report/twNames.ts` `TWSE_LIST_URL` (Discord holdings card names, 15 s timeout, same exposure); `src/services/twMarketData.ts` `TWSE_URL`. All three changed.
+- **Fix** (uncommitted working tree, 2026-10-13):
+  1. New `supabase/functions/_shared/twseList.ts`: `STOCK_DAY_ALL?response=open_data` CSV (1,381 stocks/ETFs, 137 KB, 0.1 s) first; OpenAPI fallback with warrants removed by `isTwseWarrantCode`; `loadTwseRows` shared by both Edge functions and reports a failed primary via `onFallback`. Coverage given up: TWSE warrants (TPEx warrants were never covered; search already hid warrants).
+  2. `handleTwList` keeps the last good list at `reports/twlist/latest.json` (read capped at 3 s, write never throws). Served while < 1 h old; on a failed refresh the copy of any age is served with `stale: true`. `resolveTwList`: a live list under 50 % of the stored one counts as truncated (served copy, not stored); with TPEx on the snapshot the copy wins only while < 24 h old; snapshot lists are never stored. Budget: 3 s Storage + 8 s CSV + 12 s OpenAPI < 30 s client timeout.
+  3. Client: production uses Edge only; an outdated list (Edge `stale` or expired localStorage) is returned for search/names, held 5 min in memory, never re-stamped into localStorage. `getTwStockList({ allowStale: false })` rejects it; `priceProxy.fetchTwFallback` uses that, so an old close never passes as a fresh price.
+  4. `AddWatchModal`: 「重試」 button next to the error.
+  5. `twNames.ts` / `discordHandlers.ts`: same loader; CSV leg 8 s via `twChips.fetchText(url, timeoutMs)`.
+  6. Vite proxy `/api/twse-www` (declared before `/api/twse`); E2E mocks in `scripts/run-all-e2e.cjs` and `scripts/verify-monthly-rebate-cost-e2e.cjs` now serve the CSV.
+- **Review** (`route:reviewer`, sonnet, 2026-10-13): FAIL with 1 BLOCKER + 9 RISK; all verified against the code and fixed except the Deno-bound `handleTwList` wiring, which still has no test (the logic it calls — `loadTwseRows`, `resolveTwList`, cache parse/TTL — is unit-tested). See PROGRESS.md 2026-10-13 for the per-finding verdicts.
+- **Verification**: real-data check — the CSV parses to 1,381 rows; OpenAPI minus warrant codes = 1,379 rows, all contained in the CSV. Tests that failed before / pass after: `twMarketData.test.ts` S1–S3, `priceProxy.staleList.test.ts`, modal retry. Also `twseList.test.ts` (8), `twList.test.ts` C1–C6, `twNames.test.ts`, S4–S6. `npm test` 3,117 pass / 7 skipped; `npm run build`, `typecheck:edge`, `oxlint` exit 0; `node --check` on both E2E scripts. E2E scripts not run.
+- **DEV deploy** (2026-10-13 13:33 Asia/Taipei, user ran the deploy; uncommitted working tree): `stock-price` and `stock-report` (`--no-verify-jwt`). Smoke: `{"action":"twlist"}` call 1 HTTP 200 in 5.0 s (live, incl. cold start), 2,393 rows, 2330 close 2540, 6488 present, 0 warrant codes; call 2 HTTP 200 in 0.75 s with `cachedAt 2026-10-13T05:33:50.375Z` (stored copy written and read). `app_log` `twlist` in the window: none (no CSV fallback, no TPEx snapshot, no write failure). Discord `twNames` path not exercised live (runs on its schedule).
+- **Status**: OPEN — DEV deployed and verified; not committed, no version bump; PROD not deployed (needs `main` + explicit OK).
 
 ### BUG-084 — Stale per-workspace 最低手續費 in localStorage still drives estimates, with no UI to see or change it
 - **Where**: `sources/src/utils/settings.ts` (`getMinFee`), `sources/src/utils/holdingRows.ts:80-81,119-121`

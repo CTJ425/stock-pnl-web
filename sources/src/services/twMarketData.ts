@@ -1,27 +1,27 @@
 /**
  * Full list of Taiwan stocks (listed + OTC): code, name and latest closing price.
  *
- * Data source (the official OpenAPI does not open CORS and cannot be directly connected by the browser):
- * - Listing: TWSE openapi STOCK_DAY_AVG_ALL (daily closing price)
+ * Data source (the official endpoints do not open CORS and cannot be directly connected by the browser):
+ * - Listing: TWSE STOCK_DAY_ALL open_data CSV (daily closing price; BUG-120, see _shared/twseList.ts)
  * - Listing: TPEx openapi tpex_mainboard_quotes (same source as the original GAS version getOtcList_)
  *
- * Development mode: Proxy via Vite dev server (/api/twse, /api/tpex of vite.config.ts).
- * Formal environment: First pass the twlist action proxy of Supabase Edge Function `stock-price`
- * (The official endpoint does not open CORS, and direct connection will fail). Direct connection will be attempted only when Edge is unavailable.
+ * Development mode: Proxy via Vite dev server (/api/twse-www, /api/tpex of vite.config.ts), Edge second.
+ * Formal environment: the twlist action of Supabase Edge Function `stock-price` only. A direct
+ * fetch there always failed on CORS (every app_log entry was `TypeError: Failed to fetch`), so
+ * it is no longer tried (BUG-120).
  *
  * The list is cached in localStorage (TTL 30 minutes), and is also available for "name fuzzy search/code reverse search"
- * Use with "Taiwan Stock Current Price Reserve".
+ * Use with "Taiwan Stock Current Price Reserve". When every source fails, the cached list of any
+ * age is used rather than none (BUG-120).
  */
 import { isSupabaseConfigured, supabase } from './supabase'
 import { logClient } from './appLog'
+import { parseStockDayAllCsv, TWSE_STOCK_DAY_ALL_URL } from '../../supabase/functions/_shared/twseList.ts'
 
 const DEV = import.meta.env.DEV
-const TWSE_URL = DEV
-  ? '/api/twse/v1/exchangeReport/STOCK_DAY_AVG_ALL'
-  : 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'
-const TPEX_URL = DEV
-  ? '/api/tpex/openapi/v1/tpex_mainboard_quotes'
-  : 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
+// Direct fetches run in development only, through the Vite proxy.
+const TWSE_URL = TWSE_STOCK_DAY_ALL_URL.replace('https://www.twse.com.tw', '/api/twse-www')
+const TPEX_URL = '/api/tpex/openapi/v1/tpex_mainboard_quotes'
 
 export interface TwStockRow {
   symbol: string
@@ -38,12 +38,14 @@ interface CacheShape {
   rows: TwStockRow[]
 }
 
-function readCache(): TwStockRow[] | null {
+/** `allowStale` skips the TTL: the last-resort read when every source failed (BUG-120). */
+function readCache(allowStale = false): TwStockRow[] | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as CacheShape
-    if (!Array.isArray(parsed.rows) || Date.now() - parsed.at > CACHE_TTL_MS) return null
+    if (!Array.isArray(parsed.rows) || parsed.rows.length === 0) return null
+    if (!allowStale && Date.now() - parsed.at > CACHE_TTL_MS) return null
     return parsed.rows
   } catch (err) {
     logClient('warn', 'readCache', err instanceof Error ? err.message : String(err), {})
@@ -114,17 +116,14 @@ function toNumber(value: unknown): number | null {
 
 async function fetchTwse(): Promise<TwStockRow[]> {
   const res = await fetch(TWSE_URL, {
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'text/csv' },
   })
   if (!res.ok) throw new Error(`TWSE HTTP ${res.status}`)
-  const arr = (await res.json()) as Array<Record<string, unknown>>
-  return arr
-    .map((r) => ({
-      symbol: String(r.Code ?? '').trim(),
-      name: String(r.Name ?? '').trim(),
-      close: toNumber(r.ClosingPrice),
-    }))
-    .filter((r) => r.symbol && r.name)
+  return parseStockDayAllCsv(await res.text()).map((r) => ({
+    symbol: r.Code,
+    name: r.Name,
+    close: toNumber(r.ClosingPrice),
+  }))
 }
 
 async function fetchTpex(): Promise<TwStockRow[]> {
@@ -142,7 +141,7 @@ async function fetchTpex(): Promise<TwStockRow[]> {
     .filter((r) => r.symbol && r.name)
 }
 
-/** Direct connection (development mode via dev proxy; formal environment mostly fails due to CORS)*/
+/** Direct connection (development mode via dev proxy only; the formal environment fails on CORS)*/
 async function fetchDirect(): Promise<TwStockRow[]> {
   const results = await Promise.allSettled([fetchTwse(), fetchTpex()])
   // A half list is worse than none: it caches for 30 minutes, and every stock from the dead
@@ -169,17 +168,26 @@ async function fetchDirect(): Promise<TwStockRow[]> {
 
 interface EdgeTwListResponse {
   rows?: Array<{ symbol?: unknown; name?: unknown; close?: unknown }>
+  /** Set by the Edge when a live refresh failed and it served its stored copy (BUG-120). */
+  stale?: boolean
 }
 
-/** Proxy via Supabase Edge Function (main path to the official environment)*/
-async function fetchViaEdge(): Promise<TwStockRow[]> {
-  if (!isSupabaseConfigured || !supabase) return []
+/** A loaded list; `stale` means it is older than its TTL and its `close` is not today's price. */
+interface ListLoad {
+  rows: TwStockRow[]
+  stale: boolean
+}
+
+/** Proxy via Supabase Edge Function (main path to the official environment); null on failure */
+async function fetchViaEdge(): Promise<ListLoad | null> {
+  if (!isSupabaseConfigured || !supabase) return null
   try {
     const { data, error, response } = await supabase.functions.invoke<EdgeTwListResponse>(
       'stock-price',
       {
         body: { action: 'twlist' },
-        timeout: 20_000,
+        // BUG-120: a cache miss can spend 3 s on Storage, 8 s on STOCK_DAY_ALL and 12 s on the OpenAPI.
+        timeout: 30_000,
       },
     )
     if (error || !Array.isArray(data?.rows)) {
@@ -190,41 +198,68 @@ async function fetchViaEdge(): Promise<TwStockRow[]> {
       const head = error ? (error instanceof Error ? error.message : String(error)) : 'rows 非陣列'
       const parts = [head, response ? `HTTP ${response.status}` : '', body]
       logClient('error', 'fetchViaEdge', parts.filter((p) => p).join(' · '), {})
-      return []
+      return null
     }
-    return data.rows
+    const rows = data.rows
       .map((r) => ({
         symbol: String(r.symbol ?? '').trim(),
         name: String(r.name ?? '').trim(),
         close: typeof r.close === 'number' && r.close > 0 ? r.close : null,
       }))
       .filter((r) => r.symbol && r.name)
+    return rows.length > 0 ? { rows, stale: data.stale === true } : null
   } catch (err) {
     logClient('error', 'fetchViaEdge', err instanceof Error ? err.message : String(err), {})
-    return []
+    return null
   }
 }
 
-let inflight: Promise<TwStockRow[]> | null = null
+/**
+ * An outdated list served after a failed load is held this long, so a dead network costs one slow
+ * attempt (up to the 30 s invoke timeout) per window instead of one per search keystroke.
+ */
+const STALE_HOLD_MS = 5 * 60 * 1000
+let staleHeld: { rows: TwStockRow[]; until: number } | null = null
 
-/** Get the full list of Taiwan stocks (memory deduplication + localStorage cache; try multiple sources in sequence)*/
-export async function getTwStockList(): Promise<TwStockRow[]> {
+let inflight: Promise<ListLoad> | null = null
+
+function holdStale(rows: TwStockRow[]): ListLoad {
+  staleHeld = { rows, until: Date.now() + STALE_HOLD_MS }
+  return { rows, stale: true }
+}
+
+async function loadTwStockList(): Promise<ListLoad> {
   const cached = readCache()
-  if (cached) return cached
+  if (cached) return { rows: cached, stale: false }
+  if (staleHeld && Date.now() < staleHeld.until) return { rows: staleHeld.rows, stale: true }
   if (inflight) return inflight
 
-  inflight = (async () => {
-    // In development mode, use dev proxy to connect directly; in formal environment, use Edge Function first, and only try direct connection if it fails.
-    let rows = DEV ? await fetchDirect() : await fetchViaEdge()
-    if (rows.length === 0) {
-      rows = DEV ? await fetchViaEdge() : await fetchDirect()
+  inflight = (async (): Promise<ListLoad> => {
+    // Development: dev proxy first, Edge second. Formal environment: Edge only (BUG-120).
+    let load: ListLoad | null = null
+    if (DEV) {
+      const rows = await fetchDirect()
+      if (rows.length > 0) load = { rows, stale: false }
     }
-    if (rows.length === 0) {
-      throw new Error('台股清單載入失敗（Edge Function 與官方端點皆無回應）')
+    load ??= await fetchViaEdge()
+    if (load && !load.stale) {
+      staleHeld = null
+      writeCache(load.rows)
+      rememberTwNames(load.rows)
+      return load
     }
-    writeCache(rows)
-    rememberTwNames(rows)
-    return rows
+    // The Edge's stored copy: usable for names and search, but never written to localStorage —
+    // that would re-stamp an old list as fresh for 30 minutes.
+    if (load) {
+      rememberTwNames(load.rows)
+      return holdStale(load.rows)
+    }
+    const local = readCache(true)
+    if (local) {
+      logClient('warn', 'getTwStockList', '台股清單即時載入失敗，改用過期的本機快取', { count: local.length })
+      return holdStale(local)
+    }
+    throw new Error('台股清單載入失敗（Edge Function 無回應，且沒有本機快取）')
   })()
 
   try {
@@ -232,4 +267,19 @@ export async function getTwStockList(): Promise<TwStockRow[]> {
   } finally {
     inflight = null
   }
+}
+
+export interface TwStockListOptions {
+  /**
+   * `false` rejects instead of returning an outdated list (BUG-120). Set it wherever `close` is used
+   * as a current price: an outdated close must fall to the caller's own stale handling, not pass as fresh.
+   */
+  allowStale?: boolean
+}
+
+/** Get the full list of Taiwan stocks (memory deduplication + localStorage cache; outdated list as the last resort)*/
+export async function getTwStockList(opts: TwStockListOptions = {}): Promise<TwStockRow[]> {
+  const { rows, stale } = await loadTwStockList()
+  if (stale && opts.allowStale === false) throw new Error('台股清單只有過期資料，不能當作現價')
+  return rows
 }

@@ -36,12 +36,18 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
   const [addError, setAddError] = useState<string | null>(null)
   const [listLoading, setListLoading] = useState(true)
 
-  useEffect(() => {
+  // BUG-120: also the retry button's handler — a failed load used to leave the modal useless
+  // until it was closed and reopened.
+  function loadList() {
+    setLoadError(null)
+    setListLoading(true)
     getTwStockList()
       .then(setList)
       .catch(() => setLoadError('台股清單載入失敗'))
       .finally(() => setListLoading(false))
-  }, [])
+  }
+
+  useEffect(loadList, [])
 
   const watchedSet = new Set(watched)
   const q = query.trim().toLowerCase()
@@ -106,7 +112,14 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
         </div>
       )}
       {addError && <p>{addError}</p>}
-      {loadError && <p>{loadError}</p>}
+      {loadError && (
+        <div className="watch-load-error">
+          <p>{loadError}</p>
+          <button type="button" className="btn btn-sm" onClick={loadList}>
+            重試
+          </button>
+        </div>
+      )}
       <ul className="watch-results">
         {results.map((row) => {
           const already = watchedSet.has(row.symbol)

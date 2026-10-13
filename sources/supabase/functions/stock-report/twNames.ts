@@ -8,10 +8,14 @@
  *
  * Fetched once per run, not per user. A source that fails only costs its names: every code it
  * would have named falls back to the transaction's name, which is what the card printed before.
+ *
+ * TWSE reads STOCK_DAY_ALL first and the OpenAPI only if that fails (BUG-120, see
+ * ../_shared/twseList.ts): the OpenAPI often outlasted the 15 s fetch timeout in trading hours.
  */
+import { loadTwseRows } from '../_shared/twseList.ts'
+
 export type TwNames = ReadonlyMap<string, string>
 
-export const TWSE_LIST_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'
 export const TPEX_LIST_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
 
 /** Code → name from the TWSE (`Code`/`Name`) and TPEx (`SecuritiesCompanyCode`/`CompanyName`) shapes. */
@@ -29,10 +33,19 @@ export function parseTwNames(...lists: unknown[]): Map<string, string> {
 }
 
 /** One load per returned function: every user of a run shares it. Never rejects. */
-export function memoTwNames(fetchJson: <T>(url: string) => Promise<T>): () => Promise<TwNames> {
+export function memoTwNames(
+  fetchJson: <T>(url: string) => Promise<T>,
+  fetchText: (url: string) => Promise<string>,
+): () => Promise<TwNames> {
   let pending: Promise<TwNames> | null = null
+  // A failed primary is only console-logged: this module has no db client, and the cost is the
+  // slower OpenAPI, not wrong names.
+  const loadTwse = () =>
+    loadTwseRows(fetchText, (url) => fetchJson<unknown>(url), (reason) => {
+      console.warn('twNames: TWSE STOCK_DAY_ALL failed, using the OpenAPI:', reason)
+    })
   return () => {
-    pending ??= Promise.allSettled([fetchJson<unknown>(TWSE_LIST_URL), fetchJson<unknown>(TPEX_LIST_URL)]).then(
+    pending ??= Promise.allSettled([loadTwse(), fetchJson<unknown>(TPEX_LIST_URL)]).then(
       (results) => parseTwNames(...results.map((r) => (r.status === 'fulfilled' ? r.value : null))),
     )
     return pending

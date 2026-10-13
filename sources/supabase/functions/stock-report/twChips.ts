@@ -435,4 +435,14 @@ export async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T
 }
 
+/** Same as fetchJson, for a text body (the TWSE STOCK_DAY_ALL CSV, BUG-120). */
+export async function fetchText(url: string, timeoutMs = 15_000): Promise<string> {
+  const res = await fetch(url, {
+    headers: { Accept: 'text/csv, text/plain', 'User-Agent': UA },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`)
+  return await res.text()
+}
+
 export type T86ResponseShape = T86Response

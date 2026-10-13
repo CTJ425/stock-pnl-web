@@ -30,6 +30,13 @@ export default defineConfig({
     // TWSE / TPEx OpenAPI does not open CORS, and the development mode obtains the Taiwan stock list and current price through the dev server agent;
     // The deployed build is proxied by Supabase Edge Function (see src/services/priceProxy.ts)
     proxy: {
+      // BUG-120: TWSE STOCK_DAY_ALL CSV (src/services/twMarketData.ts); the OpenAPI was too slow.
+      // Must precede '/api/twse': Vite matches contexts with startsWith, first entry wins.
+      '/api/twse-www': {
+        target: 'https://www.twse.com.tw',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/twse-www/, ''),
+      },
       '/api/twse': {
         target: 'https://openapi.twse.com.tw',
         changeOrigin: true,

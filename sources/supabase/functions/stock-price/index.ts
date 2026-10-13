@@ -35,11 +35,13 @@
  *       → { quotes: { USD: { price, asOf }, … } } The real-time median price of Taiwan dollars against foreign currencies (1 foreign currency = N Taiwan dollars)
  *         The history of the trend chart is written into Storage every day by sync-fx of stock-report, and only "how much is now" is returned here.
  *   POST { action: 'twlist' }
- *     → { rows: [{ symbol, name, close }], tpexFallbackAgeDays?: number } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
+ *     → { rows: [{ symbol, name, close }], tpexFallbackAgeDays?: number, cachedAt?: string, stale?: boolean } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
  *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup.
  *       tpexFallbackAgeDays (EP-05) is present only when the TPEx leg used the static
  *       tpexFallback.json snapshot instead of the live endpoint; it is that snapshot's age in
- *       days as of this response, and gets one extra `logEvent` warning when it exceeds 90.)
+ *       days as of this response, and gets one extra `logEvent` warning when it exceeds 90.
+ *       cachedAt (BUG-120) is set when the rows come from the stored copy in `reports/twlist/`;
+ *       stale is true when a live refresh failed and that copy is past its one-hour TTL.)
  *   POST { action: 'intraday', symbol: { market: 'TPE'|'US'|'IDX', ticker: string }, range?: '1d'|'5d' }
  *     → { series: IntradaySeries | null } (Yahoo chart v8 intraday bars; range defaults to '1d'.
  *       Tries each yahooSymbols() candidate in turn and returns the first that parses;
@@ -64,7 +66,15 @@ import { intradayInterval, parseYahooChart, type IntradayRange } from './intrada
 import { twIsClosedDay, twIsClosedDate, twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyRange.ts'
 import { extractDaily } from '../stock-report/twDaily.ts'
-import { buildTwList } from './twList.ts'
+import {
+  buildTwList,
+  isTwListCacheFresh,
+  parseTwListCache,
+  resolveTwList,
+  TWLIST_CACHE_PATH,
+  type TwListCache,
+} from './twList.ts'
+import { loadTwseRows } from '../_shared/twseList.ts'
 import { TPEX_FALLBACK_GENERATED_AT, TPEX_FALLBACK_ROWS } from './tpexFallback.ts'
 import { isValidSymbol, sanitizeSymbols, type SymbolItem } from './symbols.ts'
 
@@ -485,16 +495,94 @@ function tpexFallbackAgeDays(now: Date): number {
   return Math.floor((now.getTime() - generated) / (24 * 60 * 60 * 1000))
 }
 
-/** Full list of Taiwan stocks (listed on TWSE + listed on TPEx), the fields are simplified to symbol/name/close to shorten the response */
+/** Same public bucket stock-report writes (stock-report/dataAccess.ts); not imported, that pulls in its runtime. */
+const REPORTS_BUCKET = 'reports'
+
+/**
+ * Cap on the stored-list read. storage-js `download` takes no abort signal, so a hung Storage call
+ * would otherwise hold back the live refresh that `twlist` had no dependency on before BUG-120.
+ */
+const TWLIST_CACHE_READ_TIMEOUT_MS = 3_000
+
+/** The stored last good list (BUG-120); null when missing, unreadable or slow — the live path still runs. */
+async function readTwListCache(): Promise<TwListCache | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const read = (async () => {
+      const { data, error } = await db.storage.from(REPORTS_BUCKET).download(TWLIST_CACHE_PATH)
+      // Not logged to app_log: a missing copy (first run, Storage's 400 NoSuchKey, BUG-078) is normal.
+      if (error || !data) {
+        if (error) console.warn('twlist cache read failed:', error.message)
+        return null
+      }
+      return parseTwListCache(JSON.parse(await data.text()))
+    })()
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => {
+        console.warn(`twlist cache read exceeded ${TWLIST_CACHE_READ_TIMEOUT_MS} ms`)
+        resolve(null)
+      }, TWLIST_CACHE_READ_TIMEOUT_MS)
+    })
+    return await Promise.race([read, timeout])
+  } catch (err) {
+    console.warn('twlist cache read failed:', err instanceof Error ? err.message : String(err))
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Never throws: a failed write must not turn a good list already in hand into a 500. */
+async function writeTwListCache(cache: TwListCache): Promise<void> {
+  try {
+    const blob = new Blob([JSON.stringify(cache)], { type: 'application/json' })
+    const { error } = await db.storage.from(REPORTS_BUCKET).upload(TWLIST_CACHE_PATH, blob, {
+      upsert: true,
+      contentType: 'application/json; charset=utf-8',
+      cacheControl: '0',
+    })
+    if (error) throw error
+  } catch (err) {
+    await logEvent(db, {
+      level: 'warn',
+      action: 'twlist',
+      message: `台股清單快取寫入失敗：${err instanceof Error ? err.message : String(err)}`,
+    })
+  }
+}
+
+/**
+ * Full list of Taiwan stocks (listed on TWSE + listed on TPEx), the fields are simplified to symbol/name/close to shorten the response.
+ * Served from the stored copy while it is under an hour old; otherwise refreshed live, and a failed
+ * refresh falls back to the stored copy of any age (BUG-120, see TWLIST_CACHE_PATH in twList.ts).
+ */
 async function handleTwList(): Promise<Response> {
-  const fetchJson = async (url: string): Promise<Array<Record<string, unknown>>> => {
+  const cache = await readTwListCache()
+  if (cache && isTwListCacheFresh(cache, new Date())) {
+    return json({ rows: cache.rows, cachedAt: cache.at })
+  }
+
+  const fetchOk = async (url: string, accept: string, timeoutMs: number): Promise<Response> => {
     const res = await fetch(url, {
-      headers: { Accept: 'application/json', 'User-Agent': UA },
-      signal: AbortSignal.timeout(10_000),
+      headers: { Accept: accept, 'User-Agent': UA },
+      signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return (await res.json()) as Array<Record<string, unknown>>
+    return res
   }
+  const fetchJson = async (url: string, timeoutMs = 10_000): Promise<Array<Record<string, unknown>>> =>
+    (await (await fetchOk(url, 'application/json', timeoutMs)).json()) as Array<Record<string, unknown>>
+
+  // BUG-120: STOCK_DAY_ALL first (137 KB, 0.1 s), the OpenAPI (528 KB gzipped, 10 s+ in trading
+  // hours) only when it fails. Budget on a cache miss: 3 s Storage + 8 s + 12 s, inside the
+  // client's 30 s invoke timeout with room for the app_log inserts and the upload.
+  const fetchTwse = () =>
+    loadTwseRows(
+      async (url) => await (await fetchOk(url, 'text/csv', 8_000)).text(),
+      (url) => fetchJson(url, 12_000),
+      (reason) =>
+        logEvent(db, { level: 'warn', action: 'twlist', message: `TWSE 主要來源失敗，改用 OpenAPI：${reason}` }),
+    )
 
   let usedFallback = false
   let fallbackReason: string | null = null
@@ -513,10 +601,7 @@ async function handleTwList(): Promise<Response> {
     return TPEX_FALLBACK_ROWS
   }
 
-  const [twse, tpex] = await Promise.allSettled([
-    fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'),
-    fetchTpex(),
-  ])
+  const [twse, tpex] = await Promise.allSettled([fetchTwse(), fetchTpex()])
 
   let fallbackAgeDays: number | null = null
   if (usedFallback) {
@@ -547,10 +632,22 @@ async function handleTwList(): Promise<Response> {
       message: result.error,
       detail: { failures: result.failures },
     })
-    return json({ error: result.error, failures: result.failures }, 502)
   }
+  const decision = resolveTwList(result, usedFallback, cache, new Date())
+  if (decision.kind === 'error') {
+    return json({ error: decision.error, failures: decision.failures }, 502)
+  }
+  if (decision.kind === 'cached') {
+    await logEvent(db, {
+      level: 'warn',
+      action: 'twlist',
+      message: `即時更新未採用（${decision.reason}），改回傳 ${decision.cache.at} 的台股清單快取`,
+    })
+    return json({ rows: decision.cache.rows, cachedAt: decision.cache.at, stale: true })
+  }
+  if (decision.store) await writeTwListCache({ at: new Date().toISOString(), rows: decision.rows })
   return json({
-    rows: result.rows,
+    rows: decision.rows,
     ...(usedFallback ? { tpexFallbackAgeDays: fallbackAgeDays } : {}),
   })
 }

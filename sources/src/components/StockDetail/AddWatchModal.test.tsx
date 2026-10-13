@@ -205,4 +205,18 @@ describe('AddWatchModal', () => {
     expect(await screen.findByText('台股清單載入失敗')).toBeTruthy()
     expect(screen.queryByTestId('watch-list-loading')).toBeNull()
   })
+
+  // BUG-120: a failed load could only be retried by closing and reopening the modal.
+  it('清單載入失敗後按「重試」會重新載入，成功就清掉錯誤並能搜尋', async () => {
+    getTwStockList.mockRejectedValueOnce(new Error('台股清單載入失敗'))
+    getTwStockList.mockResolvedValueOnce([{ symbol: '2330', name: '台積電', close: 2540 }])
+    mount()
+
+    await userEvent.click(await screen.findByRole('button', { name: '重試' }))
+
+    await waitFor(() => expect(screen.queryByText('台股清單載入失敗')).toBeNull())
+    expect(getTwStockList).toHaveBeenCalledTimes(2)
+    await userEvent.type(screen.getByLabelText('搜尋股票'), '2330')
+    expect(await screen.findByRole('button', { name: '加入 2330 台積電' })).toBeTruthy()
+  })
 })

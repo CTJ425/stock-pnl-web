@@ -30,7 +30,12 @@ vi.mock('./supabase', () => ({
 vi.mock('./appLog', () => ({ logClient: logClientSpy }))
 
 const CACHE_KEY = 'stock-pnl-web/tw-list-v2'
-const TWSE_ROWS = [{ Code: '3037', Name: '欣興', ClosingPrice: '993.00' }]
+// TWSE STOCK_DAY_ALL open_data CSV (BUG-120); header as fetched 2026-10-13.
+const TWSE_CSV = [
+  '日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數',
+  '"1151012","3037","欣興","1","1","1","1","1","993.00","0","1"',
+].join('\n')
+const TWSE_CSV_EMPTY = TWSE_CSV.split('\n')[0]
 const TPEX_ROWS = [{ SecuritiesCompanyCode: '6488', CompanyName: '環球晶', Close: '500' }]
 
 type Mode = 'ok' | 'fail' | 'empty'
@@ -42,7 +47,8 @@ function mockFetch(opts: { twse: Mode; tpex: Mode }) {
     if (mode === 'fail') throw new Error('network down')
     return {
       ok: true,
-      json: async () => (mode === 'empty' ? [] : isTwse ? TWSE_ROWS : TPEX_ROWS),
+      text: async () => (mode === 'empty' ? TWSE_CSV_EMPTY : TWSE_CSV),
+      json: async () => (mode === 'empty' ? [] : TPEX_ROWS),
     } as unknown as Response
   })
 }
@@ -56,6 +62,7 @@ async function freshModule() {
 beforeEach(() => {
   window.localStorage.clear()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   edgeState.configured = false
   edgeState.invoke = null
   logClientSpy.mockClear()
@@ -165,6 +172,89 @@ describe('getTwStockList 部分來源失敗', () => {
     const call = edgeLogCall()
     expect(call).toBeTruthy()
     expect(String(call?.[2])).toContain('HTTP 200')
+  })
+})
+
+// BUG-120: the list failed most trading days (TWSE timed out at the Edge, the direct fetch hit
+// CORS), and an expired list in localStorage was ignored even then.
+describe('getTwStockList 來源全掛時（BUG-120）', () => {
+  const STALE = [{ symbol: '2330', name: '台積電', close: 2540 }]
+
+  it('S1: 所有來源都失敗、但有過期快取時，回傳過期快取而不是報錯', async () => {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify({ at: 0, rows: STALE }))
+    vi.stubGlobal('fetch', mockFetch({ twse: 'fail', tpex: 'fail' }))
+    const { getTwStockList } = await freshModule()
+
+    expect(await getTwStockList()).toEqual(STALE)
+    // Not re-stamped: the next call must still try the network.
+    expect(JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? '{}').at).toBe(0)
+    expect(logClientSpy.mock.calls.some((c) => c[0] === 'warn' && c[1] === 'getTwStockList')).toBe(true)
+  })
+
+  it('S2: 過期快取在來源恢復後會被新清單取代', async () => {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify({ at: 0, rows: STALE }))
+    vi.stubGlobal('fetch', mockFetch({ twse: 'ok', tpex: 'ok' }))
+    const { getTwStockList } = await freshModule()
+
+    expect((await getTwStockList()).map((r) => r.symbol).sort()).toEqual(['3037', '6488'])
+  })
+
+  it('S4: 現價用途（allowStale: false）拿到過期清單時要拒絕，不能把舊收盤價當現價', async () => {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify({ at: 0, rows: STALE }))
+    vi.stubGlobal('fetch', mockFetch({ twse: 'fail', tpex: 'fail' }))
+    const { getTwStockList } = await freshModule()
+
+    await expect(getTwStockList({ allowStale: false })).rejects.toThrow()
+    // The same outdated list still serves search and names.
+    expect(await getTwStockList()).toEqual(STALE)
+  })
+
+  it('S5: Edge 回 stale 的伺服器快取時，可用於搜尋但不寫回本機快取、也不當現價', async () => {
+    vi.stubEnv('DEV', false)
+    edgeState.configured = true
+    edgeState.invoke = vi.fn(async () => ({
+      data: { rows: STALE, cachedAt: '2026-10-01T00:00:00.000Z', stale: true },
+      error: null,
+      response: { status: 200 },
+    }))
+    const { getTwStockList } = await freshModule()
+
+    expect(await getTwStockList()).toEqual(STALE)
+    expect(window.localStorage.getItem(CACHE_KEY)).toBeNull()
+    await expect(getTwStockList({ allowStale: false })).rejects.toThrow()
+  })
+
+  it('S6: 拿到過期清單後 5 分鐘內不再重打網路（避免每次搜尋都等逾時）', async () => {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify({ at: 0, rows: STALE }))
+    const fetchSpy = mockFetch({ twse: 'fail', tpex: 'fail' })
+    vi.stubGlobal('fetch', fetchSpy)
+    const { getTwStockList } = await freshModule()
+
+    await getTwStockList()
+    const calls = fetchSpy.mock.calls.length
+    await getTwStockList()
+    expect(fetchSpy.mock.calls.length).toBe(calls)
+  })
+
+  it('S3: 正式環境只走 Edge，不再直連官方端點（必被 CORS 擋）', async () => {
+    vi.stubEnv('DEV', false)
+    edgeState.configured = true
+    edgeState.invoke = vi.fn(async () => ({
+      data: { rows: [{ symbol: '2330', name: '台積電', close: 2540 }] },
+      error: null,
+      response: { status: 200 },
+    }))
+    const fetchSpy = mockFetch({ twse: 'ok', tpex: 'ok' })
+    vi.stubGlobal('fetch', fetchSpy)
+    const { getTwStockList } = await freshModule()
+
+    expect(await getTwStockList()).toEqual([{ symbol: '2330', name: '台積電', close: 2540 }])
+
+    edgeState.invoke = vi.fn(async () => ({ data: null, error: new Error('down'), response: undefined }))
+    window.localStorage.clear()
+    const again = await freshModule()
+    await expect(again.getTwStockList()).rejects.toThrow()
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
 

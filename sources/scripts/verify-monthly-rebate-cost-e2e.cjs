@@ -132,9 +132,14 @@ async function installMocks(page) {
   // Playwright tries the most recently registered route first: the catch-alls go before the specific ones.
   await page.route('**/functions/v1/**', (route) => json(route, {}))
   await page.route('**/storage/v1/**', (route) => json(route, {}, 404))
-  // The official TW list (vite dev proxies /api/twse and /api/tpex), source of the labels (BUG-109).
-  await page.route('**/api/twse/**', (route) =>
-    json(route, [{ Code: '009828', Name: '中信台日韓PCB', ClosingPrice: '10.68' }]),
+  // The official TW list (vite dev proxies /api/twse-www and /api/tpex), source of the labels (BUG-109).
+  // TWSE is the STOCK_DAY_ALL CSV since BUG-120.
+  await page.route('**/api/twse-www/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/csv; charset=utf-8',
+      body: '日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數' + '\n"1151012","009828","中信台日韓PCB","1","1","1","1","1","10.68","0","1"',
+    }),
   )
   await page.route('**/api/tpex/**', (route) =>
     json(route, [{ SecuritiesCompanyCode: '6488', CompanyName: '環球晶', Close: '500' }]),

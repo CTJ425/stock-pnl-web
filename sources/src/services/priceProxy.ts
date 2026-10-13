@@ -225,7 +225,8 @@ async function fetchTwFallback(items: PriceRequestItem[]): Promise<Map<string, n
   const twItems = items.filter((i) => i.market === 'TPE')
   if (twItems.length === 0) return resolved
   try {
-    const list = await getTwStockList()
+    // BUG-120: a close from an outdated list would be stamped `asOf: now, stale: false` below.
+    const list = await getTwStockList({ allowStale: false })
     const bySymbol = new Map(list.map((r) => [r.symbol, r]))
     for (const item of twItems) {
       const row = bySymbol.get(item.ticker)

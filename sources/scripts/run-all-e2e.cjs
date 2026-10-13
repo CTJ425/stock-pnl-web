@@ -161,19 +161,23 @@ async function captureCaseScreenshot(page, testCase) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockSession) }),
   )
 
-  // TWSE & TPEx OpenAPI Mock
-  await page.route('**/api/twse/**', (route) => {
+  // TWSE STOCK_DAY_ALL CSV (BUG-120) & TPEx OpenAPI Mock
+  await page.route('**/api/twse-www/**', (route) => {
+    const rows = [
+      ['2330', '台積電', '950.00'],
+      ['2303', '聯電', '125.00'],
+      ['2603', '長榮', '185.00'],
+      ['2609', '陽明', '70.00'],
+      ['2454', '聯發科', '1280.00'],
+      ['0050', '元大台灣50', '180.00'],
+    ]
     return route.fulfill({
       status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([
-        { Code: '2330', Name: '台積電', ClosingPrice: '950.00' },
-        { Code: '2303', Name: '聯電', ClosingPrice: '125.00' },
-        { Code: '2603', Name: '長榮', ClosingPrice: '185.00' },
-        { Code: '2609', Name: '陽明', ClosingPrice: '70.00' },
-        { Code: '2454', Name: '聯發科', ClosingPrice: '1280.00' },
-        { Code: '0050', Name: '元大台灣50', ClosingPrice: '180.00' },
-      ]),
+      contentType: 'text/csv; charset=utf-8',
+      body: [
+        '日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數',
+        ...rows.map(([c, n, p]) => `"1151012","${c}","${n}","1","1","1","1","1","${p}","0","1"`),
+      ].join('\n'),
     })
   })
 

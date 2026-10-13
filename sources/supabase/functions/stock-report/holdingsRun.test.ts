@@ -559,10 +559,16 @@ describe('official TW names on the holdings card', () => {
     const urls: string[] = []
     // The production loader (discordHandlers.ts): memoised per run, two list URLs.
     const deps = runDeps(rec, {
-      loadTwNames: memoTwNames(async <T,>(url: string) => {
-        urls.push(url)
-        return [{ Code: '2330', Name: '台積電' }] as T
-      }),
+      loadTwNames: memoTwNames(
+        async <T,>(url: string) => {
+          urls.push(url)
+          return [{ Code: '2330', Name: '台積電' }] as T
+        },
+        async (url: string) => {
+          urls.push(url)
+          return '證券代號,證券名稱,收盤價\n"2330","台積電","2540"'
+        },
+      ),
     })
     const result = await runHoldingsDaily(deps)
     expect(result.sent).toBe(2)

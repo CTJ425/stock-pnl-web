@@ -102,3 +102,77 @@ export function buildTwList(twse: TwListSource, tpex: TwListSource): TwListResul
   }
   return { ok: true, rows }
 }
+
+/**
+ * Last good list, kept in the public `reports` bucket at `TWLIST_CACHE_PATH` (BUG-120).
+ *
+ * Before this every `twlist` call fetched both exchanges live, so one slow upstream reached the
+ * user every time. The list is daily close data, so it is served from this copy for
+ * `TWLIST_CACHE_TTL_MS`, and a failed refresh serves the copy of any age: a stale list only
+ * carries an older close, while no list means search, add-to-watch and name lookups all fail.
+ * The hour keeps the after-close update (today's close replacing yesterday's) within an hour.
+ */
+export const TWLIST_CACHE_PATH = 'twlist/latest.json'
+export const TWLIST_CACHE_TTL_MS = 60 * 60 * 1000
+
+export interface TwListCache {
+  /** ISO time the rows were fetched. */
+  at: string
+  rows: TwListRow[]
+}
+
+/** A stored copy, or null if it is missing, malformed or empty — never trusted blindly. */
+export function parseTwListCache(raw: unknown): TwListCache | null {
+  if (!raw || typeof raw !== 'object') return null
+  const { at, rows } = raw as { at?: unknown; rows?: unknown }
+  if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) return null
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  return { at, rows: rows as TwListRow[] }
+}
+
+export function isTwListCacheFresh(cache: TwListCache, now: Date): boolean {
+  const age = now.getTime() - Date.parse(cache.at)
+  return age >= 0 && age < TWLIST_CACHE_TTL_MS
+}
+
+/**
+ * A live list under this share of the stored one is treated as truncated: kept out of storage and
+ * not served while a copy exists. Per-exchange `usable > 0` (above) only catches an empty side; a
+ * body cut to a handful of rows would otherwise replace the full copy for an hour and become the
+ * fallback of any age (review finding on BUG-120).
+ */
+export const TWLIST_MIN_SHARE_OF_CACHE = 0.5
+
+/**
+ * With TPEx on the static snapshot, a stored copy younger than this wins over the live list (its
+ * TPEx closes are newer than the snapshot's). Past it the live list wins, so the TWSE closes do not
+ * freeze for as long as TPEx stays down — snapshot lists are never stored, so the copy cannot refresh.
+ */
+export const TWLIST_SNAPSHOT_PREFER_CACHE_MS = 24 * 60 * 60 * 1000
+
+export type TwListDecision =
+  | { kind: 'live'; rows: TwListRow[]; store: boolean }
+  | { kind: 'cached'; cache: TwListCache; reason: 'refresh-failed' | 'truncated' | 'tpex-snapshot' }
+  | { kind: 'error'; error: string; failures: TwListFailure[] }
+
+/** What to answer once a live refresh has run; every `cached` answer is stale by construction. */
+export function resolveTwList(
+  live: TwListResult,
+  usedTpexSnapshot: boolean,
+  cache: TwListCache | null,
+  now: Date,
+): TwListDecision {
+  if (!live.ok) {
+    return cache
+      ? { kind: 'cached', cache, reason: 'refresh-failed' }
+      : { kind: 'error', error: live.error, failures: live.failures }
+  }
+  if (cache && live.rows.length < cache.rows.length * TWLIST_MIN_SHARE_OF_CACHE) {
+    return { kind: 'cached', cache, reason: 'truncated' }
+  }
+  if (!usedTpexSnapshot) return { kind: 'live', rows: live.rows, store: true }
+  if (cache && now.getTime() - Date.parse(cache.at) < TWLIST_SNAPSHOT_PREFER_CACHE_MS) {
+    return { kind: 'cached', cache, reason: 'tpex-snapshot' }
+  }
+  return { kind: 'live', rows: live.rows, store: false }
+}

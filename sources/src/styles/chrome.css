@@ -577,6 +577,13 @@ a.hmenu-item {
   font-size: var(--type-label-01);
 }
 
+/* BUG-120: the failed-load message and its retry button on one line. */
+.watch-load-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ---------- Scroll ----------*/
 ::-webkit-scrollbar {
   width: 10px;

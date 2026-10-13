@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { buildTwList, type TwListSource } from './twList'
+import {
+  buildTwList,
+  isTwListCacheFresh,
+  parseTwListCache,
+  resolveTwList,
+  TWLIST_CACHE_TTL_MS,
+  TWLIST_SNAPSHOT_PREFER_CACHE_MS,
+  type TwListSource,
+} from './twList'
 
 const ok = (rows: Array<Record<string, unknown>>): TwListSource => ({
   status: 'fulfilled',
@@ -127,5 +135,52 @@ describe('buildTwList', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.failures).toEqual([{ source: 'TWSE', reason: 'response is not an array' }])
+  })
+})
+
+describe('twlist cache (BUG-120)', () => {
+  const rows = [{ symbol: '2330', name: '台積電', close: 2540 }]
+  const cache = { at: '2026-10-13T01:00:00.000Z', rows }
+  const okLive = buildTwList(ok(TWSE), ok(TPEX))
+  const badLive = buildTwList(failed(), ok(TPEX))
+
+  it('C1: parseTwListCache rejects a missing, malformed or empty copy', () => {
+    expect(parseTwListCache(cache)).toEqual(cache)
+    for (const raw of [null, 'x', {}, { at: 'nope', rows }, { at: cache.at, rows: [] }, { at: cache.at }]) {
+      expect(parseTwListCache(raw)).toBeNull()
+    }
+  })
+
+  it('C2: fresh for one hour after it was fetched, not before or after', () => {
+    const t = Date.parse(cache.at)
+    expect(isTwListCacheFresh(cache, new Date(t + TWLIST_CACHE_TTL_MS - 1))).toBe(true)
+    expect(isTwListCacheFresh(cache, new Date(t + TWLIST_CACHE_TTL_MS))).toBe(false)
+    expect(isTwListCacheFresh(cache, new Date(t - 1))).toBe(false)
+  })
+
+  const NOW = new Date(Date.parse(cache.at) + 2 * TWLIST_CACHE_TTL_MS)
+
+  it('C3: a complete live list is served and stored', () => {
+    expect(resolveTwList(okLive, false, cache, NOW)).toMatchObject({ kind: 'live', store: true })
+  })
+
+  it('C4: a failed refresh serves the stored copy of any age, and errors only without one', () => {
+    expect(resolveTwList(badLive, false, cache, NOW)).toEqual({ kind: 'cached', cache, reason: 'refresh-failed' })
+    expect(resolveTwList(badLive, false, null, NOW)).toMatchObject({ kind: 'error' })
+  })
+
+  it('C5: with TPEx on the snapshot, a stored copy under 24 h wins; an older one loses; neither is stored', () => {
+    expect(resolveTwList(okLive, true, cache, NOW)).toMatchObject({ kind: 'cached', reason: 'tpex-snapshot' })
+    const dayOld = new Date(Date.parse(cache.at) + TWLIST_SNAPSHOT_PREFER_CACHE_MS)
+    expect(resolveTwList(okLive, true, cache, dayOld)).toMatchObject({ kind: 'live', store: false })
+    expect(resolveTwList(okLive, true, null, NOW)).toMatchObject({ kind: 'live', store: false })
+  })
+
+  it('C6: a live list under half the stored one is treated as truncated and never stored', () => {
+    const big = { at: cache.at, rows: Array.from({ length: 10 }, (_, i) => ({ symbol: String(1000 + i), name: 'x', close: 1 })) }
+    // okLive has 2 rows: under 10 × 0.5.
+    expect(resolveTwList(okLive, false, big, NOW)).toMatchObject({ kind: 'cached', reason: 'truncated' })
+    const four = { at: cache.at, rows: big.rows.slice(0, 4) }
+    expect(resolveTwList(okLive, false, four, NOW)).toMatchObject({ kind: 'live', store: true })
   })
 })

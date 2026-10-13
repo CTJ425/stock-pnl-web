@@ -44,10 +44,16 @@ import {
   runHoldingsDaily,
 } from './holdingsRun.ts'
 import { type MarginSummaryResponse, marginSummaryUrl } from './marketMargin.ts'
-import { fetchJson } from './twChips.ts'
+import { fetchJson, fetchText } from './twChips.ts'
 import { memoTwNames } from './twNames.ts'
 import { type MarketFile } from './twMarket.ts'
 import { type MacroFile } from './usMacro.ts'
+
+/**
+ * BUG-120: the STOCK_DAY_ALL CSV answers in ~0.1 s, so 8 s is ample; a 15 s miss followed by the
+ * 15 s OpenAPI fallback would spend 30 s of the 80 s run budget before the first card.
+ */
+const fetchTwseCsv = (url: string) => fetchText(url, 8_000)
 
 /**
  * Real dependencies for the Discord daily summary (Task 165). Shared by `discord-summary` (cron,
@@ -257,7 +263,7 @@ export async function handleDiscordAccountTick(): Promise<Response> {
     finishMarketCopy,
     loadWorkspaces: loadHoldingsWorkspaces,
     // BUG-109: one fetch of the official TW names per tick, shared by every account in it.
-    loadTwNames: memoTwNames(fetchJson),
+    loadTwNames: memoTwNames(fetchJson, fetchTwseCsv),
     fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
     claimHoldings: claimHoldingsDaily,
     finish: finishHoldingsSend,
@@ -509,7 +515,7 @@ export function holdingsDataDeps(): HoldingsDataDeps {
     now: () => new Date(),
     loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
     loadWorkspaces: loadHoldingsWorkspaces,
-    loadTwNames: memoTwNames(fetchJson),
+    loadTwNames: memoTwNames(fetchJson, fetchTwseCsv),
     fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
     post: postDiscordWebhook,
     finish: finishHoldingsSend,
