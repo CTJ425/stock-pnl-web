@@ -21,6 +21,7 @@ export const ADMIN_RUN_JOBS = [
   'generate-history',
   'sync-market',
   'sync-sector-flow',
+  'sync-etf-holdings',
   'sync-macro',
   'sync-fx',
   'probe',
@@ -88,6 +89,11 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
     title: '類股資金流向',
     cron: '（隨籌碼階段；無獨立排程）',
     hint: 'T86 + 櫃買三大法人 + 產業別 → market/sector_flow.json；今天沒資料時往前找最近一個已公布的交易日，內容沒變就不重寫',
+  },
+  'sync-etf-holdings': {
+    title: 'ETF 成分股（0050）',
+    cron: '（隨日K／基本面階段 market-data-daily）',
+    hint: '元大投信 PCF/Daily → market/etf_holdings/0050.json；當天的資料已在就不發請求，約 16:00 公布',
   },
   'sync-macro': {
     title: '美總經',

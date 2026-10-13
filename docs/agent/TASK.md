@@ -18,6 +18,31 @@
 
 ## 📋 Active Tasks
 
+### Task 200: ETF holdings (成分股) tab — 0050 first
+- **Status**: 🔄 IN PROGRESS (implemented, on DEV; PROD and other ETFs not started)
+- **Agent**: Claude
+- **Timestamp**: 2026-10-13 22:46:23 Asia/Taipei
+- **Spec**: docs/agent/specs/200-etf-holdings.md (Phase 0 findings, contract, review fixes). Continues Task 129.
+- **Done**: Phase 0 (Yuanta `PCF/Daily` JSON bridge; reachable from DEV Edge); Edge sync on `generate-market-data` + `sync-etf-holdings`; 成分股 tab for 0050; `route:reviewer` pass (1 BLOCKER + 10 RISK, 10 fixed, 1 accepted in spec); 0.10.39-dev.1.
+1. Terms of use for republishing Yuanta's data: no terms page found (robots `Allow: /`) — ⏳ user to check the site footer
+2. Other ETFs (0056, 00631L … same endpoint answers) — ⏳ user to decide scope
+3. PROD: Edge deploy + release with the next `main` merge — ⏳
+4. Row links to constituents were dropped: 個股分析 only opens held/watched stocks. Opening any TW ticker there would bring them back — ⏳ user, optional
+
+### Task 199: Stock detail — 近一年總覽 row and a range-return trend chart (design stage)
+- **Status**: 🔄 IN PROGRESS (design reviewed by the user; implementation not started)
+- **Agent**: Claude
+- **Timestamp**: 2026-10-13 17:30:39 Asia/Taipei
+- **Origin**: user shared three screenshots of another site's ETF page (同類評分 radar, price chart with two-click range, 還原報酬 table, 配息 card) and asked what to borrow.
+- **Recommended scope** (user said 「先依照你的建議」): (1) two-click range selection on the price chart with 含息還原 / 實際股價 toggle and a result row (含息報酬, 只看股價, 配息貢獻, 區間內最大回撤, 年化 only when > 366 days), preset 「我的持有期間」 from the first buy; (3) a 近一年總覽 row under the quote head (殖利率 moved up from 基本面, 近一年含息報酬, 最大回撤, 波動度), every figure on the same 12-month window. Deferred: (4) per-stock 配息 history card, (5) period-return table. Rejected: 同類評分 / radar / weights (reads as advice; no peer-category data).
+- **Design files** (uncommitted, `docs/design/`): `stock-detail-range-mockup.html` (the redesign alone), `stock-detail-before-after.html` (現行 rebuilt from `QuoteTab` / `IntradayChart` / `FundamentalTab` vs 改版, side by side). Both embed real 0056 daily close/volume and 8 dividends from Yahoo Finance chart API, fetched 2026-10-13 after close; 「我的持有期間」 start 2025-08-12 is a placeholder, not the user's trades. Published as private artifacts: https://claude.ai/artifact/7epCPekU2gBNkk7cuzpDXB and https://claude.ai/artifact/VDbTnqgsMXirXQxjTRj2by
+- **Data check**: 2025-11-05 → 2026-07-29 price-only 27.05 % and Yahoo-adjclose 36.82 % match the user's screenshot (27.05 % / 36.84 %); dividend amounts match it too.
+- **Design decisions**: statement style per DESIGN.md (hairlines, double rule, 2px controls, no cards); range band ruling-blue tint, never red (red = up); ex-div ▲ inside the plot floor; tooltip on the far side of the cursor; 技術面 K line stays on raw prices (broker parity).
+1. Check whether the backend already has per-stock ex-dividend history (amount + ex-date) and ≥ 1–2 y of daily closes for TW stocks/ETFs; 含息還原 and 配息貢獻 depend on it — ⏳
+2. Decide placement: new section on the 個股 page vs replacing the head 走勢圖's long ranges (head keeps 1日/5日) — ⏳ user
+3. Implement (3) then (1); version bump + CHANGELOG per CLAUDE.md — ⏳
+4. Commit or discard the two `docs/design/` HTML files — ⏳ user
+
 ### Task 198: Remove Fugle — TW quotes back to MIS → Yahoo; quote-path review
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

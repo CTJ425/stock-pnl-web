@@ -31,6 +31,8 @@ import { QuoteTab } from './QuoteTab'
 import { quoteMeta } from './quoteMeta'
 import { TechnicalTab } from './TechnicalTab'
 import { WhatIfTab } from './WhatIfTab'
+import { EtfHoldingsTab } from './EtfHoldingsTab'
+import { isEtfHoldingsSupported } from '../../services/etfHoldingsProxy'
 import { useDailySeries } from './useDailySeries'
 import { buildTechnicalView } from './technicalView'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -54,10 +56,11 @@ interface StockDetailPageProps extends StockDetailTarget {
 }
 
 type DetailTab = 'analysis' | 'whatif'
-type AnalysisSectionTab = 'chips' | 'fundamental' | 'technical'
+/** `holdings` (成分股) exists only for an ETF in ETF_HOLDINGS_SUPPORTED (Task 200). */
+type AnalysisSectionTab = 'chips' | 'fundamental' | 'technical' | 'holdings'
 /**
  * One tab row since the 2026-09-27 statement redesign: the quote and 我的持股 always sit on top, and
- * 籌碼 / 基本面 / 技術面 / 損益試算 are siblings under it (they used to be two levels, 分析內容 ▸ three
+ * 籌碼 / 基本面 / 技術面 / (成分股) / 損益試算 are siblings under it (they used to be two levels, 分析內容 ▸ three
  * sections, and 損益試算 beside 分析內容). The URL keeps its two params, so old links still land.
  */
 type PageTab = AnalysisSectionTab | 'whatif'
@@ -66,10 +69,14 @@ const PAGE_TABS: Array<{ id: PageTab; label: string }> = [
   { id: 'chips', label: '籌碼' },
   { id: 'fundamental', label: '基本面' },
   { id: 'technical', label: '技術面' },
+  { id: 'holdings', label: '成分股' },
   { id: 'whatif', label: '損益試算' },
 ]
 
-const PAGE_TAB_IDS = PAGE_TABS.map((t) => t.id)
+/** The tabs this stock has: 成分股 only for a supported ETF. */
+function pageTabsFor(ticker: string): Array<{ id: PageTab; label: string }> {
+  return isEtfHoldingsSupported(ticker) ? PAGE_TABS : PAGE_TABS.filter((t) => t.id !== 'holdings')
+}
 
 /** Shortest time between two foreground re-checks for a newer report (Task 193 M16). */
 const REFRESH_MIN_GAP_MS = 5 * 60 * 1000
@@ -79,7 +86,7 @@ function isDetailTab(v: string | null): v is DetailTab {
 }
 
 function isSectionTab(v: string | null): v is AnalysisSectionTab {
-  return v === 'chips' || v === 'fundamental' || v === 'technical'
+  return v === 'chips' || v === 'fundamental' || v === 'technical' || v === 'holdings'
 }
 
 /** Initial tab level 1, read once from `?tab=`; falls back to the default when the value is unknown. */
@@ -144,6 +151,10 @@ export function StockDetailPage({
   const [pageTab, setPageTab] = useState<PageTab>(() =>
     readTabFromUrl() === 'whatif' ? 'whatif' : readSectionFromUrl(),
   )
+  const tabs = pageTabsFor(ticker)
+  const tabIds = tabs.map((t) => t.id)
+  // A switch from 0050 to a stock without 成分股 lands on 籌碼 instead of an empty page.
+  const activeTab: PageTab = tabIds.includes(pageTab) ? pageTab : 'chips'
   const selectTab = (id: PageTab) => {
     setPageTab(id)
     setUrlParams(id === 'whatif' ? { tab: 'whatif' } : { tab: 'analysis', sub: id })
@@ -346,37 +357,42 @@ export function StockDetailPage({
       </section>
 
       <nav className="subtabs sd-tabs" role="tablist" aria-label="個股分析分頁">
-        {PAGE_TABS.map(({ id, label }) => (
+        {tabs.map(({ id, label }) => (
           <button
             key={id}
             type="button"
             role="tab"
-            aria-selected={pageTab === id}
-            className={pageTab === id ? 'subtab active' : 'subtab'}
+            aria-selected={activeTab === id}
+            className={activeTab === id ? 'subtab active' : 'subtab'}
             onClick={() => selectTab(id)}
-            onKeyDown={(e) => handleTabListKeyDown(e, PAGE_TAB_IDS, pageTab, selectTab)}
+            onKeyDown={(e) => handleTabListKeyDown(e, tabIds, activeTab, selectTab)}
           >
             {label}
           </button>
         ))}
       </nav>
 
-      {pageTab === 'chips' && (
+      {activeTab === 'chips' && (
         <section className="sd-section" id="sec-chips" aria-label="籌碼：三大法人 · 融資融券">
           <ChipsTab report={report} status={status} errMsg={errMsg} />
         </section>
       )}
-      {pageTab === 'fundamental' && (
+      {activeTab === 'fundamental' && (
         <section className="sd-section" id="sec-fundamental" aria-label="基本面：估值 · 獲利能力 · 月營收">
           <FundamentalTab fundamental={fundamental} loading={fundLoading} error={fundError} />
         </section>
       )}
-      {pageTab === 'technical' && (
+      {activeTab === 'technical' && (
         <section className="sd-section" id="sec-technical" aria-label="技術面：日 K · 均線 · 布林 · 成交量 · KD">
           <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
         </section>
       )}
-      {pageTab === 'whatif' && (
+      {activeTab === 'holdings' && (
+        <section className="sd-section" id="sec-holdings" aria-label="成分股：基金概況 · 資產金額 · 持股權重">
+          <EtfHoldingsTab etf={ticker} reloadKey={reloadKey} />
+        </section>
+      )}
+      {activeTab === 'whatif' && (
         <section className="sd-section" id="sec-whatif" aria-label="損益試算">
           <WhatIfTab
             ticker={ticker}

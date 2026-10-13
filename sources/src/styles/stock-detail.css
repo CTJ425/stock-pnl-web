@@ -1629,3 +1629,37 @@ details.chart-more[open] > summary {
     grid-template-columns: 1fr;
   }
 }
+
+/* 成分股 (Task 200): the issuer's figures, in its order. Weights are not moves — no market colours. */
+.etfh-source {
+  margin: 0 0 var(--sp-04);
+}
+
+.etfh-source a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.etfh-assets {
+  max-width: 420px;
+}
+
+/* A zero class stays listed (the issuer lists it) but steps back. */
+.etfh-assets tr.etfh-zero td {
+  color: var(--ink-muted);
+}
+
+.etfh-more {
+  margin-top: var(--sp-03);
+}
+
+.etfh-foot {
+  margin-top: var(--sp-05);
+}
+
+@media (max-width: 720px) {
+  /* Phone: name and weight carry the table; share counts stay on the desktop view. */
+  .etfh-shares {
+    display: none;
+  }
+}

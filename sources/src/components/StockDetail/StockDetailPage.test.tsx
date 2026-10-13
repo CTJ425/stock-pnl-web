@@ -6,8 +6,9 @@ import userEvent from '@testing-library/user-event'
 // Replace the network layer with mock: what is tested here is the layout and paging switching, not the crawling logic
 const {
   fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental,
-  warmStockCore, warmStockHistory,
+  warmStockCore, warmStockHistory, fetchEtfHoldings,
 } = vi.hoisted(() => ({
+  fetchEtfHoldings: vi.fn(),
   fetchStoredReport: vi.fn(),
   generateReport: vi.fn(),
   fetchDailySeries: vi.fn(),
@@ -27,6 +28,10 @@ vi.mock('../../services/dailyProxy', () => ({
 }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
+vi.mock('../../services/etfHoldingsProxy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/etfHoldingsProxy')>()),
+  fetchEtfHoldings,
+}))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -116,6 +121,8 @@ describe('StockDetailPage', () => {
     // Default is no daily line / no fundamentals (the batch has not been run yet); overwrite the required cases by yourself
     fetchDailySeries.mockResolvedValue(null)
     fetchFundamental.mockResolvedValue(null)
+    fetchEtfHoldings.mockReset()
+    fetchEtfHoldings.mockResolvedValue({ kind: 'empty' })
     // Default core seals complete (e.g. ETF) so history is not entered and no re-read runs.
     warmStockCore.mockResolvedValue({
       ok: true,
@@ -314,6 +321,35 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
     const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
     expect(tabs).toEqual(['籌碼', '基本面', '技術面', '損益試算'])
+  })
+
+  it('成分股分頁只出現在支援的 ETF（Task 200）：0050 有、2330 沒有', async () => {
+    const { container, unmount } = render(
+      <StockDetailPage ticker="0050" name="元大台灣50" holding={null} quote={null} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
+    expect(tabs).toEqual(['籌碼', '基本面', '技術面', '成分股', '損益試算'])
+    expect(fetchEtfHoldings).not.toHaveBeenCalled()
+    await userEvent.setup().click(screen.getByRole('tab', { name: '成分股' }))
+    expect(sec(container, 'holdings')).toBeTruthy()
+    expect(await screen.findByText('還沒有這檔 ETF 的成分股資料')).toBeTruthy()
+    expect(fetchEtfHoldings).toHaveBeenCalledWith('0050')
+    expect(new URLSearchParams(window.location.search).get('sub')).toBe('holdings')
+    unmount()
+  })
+
+  it('從 0050 的成分股切到一般個股時回到籌碼分頁，不留空白頁', async () => {
+    window.history.replaceState(null, '', '/?tab=analysis&sub=holdings')
+    const { container, rerender } = render(
+      <StockDetailPage ticker="0050" name="元大台灣50" holding={null} quote={null} />,
+    )
+    expect(sec(container, 'holdings')).toBeTruthy()
+    rerender(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
+    expect(sec(container, 'holdings')).toBeNull()
+    expect(sec(container, 'chips')).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: '成分股' })).toBeNull()
+    expect(screen.getByRole('tab', { name: '籌碼' }).getAttribute('aria-selected')).toBe('true')
   })
 
   it('行情區不再放三大法人 2 日卡片，改在籌碼分頁畫近 N 日長條圖', async () => {

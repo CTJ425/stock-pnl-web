@@ -146,6 +146,8 @@ import {
   type MarketFile,
 } from './twMarket.ts'
 import { syncSectorFlow, type SectorFlowSyncDeps, type SectorFlowSyncResult } from './sectorFlowSync.ts'
+import { syncEtfHoldings, type EtfHoldingsSyncDeps, type EtfHoldingsSyncResult } from './etfHoldingsSync.ts'
+import { ETF_0050_RULES } from './etfHoldings.ts'
 import {
   FOREIGN_TOP_SCHEMA,
   foreignTopFingerprint,
@@ -1749,6 +1751,76 @@ function sectorFlowDeps(): SectorFlowSyncDeps {
   }
 }
 
+/**
+ * Output/update market/etf_holdings/0050.json: what 0050 holds, as Yuanta publishes it (Task 200).
+ *
+ * Rides on `generate-market-data` (market-data-daily, 18:00 / 22:00 Taipei), which runs every round
+ * and comes after Yuanta's ~16:00 publication, and is reachable on its own as `sync-etf-holdings`.
+ * Once the expected day is stored it makes no request at all. Logic: `etfHoldingsSync.ts`.
+ */
+async function fetchEtfHoldingsJson(url: string): Promise<unknown | null> {
+  try {
+    // Sized so a hung source cannot eat the rest of the 60 s market-data phase.
+    const result = await fetchWithRetry(
+      url,
+      { headers: { 'User-Agent': UA, Accept: 'application/json' } },
+      { timeoutMs: 8_000, totalBudgetMs: 10_000 },
+    )
+    if (!result.ok) return null
+    return await result.res.json()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * `downloadJson` answers null for a missing file *and* for a failed read; the sync must tell the two
+ * apart (a failed read taken as "no file" would replace 20 stored days with one), so this throws on
+ * anything but not-found. Storage reports a missing object as 400 with `not_found` (BUG-078).
+ */
+async function downloadEtfHoldingsFile<T>(path: string): Promise<T | null> {
+  const { data, error } = await db.storage.from(REPORTS_BUCKET).download(path)
+  if (error) {
+    const status = (error as { status?: number; statusCode?: string | number }).status ??
+      (error as { statusCode?: string | number }).statusCode
+    if (String(status) === '404' || /not.?found|NoSuchKey/i.test(error.message)) return null
+    throw new Error(`etf holdings read failed: ${error.message}`)
+  }
+  if (!data) return null
+  try {
+    return JSON.parse(await data.text()) as T
+  } catch {
+    // Unreadable as JSON is not ours: replaced, like a file without `days`.
+    return null
+  }
+}
+
+function etfHoldingsDeps(): EtfHoldingsSyncDeps {
+  return {
+    fetchJson: fetchEtfHoldingsJson,
+    download: downloadEtfHoldingsFile,
+    upload: uploadJson,
+    now: () => new Date(),
+  }
+}
+
+/** Outcomes that mean the file could not be refreshed for a reason someone should look at. */
+const ETF_HOLDINGS_FAILURES = new Set(['fetch-failed', 'parse-failed', 'invalid', 'upload-failed', 'error'])
+
+/** One 0050 round; a failure also lands in `app_log`, since this phase writes no `batch_run_log` row. */
+async function syncEtfHoldings0050(): Promise<EtfHoldingsSyncResult> {
+  const result = await syncEtfHoldings('0050', ETF_0050_RULES, etfHoldingsDeps())
+  if (result.reason && ETF_HOLDINGS_FAILURES.has(result.reason)) {
+    await logEvent(db, {
+      level: 'warn',
+      action: 'sync-etf-holdings',
+      message: `0050 holdings not refreshed: ${result.reason}${result.rule ? ` (${result.rule})` : ''}`,
+      detail: { ...result },
+    })
+  }
+  return result
+}
+
 // ----U.S. General Economic Indicator (0.6.5)----
 
 /**
@@ -2711,7 +2783,8 @@ async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, u
     case 'generate-chips':
       return runGeneratePhase('chips')
     case 'generate-market-data':
-      return runGeneratePhase('market-data')
+      // Not runGeneratePhase: the ETF holdings sync stays out of the probe's time budget.
+      return runGeneratePhaseMarketData(false)
     case 'generate-history':
       return runGeneratePhase('history')
   }
@@ -3232,8 +3305,14 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   }
 }
 
-async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
+/**
+ * `withEtfHoldings` is false when the source probe runs this phase as a follow-up: that call shares
+ * one 60 s invocation with the probe loop, and a hung issuer site (up to 10 s) must not push it over.
+ */
+async function runGeneratePhaseMarketData(withEtfHoldings = true): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
+  // First, while the phase has its full time: one small request at most (none once the day is in).
+  const etfHoldings = withEtfHoldings ? await syncEtfHoldings0050() : null
   const tickers = await batchTwTickers()
   const personalList = tickers
 
@@ -3272,6 +3351,7 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
     /** True when every ticker already had daily+fund for this data day (no Yahoo / no rewrite). */
     allCached: tickers.length > 0 && dailySynced === 0 && fundamentalSynced === 0,
     bwibbuDate,
+    etfHoldings,
     scopes: {
       holdings: {
         total: holdingsScope.total,
@@ -3557,6 +3637,15 @@ async function handleSyncSectorFlow(body: GenerateReportRequestBody): Promise<Re
   return json({ ok: true, ...result, durationMs: Date.now() - startedAt })
 }
 
+/** Trigger the ETF holdings sync by hand; the scheduled run is inside `generate-market-data`. */
+async function handleSyncEtfHoldings(): Promise<Response> {
+  const startedAt = Date.now()
+  const result = await syncEtfHoldings0050()
+  const failed = result.reason !== null && ETF_HOLDINGS_FAILURES.has(result.reason)
+  // A failure answers 502 so `admin_run_log.ok` (httpStatus < 400) and the console show it as failed.
+  return json({ ok: !failed, ...result, durationMs: Date.now() - startedAt }, failed ? 502 : 200)
+}
+
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -3581,6 +3670,7 @@ const ADMIN_RUN_JOBS = [
   'generate-history',
   'sync-market',
   'sync-sector-flow',
+  'sync-etf-holdings',
   'sync-macro',
   'sync-fx',
   'probe',
@@ -3596,6 +3686,8 @@ const ADMIN_RUN_JOBNAME: Record<AdminRunJob, string> = {
   'sync-market': 'market-daily',
   // No cron job of its own: it rides on generate-chips, so a manual run rolls into the same row.
   'sync-sector-flow': 'stock-report-nightly',
+  // No cron job of its own either: it rides on generate-market-data.
+  'sync-etf-holdings': 'market-data-daily',
   'sync-macro': 'macro-daily',
   'sync-fx': 'fx-daily',
   probe: 'source-probe',
@@ -3715,6 +3807,9 @@ async function handleAdminRun(
         case 'sync-sector-flow':
           resp = await handleSyncSectorFlow({})
           break
+        case 'sync-etf-holdings':
+          resp = await handleSyncEtfHoldings()
+          break
         case 'sync-macro':
           resp = await handleSyncMacro()
           break
@@ -3790,6 +3885,7 @@ const ACTION_ROUTES = new Map<string, ActionRoute<GenerateReportRequestBody>>([
   ['sync-macro', { gate: 'cron', run: () => handleSyncMacro() }],
   ['sync-market', { gate: 'cron', run: () => handleSyncMarket() }],
   ['sync-sector-flow', { gate: 'cron', run: (_req, body) => handleSyncSectorFlow(body) }],
+  ['sync-etf-holdings', { gate: 'cron', run: () => handleSyncEtfHoldings() }],
   ['sync-fx', { gate: 'cron', run: () => handleSyncFx() }],
   // Source probe only reads (plus its own observation table) but still calls TWSE.
   ['probe', { gate: 'cron', run: () => handleProbe() }],

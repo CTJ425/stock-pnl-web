@@ -1030,6 +1030,7 @@ One finding could not be implemented as written
 - **Agent**: Scribe
 - **Timestamp**: 2026-08-24 13:33:13 Asia/Taipei
 - **Investigation outcome**: TWSE has no official ETF constituent API (PCF published by issuers). Documented candidate sources (MoneyDJ, issuer PCF pages, TEJ). Deferred until official API or stable source is decided.
+- **Continued by Task 200** (2026-10-13): Yuanta's own `PCF/Daily` JSON is the source; see `specs/200-etf-holdings.md`.
 
 ### Task 125: Watchlist card design variants (Sparkline / Chips & PE / Range Bar)
 - **Status**: ⏳ **DEFERRED — Design documented, implementation deferred by scope**

@@ -710,6 +710,9 @@ CREATE INDEX IF NOT EXISTS source_probe_tick_ymd_src_idx
 --       `market-data-daily`  —— 0.7.11 moved `bwibbu` to the dated endpoint and reopened its window
 --                               to 15:00. There is not yet one full day of ticks proving the probe
 --                               catches it inside that window. Retire it once there is.
+--                               ⚠️ It is also the only automatic trigger of the 0050 holdings sync
+--                               (Task 200, `market/etf_holdings/0050.json`): retiring it stops those
+--                               updates unless the sync is moved to another job first.
 --
 --     ⚠️ Live envs: create these by **cloning an existing job's command** so the embedded
 --     CRON_SECRET is carried over without ever being printed (`stock-report-nightly` was the donor

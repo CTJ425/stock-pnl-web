@@ -40,6 +40,7 @@ describe('AdminConsolePage', () => {
       'generate-history',
       'sync-market',
       'sync-sector-flow',
+      'sync-etf-holdings',
       'sync-macro',
       'sync-fx',
       'probe',
