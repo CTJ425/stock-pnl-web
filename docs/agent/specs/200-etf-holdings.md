@@ -143,6 +143,18 @@ does not publish one and the denominator (`totalav` vs `fundsize`) would be our 
   not coloured with `--up` / `--down`. Phone: name + weight, shares hidden. Empty state:
   「還沒有這檔 ETF 的成分股資料，排程每個交易日傍晚更新。」
 
+## UI revision — charts first (0.10.39-dev.2, user-approved shape)
+
+The user asked for 「圖表為主，表格為輔」. Order: data note → fund summary (three figures, unchanged)
+→ **持股集中度**: one 100 % bar over fund size, segments = largest holding / ranks 2–10 / the rest /
+「股票以外」 (100 − sum of stock weights); each stock segment is a plain sum of published weights →
+**前 10 大持股**: horizontal bars on one shared scale (largest = full track) → `details.chart-more`
+「看全部 N 檔明細」 holding the 50-row table (collapsed) → **資產配置**: one bar whose widths are each
+amount's share of the four amounts together, labelled in 億元 only (no percent: the futures amount may
+be notional, so a fund-size denominator could top 100 %) → futures table. Figures live in the legend,
+not inside the bars (white text on the light-theme yellow failed contrast). Identity colours
+`--chart-c1..3`; never `--up` / `--down`. The 「顯示全部」 button is gone (the disclosure replaces it).
+
 ## Tests
 
 Edge: parser against the 10/12 fixture; each validation rule fails once, the fixture passes;

@@ -21,9 +21,9 @@
 ### Task 200: ETF holdings (成分股) tab — 0050 first
 - **Status**: 🔄 IN PROGRESS (implemented, on DEV; PROD and other ETFs not started)
 - **Agent**: Claude
-- **Timestamp**: 2026-10-13 22:46:23 Asia/Taipei
+- **Timestamp**: 2026-10-13 23:19:23 Asia/Taipei
 - **Spec**: docs/agent/specs/200-etf-holdings.md (Phase 0 findings, contract, review fixes). Continues Task 129.
-- **Done**: Phase 0 (Yuanta `PCF/Daily` JSON bridge; reachable from DEV Edge); Edge sync on `generate-market-data` + `sync-etf-holdings`; 成分股 tab for 0050; `route:reviewer` pass (1 BLOCKER + 10 RISK, 10 fixed, 1 accepted in spec); 0.10.39-dev.1.
+- **Done**: Phase 0 (Yuanta `PCF/Daily` JSON bridge; reachable from DEV Edge); Edge sync on `generate-market-data` + `sync-etf-holdings`; 成分股 tab for 0050; `route:reviewer` pass (1 BLOCKER + 10 RISK, 10 fixed, 1 accepted in spec); 0.10.39-dev.1. Charts-first redesign (/impeccable shape, user-approved) as 0.10.39-dev.2.
 1. Terms of use for republishing Yuanta's data: no terms page found (robots `Allow: /`) — ⏳ user to check the site footer
 2. Other ETFs (0056, 00631L … same endpoint answers) — ⏳ user to decide scope
 3. PROD: Edge deploy + release with the next `main` merge — ⏳

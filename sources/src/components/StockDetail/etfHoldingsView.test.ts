@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  HOLDINGS_TOP_N,
   formatContractMonth,
   formatPublishedAt,
   formatTwdFull,
   formatUnitsYi,
   formatWeight,
   formatYi,
-  visibleStocks,
+  assetSegments,
+  concentrationSegments,
 } from './etfHoldingsView'
 
 describe('etfHoldingsView', () => {
@@ -28,11 +28,32 @@ describe('etfHoldingsView', () => {
     expect(formatPublishedAt(null)).toBeNull()
   })
 
-  it('cuts the stock list to the top 10 until expanded', () => {
-    const stocks = Array.from({ length: 50 }, (_, i) => ({ code: String(1000 + i), name: 'x', shares: 1, weight: 1 }))
-    expect(visibleStocks(stocks, false)).toHaveLength(HOLDINGS_TOP_N)
-    expect(visibleStocks(stocks, false)[0].code).toBe('1000')
-    expect(visibleStocks(stocks, true)).toHaveLength(50)
-    expect(visibleStocks(stocks.slice(0, 3), false)).toHaveLength(3)
+  it('splits concentration into the largest, the next nine, the rest and what stocks leave of 100 %', () => {
+    const stocks = [
+      { code: '2330', name: '台積電', shares: 1, weight: 56.48 },
+      ...Array.from({ length: 9 }, (_, i) => ({ code: String(2000 + i), name: 'x', shares: 1, weight: 2.29 })),
+      ...Array.from({ length: 40 }, (_, i) => ({ code: String(3000 + i), name: 'y', shares: 1, weight: 0.5627 })),
+    ]
+    const segs = concentrationSegments(stocks)
+    expect(segs.map((g) => [g.key, g.label, g.weight])).toEqual([
+      ['top1', '台積電', 56.48],
+      ['next', '第 2–10 名', 20.61],
+      ['rest', '其餘 40 檔', 22.51],
+      ['other', '股票以外', 0.4],
+    ])
+  })
+
+  it('drops empty segments for a fund with few holdings', () => {
+    const segs = concentrationSegments([{ code: '2330', name: '台積電', shares: 1, weight: 100 }])
+    expect(segs.map((g) => g.key)).toEqual(['top1'])
+    expect(concentrationSegments([])).toEqual([])
+  })
+
+  it('sizes asset segments by the amounts themselves, keeping zero classes listed', () => {
+    const segs = assetSegments({ stock: 2_492_806_207_442, etf: 0, bond: 0, futures: 6_907_178_200 })
+    expect(segs.map((a) => a.key)).toEqual(['stock', 'etf', 'bond', 'futures'])
+    expect(segs[1].widthPct).toBe(0)
+    expect(segs[0].widthPct + segs[3].widthPct).toBeCloseTo(100, 10)
+    expect(segs[0].widthPct).toBeGreaterThan(99)
   })
 })

@@ -1630,7 +1630,8 @@ details.chart-more[open] > summary {
   }
 }
 
-/* 成分股 (Task 200): the issuer's figures, in its order. Weights are not moves — no market colours. */
+/* 成分股 (Task 200): charts first, the table one disclosure below. Weights are not moves — identity
+   colours only, never --up / --down. Bars are square (statement geometry). */
 .etfh-source {
   margin: 0 0 var(--sp-04);
 }
@@ -1640,17 +1641,74 @@ details.chart-more[open] > summary {
   text-underline-offset: 3px;
 }
 
-.etfh-assets {
-  max-width: 420px;
+/* One 100 % bar split into segments; the figures are in the legend under it. */
+.etfh-stack {
+  display: flex;
+  height: 32px;
+  margin: var(--sp-03) 0 var(--sp-04);
+  background: var(--cds-border-subtle);
+  overflow: hidden;
 }
 
-/* A zero class stays listed (the issuer lists it) but steps back. */
-.etfh-assets tr.etfh-zero td {
-  color: var(--ink-muted);
+.etfh-seg {
+  display: block;
+  min-width: 2px;
 }
 
-.etfh-more {
-  margin-top: var(--sp-03);
+.etfh-seg + .etfh-seg {
+  box-shadow: inset 1px 0 0 var(--cds-background);
+}
+
+.etfh-legend {
+  max-width: 320px;
+}
+
+.etfh-legend .chart-legend {
+  margin: 0;
+  padding: 0;
+}
+
+.etfh-legend .chart-legend-note {
+  color: inherit;
+  font-weight: 600;
+}
+
+/* Ten bars on one shared scale (largest = full track), name | bar | weight. */
+.etfh-bars {
+  list-style: none;
+  margin: var(--sp-03) 0 0;
+  padding: 0;
+}
+
+.etfh-bar-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) 1fr 4.5rem;
+  align-items: center;
+  gap: var(--sp-04);
+  min-height: 32px;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.etfh-bar-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.etfh-bar-track {
+  height: 12px;
+}
+
+.etfh-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--chart-c1);
+}
+
+.etfh-bar-value {
+  text-align: right;
+  font-weight: 600;
 }
 
 .etfh-foot {
@@ -1658,7 +1716,26 @@ details.chart-more[open] > summary {
 }
 
 @media (max-width: 720px) {
-  /* Phone: name and weight carry the table; share counts stay on the desktop view. */
+  /* Phone: name and weight on one line, the bar full width under them. */
+  .etfh-bar-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'name value' 'bar bar';
+    row-gap: var(--sp-02);
+    padding: var(--sp-03) 0;
+  }
+
+  .etfh-bar-name {
+    grid-area: name;
+  }
+
+  .etfh-bar-value {
+    grid-area: value;
+  }
+
+  .etfh-bar-track {
+    grid-area: bar;
+  }
+
   .etfh-shares {
     display: none;
   }

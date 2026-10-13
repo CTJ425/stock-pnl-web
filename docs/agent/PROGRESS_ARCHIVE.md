@@ -1,5 +1,11 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-10-13 17:30:39 Asia/Taipei (Task 199, design only)
+- **Ask**: 「如果我想要借鏡這些圖表跟UI呈現方式，我們有哪些地方建議調整?」 → 「先依照你的建議且用相關skill 設計與html demo」 → publish to artifacts → use real data → 「幫我比對一下前後差異，然後用html show給我看」.
+- **Done**: recommendations, two HTML mockups and two private artifacts — details and open items in `TASK.md` Task 199. No app code, no version change.
+- **Verified**: Playwright screenshots desktop light/dark + 390 px phone, no page errors; `impeccable detect` clean except the 2rem quote price (kept: it is the live app's size); range figures cross-checked against the user's screenshot.
+- **Not done**: backend dividend-history check; implementation; the HTML files are uncommitted.
+
 ## 📅 Log: 2026-10-13 11:09:47 Asia/Taipei (BUG-120, 0.10.38)
 - **Ask**: 「在加入觀察時…台股清單載入…為什麼很常失敗」, then 「1-4全部處理，幫我開bug…測試完畢後再呼叫 /route:reviewer…紀錄本次subagent的行為和token消耗」.
 - **Root cause / fix / evidence**: see `BUG_FIX.md` BUG-120 (TWSE OpenAPI 10.2 s gz vs 10 s Edge timeout; CORS-dead client fallback; no stale use; no server copy).

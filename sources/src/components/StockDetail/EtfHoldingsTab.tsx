@@ -1,6 +1,7 @@
 /**
- * 成分股 tab (Task 200): what an ETF holds, laid out in the issuer's own order — fund summary,
- * asset amounts, stock weights, futures. Only rendered for codes in `ETF_HOLDINGS_SUPPORTED`.
+ * 成分股 tab (Task 200): what an ETF holds. Charts first (DESIGN.md): how concentrated it is, the
+ * ten largest holdings, the asset mix; the full 50-row table sits one disclosure below. Only rendered
+ * for codes in `ETF_HOLDINGS_SUPPORTED`.
  *
  * Every figure is the issuer's as published; nothing here recomputes a weight or a NAV. Weights
  * are not price moves, so they never take the market red / green.
@@ -8,8 +9,11 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { fetchEtfHoldings, type EtfHoldingsData } from '../../services/etfHoldingsProxy'
+import { ChartLegend } from '../Charts/ChartLegend'
 import {
   HOLDINGS_TOP_N,
+  assetSegments,
+  concentrationSegments,
   formatContractMonth,
   formatInt,
   formatPublishedAt,
@@ -18,7 +22,8 @@ import {
   formatUnitsYi,
   formatWeight,
   formatYi,
-  visibleStocks,
+  type AssetSegment,
+  type ConcentrationSegment,
 } from './etfHoldingsView'
 
 interface EtfHoldingsTabProps {
@@ -34,21 +39,27 @@ type LoadState =
   | { kind: 'invalid' }
   | { kind: 'ok'; data: EtfHoldingsData }
 
-const ASSET_ROWS = [
-  ['stock', '股票'],
-  ['etf', 'ETF'],
-  ['bond', '債券'],
-  ['futures', '期貨'],
-] as const
+/** Identity colours (DESIGN.md: never the market red / green for something that is not a move). */
+const SEGMENT_COLOR: Record<ConcentrationSegment['key'], string> = {
+  top1: 'var(--chart-c1)',
+  next: 'var(--chart-c2)',
+  rest: 'var(--chart-c3)',
+  other: 'var(--ink-muted)',
+}
+
+const ASSET_COLOR: Record<AssetSegment['key'], string> = {
+  stock: 'var(--chart-c1)',
+  etf: 'var(--chart-c3)',
+  bond: 'var(--chart-c4)',
+  futures: 'var(--chart-c2)',
+}
 
 export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
-  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     let alive = true
     setState({ kind: 'loading' })
-    setExpanded(false)
     fetchEtfHoldings(etf)
       .then((r) => {
         if (!alive) return
@@ -99,7 +110,10 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
   const { data } = state
   const day = data.days[0]
   const published = formatPublishedAt(day.publishedAt)
-  const shown = visibleStocks(day.stocks, expanded)
+  const top = day.stocks.slice(0, HOLDINGS_TOP_N)
+  const maxWeight = Math.max(...top.map((s) => s.weight), 0)
+  const segments = concentrationSegments(day.stocks)
+  const assetSegs = assetSegments(day.assets)
 
   return (
     <div className="etfh">
@@ -146,72 +160,111 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
 
       <section className="rpt-section">
         <div className="rpt-section-head">
-          <h3>資產金額</h3>
-          <span className="source-tag">單位：新台幣</span>
+          <h3>持股集中度</h3>
+          <span className="source-tag">占基金規模的權重，共 {day.stocks.length} 檔</span>
         </div>
-        <div className="table-scroll">
-          <table className="data-table etfh-assets" aria-label="資產金額">
-            <thead>
-              <tr>
-                <th scope="col">類別</th>
-                <th scope="col" className="num">金額</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ASSET_ROWS.map(([key, label]) => {
-                const v = day.assets[key]
-                return (
-                  <tr key={key} className={v === 0 ? 'etfh-zero' : undefined}>
-                    <td>{label}</td>
-                    <td className="num" title={v === 0 ? undefined : formatTwdFull(v)}>
-                      {formatYi(v)}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div
+          className="etfh-stack"
+          role="img"
+          aria-label={`持股集中度：${segments.map((g) => `${g.label} ${formatWeight(g.weight)}`).join('、')}`}
+        >
+          {segments.map((g) => (
+            <span
+              key={g.key}
+              className="etfh-seg"
+              style={{ width: `${g.weight}%`, background: SEGMENT_COLOR[g.key] }}
+              title={`${g.label} ${formatWeight(g.weight)}`}
+            />
+          ))}
+        </div>
+        {/* The figures live in the legend, not inside the bar: segment text could not keep contrast on every colour. */}
+        <div className="etfh-legend">
+          <ChartLegend
+            items={segments.map((g) => ({ label: g.label, color: SEGMENT_COLOR[g.key], note: formatWeight(g.weight) }))}
+          />
         </div>
       </section>
 
       <section className="rpt-section">
         <div className="rpt-section-head">
-          <h3>股票持股</h3>
-          <span className="source-tag">共 {day.stocks.length} 檔，依權重排列</span>
+          <h3>前 {top.length} 大持股</h3>
+          <span className="source-tag">權重，依大小排列</span>
         </div>
-        <div className="table-scroll">
-          <table className="data-table etfh-stocks" aria-label="股票持股">
-            <thead>
-              <tr>
-                <th scope="col">股票</th>
-                <th scope="col" className="num etfh-shares">股數</th>
-                <th scope="col" className="num">權重</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((s) => (
-                <tr key={s.code}>
-                  {/* No link: 個股分析 only opens held or watched stocks, so most rows would land elsewhere. */}
-                  <td>
-                    {s.name} <span className="hint">{s.code}</span>
-                  </td>
-                  <td className="num etfh-shares">{formatInt(s.shares)}</td>
-                  <td className="num">{formatWeight(s.weight)}</td>
+        <ol className="etfh-bars" aria-label={`前 ${top.length} 大持股權重`}>
+          {top.map((s) => (
+            <li key={s.code} className="etfh-bar-row">
+              <span className="etfh-bar-name">
+                {s.name} <span className="hint">{s.code}</span>
+              </span>
+              <span className="etfh-bar-track" aria-hidden="true">
+                <span
+                  className="etfh-bar-fill"
+                  style={{ width: `${maxWeight > 0 ? (s.weight / maxWeight) * 100 : 0}%` }}
+                />
+              </span>
+              <span className="etfh-bar-value">{formatWeight(s.weight)}</span>
+            </li>
+          ))}
+        </ol>
+        <details className="chart-more">
+          <summary>看全部 {day.stocks.length} 檔明細（股數、權重）</summary>
+          <div className="table-scroll">
+            <table className="data-table etfh-stocks" aria-label="股票持股">
+              <thead>
+                <tr>
+                  <th scope="col">股票</th>
+                  <th scope="col" className="num etfh-shares">股數</th>
+                  <th scope="col" className="num">權重</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {day.stocks.map((s) => (
+                  <tr key={s.code}>
+                    {/* No link: 個股分析 only opens held or watched stocks, so most rows would land elsewhere. */}
+                    <td>
+                      {s.name} <span className="hint">{s.code}</span>
+                    </td>
+                    <td className="num etfh-shares">{formatInt(s.shares)}</td>
+                    <td className="num">{formatWeight(s.weight)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <section className="rpt-section">
+        <div className="rpt-section-head">
+          <h3>資產配置</h3>
+          <span className="source-tag">單位：新台幣</span>
         </div>
-        {day.stocks.length > HOLDINGS_TOP_N && (
-          <button
-            type="button"
-            className="btn btn-sm etfh-more"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? `只看前 ${HOLDINGS_TOP_N} 檔` : `顯示全部 ${day.stocks.length} 檔`}
-          </button>
-        )}
+        <div
+          className="etfh-stack etfh-stack-assets"
+          role="img"
+          aria-label={`資產配置：${assetSegs.map((a) => `${a.label} ${formatYi(a.amount)}`).join('、')}`}
+        >
+          {assetSegs
+            .filter((a) => a.widthPct > 0)
+            .map((a) => (
+              <span
+                key={a.key}
+                className="etfh-seg"
+                style={{ width: `${a.widthPct}%`, background: ASSET_COLOR[a.key] }}
+                title={`${a.label} ${formatTwdFull(a.amount)}`}
+              />
+            ))}
+        </div>
+        <div className="etfh-legend">
+          <ChartLegend
+            items={assetSegs.map((a) => ({
+              label: a.label,
+              color: ASSET_COLOR[a.key],
+              note: formatYi(a.amount),
+              hidden: a.amount === 0,
+            }))}
+          />
+        </div>
       </section>
 
       {day.futures.length > 0 && (
@@ -247,9 +300,9 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
       )}
 
       <p className="hint etfh-foot">
-        權重是各持股占基金規模的比率，元大以基金規模{day.fundSize > 0 ? `（${formatYi(day.fundSize)}）` : ''}
-        為分母，與上方總淨值略有不同；
-        數字皆為元大公布值，本站未重新計算。
+        權重是元大公布的各持股占基金規模{day.fundSize > 0 ? `（${formatYi(day.fundSize)}）` : ''}的比率，與上方總淨值略有不同。
+        集中度各段是權重直接相加；「股票以外」是 100% 減去股票權重合計，含現金與期貨保證金等。
+        資產配置長條只表示四項金額的相對大小，元大未公布占比。本站未重新計算任何權重。
       </p>
     </div>
   )

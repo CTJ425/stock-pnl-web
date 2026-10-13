@@ -3,7 +3,7 @@
  */
 import type { EtfHoldingsStock } from '../../services/etfHoldingsProxy'
 
-/** Rows shown before 「顯示全部」. */
+/** Holdings drawn as bars; the rest are in the table under 「看全部明細」. */
 export const HOLDINGS_TOP_N = 10
 
 const nf = (digits: number) =>
@@ -44,7 +44,63 @@ export function formatPublishedAt(stamp: string | null): string | null {
   return m ? `${m[1]}/${m[2]} ${m[3]}:${m[4]}` : null
 }
 
-/** Stocks in the issuer's order (largest weight first), cut to the top N unless expanded. */
-export function visibleStocks(stocks: EtfHoldingsStock[], expanded: boolean, n = HOLDINGS_TOP_N): EtfHoldingsStock[] {
-  return expanded ? stocks : stocks.slice(0, n)
+
+/** Sum of published weights, rounded to the 2 decimals they are published with (no float noise). */
+const sumWeights = (stocks: EtfHoldingsStock[]): number =>
+  Math.round(stocks.reduce((s, x) => s + x.weight, 0) * 100) / 100
+
+export interface ConcentrationSegment {
+  key: 'top1' | 'next' | 'rest' | 'other'
+  label: string
+  /** Percent of fund size: a sum of published weights, or for `other` what they leave of 100. */
+  weight: number
+}
+
+/**
+ * The concentration bar: the largest holding, the next nine, the rest, and what the stock weights
+ * leave of 100 % (cash, futures margin — the issuer's weights are over fund size, so stocks sum to
+ * about 99.7 %). Every stock figure is a sum of published weights; nothing is recomputed.
+ */
+export function concentrationSegments(stocks: EtfHoldingsStock[]): ConcentrationSegment[] {
+  if (stocks.length === 0) return []
+  const [first, ...others] = stocks
+  const next = others.slice(0, HOLDINGS_TOP_N - 1)
+  const rest = others.slice(HOLDINGS_TOP_N - 1)
+  const segs: ConcentrationSegment[] = [{ key: 'top1', label: first.name, weight: first.weight }]
+  if (next.length > 0) {
+    segs.push({ key: 'next', label: `第 2–${next.length + 1} 名`, weight: sumWeights(next) })
+  }
+  if (rest.length > 0) segs.push({ key: 'rest', label: `其餘 ${rest.length} 檔`, weight: sumWeights(rest) })
+  const other = Math.round((100 - sumWeights(stocks)) * 100) / 100
+  if (other > 0) segs.push({ key: 'other', label: '股票以外', weight: other })
+  return segs
+}
+
+export interface AssetSegment {
+  key: 'stock' | 'etf' | 'bond' | 'futures'
+  label: string
+  amount: number
+  /** Bar width only: this amount over the four amounts together. Never printed as a percent. */
+  widthPct: number
+}
+
+const ASSET_LABELS = [
+  ['stock', '股票'],
+  ['etf', 'ETF'],
+  ['bond', '債券'],
+  ['futures', '期貨'],
+] as const
+
+/**
+ * Asset bar segments. Widths are each amount's share of the four amounts together — not a share of
+ * the fund: the futures amount may be notional exposure, so a fund-size denominator could top 100 %.
+ */
+export function assetSegments(assets: Record<AssetSegment['key'], number>): AssetSegment[] {
+  const total = ASSET_LABELS.reduce((s, [k]) => s + Math.max(0, assets[k]), 0)
+  return ASSET_LABELS.map(([key, label]) => ({
+    key,
+    label,
+    amount: assets[key],
+    widthPct: total > 0 ? (Math.max(0, assets[key]) / total) * 100 : 0,
+  }))
 }

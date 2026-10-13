@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 
 const { fetchEtfHoldings } = vi.hoisted(() => ({ fetchEtfHoldings: vi.fn() }))
 vi.mock('../../services/etfHoldingsProxy', () => ({ fetchEtfHoldings }))
@@ -44,7 +43,7 @@ describe('EtfHoldingsTab', () => {
   it('shows the issuer figures, the data date and the source link', async () => {
     fetchEtfHoldings.mockResolvedValue(ok(day()))
     render(<EtfHoldingsTab etf="0050" />)
-    expect(await screen.findByText('25,535.51 億')).toBeTruthy()
+    expect((await screen.findAllByText('25,535.51 億')).length).toBeGreaterThan(0)
     expect(screen.getByText(/資料日 2026\/10\/12・元大投信公布（10\/12 16:06 更新）/)).toBeTruthy()
     expect(screen.getByRole('link', { name: '元大官網原始頁面' }).getAttribute('href')).toBe('https://example.test/0050')
     expect(screen.getByText('114.47 元')).toBeTruthy()
@@ -54,26 +53,40 @@ describe('EtfHoldingsTab', () => {
     expect(within(futures).getAllByText('2026/10')).toHaveLength(2)
   })
 
-  it('lists the top 10 stocks and expands to all', async () => {
+  it('draws concentration and the top 10 as charts, with all 50 rows one disclosure below', async () => {
     fetchEtfHoldings.mockResolvedValue(ok(day()))
-    render(<EtfHoldingsTab etf="0050" />)
-    const table = await screen.findByRole('table', { name: '股票持股' })
-    expect(within(table).getAllByRole('row')).toHaveLength(11)
+    const { container } = render(<EtfHoldingsTab etf="0050" />)
+    const concentration = await screen.findByRole('img', { name: /持股集中度/ })
+    expect(concentration.getAttribute('aria-label')).toContain('台積電 56.39%')
+    expect(concentration.getAttribute('aria-label')).toContain('第 2–10 名')
+    const bars = screen.getByRole('list', { name: '前 10 大持股權重' })
+    expect(within(bars).getAllByRole('listitem')).toHaveLength(10)
+    // Shared scale: the largest bar is the full track.
+    expect((container.querySelector('.etfh-bar-fill') as HTMLElement).style.width).toBe('100%')
+    const details = container.querySelector('details.chart-more') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    expect(within(details).getByText('看全部 50 檔明細（股數、權重）')).toBeTruthy()
+    const table = within(details).getByRole('table', { hidden: true, name: '股票持股' })
+    expect(within(table).getAllByRole('row', { hidden: true })).toHaveLength(51)
     expect(within(table).getByText('565,525,249')).toBeTruthy()
-    expect(within(table).getByText('56.39%')).toBeTruthy()
     // No row links: 個股分析 can only open held or watched stocks (review BLOCKER, Task 200).
-    expect(within(table).queryAllByRole('link')).toHaveLength(0)
-    await userEvent.setup().click(screen.getByRole('button', { name: '顯示全部 50 檔' }))
-    expect(within(table).getAllByRole('row')).toHaveLength(51)
-    expect(screen.getByRole('button', { name: '只看前 10 檔' })).toBeTruthy()
+    expect(within(table).queryAllByRole('link', { hidden: true })).toHaveLength(0)
   })
 
-  it('hides the futures block when the fund holds none, and dims zero asset rows', async () => {
-    fetchEtfHoldings.mockResolvedValue(ok(day({ futures: [], assets: { stock: 1, etf: 0, bond: 0, futures: 0 } })))
+  it('draws the asset mix as one bar and lists zero classes in the legend', async () => {
+    fetchEtfHoldings.mockResolvedValue(ok(day()))
     const { container } = render(<EtfHoldingsTab etf="0050" />)
-    await screen.findByRole('table', { name: '股票持股' })
+    const assets = await screen.findByRole('img', { name: /資產配置/ })
+    expect(assets.getAttribute('aria-label')).toContain('股票 25,401.94 億')
+    expect(assets.querySelectorAll('.etfh-seg')).toHaveLength(2)
+    expect(container.textContent).toContain('債券')
+  })
+
+  it('hides the futures block when the fund holds none', async () => {
+    fetchEtfHoldings.mockResolvedValue(ok(day({ futures: [], assets: { stock: 1, etf: 0, bond: 0, futures: 0 } })))
+    render(<EtfHoldingsTab etf="0050" />)
+    await screen.findByRole('img', { name: /資產配置/ })
     expect(screen.queryByRole('table', { name: '期貨部位' })).toBeNull()
-    expect(container.querySelectorAll('.etfh-assets tr.etfh-zero')).toHaveLength(3)
   })
 
   it('says plainly when there is no file yet, and when reading failed', async () => {
