@@ -222,6 +222,20 @@ data note and link text name the issuer.
 DEV live (branch deploy, `stock-report` v19 `06fcb71f10c2…`): first run 0050 unchanged, 0056 and
 009828 written, 7 codes unsupported, 4.5 s; second run 705 ms, nothing written.
 
+### Release 1 review (session 2 via herdr, 2026-10-14 10:26:17 Asia/Taipei)
+
+Review-only agent (`pr-reviewer`, Claude, `--disallowedTools Edit Write NotebookEdit`, told not to
+commit / push / comment) on PR #1: 0 BLOCKER, 6 RISK, 6 NIT; all checked against the code, none
+false. Fixed: (1) issuer read from user-typed `transactions.name` → Edge prefers the TWSE short name
+from `reports/twlist/latest.json`, 0050 always in; the tab always reads the file and uses the name only
+to word a missing-file message; (2) 「主動」 prefix stripped before brand matching; (3) uniqueness by
+`market:code` (and React keys); (4) a fund with no stocks → `no-stocks`, not a failure; (5) budget
+counted from before the universe query, a fund starts only if `elapsed + source.worstCaseMs()` fits
+(Yuanta 7 s; CTBC 21 s before its session, 7 s after), per-call 6 s / 7 s, round 25 s; (6) universe
+query error logged. NITs fixed: `TT` → TW; unknown CTBC row types refuse the day; supported-issuer copy
+generated from the brand list. Not changed: market bar > 100 % (the bar clips, `overflow: hidden`);
+one extra same-day rewrite of pre-release files (adds `market`, harmless).
+
 ## Tests
 
 Edge: parser against the 10/12 fixture; each validation rule fails once, the fixture passes;

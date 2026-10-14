@@ -8,7 +8,12 @@
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import { etfIssuerOf, fetchEtfHoldings, type EtfHoldingsData } from '../../services/etfHoldingsProxy'
+import {
+  etfIssuerOf,
+  fetchEtfHoldings,
+  supportedIssuerLabels,
+  type EtfHoldingsData,
+} from '../../services/etfHoldingsProxy'
 import { ChartLegend } from '../Charts/ChartLegend'
 import {
   HOLDINGS_TOP_N,
@@ -29,7 +34,10 @@ import {
 
 interface EtfHoldingsTabProps {
   etf: string
-  /** The ETF's short name; its issuer is read from it (「中信台日韓PCB」 → 中國信託投信). */
+  /**
+   * The ETF's short name, used only to word the message when no file exists (「中信台日韓PCB」 →
+   * 中國信託投信). It can be a name the user typed, so it never decides whether the file is read.
+   */
   name: string
   /** +1 on the page's 重新整理, to refetch. */
   reloadKey?: number
@@ -70,8 +78,8 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
 
   useEffect(() => {
-    // No source for this issuer: nothing to read, the tab says so below.
-    if (!supported) return
+    // Always read: the file, when there is one, is the truth (and carries its issuer); the name only
+    // words the message for a missing file.
     let alive = true
     setState({ kind: 'loading' })
     fetchEtfHoldings(etf)
@@ -86,20 +94,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
     return () => {
       alive = false
     }
-  }, [etf, reloadKey, supported])
-
-  if (!supported) {
-    return (
-      <div className="empty-state" style={{ padding: 32 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>
-          {issuer ? `${issuer.label}的成分股資料尚未串接` : '這檔 ETF 的投信成分股資料尚未串接'}
-        </div>
-        <div className="hint" style={{ marginTop: 6 }}>
-          目前只接上元大投信與中國信託投信；其他投信會一家一家加入。
-        </div>
-      </div>
-    )
-  }
+  }, [etf, reloadKey])
 
   if (state.kind === 'loading') {
     return (
@@ -122,6 +117,18 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
       <div className="notice notice-error" role="alert">
         <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
         成分股資料的格式和網頁對不上，暫時無法顯示。
+      </div>
+    )
+  }
+  if (state.kind === 'none' && !supported) {
+    return (
+      <div className="empty-state" style={{ padding: 32 }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
+          {issuer ? `${issuer.label}的成分股資料尚未串接` : '這檔 ETF 的投信成分股資料尚未串接'}
+        </div>
+        <div className="hint" style={{ marginTop: 6 }}>
+          目前只接上{supportedIssuerLabels().join('與')}；其他投信會一家一家加入。
+        </div>
       </div>
     )
   }
@@ -253,7 +260,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
         </div>
         <ol className="etfh-bars" aria-label={`前 ${top.length} 大持股權重`}>
           {top.map((s) => (
-            <li key={s.code} className="etfh-bar-row">
+            <li key={`${s.market}:${s.code}`} className="etfh-bar-row">
               <span className="etfh-bar-name">
                 {s.name} <span className="hint">{s.code}</span>
               </span>
@@ -280,7 +287,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
               </thead>
               <tbody>
                 {day.stocks.map((s) => (
-                  <tr key={s.code}>
+                  <tr key={`${s.market}:${s.code}`}>
                     {/* No link: 個股分析 only opens held or watched stocks, so most rows would land elsewhere. */}
                     <td>
                       {s.name} <span className="hint">{s.code}</span>

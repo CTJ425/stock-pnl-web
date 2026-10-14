@@ -50,13 +50,18 @@ export function ctbcNumber(v: unknown): number {
  * Exchange suffix → market. Taiwan codes carry none ('3037'); foreign ones do ('4062 JP',
  * '007660 KP'). KP / KQ / KS are the Korean boards (KOSPI / KOSDAQ).
  */
-const MARKET_OF_SUFFIX: Record<string, string> = { JP: 'JP', KP: 'KR', KQ: 'KR', KS: 'KR', US: 'US', UN: 'US', UW: 'US', HK: 'HK' }
+const MARKET_OF_SUFFIX: Record<string, string> = {
+  TT: 'TW', JP: 'JP', KP: 'KR', KQ: 'KR', KS: 'KR', US: 'US', UN: 'US', UW: 'US', HK: 'HK',
+}
 
 export function splitCtbcCode(raw: string): { code: string; market: string } {
   const [code, suffix] = raw.trim().split(/\s+/)
   if (!suffix) return { code, market: 'TW' }
   return { code, market: MARKET_OF_SUFFIX[suffix] ?? suffix }
 }
+
+/** Row types that are not holdings: cash and receivable / payable lines (seen 2026-10-13). */
+const NON_HOLDING_TYPES = new Set(['CASH', 'PAYRCIV'])
 
 /** The fund's name and day from `etf/ETFHoldingWeight` `Data`, or null when it is not that shape. */
 export function parseCtbcHoldings(data: unknown): { fundName: string; day: EtfHoldingsDay } | null {
@@ -97,8 +102,11 @@ export function parseCtbcHoldings(data: unknown): { fundName: string; day: EtfHo
           weight,
           month: typeof r.ym_ === 'string' ? r.ym_ : '',
         })
+      } else if (!NON_HOLDING_TYPES.has(type)) {
+        // A row type we have not seen (ETF, BOND, DR …) would be dropped silently and the weights
+        // would no longer add up; refuse the day instead, so the run log names it.
+        return null
       }
-      // CASH and receivable / payable lines are not holdings.
     }
   }
   stocks.sort((a, b) => b.weight - a.weight)
@@ -128,6 +136,7 @@ export function parseCtbcHoldings(data: unknown): { fundName: string; day: EtfHo
  */
 export function createCtbcSession(post: CtbcPost) {
   let session: Promise<{ token: string; fids: Map<string, string> } | null> | null = null
+  let opened = false
 
   async function open(): Promise<{ token: string; fids: Map<string, string> } | null> {
     const auth = obj(dataOf(await post(ctbcCallUrl('home/AuthToken', SITE_TOKEN), { token: SITE_TOKEN })))
@@ -143,8 +152,11 @@ export function createCtbcSession(post: CtbcPost) {
   }
 
   return {
+    /** Calls the next `fetchHoldings` makes: 3 while the session is not open yet, then 1. */
+    pendingCalls: (): number => (opened ? 1 : 3),
     /** `Data` of `etf/ETFHoldingWeight` for the latest day on or before `startYmd` (YYYYMMDD). */
     async fetchHoldings(etf: string, startYmd: string): Promise<unknown | null> {
+      opened = true
       session ??= open()
       const s = await session
       const fid = s?.fids.get(etf)

@@ -186,8 +186,11 @@ export function validateHoldingsDay(day: EtfHoldingsDay, rules: HoldingsRules, t
 
   const n = day.stocks.length
   if (n < rules.minStocks || n > rules.maxStocks) return { ok: false, rule: 'stock-count' }
-  const codes = new Set(day.stocks.map((s) => s.code))
-  if (codes.size !== n) return { ok: false, rule: 'stock-duplicate' }
+  // A Tokyo and a Taiwan listing can share a 4-digit code (009828 holds both), so a holding is
+  // identified by market + code.
+  const keys = new Set(day.stocks.map((s) => `${s.market}:${s.code}`))
+  if (keys.size !== n) return { ok: false, rule: 'stock-duplicate' }
+  const codes = new Set(day.stocks.filter((s) => s.market === 'TW').map((s) => s.code))
   if (!day.stocks.every((s) => s.code !== '' && Number.isInteger(s.shares) && s.shares > 0 && s.weight > 0)) {
     return { ok: false, rule: 'stock-row' }
   }

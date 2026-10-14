@@ -99,6 +99,10 @@ describe('validateHoldingsDay', () => {
     expect(fails(mutate)).toEqual({ ok: false, rule })
   })
 
+  it('tells holdings apart by market + code: a Tokyo and a Taiwan listing may share a code', () => {
+    expect(fails((d) => { d.stocks[5] = { ...d.stocks[5], code: d.stocks[4].code, market: 'JP' } })).toEqual({ ok: true })
+  })
+
   it('fails a trade date after today', () => {
     expect(fails(() => {}, '20261011')).toEqual({ ok: false, rule: 'trade-date-future' })
   })

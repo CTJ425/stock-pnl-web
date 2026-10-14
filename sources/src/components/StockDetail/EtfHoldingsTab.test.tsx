@@ -108,13 +108,21 @@ describe('EtfHoldingsTab', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('格式和網頁對不上')
   })
 
-  it('says an unsupported issuer is not connected yet, without reading anything', async () => {
+  it('says an unsupported issuer is not connected yet when there is no file', async () => {
+    fetchEtfHoldings.mockResolvedValue({ kind: 'empty' })
     render(<EtfHoldingsTab etf="00878" name="國泰永續高股息" />)
-    expect(screen.getByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
-    expect(fetchEtfHoldings).not.toHaveBeenCalled()
+    expect(await screen.findByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
+    expect(document.body.textContent).toContain('目前只接上元大投信與中國信託投信；其他投信會一家一家加入。')
     cleanup()
     render(<EtfHoldingsTab etf="00999" name="某某ETF" />)
-    expect(screen.getByText('這檔 ETF 的投信成分股資料尚未串接')).toBeTruthy()
+    expect(await screen.findByText('這檔 ETF 的投信成分股資料尚未串接')).toBeTruthy()
+  })
+
+  it('shows the file even when the name the user typed names no issuer (review RISK 1)', async () => {
+    fetchEtfHoldings.mockResolvedValue(ok(day()))
+    render(<EtfHoldingsTab etf="0050" name="台灣50" />)
+    expect((await screen.findAllByText('25,535.51 億')).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/尚未串接/)).toBeNull()
   })
 
   it('draws a market split for a cross-border fund and drops the asset bar when no NT$ totals exist', async () => {

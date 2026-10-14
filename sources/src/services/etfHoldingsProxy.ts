@@ -12,7 +12,7 @@ import { downloadReportsJson } from './reportsBucket'
 import type { ProxyResult } from './marketProxy'
 import { isEtfCode } from '../../supabase/functions/_shared/etfIssuer.ts'
 
-export { etfIssuerOf, isEtfCode, type EtfIssuer } from '../../supabase/functions/_shared/etfIssuer.ts'
+export { etfIssuerOf, isEtfCode, supportedIssuerLabels, type EtfIssuer } from '../../supabase/functions/_shared/etfIssuer.ts'
 
 export interface EtfHoldingsStock {
   code: string

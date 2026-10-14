@@ -3,7 +3,7 @@
 - Agent: Claude
 - Action: **Task 200 expansion release 1** — any ETF gets the tab; 0056 + 中信 009828 synced; branch `feature/etf-holdings-r1` (0.10.40-dev.1) in PR.
 - Status: ✅ `main` = 0.10.39 (PROD Edge + Pages); DEV Edge runs the branch (`06fcb71f10c2…`); PR pending review.
-- Timestamp: 2026-10-14 10:11:38 Asia/Taipei
+- Timestamp: 2026-10-14 10:26:17 Asia/Taipei
 
 ---
 
@@ -12,6 +12,7 @@
 - **Phase 0 (CTBC)**: passed — SPA API found in the bundle; raw curl failed until the token was URL-encoded; Edge 3/3 via a throwaway DEV function (deleted). Details: spec § Release 1.
 - **Done**: shared issuer module, CTBC source + session, per-issuer sources, universe sync with budget, contract additions, tab for every ETF code with 尚未串接 state, 市場分布 bar, issuer-aware note/link, admin text.
 - **Verified**: `npm test` 3,201 pass / 7 skipped; `npm run build`, `typecheck:edge`, oxlint exit 0; impeccable detect clean. DEV deploy of the branch: first run 0056 + 009828 written (009828: 30 holdings, TW 17 / JP 9 / KR 4, assets null), 7 unsupported, 4.5 s; second run 705 ms. Playwright preview (temporary, deleted): 009828 desktop + 390 px and 00878 — no errors/overflow; caught and fixed the hard-coded 「元大官網原始頁面」 link text and an unlabelled market remainder.
+- **Review by session 2** (herdr tab 2, agent `pr-reviewer`, review-only): 0 BLOCKER / 6 RISK / 6 NIT, all verified true; 6 RISK + 3 NIT fixed as 0.10.40-dev.2 (spec § Release 1 review). Gates after: `npm test` 3,206 / 7 skipped, build, `typecheck:edge`, oxlint. DEV redeploy `c83c6378a473…`: 009828 file deleted then recreated by the sync; 0050 / 0056 unchanged; 4.0 s.
 - **Not verified**: CTBC same-day publish time; whether 10/12 was skipped for a Japanese holiday; the tab logged in.
 
 ## 📅 Log: 2026-10-14 09:28:08 Asia/Taipei (Task 200, release 0.10.39)

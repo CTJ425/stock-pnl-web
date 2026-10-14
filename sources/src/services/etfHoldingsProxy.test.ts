@@ -68,6 +68,10 @@ describe('fetchEtfHoldings', () => {
     expect(etfIssuerOf('中信台日韓PCB')).toMatchObject({ id: 'ctbc', label: '中國信託投信', supported: true })
     expect(etfIssuerOf('國泰永續高股息')).toMatchObject({ id: 'cathay', supported: false })
     expect(etfIssuerOf('主動統一台股增長')).toMatchObject({ id: 'uni' })
+    // Active ETFs put 「主動」 before the brand (review RISK 2): the brand still decides.
+    expect(etfIssuerOf('主動元大AI新經濟')).toMatchObject({ id: 'yuanta', supported: true })
+    expect(etfIssuerOf('主動中信ARK創新')).toMatchObject({ id: 'ctbc', supported: true })
+    expect(etfIssuerOf('主動國泰動能高息')).toMatchObject({ id: 'cathay' })
     expect(etfIssuerOf('台積電')).toBeNull()
   })
 

@@ -38,12 +38,18 @@ export interface HoldingsSource {
   sourceUrl: (etf: string) => string
   /** The raw response for the latest day; null on any failure. `todayYmd` is YYYYMMDD Taipei. */
   fetch: (etf: string, todayYmd: string) => Promise<unknown | null>
+  /** Longest the next `fetch` can take, so the round never starts one it cannot finish. */
+  worstCaseMs: () => number
   parse: (raw: unknown) => { fundName: string; day: EtfHoldingsDay } | null
 }
+
+/** Per-call wall budget the index.ts fetchers pass to `fetchWithRetry` (`totalBudgetMs`). */
+export const ETF_CALL_BUDGET_MS = 7_000
 
 export function yuantaSource(fetchJson: (url: string) => Promise<unknown | null>): HoldingsSource {
   return {
     issuer: 'yuanta',
+    worstCaseMs: () => ETF_CALL_BUDGET_MS,
     publishHourTaipei: YUANTA_PUBLISH_HOUR_TAIPEI,
     sourceUrl: yuantaRatioPageUrl,
     fetch: (etf) => fetchJson(yuantaHoldingsUrl(etf)),
@@ -56,6 +62,7 @@ export function ctbcSource(post: CtbcPost): HoldingsSource {
   const session = createCtbcSession(post)
   return {
     issuer: 'ctbc',
+    worstCaseMs: () => session.pendingCalls() * ETF_CALL_BUDGET_MS,
     publishHourTaipei: null,
     sourceUrl: ctbcRatioPageUrl,
     fetch: (etf, todayYmd) => session.fetchHoldings(etf, todayYmd),
@@ -80,6 +87,7 @@ export type EtfHoldingsReason =
   | 'parse-failed'
   | 'invalid'
   | 'stale'
+  | 'no-stocks'
   | 'upload-failed'
   | 'error'
 
@@ -136,6 +144,9 @@ export async function syncEtfHoldings(
     const parsed = source.parse(raw)
     if (!parsed) return out({ synced: false, tradeDate: newest?.tradeDate ?? null, reason: 'parse-failed' })
     const { day, fundName } = parsed
+    // A leveraged / inverse / bond fund holds no stocks: the screen for it (spec § Expansion 7) is
+    // not built yet, so it is skipped — not a failure that would turn every run red.
+    if (day.stocks.length === 0) return out({ synced: false, tradeDate: day.tradeDate, reason: 'no-stocks' })
 
     const check = validateHoldingsDay(day, rules, today)
     if (!check.ok) return out({ synced: false, tradeDate: day.tradeDate, reason: 'invalid', rule: check.rule })
@@ -174,16 +185,17 @@ export interface EtfUniverseResult {
 }
 
 /**
- * Every ETF in `etfs` (code + short name) whose issuer has a source, one after another, stopping
- * before a new fund once `budgetMs` is spent (a fund already in flight is never interrupted).
+ * Every ETF in `etfs` (code + short name) whose issuer has a source, one after another. A fund is
+ * started only when its source's worst case still fits in `budgetMs` counted from `startedAt` — pass
+ * the time the round began (before the universe query), so that query counts too.
  */
 export async function syncEtfUniverse(
   etfs: Array<{ ticker: string; name: string }>,
   sources: Partial<Record<EtfIssuerId, HoldingsSource>>,
   deps: EtfHoldingsSyncDeps,
   budgetMs: number,
+  startedAt: number = deps.now().getTime(),
 ): Promise<EtfUniverseResult> {
-  const startedAt = deps.now().getTime()
   const results: EtfHoldingsSyncResult[] = []
   const unsupported: string[] = []
   const skippedForBudget: string[] = []
@@ -199,7 +211,7 @@ export async function syncEtfUniverse(
       unsupported.push(ticker)
       continue
     }
-    if (deps.now().getTime() - startedAt >= budgetMs) {
+    if (deps.now().getTime() - startedAt + source.worstCaseMs() > budgetMs) {
       skippedForBudget.push(ticker)
       continue
     }

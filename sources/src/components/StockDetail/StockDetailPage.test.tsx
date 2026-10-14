@@ -346,8 +346,8 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
     await userEvent.setup().click(screen.getByRole('tab', { name: '成分股' }))
     expect(sec(container, 'holdings')).toBeTruthy()
-    expect(screen.getByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
-    expect(fetchEtfHoldings).not.toHaveBeenCalled()
+    expect(await screen.findByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
+    expect(fetchEtfHoldings).toHaveBeenCalledWith('00878')
   })
 
   it('從 0050 的成分股切到一般個股時回到籌碼分頁，不留空白頁', async () => {

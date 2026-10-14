@@ -147,6 +147,7 @@ import {
 } from './twMarket.ts'
 import { syncSectorFlow, type SectorFlowSyncDeps, type SectorFlowSyncResult } from './sectorFlowSync.ts'
 import {
+  ETF_CALL_BUDGET_MS,
   ETF_HOLDINGS_FAILURES,
   ctbcSource,
   syncEtfUniverse,
@@ -1773,7 +1774,7 @@ async function fetchEtfHoldingsJson(url: string): Promise<unknown | null> {
     const result = await fetchWithRetry(
       url,
       { headers: { 'User-Agent': UA, Accept: 'application/json' } },
-      { timeoutMs: 8_000, totalBudgetMs: 10_000 },
+      { timeoutMs: 6_000, totalBudgetMs: ETF_CALL_BUDGET_MS },
     )
     if (!result.ok) return null
     return await result.res.json()
@@ -1792,7 +1793,7 @@ async function postEtfHoldingsJson(url: string, body: Record<string, unknown>): 
         headers: { 'User-Agent': UA, Accept: 'application/json', 'content-type': 'application/json; charset=utf-8' },
         body: JSON.stringify(body),
       },
-      { timeoutMs: 8_000, totalBudgetMs: 10_000 },
+      { timeoutMs: 6_000, totalBudgetMs: ETF_CALL_BUDGET_MS },
     )
     if (!result.ok) return null
     return await result.res.json()
@@ -1833,10 +1834,13 @@ function etfHoldingsDeps(): EtfHoldingsSyncDeps {
 
 /**
  * Every ETF code in any user's transactions (open or closed — the user chose "ever traded") or
- * watchlist, with a short name to tell the issuer by. Paged like `heldTwTickers` (BUG-066).
+ * watchlist, with the **official** short name the issuer is read from. `transactions.name` is free
+ * text a user typed, so it is only the fallback: the TWSE list copy `stock-price` keeps in
+ * `reports/twlist/latest.json` (BUG-120) is preferred, and 0050 is always in, whatever anyone typed.
+ * Paged like `heldTwTickers` (BUG-066); a failed query is logged, not silently an empty round.
  */
 async function etfUniverse(): Promise<Array<{ ticker: string; name: string }>> {
-  const { data } = await pagedSelect<{ ticker: string; name: string }>((from, to) =>
+  const { data, error } = await pagedSelect<{ ticker: string; name: string }>((from, to) =>
     db
       .from('transactions')
       .select('ticker, name')
@@ -1845,27 +1849,41 @@ async function etfUniverse(): Promise<Array<{ ticker: string; name: string }>> {
       .order('id', { ascending: true })
       .range(from, to),
   )
-  const acc = new Map<string, string>()
+  if (error) {
+    await logEvent(db, {
+      level: 'warn',
+      action: 'sync-etf-holdings',
+      message: `ETF universe query failed: ${error.message}`,
+    })
+  }
+  const official = new Map<string, string>()
+  const twlist = await downloadJson<{ rows?: Array<{ symbol?: unknown; name?: unknown }> }>('twlist/latest.json')
+  for (const r of twlist?.rows ?? []) {
+    if (typeof r.symbol === 'string' && typeof r.name === 'string') official.set(r.symbol.trim(), r.name.trim())
+  }
+  const acc = new Map<string, string>([['0050', official.get('0050') || '元大台灣50']])
   for (const row of [...(data ?? []), ...(await watchedTwTickers())]) {
     const ticker = String(row.ticker ?? '').trim()
-    const name = String(row.name ?? '').trim()
     if (!isEtfCode(ticker)) continue
     // Keep the first non-empty name: the issuer is read from it.
-    if (!acc.get(ticker)) acc.set(ticker, name)
+    if (!acc.get(ticker)) acc.set(ticker, official.get(ticker) || String(row.name ?? '').trim())
   }
   return [...acc.entries()].map(([ticker, name]) => ({ ticker, name }))
 }
 
 /**
- * Wall budget for *starting* another fund. The phase runs under a 60 s cron timeout and still has
- * the daily / fundamental work after this; one fund is ~1 s, a hung one at most ~10 s.
+ * Wall budget for the whole ETF round, from before the universe query. A fund starts only if its
+ * source's worst case (Yuanta 7 s; CTBC 21 s before its session is open, 7 s after) still fits, so the
+ * phase keeps ~35 s of its 60 s cron timeout for the daily / fundamental work after it.
  */
-const ETF_HOLDINGS_BUDGET_MS = 20_000
+const ETF_HOLDINGS_BUDGET_MS = 25_000
 
 /** One round over every ETF; failures also land in `app_log`, since this phase writes no `batch_run_log` row. */
 async function syncAllEtfHoldings(): Promise<EtfUniverseResult> {
+  const startedAt = Date.now()
   const sources = { yuanta: yuantaSource(fetchEtfHoldingsJson), ctbc: ctbcSource(postEtfHoldingsJson) }
-  const round = await syncEtfUniverse(await etfUniverse(), sources, etfHoldingsDeps(), ETF_HOLDINGS_BUDGET_MS)
+  const universe = await etfUniverse()
+  const round = await syncEtfUniverse(universe, sources, etfHoldingsDeps(), ETF_HOLDINGS_BUDGET_MS, startedAt)
   for (const r of round.results) {
     if (r.reason && ETF_HOLDINGS_FAILURES.has(r.reason)) {
       await logEvent(db, {

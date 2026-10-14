@@ -26,15 +26,14 @@ export interface EtfIssuer {
   supported: boolean
 }
 
-/** Longest prefix first, so 「中國信託」 wins over a shorter brand that is also its prefix. */
+/** Listed in the order issuers are named on screen; matching sorts a copy longest prefix first. */
 const BRAND_LIST: Array<[prefix: string, issuer: EtfIssuer]> = [
-  ['中國信託', { id: 'ctbc', label: '中國信託投信', supported: true }],
   ['元大', { id: 'yuanta', label: '元大投信', supported: true }],
+  ['中國信託', { id: 'ctbc', label: '中國信託投信', supported: true }],
   ['中信', { id: 'ctbc', label: '中國信託投信', supported: true }],
   ['國泰', { id: 'cathay', label: '國泰投信', supported: false }],
   ['群益', { id: 'capital', label: '群益投信', supported: false }],
   ['統一', { id: 'uni', label: '統一投信', supported: false }],
-  ['主動統一', { id: 'uni', label: '統一投信', supported: false }],
   ['台新', { id: 'taishin', label: '台新投信', supported: false }],
   ['凱基', { id: 'kgi', label: '凱基投信', supported: false }],
   ['富邦', { id: 'fubon', label: '富邦投信', supported: false }],
@@ -48,9 +47,17 @@ export function isEtfCode(code: string): boolean {
   return /^00[0-9A-Z]{2,5}$/.test(code)
 }
 
-/** The issuer behind an ETF's short name, or null when the name names none we know. */
+/**
+ * The issuer behind an ETF's short name, or null when the name names none we know. Active ETFs put
+ * 「主動」 before the brand (「主動統一台股增長」, 「主動元大AI新經濟」), so it is skipped first.
+ */
 export function etfIssuerOf(name: string): EtfIssuer | null {
-  const n = name.trim()
+  const n = name.trim().replace(/^主動/, '')
   for (const [prefix, issuer] of BRANDS) if (n.startsWith(prefix)) return issuer
   return null
+}
+
+/** Labels of the issuers the sync can fetch, for copy that lists them (「元大投信、中國信託投信」). */
+export function supportedIssuerLabels(): string[] {
+  return [...new Set(BRAND_LIST.filter(([, i]) => i.supported).map(([, i]) => i.label))]
 }

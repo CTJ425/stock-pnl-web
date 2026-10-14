@@ -48,6 +48,7 @@ describe('parseCtbcHoldings', () => {
     ['not an object', null],
     ['no FundAssets', { FundAssetsDetail: [] }],
     ['a bad date', (() => { const r = clone(CTBC_009828_20261013); r.FundAssets[0]['資料日期'] = '2026-10-13'; return r })()],
+    ['a row type it does not know (it would drop weight silently)', (() => { const r = clone(CTBC_009828_20261013); (r.FundAssetsDetail[0].Data[0] as Record<string, unknown>).invtp_ = 'BOND'; return r })()],
     ['a stock row without weight', (() => { const r = clone(CTBC_009828_20261013); (r.FundAssetsDetail[0].Data[2] as Record<string, unknown>).weights_ = ''; return r })()],
   ])('returns null for %s', (_l, raw) => {
     expect(parseCtbcHoldings(raw)).toBeNull()
@@ -66,6 +67,7 @@ describe('CTBC helpers', () => {
     expect(splitCtbcCode('4062 JP')).toEqual({ code: '4062', market: 'JP' })
     expect(splitCtbcCode('007660 KP')).toEqual({ code: '007660', market: 'KR' })
     expect(splitCtbcCode('950140 KQ')).toEqual({ code: '950140', market: 'KR' })
+    expect(splitCtbcCode('2330 TT')).toEqual({ code: '2330', market: 'TW' })
   })
 
   it('URL-encodes the token: a raw "+" reads as a space and the API rejects it', () => {
@@ -89,7 +91,10 @@ describe('createCtbcSession', () => {
   it('opens one session per run and asks for the fund by its FID', async () => {
     const api = fakeApi()
     const s = createCtbcSession(api.post)
+    // Three calls before the session is open (auth, list, holdings), one after: the budget uses it.
+    expect(s.pendingCalls()).toBe(3)
     expect(await s.fetchHoldings('009828', '20261014')).toEqual({ echo: 'E0039' })
+    expect(s.pendingCalls()).toBe(1)
     expect(await s.fetchHoldings('00891', '20261014')).toEqual({ echo: 'E0017' })
     const eps = api.calls.map((c) => c.url.split('/API/')[1].split('?')[0])
     expect(eps).toEqual(['home/AuthToken', 'etf/ETFList', 'etf/ETFHoldingWeight', 'etf/ETFHoldingWeight'])

@@ -181,8 +181,9 @@ describe('syncEtfUniverse', () => {
     upload: async () => true,
     now: () => new Date('2026-10-13T10:00:00Z'),
   }
-  const fakeSource = (issuer: 'yuanta' | 'ctbc', seen: string[]): HoldingsSource => ({
+  const fakeSource = (issuer: 'yuanta' | 'ctbc', seen: string[], worstCaseMs = 1_000): HoldingsSource => ({
     issuer,
+    worstCaseMs: () => worstCaseMs,
     publishHourTaipei: null,
     sourceUrl: (e) => `https://example.test/${e}`,
     fetch: async (etf) => {
@@ -212,6 +213,21 @@ describe('syncEtfUniverse', () => {
     expect(round.skippedForBudget).toEqual([])
   })
 
+  it('does not start a fund whose worst case no longer fits, counting from the given start', async () => {
+    const t0 = Date.parse('2026-10-13T10:00:00Z')
+    const deps: EtfHoldingsSyncDeps = { ...noFile, now: () => new Date(t0 + 5_000) }
+    const seen: string[] = []
+    const round = await syncEtfUniverse(
+      [{ ticker: '0050', name: '元大台灣50' }, { ticker: '009828', name: '中信台日韓PCB' }],
+      { yuanta: fakeSource('yuanta', seen, 7_000), ctbc: fakeSource('ctbc', seen, 21_000) },
+      deps,
+      25_000,
+      t0, // the universe query already took 5 s
+    )
+    expect(seen).toEqual(['0050'])
+    expect(round.skippedForBudget).toEqual(['009828'])
+  })
+
   it('stops starting new funds once the budget is spent', async () => {
     let t = Date.parse('2026-10-13T10:00:00Z')
     const deps: EtfHoldingsSyncDeps = { ...noFile, now: () => new Date((t += 6_000)) }
@@ -228,5 +244,16 @@ describe('syncEtfUniverse', () => {
     )
     expect(seen.length).toBeLessThan(3)
     expect(round.skippedForBudget.length).toBeGreaterThan(0)
+  })
+})
+
+describe('funds that hold no stocks', () => {
+  it('are skipped as no-stocks, not counted as a failure', async () => {
+    const bond = clone(YUANTA_0050_20261012)
+    bond.FundWeights.StockWeights = []
+    const h = harness({ response: bond, now: EVENING })
+    const r = await syncEtfHoldings('0050', h.source, ETF_0050_RULES, h.deps)
+    expect(r.reason).toBe('no-stocks')
+    expect(h.uploads).toEqual([])
   })
 })
