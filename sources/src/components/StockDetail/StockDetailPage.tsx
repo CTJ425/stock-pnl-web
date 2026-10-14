@@ -32,7 +32,7 @@ import { quoteMeta } from './quoteMeta'
 import { TechnicalTab } from './TechnicalTab'
 import { WhatIfTab } from './WhatIfTab'
 import { EtfHoldingsTab } from './EtfHoldingsTab'
-import { isEtfHoldingsSupported } from '../../services/etfHoldingsProxy'
+import { isEtfCode } from '../../services/etfHoldingsProxy'
 import { useDailySeries } from './useDailySeries'
 import { buildTechnicalView } from './technicalView'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -56,7 +56,7 @@ interface StockDetailPageProps extends StockDetailTarget {
 }
 
 type DetailTab = 'analysis' | 'whatif'
-/** `holdings` (成分股) exists only for an ETF in ETF_HOLDINGS_SUPPORTED (Task 200). */
+/** `holdings` (成分股) exists only for an ETF code (Task 200). */
 type AnalysisSectionTab = 'chips' | 'fundamental' | 'technical' | 'holdings'
 /**
  * One tab row since the 2026-09-27 statement redesign: the quote and 我的持股 always sit on top, and
@@ -73,9 +73,12 @@ const PAGE_TABS: Array<{ id: PageTab; label: string }> = [
   { id: 'whatif', label: '損益試算' },
 ]
 
-/** The tabs this stock has: 成分股 only for a supported ETF. */
+/**
+ * The tabs this stock has: 成分股 for every ETF code. An ETF whose issuer has no source still gets it
+ * and is told why (user decision 2026-10-14, spec 200 § Expansion).
+ */
 function pageTabsFor(ticker: string): Array<{ id: PageTab; label: string }> {
-  return isEtfHoldingsSupported(ticker) ? PAGE_TABS : PAGE_TABS.filter((t) => t.id !== 'holdings')
+  return isEtfCode(ticker) ? PAGE_TABS : PAGE_TABS.filter((t) => t.id !== 'holdings')
 }
 
 /** Shortest time between two foreground re-checks for a newer report (Task 193 M16). */
@@ -389,7 +392,7 @@ export function StockDetailPage({
       )}
       {activeTab === 'holdings' && (
         <section className="sd-section" id="sec-holdings" aria-label="成分股：基金概況 · 資產金額 · 持股權重">
-          <EtfHoldingsTab etf={ticker} reloadKey={reloadKey} />
+          <EtfHoldingsTab etf={ticker} name={name} reloadKey={reloadKey} />
         </section>
       )}
       {activeTab === 'whatif' && (

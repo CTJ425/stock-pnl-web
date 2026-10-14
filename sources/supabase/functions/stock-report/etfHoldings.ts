@@ -1,7 +1,8 @@
 /**
- * ETF holdings (Task 200): what an ETF holds, as its issuer publishes it. 0050 only for now.
+ * ETF holdings (Task 200): what an ETF holds, as its issuer publishes it. The file contract and the
+ * checks are shared by every issuer; this file also holds the Yuanta parser (CTBC: etfHoldingsCtbc.ts).
  *
- * Source: Yuanta's JSON bridge, the same `PCF/Daily` call its own 「持股比重」 page makes
+ * Yuanta source: its JSON bridge, the same `PCF/Daily` call its own 「持股比重」 page makes
  * (docs/agent/specs/200-etf-holdings.md § Phase 0). Three facts about it that are easy to get wrong:
  *
  * 1. The quantities in `FundWeights` are the **whole fund**, not the creation basket (that is `InKind`).
@@ -23,6 +24,8 @@ export interface EtfHoldingsStock {
   shares: number
   /** Percent as published (56.39). */
   weight: number
+  /** Where it trades: 'TW', 'JP', 'KR' … Files written before release 1 lack it — read as 'TW'. */
+  market: string
 }
 
 export interface EtfHoldingsFuture {
@@ -42,9 +45,10 @@ export interface EtfHoldingsDay {
   navTotal: number
   navPerUnit: number
   unitsOutstanding: number
-  /** The denominator of `weight`. Differs from `navTotal`. */
+  /** The denominator of `weight` (Yuanta: its fund size, not `navTotal`; CTBC: net assets). */
   fundSize: number
-  assets: { stock: number; etf: number; bond: number; futures: number }
+  /** NT$ per asset class; null when the issuer publishes none (CTBC: amounts are in local currency). */
+  assets: { stock: number; etf: number; bond: number; futures: number } | null
   stocks: EtfHoldingsStock[]
   futures: EtfHoldingsFuture[]
 }
@@ -53,7 +57,7 @@ export interface EtfHoldingsFile {
   schema: typeof ETF_HOLDINGS_SCHEMA
   etf: string
   fundName: string
-  issuer: 'yuanta'
+  issuer: 'yuanta' | 'ctbc'
   /** The official page, for the user to check against. */
   sourceUrl: string
   updatedAt: string
@@ -98,7 +102,7 @@ export function parseYuantaHoldings(raw: unknown): { fundName: string; day: EtfH
     if (!o || typeof o.code !== 'string' || typeof o.name !== 'string' || !isNum(o.qty) || !isNum(o.weights)) {
       return null
     }
-    stocks.push({ code: o.code.trim(), name: o.name.trim(), shares: o.qty, weight: o.weights })
+    stocks.push({ code: o.code.trim(), name: o.name.trim(), shares: o.qty, weight: o.weights, market: 'TW' })
   }
   // The screen cuts to the top 10, so the order must be the published weight, largest first —
   // not whatever order the response happens to use (Yuanta's matched it on the days checked).
@@ -147,6 +151,16 @@ export interface HoldingsRules {
 /** 0050 tracks 臺灣50: 50 constituents, 2330 by far the largest. */
 export const ETF_0050_RULES: HoldingsRules = { minStocks: 45, maxStocks: 55, mustInclude: ['2330'] }
 
+/**
+ * Any other stock ETF until it earns rules of its own: at least one holding, no runaway list. The
+ * structural checks (NAV identity, unique codes, positive rows, weight sum) still apply to all.
+ */
+export const DEFAULT_HOLDINGS_RULES: HoldingsRules = { minStocks: 1, maxStocks: 500, mustInclude: [] }
+
+export const HOLDINGS_RULES_BY_ETF: Record<string, HoldingsRules> = { '0050': ETF_0050_RULES }
+
+export const rulesFor = (etf: string): HoldingsRules => HOLDINGS_RULES_BY_ETF[etf] ?? DEFAULT_HOLDINGS_RULES
+
 /** NAV per unit is rounded to 2 decimals; on 2026-10-12 nav × units missed totalav by 0.0027 %. */
 const NAV_IDENTITY_TOLERANCE = 0.0005
 /** Percentage points; on 2026-10-12 the weight sum missed stock / fundsize by 0.02 pp. */
@@ -180,11 +194,15 @@ export function validateHoldingsDay(day: EtfHoldingsDay, rules: HoldingsRules, t
   if (!rules.mustInclude.every((c) => codes.has(c))) return { ok: false, rule: 'stock-missing' }
 
   const weightSum = day.stocks.reduce((sum, s) => sum + s.weight, 0)
-  const stockShare = (day.assets.stock / day.fundSize) * 100
-  if (Math.abs(weightSum - stockShare) > STOCK_WEIGHT_TOLERANCE_PP) return { ok: false, rule: 'stock-weight-sum' }
-
-  // Futures amount and futures weight are not cross-checked: what `futvalues` measures is not documented.
-  if (day.assets.futures > 0 && day.futures.length === 0) return { ok: false, rule: 'futures-missing' }
+  if (day.assets) {
+    const stockShare = (day.assets.stock / day.fundSize) * 100
+    if (Math.abs(weightSum - stockShare) > STOCK_WEIGHT_TOLERANCE_PP) return { ok: false, rule: 'stock-weight-sum' }
+    // Futures amount and futures weight are not cross-checked: what `futvalues` measures is not documented.
+    if (day.assets.futures > 0 && day.futures.length === 0) return { ok: false, rule: 'futures-missing' }
+  } else if (weightSum > 100 + STOCK_WEIGHT_TOLERANCE_PP) {
+    // No NT$ totals to check against: stock weights over the fund can at least not top 100 %.
+    return { ok: false, rule: 'stock-weight-sum' }
+  }
   return { ok: true }
 }
 
@@ -207,18 +225,20 @@ export function holdingsFingerprint(day: EtfHoldingsDay): string {
 
 const TAIPEI_OFFSET_MS = 8 * 3600 * 1000
 /** Yuanta stamped 15:54–16:33 between 2026-09-29 and 2026-10-13. */
-const PUBLISH_HOUR_TAIPEI = 16
+export const YUANTA_PUBLISH_HOUR_TAIPEI = 16
 
 /**
- * The newest trade date that ought to be published at `now` ('YYYY-MM-DD'): today from 16:00 Taipei
- * on a weekday, otherwise the previous weekday. Holidays are not known here — on one the sync makes a
- * single request and finds nothing new, which is cheaper than another copy of the holiday calendar.
+ * The newest trade date that ought to be published at `now` ('YYYY-MM-DD'): today from
+ * `publishHourTaipei` on a weekday, otherwise the previous weekday. `null` means the issuer's same-day
+ * time is not known, so only the previous weekday is expected (CTBC: T was there by T+1 09:40).
+ * Holidays are not known here — on one the sync makes a single request and finds nothing new, which is
+ * cheaper than another copy of the holiday calendar (and a cross-border fund follows foreign ones too).
  */
-export function expectedLatestTradeDate(now: Date): string {
+export function expectedLatestTradeDate(now: Date, publishHourTaipei: number | null = YUANTA_PUBLISH_HOUR_TAIPEI): string {
   const t = new Date(now.getTime() + TAIPEI_OFFSET_MS)
   const day = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()))
   const weekday = (d: Date) => d.getUTCDay() !== 0 && d.getUTCDay() !== 6
-  if (!(weekday(day) && t.getUTCHours() >= PUBLISH_HOUR_TAIPEI)) {
+  if (!(publishHourTaipei !== null && weekday(day) && t.getUTCHours() >= publishHourTaipei)) {
     do day.setUTCDate(day.getUTCDate() - 1)
     while (!weekday(day))
   }

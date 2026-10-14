@@ -29,8 +29,8 @@ describe('parseYuantaHoldings', () => {
     expect(d.fundSize).toBe(2_547_140_807_580)
     expect(d.assets).toEqual({ stock: 2_540_194_490_501, etf: 0, bond: 0, futures: 7_044_587_000 })
     expect(d.stocks).toHaveLength(50)
-    expect(d.stocks[0]).toEqual({ code: '2330', name: '台積電', shares: 565_525_249, weight: 56.39 })
-    expect(d.stocks[1]).toEqual({ code: '2454', name: '聯發科', shares: 34_056_356, weight: 6.18 })
+    expect(d.stocks[0]).toEqual({ code: '2330', name: '台積電', shares: 565_525_249, weight: 56.39, market: 'TW' })
+    expect(d.stocks[1]).toEqual({ code: '2454', name: '聯發科', shares: 34_056_356, weight: 6.18, market: 'TW' })
     expect(d.futures).toEqual([
       { code: 'TX', name: '臺股期貨', contracts: 628, weight: 0.24, month: '202610' },
       { code: 'NYF', name: '台灣50ETF股票期貨', contracts: 738, weight: 0.03, month: '202610' },
@@ -94,6 +94,7 @@ describe('validateHoldingsDay', () => {
     ['stock-missing', (d) => { d.stocks[0].code = '9999' }],
     ['stock-weight-sum', (d) => { d.stocks[1].weight += 1 }],
     ['futures-missing', (d) => { d.futures = [] }],
+    ['stock-weight-sum', (d) => { d.assets = null; d.stocks[0].weight += 50 }],
   ])('fails %s', (rule, mutate) => {
     expect(fails(mutate)).toEqual({ ok: false, rule })
   })
@@ -103,7 +104,7 @@ describe('validateHoldingsDay', () => {
   })
 
   it('needs no futures list when the futures amount is zero', () => {
-    expect(fails((d) => { d.futures = []; d.assets.futures = 0 })).toEqual({ ok: true })
+    expect(fails((d) => { d.futures = []; d.assets!.futures = 0 })).toEqual({ ok: true })
   })
 })
 
@@ -137,6 +138,11 @@ describe('holdingsFingerprint', () => {
 })
 
 describe('expectedLatestTradeDate', () => {
+  it('expects only the previous weekday when the publish hour is unknown (CTBC)', () => {
+    expect(expectedLatestTradeDate(new Date('2026-10-13T10:00:00Z'), null)).toBe('2026-10-12')
+    expect(expectedLatestTradeDate(new Date('2026-10-12T01:00:00Z'), null)).toBe('2026-10-09')
+  })
+
   it.each([
     // [UTC instant, Taipei clock, expected]
     ['2026-10-13T07:59:00Z', 'Tue 15:59', '2026-10-12'],

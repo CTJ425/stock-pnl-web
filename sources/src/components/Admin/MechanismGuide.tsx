@@ -131,7 +131,7 @@ const CRON_JOBS_CONFIG: CronJobConfig[] = [
     taipeiTime: '週一至週五 18:00 / 22:00 (2 班)',
     action: 'generate-market-data',
     role: '估值/日K最外層兜底；ETF 成分股',
-    description: '平日傍晚與晚間定時備援，防範探針未命中時的估值與日 K 漏缺。同一階段也同步 0050 成分股（元大投信 PCF/Daily，約 16:00 公布）→ market/etf_holdings/0050.json，當天資料已在就不發請求。',
+    description: '平日傍晚與晚間定時備援，防範探針未命中時的估值與日 K 漏缺。同一階段也同步使用者交易過或觀察中的 ETF 成分股（元大 PCF/Daily 約 16:00 公布；中信 ETFHoldingWeight）→ market/etf_holdings/<代號>.json，資料已是最新就不發請求；其他投信尚未串接。',
   },
   {
     jobname: 'history-daily',

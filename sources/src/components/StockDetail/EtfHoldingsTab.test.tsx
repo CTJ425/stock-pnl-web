@@ -3,16 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 
 const { fetchEtfHoldings } = vi.hoisted(() => ({ fetchEtfHoldings: vi.fn() }))
-vi.mock('../../services/etfHoldingsProxy', () => ({ fetchEtfHoldings }))
+vi.mock('../../services/etfHoldingsProxy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/etfHoldingsProxy')>()),
+  fetchEtfHoldings,
+}))
 
 import { EtfHoldingsTab } from './EtfHoldingsTab'
 import type { EtfHoldingsDay } from '../../services/etfHoldingsProxy'
 
 // 2026-10-12 figures from Yuanta's 0050 page; the stock list is padded to 50 rows.
 const stocks = [
-  { code: '2330', name: '台積電', shares: 565525249, weight: 56.39 },
-  { code: '2454', name: '聯發科', shares: 34056356, weight: 6.18 },
-  ...Array.from({ length: 48 }, (_, i) => ({ code: String(3000 + i), name: `股${i}`, shares: 1000, weight: 0.5 })),
+  { code: '2330', name: '台積電', shares: 565525249, weight: 56.39, market: 'TW' },
+  { code: '2454', name: '聯發科', shares: 34056356, weight: 6.18, market: 'TW' },
+  ...Array.from({ length: 48 }, (_, i) => ({ code: String(3000 + i), name: `股${i}`, shares: 1000, weight: 0.5, market: 'TW' })),
 ]
 const day = (over: Partial<EtfHoldingsDay> = {}): EtfHoldingsDay => ({
   tradeDate: '2026-10-12',
@@ -31,7 +34,7 @@ const day = (over: Partial<EtfHoldingsDay> = {}): EtfHoldingsDay => ({
 })
 const ok = (d: EtfHoldingsDay) => ({
   kind: 'ok',
-  data: { etf: '0050', fundName: '元大台灣卓越50基金', sourceUrl: 'https://example.test/0050', updatedAt: '', days: [d] },
+  data: { etf: '0050', fundName: '元大台灣卓越50基金', issuer: 'yuanta', sourceUrl: 'https://example.test/0050', updatedAt: '', days: [d] },
 })
 
 describe('EtfHoldingsTab', () => {
@@ -42,10 +45,12 @@ describe('EtfHoldingsTab', () => {
 
   it('shows the issuer figures, the data date and the source link', async () => {
     fetchEtfHoldings.mockResolvedValue(ok(day()))
-    render(<EtfHoldingsTab etf="0050" />)
+    render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     expect((await screen.findAllByText('25,535.51 億')).length).toBeGreaterThan(0)
     expect(screen.getByText(/資料日 2026\/10\/12・元大投信公布（10\/12 16:06 更新）/)).toBeTruthy()
-    expect(screen.getByRole('link', { name: '元大官網原始頁面' }).getAttribute('href')).toBe('https://example.test/0050')
+    // A Taiwan-only fund gets no market split.
+    expect(screen.queryByRole('img', { name: /市場分布/ })).toBeNull()
+    expect(screen.getByRole('link', { name: '元大投信官網原始頁面' }).getAttribute('href')).toBe('https://example.test/0050')
     expect(screen.getByText('114.47 元')).toBeTruthy()
     expect(screen.getByText('223.07 億')).toBeTruthy()
     const futures = screen.getByRole('table', { name: '期貨部位' })
@@ -55,7 +60,7 @@ describe('EtfHoldingsTab', () => {
 
   it('draws concentration and the top 10 as charts, with all 50 rows one disclosure below', async () => {
     fetchEtfHoldings.mockResolvedValue(ok(day()))
-    const { container } = render(<EtfHoldingsTab etf="0050" />)
+    const { container } = render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     const concentration = await screen.findByRole('img', { name: /持股集中度/ })
     expect(concentration.getAttribute('aria-label')).toContain('台積電 56.39%')
     expect(concentration.getAttribute('aria-label')).toContain('第 2–10 名')
@@ -75,7 +80,7 @@ describe('EtfHoldingsTab', () => {
 
   it('draws the asset mix as one bar and lists zero classes in the legend', async () => {
     fetchEtfHoldings.mockResolvedValue(ok(day()))
-    const { container } = render(<EtfHoldingsTab etf="0050" />)
+    const { container } = render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     const assets = await screen.findByRole('img', { name: /資產配置/ })
     expect(assets.getAttribute('aria-label')).toContain('股票 25,401.94 億')
     expect(assets.querySelectorAll('.etfh-seg')).toHaveLength(2)
@@ -84,22 +89,53 @@ describe('EtfHoldingsTab', () => {
 
   it('hides the futures block when the fund holds none', async () => {
     fetchEtfHoldings.mockResolvedValue(ok(day({ futures: [], assets: { stock: 1, etf: 0, bond: 0, futures: 0 } })))
-    render(<EtfHoldingsTab etf="0050" />)
+    render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     await screen.findByRole('img', { name: /資產配置/ })
     expect(screen.queryByRole('table', { name: '期貨部位' })).toBeNull()
   })
 
   it('says plainly when there is no file yet, and when reading failed', async () => {
     fetchEtfHoldings.mockResolvedValue({ kind: 'empty' })
-    render(<EtfHoldingsTab etf="0050" />)
+    render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     expect(await screen.findByText('還沒有這檔 ETF 的成分股資料')).toBeTruthy()
     cleanup()
     fetchEtfHoldings.mockRejectedValue(new Error('net'))
-    render(<EtfHoldingsTab etf="0050" />)
+    render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     expect(await screen.findByRole('alert')).toBeTruthy()
     cleanup()
     fetchEtfHoldings.mockResolvedValue({ kind: 'invalid' })
-    render(<EtfHoldingsTab etf="0050" />)
+    render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
     expect((await screen.findByRole('alert')).textContent).toContain('格式和網頁對不上')
+  })
+
+  it('says an unsupported issuer is not connected yet, without reading anything', async () => {
+    render(<EtfHoldingsTab etf="00878" name="國泰永續高股息" />)
+    expect(screen.getByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
+    expect(fetchEtfHoldings).not.toHaveBeenCalled()
+    cleanup()
+    render(<EtfHoldingsTab etf="00999" name="某某ETF" />)
+    expect(screen.getByText('這檔 ETF 的投信成分股資料尚未串接')).toBeTruthy()
+  })
+
+  it('draws a market split for a cross-border fund and drops the asset bar when no NT$ totals exist', async () => {
+    const cross = day({
+      stocks: [
+        { code: '3037', name: '欣興電子', shares: 999600, weight: 11.44, market: 'TW' },
+        { code: '4062', name: 'Ibiden Co Ltd', shares: 465500, weight: 9.77, market: 'JP' },
+        { code: '007660', name: 'Isu Petasys', shares: 1, weight: 3.1, market: 'KR' },
+      ],
+      futures: [],
+      assets: null,
+      fundSize: 10304880295,
+      navTotal: 10304880295,
+      publishedAt: null,
+    })
+    fetchEtfHoldings.mockResolvedValue({ kind: 'ok', data: { ...ok(cross).data, etf: '009828', issuer: 'ctbc' } })
+    render(<EtfHoldingsTab etf="009828" name="中信台日韓PCB" />)
+    const markets = await screen.findByRole('img', { name: /市場分布/ })
+    expect(markets.getAttribute('aria-label')).toBe('市場分布：台灣 11.44%、日本 9.77%、韓國 3.10%、股票以外 75.69%')
+    expect(screen.getByRole('link', { name: '中國信託投信官網原始頁面' })).toBeTruthy()
+    expect(screen.queryByRole('img', { name: /資產配置/ })).toBeNull()
+    expect(screen.getByText(/資料日 2026\/10\/12・中國信託投信公布，/)).toBeTruthy()
   })
 })

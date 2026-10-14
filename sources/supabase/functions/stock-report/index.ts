@@ -146,8 +146,15 @@ import {
   type MarketFile,
 } from './twMarket.ts'
 import { syncSectorFlow, type SectorFlowSyncDeps, type SectorFlowSyncResult } from './sectorFlowSync.ts'
-import { syncEtfHoldings, type EtfHoldingsSyncDeps, type EtfHoldingsSyncResult } from './etfHoldingsSync.ts'
-import { ETF_0050_RULES } from './etfHoldings.ts'
+import {
+  ETF_HOLDINGS_FAILURES,
+  ctbcSource,
+  syncEtfUniverse,
+  yuantaSource,
+  type EtfHoldingsSyncDeps,
+  type EtfUniverseResult,
+} from './etfHoldingsSync.ts'
+import { isEtfCode } from '../_shared/etfIssuer.ts'
 import {
   FOREIGN_TOP_SCHEMA,
   foreignTopFingerprint,
@@ -1752,11 +1759,13 @@ function sectorFlowDeps(): SectorFlowSyncDeps {
 }
 
 /**
- * Output/update market/etf_holdings/0050.json: what 0050 holds, as Yuanta publishes it (Task 200).
+ * Output/update market/etf_holdings/<etf>.json: what each ETF holds, as its issuer publishes it
+ * (Task 200). Every ETF any user has ever traded or watches is in scope; only issuers with a source
+ * (元大, 中信) are fetched, the rest show 「尚未串接」 in the tab.
  *
  * Rides on `generate-market-data` (market-data-daily, 18:00 / 22:00 Taipei), which runs every round
  * and comes after Yuanta's ~16:00 publication, and is reachable on its own as `sync-etf-holdings`.
- * Once the expected day is stored it makes no request at all. Logic: `etfHoldingsSync.ts`.
+ * A fund whose expected day is stored makes no request at all. Logic: `etfHoldingsSync.ts`.
  */
 async function fetchEtfHoldingsJson(url: string): Promise<unknown | null> {
   try {
@@ -1764,6 +1773,25 @@ async function fetchEtfHoldingsJson(url: string): Promise<unknown | null> {
     const result = await fetchWithRetry(
       url,
       { headers: { 'User-Agent': UA, Accept: 'application/json' } },
+      { timeoutMs: 8_000, totalBudgetMs: 10_000 },
+    )
+    if (!result.ok) return null
+    return await result.res.json()
+  } catch {
+    return null
+  }
+}
+
+/** CTBC's API is POST-only, JSON in and out (etfHoldingsCtbc.ts). Same per-call budget as Yuanta. */
+async function postEtfHoldingsJson(url: string, body: Record<string, unknown>): Promise<unknown | null> {
+  try {
+    const result = await fetchWithRetry(
+      url,
+      {
+        method: 'POST',
+        headers: { 'User-Agent': UA, Accept: 'application/json', 'content-type': 'application/json; charset=utf-8' },
+        body: JSON.stringify(body),
+      },
       { timeoutMs: 8_000, totalBudgetMs: 10_000 },
     )
     if (!result.ok) return null
@@ -1797,28 +1825,58 @@ async function downloadEtfHoldingsFile<T>(path: string): Promise<T | null> {
 
 function etfHoldingsDeps(): EtfHoldingsSyncDeps {
   return {
-    fetchJson: fetchEtfHoldingsJson,
     download: downloadEtfHoldingsFile,
     upload: uploadJson,
     now: () => new Date(),
   }
 }
 
-/** Outcomes that mean the file could not be refreshed for a reason someone should look at. */
-const ETF_HOLDINGS_FAILURES = new Set(['fetch-failed', 'parse-failed', 'invalid', 'upload-failed', 'error'])
-
-/** One 0050 round; a failure also lands in `app_log`, since this phase writes no `batch_run_log` row. */
-async function syncEtfHoldings0050(): Promise<EtfHoldingsSyncResult> {
-  const result = await syncEtfHoldings('0050', ETF_0050_RULES, etfHoldingsDeps())
-  if (result.reason && ETF_HOLDINGS_FAILURES.has(result.reason)) {
-    await logEvent(db, {
-      level: 'warn',
-      action: 'sync-etf-holdings',
-      message: `0050 holdings not refreshed: ${result.reason}${result.rule ? ` (${result.rule})` : ''}`,
-      detail: { ...result },
-    })
+/**
+ * Every ETF code in any user's transactions (open or closed — the user chose "ever traded") or
+ * watchlist, with a short name to tell the issuer by. Paged like `heldTwTickers` (BUG-066).
+ */
+async function etfUniverse(): Promise<Array<{ ticker: string; name: string }>> {
+  const { data } = await pagedSelect<{ ticker: string; name: string }>((from, to) =>
+    db
+      .from('transactions')
+      .select('ticker, name')
+      .eq('market', 'TPE')
+      .like('ticker', '00%')
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
+  const acc = new Map<string, string>()
+  for (const row of [...(data ?? []), ...(await watchedTwTickers())]) {
+    const ticker = String(row.ticker ?? '').trim()
+    const name = String(row.name ?? '').trim()
+    if (!isEtfCode(ticker)) continue
+    // Keep the first non-empty name: the issuer is read from it.
+    if (!acc.get(ticker)) acc.set(ticker, name)
   }
-  return result
+  return [...acc.entries()].map(([ticker, name]) => ({ ticker, name }))
+}
+
+/**
+ * Wall budget for *starting* another fund. The phase runs under a 60 s cron timeout and still has
+ * the daily / fundamental work after this; one fund is ~1 s, a hung one at most ~10 s.
+ */
+const ETF_HOLDINGS_BUDGET_MS = 20_000
+
+/** One round over every ETF; failures also land in `app_log`, since this phase writes no `batch_run_log` row. */
+async function syncAllEtfHoldings(): Promise<EtfUniverseResult> {
+  const sources = { yuanta: yuantaSource(fetchEtfHoldingsJson), ctbc: ctbcSource(postEtfHoldingsJson) }
+  const round = await syncEtfUniverse(await etfUniverse(), sources, etfHoldingsDeps(), ETF_HOLDINGS_BUDGET_MS)
+  for (const r of round.results) {
+    if (r.reason && ETF_HOLDINGS_FAILURES.has(r.reason)) {
+      await logEvent(db, {
+        level: 'warn',
+        action: 'sync-etf-holdings',
+        message: `${r.etf} holdings not refreshed: ${r.reason}${r.rule ? ` (${r.rule})` : ''}`,
+        detail: { ...r },
+      })
+    }
+  }
+  return round
 }
 
 // ----U.S. General Economic Indicator (0.6.5)----
@@ -3312,7 +3370,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
 async function runGeneratePhaseMarketData(withEtfHoldings = true): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
   // First, while the phase has its full time: one small request at most (none once the day is in).
-  const etfHoldings = withEtfHoldings ? await syncEtfHoldings0050() : null
+  const etfHoldings = withEtfHoldings ? await syncAllEtfHoldings() : null
   const tickers = await batchTwTickers()
   const personalList = tickers
 
@@ -3640,10 +3698,10 @@ async function handleSyncSectorFlow(body: GenerateReportRequestBody): Promise<Re
 /** Trigger the ETF holdings sync by hand; the scheduled run is inside `generate-market-data`. */
 async function handleSyncEtfHoldings(): Promise<Response> {
   const startedAt = Date.now()
-  const result = await syncEtfHoldings0050()
-  const failed = result.reason !== null && ETF_HOLDINGS_FAILURES.has(result.reason)
-  // A failure answers 502 so `admin_run_log.ok` (httpStatus < 400) and the console show it as failed.
-  return json({ ok: !failed, ...result, durationMs: Date.now() - startedAt }, failed ? 502 : 200)
+  const round = await syncAllEtfHoldings()
+  const failed = round.results.some((r) => r.reason !== null && ETF_HOLDINGS_FAILURES.has(r.reason))
+  // Any failure answers 502 so `admin_run_log.ok` (httpStatus < 400) and the console show it as failed.
+  return json({ ok: !failed, ...round, durationMs: Date.now() - startedAt }, failed ? 502 : 200)
 }
 
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/

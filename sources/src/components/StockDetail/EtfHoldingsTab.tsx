@@ -1,14 +1,14 @@
 /**
  * 成分股 tab (Task 200): what an ETF holds. Charts first (DESIGN.md): how concentrated it is, the
- * ten largest holdings, the asset mix; the full 50-row table sits one disclosure below. Only rendered
- * for codes in `ETF_HOLDINGS_SUPPORTED`.
+ * market split for a cross-border fund, the ten largest holdings, the asset mix; the full table sits
+ * one disclosure below. Rendered for every ETF code; an issuer without a source says so plainly.
  *
  * Every figure is the issuer's as published; nothing here recomputes a weight or a NAV. Weights
  * are not price moves, so they never take the market red / green.
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import { fetchEtfHoldings, type EtfHoldingsData } from '../../services/etfHoldingsProxy'
+import { etfIssuerOf, fetchEtfHoldings, type EtfHoldingsData } from '../../services/etfHoldingsProxy'
 import { ChartLegend } from '../Charts/ChartLegend'
 import {
   HOLDINGS_TOP_N,
@@ -22,12 +22,15 @@ import {
   formatUnitsYi,
   formatWeight,
   formatYi,
+  marketSegments,
   type AssetSegment,
   type ConcentrationSegment,
 } from './etfHoldingsView'
 
 interface EtfHoldingsTabProps {
   etf: string
+  /** The ETF's short name; its issuer is read from it (「中信台日韓PCB」 → 中國信託投信). */
+  name: string
   /** +1 on the page's 重新整理, to refetch. */
   reloadKey?: number
 }
@@ -47,6 +50,13 @@ const SEGMENT_COLOR: Record<ConcentrationSegment['key'], string> = {
   other: 'var(--ink-muted)',
 }
 
+/** Markets in the order they are drawn get the identity colours in turn; the remainder is neutral. */
+const MARKET_COLORS = ['var(--chart-c1)', 'var(--chart-c2)', 'var(--chart-c3)', 'var(--chart-c4)']
+const marketColor = (market: string, i: number): string =>
+  market === 'other' ? 'var(--ink-muted)' : MARKET_COLORS[Math.min(i, MARKET_COLORS.length - 1)]
+
+const ISSUER_LABEL: Record<string, string> = { yuanta: '元大投信', ctbc: '中國信託投信' }
+
 const ASSET_COLOR: Record<AssetSegment['key'], string> = {
   stock: 'var(--chart-c1)',
   etf: 'var(--chart-c3)',
@@ -54,10 +64,14 @@ const ASSET_COLOR: Record<AssetSegment['key'], string> = {
   futures: 'var(--chart-c2)',
 }
 
-export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
+export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps) {
+  const issuer = etfIssuerOf(name)
+  const supported = issuer?.supported === true
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
 
   useEffect(() => {
+    // No source for this issuer: nothing to read, the tab says so below.
+    if (!supported) return
     let alive = true
     setState({ kind: 'loading' })
     fetchEtfHoldings(etf)
@@ -72,7 +86,20 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
     return () => {
       alive = false
     }
-  }, [etf, reloadKey])
+  }, [etf, reloadKey, supported])
+
+  if (!supported) {
+    return (
+      <div className="empty-state" style={{ padding: 32 }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
+          {issuer ? `${issuer.label}的成分股資料尚未串接` : '這檔 ETF 的投信成分股資料尚未串接'}
+        </div>
+        <div className="hint" style={{ marginTop: 6 }}>
+          目前只接上元大投信與中國信託投信；其他投信會一家一家加入。
+        </div>
+      </div>
+    )
+  }
 
   if (state.kind === 'loading') {
     return (
@@ -102,7 +129,7 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
     return (
       <div className="empty-state" style={{ padding: 32 }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>還沒有這檔 ETF 的成分股資料</div>
-        <div className="hint" style={{ marginTop: 6 }}>排程每個交易日傍晚更新，稍後再回來看看。</div>
+        <div className="hint" style={{ marginTop: 6 }}>排程每個交易日 18:00 與 22:00 向投信檢查更新，稍後再回來看看。</div>
       </div>
     )
   }
@@ -113,18 +140,20 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
   const top = day.stocks.slice(0, HOLDINGS_TOP_N)
   const maxWeight = Math.max(...top.map((s) => s.weight), 0)
   const segments = concentrationSegments(day.stocks)
+  const markets = marketSegments(day.stocks)
   const assetSegs = assetSegments(day.assets)
+  const issuerLabel = ISSUER_LABEL[data.issuer] ?? issuer?.label ?? '投信'
 
   return (
     <div className="etfh">
       <p className="hint etfh-source">
-        資料日 {formatTradeDate(day.tradeDate)}・元大投信公布{published ? `（${published} 更新）` : ''}
-        ，每個交易日約 16:00 更新。
+        資料日 {formatTradeDate(day.tradeDate)}・{issuerLabel}公布{published ? `（${published} 更新）` : ''}
+        ，本站每個交易日 18:00 與 22:00 檢查更新。
         {data.sourceUrl && (
           <>
             {' '}
             <a href={data.sourceUrl} target="_blank" rel="noopener noreferrer">
-              元大官網原始頁面
+              {issuerLabel}官網原始頁面
             </a>
           </>
         )}
@@ -185,6 +214,38 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
         </div>
       </section>
 
+      {markets.length > 0 && (
+        <section className="rpt-section">
+          <div className="rpt-section-head">
+            <h3>市場分布</h3>
+            <span className="source-tag">占基金的權重</span>
+          </div>
+          <div
+            className="etfh-stack"
+            role="img"
+            aria-label={`市場分布：${markets.map((g) => `${g.label} ${formatWeight(g.weight)}`).join('、')}`}
+          >
+            {markets.map((g, i) => (
+              <span
+                key={g.market}
+                className="etfh-seg"
+                style={{ width: `${g.weight}%`, background: marketColor(g.market, i) }}
+                title={`${g.label} ${formatWeight(g.weight)}`}
+              />
+            ))}
+          </div>
+          <div className="etfh-legend">
+            <ChartLegend
+              items={markets.map((g, i) => ({
+                label: g.label,
+                color: marketColor(g.market, i),
+                note: formatWeight(g.weight),
+              }))}
+            />
+          </div>
+        </section>
+      )}
+
       <section className="rpt-section">
         <div className="rpt-section-head">
           <h3>前 {top.length} 大持股</h3>
@@ -234,6 +295,7 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
         </details>
       </section>
 
+      {assetSegs.length > 0 && (
       <section className="rpt-section">
         <div className="rpt-section-head">
           <h3>資產配置</h3>
@@ -266,6 +328,7 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
           />
         </div>
       </section>
+      )}
 
       {day.futures.length > 0 && (
         <section className="rpt-section">
@@ -300,9 +363,10 @@ export function EtfHoldingsTab({ etf, reloadKey = 0 }: EtfHoldingsTabProps) {
       )}
 
       <p className="hint etfh-foot">
-        權重是元大公布的各持股占基金規模{day.fundSize > 0 ? `（${formatYi(day.fundSize)}）` : ''}的比率，與上方總淨值略有不同。
-        集中度各段是權重直接相加；「股票以外」是 100% 減去股票權重合計，含現金與期貨保證金等。
-        資產配置長條只表示四項金額的相對大小，元大未公布占比。本站未重新計算任何權重。
+        權重是{issuerLabel}公布的各持股占基金的比率
+        {data.issuer === 'yuanta' && day.fundSize > 0 ? `，分母為基金規模（${formatYi(day.fundSize)}），與上方總淨值略有不同` : ''}。
+        集中度{markets.length > 0 ? '與市場分布' : ''}各段是權重直接相加；「股票以外」是 100% 減去股票權重合計，含現金等。
+        {assetSegs.length > 0 ? '資產配置長條只表示四項金額的相對大小，投信未公布占比。' : ''}本站未重新計算任何權重。
       </p>
     </div>
   )

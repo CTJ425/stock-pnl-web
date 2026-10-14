@@ -185,6 +185,43 @@ Open (decide during build, not asked): contract fields for market / currency of 
 (schema bump if needed); per-type validation rules replacing the 0050-only `ETF_0050_RULES`; the
 request budget inside the 60 s `market-data-daily` phase once 10+ ETFs are fetched.
 
+## Release 1 — CTBC Phase 0 and build (2026-10-14 10:11:38 Asia/Taipei)
+
+**Source: CTBC's own SPA API** (`https://www.ctbcinvestments.com.tw/API/<path>`, found in the site's
+Vite bundle). Every call is POST with `token` in both the query string and the JSON body:
+`home/AuthToken {token:'www.ctbcinvestments.com'}` → session token (91–115 chars, contains `+ / =`;
+**must be URL-encoded** — sent raw, `+` reads as a space and every call answers 「Token 無效或過期」) →
+`etf/ETFList {IsWithETF:'Y'}` maps `ETF_ID` 009828 → `FID` E0039 (36 funds) →
+`etf/ETFHoldingWeight {FID, StartDate:'YYYY/MM/DD'}`.
+
+- **Whole fund**: 3037 欣興 999,600 sh × 1,180 = 1,179,528,000 ≈ 11.44 % of NAV 10,304,880,295.
+  Weights are over net assets (`fundSize = navTotal`). NAV × units vs NAV: −0.03 %.
+- **Shape**: `FundAssets[0]` (資料日期 'YYYY/MM/DD', 基金淨資產, 基金在外流通單位數, 基金每單位淨值);
+  `FundAssetsDetail[]` groups (`STOCK`: 30 rows; `CASH`: cash and 應收(付)證券款 lines). Numbers are
+  strings with thousands separators; `amount_` is in the row's own currency (JPY/KRW), so there are no
+  NT$ asset-class totals → `assets: null`. Codes carry an exchange suffix: none = TW, `JP`, `KP`/`KQ` =
+  Korea. 2026-10-13: TW 17 / JP 9 / KR 4; stock weights 98.97 %.
+- **Dates**: `StartDate` returns the latest day on or before it; back to 2026-09-15 (listed late
+  August). `StartDate 10/12` → 10/08: 10/09 a TW holiday, 10/12 skipped (probably Japan's 體育の日 —
+  not verified). T was available by T+1 09:40 Taipei; same-day time unknown → `publishHourTaipei: null`
+  (only the previous weekday is expected).
+- **Edge**: a throwaway DEV function (deleted, 404 after) got rc 0, 30 holdings, ~1.1 s on 3/3 calls.
+- **Terms**: `robots.txt` on both domains `Allow: /`; no terms page checked beyond that.
+
+**Built** (release 1 per § Expansion): `_shared/etfIssuer.ts` (issuer by short-name prefix, shared
+with the browser); `etfHoldingsCtbc.ts` (session: 1 auth + 1 list per run, then 1 call per fund);
+`HoldingsSource` per issuer in `etfHoldingsSync.ts`; `syncEtfUniverse` over every ETF code in all
+users' transactions (open or closed) ∪ watchlists, 0050 first, 20 s start budget, unsupported issuers
+listed not fetched; contract adds `stocks[].market` (missing = TW), `assets` nullable, `issuer`
+'yuanta' | 'ctbc' (schema stays 1: additive). Rules: 0050 keeps its own; others `DEFAULT_HOLDINGS_RULES`
+(≥ 1 stock, ≤ 500); without `assets` the stock weight sum must not top 100.5 %. UI: tab for every ETF
+code; 尚未串接 message (no request) for an issuer without a source — no official link (their URLs
+were not verified); 市場分布 bar when holdings span ≥ 2 markets; 資產配置 only when `assets` exist;
+data note and link text name the issuer.
+
+DEV live (branch deploy, `stock-report` v19 `06fcb71f10c2…`): first run 0050 unchanged, 0056 and
+009828 written, 7 codes unsupported, 4.5 s; second run 705 ms, nothing written.
+
 ## Tests
 
 Edge: parser against the 10/12 fixture; each validation rule fails once, the fixture passes;

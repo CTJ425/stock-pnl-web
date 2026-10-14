@@ -95,7 +95,8 @@ const ASSET_LABELS = [
  * Asset bar segments. Widths are each amount's share of the four amounts together — not a share of
  * the fund: the futures amount may be notional exposure, so a fund-size denominator could top 100 %.
  */
-export function assetSegments(assets: Record<AssetSegment['key'], number>): AssetSegment[] {
+export function assetSegments(assets: Record<AssetSegment['key'], number> | null): AssetSegment[] {
+  if (!assets) return []
   const total = ASSET_LABELS.reduce((s, [k]) => s + Math.max(0, assets[k]), 0)
   return ASSET_LABELS.map(([key, label]) => ({
     key,
@@ -103,4 +104,32 @@ export function assetSegments(assets: Record<AssetSegment['key'], number>): Asse
     amount: assets[key],
     widthPct: total > 0 ? (Math.max(0, assets[key]) / total) * 100 : 0,
   }))
+}
+
+const MARKET_LABELS: Record<string, string> = { TW: '台灣', JP: '日本', KR: '韓國', US: '美國', HK: '香港', CN: '中國' }
+
+export const marketLabel = (market: string): string => MARKET_LABELS[market] ?? market
+
+export interface MarketSegment {
+  market: string
+  label: string
+  /** Sum of published weights of that market's holdings (percent of fund). */
+  weight: number
+}
+
+/**
+ * Weight by market, largest first — only when the fund holds two or more markets (a Taiwan-only
+ * ETF gets no bar). Each figure is a plain sum of published weights, like the concentration bar.
+ */
+export function marketSegments(stocks: EtfHoldingsStock[]): MarketSegment[] {
+  const by = new Map<string, EtfHoldingsStock[]>()
+  for (const s of stocks) by.set(s.market, [...(by.get(s.market) ?? []), s])
+  if (by.size < 2) return []
+  const segs = [...by.entries()]
+    .map(([market, list]) => ({ market, label: marketLabel(market), weight: sumWeights(list) }))
+    .sort((a, b) => b.weight - a.weight)
+  // Same remainder as the concentration bar, so the two bars end at the same place and say why.
+  const other = Math.round((100 - sumWeights(stocks)) * 100) / 100
+  if (other > 0) segs.push({ market: 'other', label: '股票以外', weight: other })
+  return segs
 }

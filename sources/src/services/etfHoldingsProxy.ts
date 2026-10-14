@@ -1,5 +1,6 @@
 /**
- * ETF holdings (Task 200): what an ETF holds, as its issuer publishes it. 0050 only for now.
+ * ETF holdings (Task 200): what an ETF holds, as its issuer publishes it. Any ETF code may have a
+ * file; which issuers are fetched at all is `etfIssuerOf(...).supported` (shared with the Edge sync).
  *
  * Written by the `generate-market-data` phase (and the `sync-etf-holdings` action) into the public
  * `reports` bucket at `market/etf_holdings/<etf>.json`. The types are a **Web Interface Contract**
@@ -9,13 +10,9 @@
  */
 import { downloadReportsJson } from './reportsBucket'
 import type { ProxyResult } from './marketProxy'
+import { isEtfCode } from '../../supabase/functions/_shared/etfIssuer.ts'
 
-/** ETFs that have a holdings file. Any other code gets no tab and no request. */
-export const ETF_HOLDINGS_SUPPORTED = ['0050'] as const
-
-export function isEtfHoldingsSupported(code: string): boolean {
-  return (ETF_HOLDINGS_SUPPORTED as readonly string[]).includes(code)
-}
+export { etfIssuerOf, isEtfCode, type EtfIssuer } from '../../supabase/functions/_shared/etfIssuer.ts'
 
 export interface EtfHoldingsStock {
   code: string
@@ -23,6 +20,8 @@ export interface EtfHoldingsStock {
   shares: number
   /** Percent as published (56.39). */
   weight: number
+  /** 'TW', 'JP', 'KR' …; files written before release 1 have none and read as 'TW'. */
+  market: string
 }
 
 export interface EtfHoldingsFuture {
@@ -42,9 +41,10 @@ export interface EtfHoldingsDay {
   navTotal: number
   navPerUnit: number
   unitsOutstanding: number
-  /** The denominator of `weight`; differs from `navTotal`. */
+  /** The denominator of `weight` (Yuanta: fund size, which differs from `navTotal`; CTBC: net assets). */
   fundSize: number
-  assets: { stock: number; etf: number; bond: number; futures: number }
+  /** NT$ per asset class; null when the issuer publishes none. */
+  assets: { stock: number; etf: number; bond: number; futures: number } | null
   stocks: EtfHoldingsStock[]
   futures: EtfHoldingsFuture[]
 }
@@ -52,6 +52,8 @@ export interface EtfHoldingsDay {
 export interface EtfHoldingsData {
   etf: string
   fundName: string
+  /** 'yuanta' | 'ctbc' …; '' when the file predates the field. */
+  issuer: string
   sourceUrl: string
   updatedAt: string
   /** Newest first. */
@@ -70,7 +72,7 @@ function normalizeStock(v: unknown): EtfHoldingsStock | null {
   if (!o || typeof o.code !== 'string' || typeof o.name !== 'string' || !isNum(o.shares) || !isNum(o.weight)) {
     return null
   }
-  return { code: o.code, name: o.name, shares: o.shares, weight: o.weight }
+  return { code: o.code, name: o.name, shares: o.shares, weight: o.weight, market: typeof o.market === 'string' && o.market ? o.market : 'TW' }
 }
 
 function normalizeFuture(v: unknown): EtfHoldingsFuture | null {
@@ -87,11 +89,12 @@ function normalizeFuture(v: unknown): EtfHoldingsFuture | null {
 
 function normalizeDay(v: unknown): EtfHoldingsDay | null {
   const o = rec(v)
-  const a = rec(o?.assets)
-  if (!o || !a) return null
+  if (!o) return null
+  const a = o.assets === null ? null : rec(o.assets)
+  if (o.assets !== null && !a) return null
   if (typeof o.tradeDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.tradeDate)) return null
   if (![o.navTotal, o.navPerUnit, o.unitsOutstanding].every(isNum)) return null
-  if (![a.stock, a.etf, a.bond, a.futures].every(isNum)) return null
+  if (a && ![a.stock, a.etf, a.bond, a.futures].every(isNum)) return null
   if (!Array.isArray(o.stocks) || !Array.isArray(o.futures)) return null
   const stocks = o.stocks.map(normalizeStock).filter((s): s is EtfHoldingsStock => s !== null)
   if (stocks.length === 0) return null
@@ -102,15 +105,15 @@ function normalizeDay(v: unknown): EtfHoldingsDay | null {
     navPerUnit: o.navPerUnit as number,
     unitsOutstanding: o.unitsOutstanding as number,
     fundSize: isNum(o.fundSize) ? o.fundSize : 0,
-    assets: { stock: a.stock as number, etf: a.etf as number, bond: a.bond as number, futures: a.futures as number },
+    assets: a ? { stock: a.stock as number, etf: a.etf as number, bond: a.bond as number, futures: a.futures as number } : null,
     stocks,
     futures: o.futures.map(normalizeFuture).filter((f): f is EtfHoldingsFuture => f !== null),
   }
 }
 
-/** Read one ETF's holdings file; `empty` = unsupported code or no file yet, `invalid` = no usable day. */
+/** Read one ETF's holdings file; `empty` = not an ETF code or no file yet, `invalid` = no usable day. */
 export async function fetchEtfHoldings(etf: string): Promise<ProxyResult<EtfHoldingsData>> {
-  if (!isEtfHoldingsSupported(etf)) return { kind: 'empty' }
+  if (!isEtfCode(etf)) return { kind: 'empty' }
   const stored = await downloadReportsJson<Record<string, unknown>>(`market/etf_holdings/${etf}.json`)
   if (stored === null || stored === undefined) return { kind: 'empty' }
   if (typeof stored !== 'object') return { kind: 'invalid' }
@@ -126,6 +129,7 @@ export async function fetchEtfHoldings(etf: string): Promise<ProxyResult<EtfHold
     data: {
       etf,
       fundName: typeof stored.fundName === 'string' ? stored.fundName : etf,
+      issuer: typeof stored.issuer === 'string' ? stored.issuer : '',
       sourceUrl: typeof stored.sourceUrl === 'string' ? stored.sourceUrl : '',
       updatedAt: typeof stored.updatedAt === 'string' ? stored.updatedAt : '',
       days,

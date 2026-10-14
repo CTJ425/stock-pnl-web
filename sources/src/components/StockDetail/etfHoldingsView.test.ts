@@ -8,6 +8,7 @@ import {
   formatYi,
   assetSegments,
   concentrationSegments,
+  marketSegments,
 } from './etfHoldingsView'
 
 describe('etfHoldingsView', () => {
@@ -30,9 +31,9 @@ describe('etfHoldingsView', () => {
 
   it('splits concentration into the largest, the next nine, the rest and what stocks leave of 100 %', () => {
     const stocks = [
-      { code: '2330', name: '台積電', shares: 1, weight: 56.48 },
-      ...Array.from({ length: 9 }, (_, i) => ({ code: String(2000 + i), name: 'x', shares: 1, weight: 2.29 })),
-      ...Array.from({ length: 40 }, (_, i) => ({ code: String(3000 + i), name: 'y', shares: 1, weight: 0.5627 })),
+      { code: '2330', name: '台積電', shares: 1, weight: 56.48, market: 'TW' },
+      ...Array.from({ length: 9 }, (_, i) => ({ code: String(2000 + i), name: 'x', shares: 1, weight: 2.29, market: 'TW' })),
+      ...Array.from({ length: 40 }, (_, i) => ({ code: String(3000 + i), name: 'y', shares: 1, weight: 0.5627, market: 'TW' })),
     ]
     const segs = concentrationSegments(stocks)
     expect(segs.map((g) => [g.key, g.label, g.weight])).toEqual([
@@ -44,7 +45,7 @@ describe('etfHoldingsView', () => {
   })
 
   it('drops empty segments for a fund with few holdings', () => {
-    const segs = concentrationSegments([{ code: '2330', name: '台積電', shares: 1, weight: 100 }])
+    const segs = concentrationSegments([{ code: '2330', name: '台積電', shares: 1, weight: 100, market: 'TW' }])
     expect(segs.map((g) => g.key)).toEqual(['top1'])
     expect(concentrationSegments([])).toEqual([])
   })
@@ -55,5 +56,21 @@ describe('etfHoldingsView', () => {
     expect(segs[1].widthPct).toBe(0)
     expect(segs[0].widthPct + segs[3].widthPct).toBeCloseTo(100, 10)
     expect(segs[0].widthPct).toBeGreaterThan(99)
+  })
+
+  it('splits weight by market only when there are two or more', () => {
+    const tw = { code: '3037', name: 'a', shares: 1, weight: 11.44, market: 'TW' }
+    expect(marketSegments([tw])).toEqual([])
+    expect(
+      marketSegments([tw, { ...tw, code: '2383', weight: 8.92 }, { ...tw, code: '4062', weight: 9.77, market: 'JP' }]),
+    ).toEqual([
+      { market: 'TW', label: '台灣', weight: 20.36 },
+      { market: 'JP', label: '日本', weight: 9.77 },
+      { market: 'other', label: '股票以外', weight: 69.87 },
+    ])
+  })
+
+  it('has no asset segments when the issuer publishes no NT$ totals', () => {
+    expect(assetSegments(null)).toEqual([])
   })
 })

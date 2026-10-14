@@ -339,6 +339,17 @@ describe('StockDetailPage', () => {
     unmount()
   })
 
+  it('任何 ETF 代號都有成分股分頁；投信尚未串接時說明原因（2026-10-14 決策）', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="00878" name="國泰永續高股息" holding={null} quote={null} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    await userEvent.setup().click(screen.getByRole('tab', { name: '成分股' }))
+    expect(sec(container, 'holdings')).toBeTruthy()
+    expect(screen.getByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
+    expect(fetchEtfHoldings).not.toHaveBeenCalled()
+  })
+
   it('從 0050 的成分股切到一般個股時回到籌碼分頁，不留空白頁', async () => {
     window.history.replaceState(null, '', '/?tab=analysis&sub=holdings')
     const { container, rerender } = render(
