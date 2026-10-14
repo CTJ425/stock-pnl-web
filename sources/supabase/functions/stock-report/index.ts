@@ -147,8 +147,10 @@ import {
 } from './twMarket.ts'
 import { syncSectorFlow, type SectorFlowSyncDeps, type SectorFlowSyncResult } from './sectorFlowSync.ts'
 import {
+  ETF_CALL_ATTEMPT_MS,
   ETF_CALL_BUDGET_MS,
   ETF_HOLDINGS_FAILURES,
+  capitalSource,
   ctbcSource,
   syncEtfUniverse,
   yuantaSource,
@@ -1762,7 +1764,7 @@ function sectorFlowDeps(): SectorFlowSyncDeps {
 /**
  * Output/update market/etf_holdings/<etf>.json: what each ETF holds, as its issuer publishes it
  * (Task 200). Every ETF any user has ever traded or watches is in scope; only issuers with a source
- * (元大, 中信) are fetched, the rest show 「尚未串接」 in the tab.
+ * (元大, 中信, 群益) are fetched, the rest show 「尚未串接」 in the tab.
  *
  * Rides on `generate-market-data` (market-data-daily, 18:00 / 22:00 Taipei), which runs every round
  * and comes after Yuanta's ~16:00 publication, and is reachable on its own as `sync-etf-holdings`.
@@ -1774,7 +1776,7 @@ async function fetchEtfHoldingsJson(url: string): Promise<unknown | null> {
     const result = await fetchWithRetry(
       url,
       { headers: { 'User-Agent': UA, Accept: 'application/json' } },
-      { timeoutMs: 6_000, totalBudgetMs: ETF_CALL_BUDGET_MS },
+      { timeoutMs: ETF_CALL_ATTEMPT_MS, totalBudgetMs: ETF_CALL_BUDGET_MS },
     )
     if (!result.ok) return null
     return await result.res.json()
@@ -1783,8 +1785,11 @@ async function fetchEtfHoldingsJson(url: string): Promise<unknown | null> {
   }
 }
 
-/** CTBC's API is POST-only, JSON in and out (etfHoldingsCtbc.ts). Same per-call budget as Yuanta. */
-async function postEtfHoldingsJson(url: string, body: Record<string, unknown>): Promise<unknown | null> {
+/**
+ * POST JSON, read JSON (CTBC: etfHoldingsCtbc.ts; Capital: etfHoldingsCapital.ts — whose list call
+ * wants the literal body `null`). Same per-call budget as Yuanta.
+ */
+async function postEtfHoldingsJson(url: string, body: unknown): Promise<unknown | null> {
   try {
     const result = await fetchWithRetry(
       url,
@@ -1793,7 +1798,7 @@ async function postEtfHoldingsJson(url: string, body: Record<string, unknown>): 
         headers: { 'User-Agent': UA, Accept: 'application/json', 'content-type': 'application/json; charset=utf-8' },
         body: JSON.stringify(body),
       },
-      { timeoutMs: 6_000, totalBudgetMs: ETF_CALL_BUDGET_MS },
+      { timeoutMs: ETF_CALL_ATTEMPT_MS, totalBudgetMs: ETF_CALL_BUDGET_MS },
     )
     if (!result.ok) return null
     return await result.res.json()
@@ -1881,7 +1886,11 @@ const ETF_HOLDINGS_BUDGET_MS = 25_000
 /** One round over every ETF; failures also land in `app_log`, since this phase writes no `batch_run_log` row. */
 async function syncAllEtfHoldings(): Promise<EtfUniverseResult> {
   const startedAt = Date.now()
-  const sources = { yuanta: yuantaSource(fetchEtfHoldingsJson), ctbc: ctbcSource(postEtfHoldingsJson) }
+  const sources = {
+    yuanta: yuantaSource(fetchEtfHoldingsJson),
+    ctbc: ctbcSource(postEtfHoldingsJson),
+    capital: capitalSource(postEtfHoldingsJson),
+  }
   const universe = await etfUniverse()
   const round = await syncEtfUniverse(universe, sources, etfHoldingsDeps(), ETF_HOLDINGS_BUDGET_MS, startedAt)
   for (const r of round.results) {
@@ -1890,7 +1899,8 @@ async function syncAllEtfHoldings(): Promise<EtfUniverseResult> {
         level: 'warn',
         action: 'sync-etf-holdings',
         message: `${r.etf} holdings not refreshed: ${r.reason}${r.rule ? ` (${r.rule})` : ''}`,
-        detail: { ...r },
+        // `detail` passes the _shared/log.ts allowlist only, so map onto its keys (a raw result logged {}).
+        detail: { ticker: r.etf, code: r.reason, hint: r.rule ?? r.detail ?? null, ymd: r.tradeDate },
       })
     }
   }

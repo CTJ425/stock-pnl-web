@@ -63,7 +63,7 @@ const MARKET_COLORS = ['var(--chart-c1)', 'var(--chart-c2)', 'var(--chart-c3)', 
 const marketColor = (market: string, i: number): string =>
   market === 'other' ? 'var(--ink-muted)' : MARKET_COLORS[Math.min(i, MARKET_COLORS.length - 1)]
 
-const ISSUER_LABEL: Record<string, string> = { yuanta: '元大投信', ctbc: '中國信託投信' }
+const ISSUER_LABEL: Record<string, string> = { yuanta: '元大投信', ctbc: '中國信託投信', capital: '群益投信' }
 
 const ASSET_COLOR: Record<AssetSegment['key'], string> = {
   stock: 'var(--chart-c1)',
@@ -127,7 +127,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
           {issuer ? `${issuer.label}的成分股資料尚未串接` : '這檔 ETF 的投信成分股資料尚未串接'}
         </div>
         <div className="hint" style={{ marginTop: 6 }}>
-          目前只接上{supportedIssuerLabels().join('與')}；其他投信會一家一家加入。
+          目前只接上{supportedIssuerLabels().join('、')}；其他投信會一家一家加入。
         </div>
       </div>
     )
@@ -150,6 +150,12 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
   const markets = marketSegments(day.stocks)
   const assetSegs = assetSegments(day.assets)
   const issuerLabel = ISSUER_LABEL[data.issuer] ?? issuer?.label ?? '投信'
+  // Leveraged / inverse funds hold futures, not stocks (00685L: 台指期 at ~200 %): the stock charts
+  // have nothing to show, so the futures exposure is the main chart instead (spec § Expansion 7).
+  const futuresLed = day.stocks.length === 0 && day.futures.length > 0
+  const futuresSum = Math.round(day.futures.reduce((a, f) => a + f.weight, 0) * 100) / 100
+  // One scale for every bar, never below 100 % so the 100 % mark is always on the track.
+  const exposureScale = Math.max(100, ...day.futures.map((f) => Math.abs(f.weight)))
 
   return (
     <div className="etfh">
@@ -194,6 +200,38 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
         </div>
       </section>
 
+      {futuresLed && (
+        <section className="rpt-section">
+          <div className="rpt-section-head">
+            <h3>期貨曝險</h3>
+            <span className="source-tag">占基金的權重，可以超過 100%</span>
+          </div>
+          <p className="hint etfh-exposure-note">
+            這檔以期貨為主（槓桿或反向型），沒有持有個股。期貨權重合計 {formatWeight(futuresSum)}
+            {futuresSum > 100 ? '，超過 100% 的部分就是放大的倍數。' : '。'}
+          </p>
+          <ol className="etfh-bars" aria-label="期貨曝險權重">
+            {day.futures.map((f) => (
+              <li key={`${f.code}-${f.month}`} className="etfh-bar-row">
+                <span className="etfh-bar-name">
+                  {f.name ?? f.code} <span className="hint">{formatContractMonth(f.month)}</span>
+                </span>
+                <span className="etfh-bar-track etfh-bar-track-scaled" aria-hidden="true">
+                  <span
+                    className="etfh-bar-fill"
+                    style={{ width: `${(Math.abs(f.weight) / exposureScale) * 100}%` }}
+                  />
+                  <span className="etfh-bar-mark" style={{ left: `${(100 / exposureScale) * 100}%` }} title="100%" />
+                </span>
+                <span className="etfh-bar-value">{formatWeight(f.weight)}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="hint etfh-exposure-scale">直線標示 100%：長條超過直線的部分，就是超過基金規模的曝險。</p>
+        </section>
+      )}
+
+      {!futuresLed && (
       <section className="rpt-section">
         <div className="rpt-section-head">
           <h3>持股集中度</h3>
@@ -220,6 +258,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
           />
         </div>
       </section>
+      )}
 
       {markets.length > 0 && (
         <section className="rpt-section">
@@ -253,6 +292,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
         </section>
       )}
 
+      {!futuresLed && (
       <section className="rpt-section">
         <div className="rpt-section-head">
           <h3>前 {top.length} 大持股</h3>
@@ -301,6 +341,7 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
           </div>
         </details>
       </section>
+      )}
 
       {assetSegs.length > 0 && (
       <section className="rpt-section">
@@ -369,12 +410,18 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
         </section>
       )}
 
+      {futuresLed ? (
+        <p className="hint etfh-foot">
+          權重是{issuerLabel}公布的各部位占基金的比率；期貨權重合計可以超過 100%。本站未重新計算任何權重。
+        </p>
+      ) : (
       <p className="hint etfh-foot">
         權重是{issuerLabel}公布的各持股占基金的比率
         {data.issuer === 'yuanta' && day.fundSize > 0 ? `，分母為基金規模（${formatYi(day.fundSize)}），與上方總淨值略有不同` : ''}。
         集中度{markets.length > 0 ? '與市場分布' : ''}各段是權重直接相加；「股票以外」是 100% 減去股票權重合計，含現金等。
         {assetSegs.length > 0 ? '資產配置長條只表示四項金額的相對大小，投信未公布占比。' : ''}本站未重新計算任何權重。
       </p>
+      )}
     </div>
   )
 }

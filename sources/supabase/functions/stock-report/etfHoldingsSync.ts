@@ -27,6 +27,7 @@ import {
   type HoldingsRules,
 } from './etfHoldings.ts'
 import { createCtbcSession, ctbcRatioPageUrl, parseCtbcHoldings, type CtbcPost } from './etfHoldingsCtbc.ts'
+import { capitalRatioPageUrl, createCapitalSession, parseCapitalHoldings, type CapitalPost } from './etfHoldingsCapital.ts'
 
 export type EtfFileIssuer = EtfHoldingsFile['issuer']
 
@@ -35,7 +36,8 @@ export interface HoldingsSource {
   issuer: EtfFileIssuer
   /** Hour (Taipei) from which today's day is expected; null = only the previous weekday is. */
   publishHourTaipei: number | null
-  sourceUrl: (etf: string) => string
+  /** The official page for the user to check against (may need the issuer's own fund id). */
+  sourceUrl: (etf: string) => string | Promise<string>
   /** The raw response for the latest day; null on any failure. `todayYmd` is YYYYMMDD Taipei. */
   fetch: (etf: string, todayYmd: string) => Promise<unknown | null>
   /** Longest the next `fetch` can take, so the round never starts one it cannot finish. */
@@ -43,7 +45,12 @@ export interface HoldingsSource {
   parse: (raw: unknown) => { fundName: string; day: EtfHoldingsDay } | null
 }
 
-/** Per-call wall budget the index.ts fetchers pass to `fetchWithRetry` (`totalBudgetMs`). */
+/**
+ * Per-call budgets the index.ts fetchers pass to `fetchWithRetry`: 3 s an attempt inside 7 s, so a
+ * slow first attempt still leaves room for one retry (3 + 0.4 backoff + 3). The issuers answer Edge in
+ * 0.1–1 s; on 2026-10-14 one Capital call stalled with 6 s / 7 s, which left no retry at all.
+ */
+export const ETF_CALL_ATTEMPT_MS = 3_000
 export const ETF_CALL_BUDGET_MS = 7_000
 
 export function yuantaSource(fetchJson: (url: string) => Promise<unknown | null>): HoldingsSource {
@@ -54,6 +61,23 @@ export function yuantaSource(fetchJson: (url: string) => Promise<unknown | null>
     sourceUrl: yuantaRatioPageUrl,
     fetch: (etf) => fetchJson(yuantaHoldingsUrl(etf)),
     parse: parseYuantaHoldings,
+  }
+}
+
+/** One Capital session (ticker → fundNo) per source, so build one source per run. */
+export function capitalSource(post: CapitalPost): HoldingsSource {
+  const session = createCapitalSession(post)
+  return {
+    issuer: 'capital',
+    worstCaseMs: () => session.pendingCalls() * ETF_CALL_BUDGET_MS,
+    // Same-day publish time not observed yet (T was there by T+1 11:00); expect the previous weekday.
+    publishHourTaipei: null,
+    sourceUrl: async (etf) => {
+      const fundNo = await session.fundNoOf(etf)
+      return fundNo ? capitalRatioPageUrl(fundNo) : 'https://www.capitalfund.com.tw/etf'
+    },
+    fetch: (etf) => session.fetchHoldings(etf),
+    parse: parseCapitalHoldings,
   }
 }
 
@@ -144,9 +168,11 @@ export async function syncEtfHoldings(
     const parsed = source.parse(raw)
     if (!parsed) return out({ synced: false, tradeDate: newest?.tradeDate ?? null, reason: 'parse-failed' })
     const { day, fundName } = parsed
-    // A leveraged / inverse / bond fund holds no stocks: the screen for it (spec § Expansion 7) is
-    // not built yet, so it is skipped — not a failure that would turn every run red.
-    if (day.stocks.length === 0) return out({ synced: false, tradeDate: day.tradeDate, reason: 'no-stocks' })
+    // A fund with neither stocks nor futures (a bond fund) has no screen yet (spec § Expansion 7):
+    // skipped — not a failure that would turn every run red. Futures-led funds are written.
+    if (day.stocks.length === 0 && day.futures.length === 0) {
+      return out({ synced: false, tradeDate: day.tradeDate, reason: 'no-stocks' })
+    }
 
     const check = validateHoldingsDay(day, rules, today)
     if (!check.ok) return out({ synced: false, tradeDate: day.tradeDate, reason: 'invalid', rule: check.rule })
@@ -165,7 +191,7 @@ export async function syncEtfHoldings(
       etf,
       fundName: fundName || stored?.fundName || etf,
       issuer: source.issuer,
-      sourceUrl: source.sourceUrl(etf),
+      sourceUrl: await source.sourceUrl(etf),
       updatedAt: now.toISOString(),
       days: appendHoldingsDay(existing, day),
     }

@@ -97,7 +97,9 @@ function normalizeDay(v: unknown): EtfHoldingsDay | null {
   if (a && ![a.stock, a.etf, a.bond, a.futures].every(isNum)) return null
   if (!Array.isArray(o.stocks) || !Array.isArray(o.futures)) return null
   const stocks = o.stocks.map(normalizeStock).filter((s): s is EtfHoldingsStock => s !== null)
-  if (stocks.length === 0) return null
+  const futures = o.futures.map(normalizeFuture).filter((f): f is EtfHoldingsFuture => f !== null)
+  // A leveraged / inverse fund holds futures and no stocks (00685L); only a day with neither is empty.
+  if (stocks.length === 0 && futures.length === 0) return null
   return {
     tradeDate: o.tradeDate,
     publishedAt: typeof o.publishedAt === 'string' ? o.publishedAt : null,
@@ -107,7 +109,7 @@ function normalizeDay(v: unknown): EtfHoldingsDay | null {
     fundSize: isNum(o.fundSize) ? o.fundSize : 0,
     assets: a ? { stock: a.stock as number, etf: a.etf as number, bond: a.bond as number, futures: a.futures as number } : null,
     stocks,
-    futures: o.futures.map(normalizeFuture).filter((f): f is EtfHoldingsFuture => f !== null),
+    futures,
   }
 }
 

@@ -67,6 +67,7 @@ describe('fetchEtfHoldings', () => {
     expect(etfIssuerOf('元大高股息')).toMatchObject({ id: 'yuanta', supported: true })
     expect(etfIssuerOf('中信台日韓PCB')).toMatchObject({ id: 'ctbc', label: '中國信託投信', supported: true })
     expect(etfIssuerOf('國泰永續高股息')).toMatchObject({ id: 'cathay', supported: false })
+    expect(etfIssuerOf('群益台灣精選高息')).toMatchObject({ id: 'capital', supported: true })
     expect(etfIssuerOf('主動統一台股增長')).toMatchObject({ id: 'uni' })
     // Active ETFs put 「主動」 before the brand (review RISK 2): the brand still decides.
     expect(etfIssuerOf('主動元大AI新經濟')).toMatchObject({ id: 'yuanta', supported: true })
@@ -78,7 +79,7 @@ describe('fetchEtfHoldings', () => {
   it('is empty without a file and invalid when no day is usable', async () => {
     downloadReportsJson.mockResolvedValue(null)
     expect(await fetchEtfHoldings('0050')).toEqual({ kind: 'empty' })
-    downloadReportsJson.mockResolvedValue(file([day('2026-10-12', { stocks: [] }), { tradeDate: 'x' }]))
+    downloadReportsJson.mockResolvedValue(file([day('2026-10-12', { stocks: [], futures: [] }), { tradeDate: 'x' }]))
     expect(await fetchEtfHoldings('0050')).toEqual({ kind: 'invalid' })
     downloadReportsJson.mockResolvedValue({ ...file([day('2026-10-12')]), schema: 0 })
     expect(await fetchEtfHoldings('0050')).toEqual({ kind: 'invalid' })
@@ -110,5 +111,41 @@ describe('Edge → Web contract', () => {
     expect(r.data.days[0]).toEqual(producedDay)
     expect(r.data.days[0].stocks).toHaveLength(50)
     expect(r.data.days[0].fundSize).toBe(2547140807580)
+  })
+
+  it('reads back a futures-led fund the Capital source writes (00685L: no stocks)', async () => {
+    const { syncEtfHoldings } = await import('../../supabase/functions/stock-report/etfHoldingsSync.ts')
+    const { DEFAULT_HOLDINGS_RULES } = await import('../../supabase/functions/stock-report/etfHoldings.ts')
+    const { parseCapitalHoldings } = await import('../../supabase/functions/stock-report/etfHoldingsCapital.ts')
+    const { CAPITAL_00685L_20261013 } = await import('../../supabase/functions/stock-report/etfHoldingsCapital.fixture.ts')
+    let written: unknown = null
+    await syncEtfHoldings(
+      '00685L',
+      {
+        issuer: 'capital',
+        publishHourTaipei: null,
+        worstCaseMs: () => 0,
+        sourceUrl: () => 'https://example.test',
+        fetch: async () => JSON.parse(JSON.stringify(CAPITAL_00685L_20261013)),
+        parse: parseCapitalHoldings,
+      },
+      DEFAULT_HOLDINGS_RULES,
+      {
+        download: async () => null,
+        upload: async (_p, payload) => {
+          written = payload
+          return true
+        },
+        now: () => new Date('2026-10-14T03:00:00Z'),
+      },
+    )
+    expect(written).not.toBeNull()
+    downloadReportsJson.mockResolvedValue(JSON.parse(JSON.stringify(written)))
+    const r = await fetchEtfHoldings('00685L')
+    expect(r.kind).toBe('ok')
+    if (r.kind !== 'ok') return
+    expect(r.data.days[0].stocks).toEqual([])
+    expect(r.data.days[0].futures[0]).toMatchObject({ code: 'TX', weight: 200.9432 })
+    expect(r.data.issuer).toBe('capital')
   })
 })

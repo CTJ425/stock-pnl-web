@@ -112,7 +112,7 @@ describe('EtfHoldingsTab', () => {
     fetchEtfHoldings.mockResolvedValue({ kind: 'empty' })
     render(<EtfHoldingsTab etf="00878" name="國泰永續高股息" />)
     expect(await screen.findByText('國泰投信的成分股資料尚未串接')).toBeTruthy()
-    expect(document.body.textContent).toContain('目前只接上元大投信與中國信託投信；其他投信會一家一家加入。')
+    expect(document.body.textContent).toContain('目前只接上元大投信、中國信託投信、群益投信；其他投信會一家一家加入。')
     cleanup()
     render(<EtfHoldingsTab etf="00999" name="某某ETF" />)
     expect(await screen.findByText('這檔 ETF 的投信成分股資料尚未串接')).toBeTruthy()
@@ -145,5 +145,25 @@ describe('EtfHoldingsTab', () => {
     expect(screen.getByRole('link', { name: '中國信託投信官網原始頁面' })).toBeTruthy()
     expect(screen.queryByRole('img', { name: /資產配置/ })).toBeNull()
     expect(screen.getByText(/資料日 2026\/10\/12・中國信託投信公布，/)).toBeTruthy()
+  })
+
+  it('draws a futures-led fund (00685L) as exposure bars instead of stock charts', async () => {
+    const lev = day({
+      stocks: [],
+      futures: [{ code: 'TX', name: '台指期', contracts: 15866, weight: 200.9432, month: '202610' }],
+      assets: null,
+      publishedAt: null,
+    })
+    fetchEtfHoldings.mockResolvedValue({ kind: 'ok', data: { ...ok(lev).data, etf: '00685L', issuer: 'capital' } })
+    const { container } = render(<EtfHoldingsTab etf="00685L" name="群益臺灣加權正2" />)
+    const bars = await screen.findByRole('list', { name: '期貨曝險權重' })
+    expect(within(bars).getByText('200.94%')).toBeTruthy()
+    expect(container.textContent).toContain('期貨權重合計 200.94%，超過 100% 的部分就是放大的倍數。')
+    // The bar fills the track (scale = the largest weight); the 100 % mark sits just under half way.
+    expect((container.querySelector('.etfh-bar-fill') as HTMLElement).style.width).toBe('100%')
+    expect((container.querySelector('.etfh-bar-mark') as HTMLElement).style.left).toMatch(/^49\.7/)
+    expect(screen.queryByRole('img', { name: /持股集中度/ })).toBeNull()
+    expect(screen.queryByRole('list', { name: /前 \d+ 大持股權重/ })).toBeNull()
+    expect(screen.getAllByText(/群益投信公布/).length).toBeGreaterThan(0)
   })
 })

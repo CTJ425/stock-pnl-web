@@ -32,7 +32,7 @@ const BRAND_LIST: Array<[prefix: string, issuer: EtfIssuer]> = [
   ['中國信託', { id: 'ctbc', label: '中國信託投信', supported: true }],
   ['中信', { id: 'ctbc', label: '中國信託投信', supported: true }],
   ['國泰', { id: 'cathay', label: '國泰投信', supported: false }],
-  ['群益', { id: 'capital', label: '群益投信', supported: false }],
+  ['群益', { id: 'capital', label: '群益投信', supported: true }],
   ['統一', { id: 'uni', label: '統一投信', supported: false }],
   ['台新', { id: 'taishin', label: '台新投信', supported: false }],
   ['凱基', { id: 'kgi', label: '凱基投信', supported: false }],

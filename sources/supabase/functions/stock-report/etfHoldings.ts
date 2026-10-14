@@ -57,7 +57,7 @@ export interface EtfHoldingsFile {
   schema: typeof ETF_HOLDINGS_SCHEMA
   etf: string
   fundName: string
-  issuer: 'yuanta' | 'ctbc'
+  issuer: 'yuanta' | 'ctbc' | 'capital'
   /** The official page, for the user to check against. */
   sourceUrl: string
   updatedAt: string
@@ -182,6 +182,15 @@ export function validateHoldingsDay(day: EtfHoldingsDay, rules: HoldingsRules, t
   }
   if (Math.abs((day.navPerUnit * day.unitsOutstanding) / day.navTotal - 1) > NAV_IDENTITY_TOLERANCE) {
     return { ok: false, rule: 'nav-identity' }
+  }
+
+  // A futures-led fund (leveraged / inverse: 00685L holds 台指期 at ~200 % and no stocks) has no stock
+  // list to check; its futures rows must be whole instead. Weights can exceed 100 % by design.
+  if (day.stocks.length === 0 && day.futures.length > 0 && rules.mustInclude.length === 0) {
+    if (!day.futures.every((f) => f.code !== '' && Number.isFinite(f.contracts) && Number.isFinite(f.weight) && f.weight !== 0)) {
+      return { ok: false, rule: 'futures-row' }
+    }
+    return { ok: true }
   }
 
   const n = day.stocks.length

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { syncEtfHoldings, syncEtfUniverse, yuantaSource, type EtfHoldingsSyncDeps, type HoldingsSource } from './etfHoldingsSync.ts'
 import {
+  DEFAULT_HOLDINGS_RULES,
   ETF_0050_RULES,
   etfHoldingsPath,
   parseYuantaHoldings,
@@ -248,9 +249,20 @@ describe('syncEtfUniverse', () => {
 })
 
 describe('funds that hold no stocks', () => {
-  it('are skipped as no-stocks, not counted as a failure', async () => {
+  it('writes a futures-led fund (leveraged) instead of skipping it', async () => {
+    const lev = clone(YUANTA_0050_20261012)
+    lev.FundWeights.StockWeights = []
+    const h = harness({ response: lev, now: EVENING })
+    const r = await syncEtfHoldings('00631L', h.source, DEFAULT_HOLDINGS_RULES, h.deps)
+    expect(r.synced).toBe(true)
+    expect(h.uploads[0].payload.days[0].stocks).toEqual([])
+    expect(h.uploads[0].payload.days[0].futures.length).toBeGreaterThan(0)
+  })
+
+  it('skips a fund with neither stocks nor futures as no-stocks, not a failure', async () => {
     const bond = clone(YUANTA_0050_20261012)
     bond.FundWeights.StockWeights = []
+    bond.FundWeights.FutureWeights = []
     const h = harness({ response: bond, now: EVENING })
     const r = await syncEtfHoldings('0050', h.source, ETF_0050_RULES, h.deps)
     expect(r.reason).toBe('no-stocks')

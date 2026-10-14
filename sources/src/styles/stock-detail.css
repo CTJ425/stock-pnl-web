@@ -1740,3 +1740,25 @@ details.chart-more[open] > summary {
     display: none;
   }
 }
+
+/* Futures exposure (leveraged / inverse ETF): bars on one scale of at least 100 %, with a 100 % mark. */
+.etfh-exposure-note {
+  margin: var(--sp-03) 0 0;
+}
+
+.etfh-bar-track-scaled {
+  position: relative;
+}
+
+.etfh-bar-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink-muted);
+}
+
+.etfh-exposure-scale {
+  margin-top: var(--sp-03);
+}

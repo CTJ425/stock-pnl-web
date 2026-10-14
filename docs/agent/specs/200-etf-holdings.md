@@ -236,6 +236,43 @@ query error logged. NITs fixed: `TT` → TW; unknown CTBC row types refuse the d
 generated from the brand list. Not changed: market bar > 100 % (the bar clips, `overflow: hidden`);
 one extra same-day rewrite of pre-release files (adds `market`, harmless).
 
+## Release 2 — 群益 (Capital) Phase 0 and build (2026-10-14 11:18:46 Asia/Taipei)
+
+**Source: Capital's Angular app API** `https://www.capitalfund.com.tw/CFWeb/api/<path>` (found in its
+lazy chunks; the `/api/...` paths in `main.js` are relative to `/CFWeb`), POST JSON, no token:
+`etf/list` with body **`null`** (an empty body answers 411) → `data.funds[]` (`data` is an object
+`{etfFilters, funds}`, 28 funds) maps `stockNo` 00919 → `fundNo` 195, 00685L → 094 →
+`etf/buyback {fundId, date}` (what its 投資組合 and 申購買回清單 pages call).
+
+- **Whole fund**: 2881 富邦金 611,370,000 shares at 15.5016 % of NAV 631,025,345,971. Weights are over
+  NAV (stocks 99.58 % + futures 0.42 % = 100 %). NAV identity −0.008 %. `assets` null (only margin /
+  cash / payable lines). `fundhold/list` is only the monthly top 10 — not used.
+- **Dates**: `pcf.date2` = trade date, `pcf.date1` = announcement date; `date` asks by announcement
+  date (`null` = latest); back to at least 2026-09-15. T was there by T+1 11:00; same-day time not
+  observed → `publishHourTaipei: null`.
+- **00685L**: 0 stocks, one future 台指期 202610, 15,866 contracts, **200.9432 %**.
+- **Edge**: throwaway DEV probes (deleted) got HTTP 200 JSON on every call, 0.1–1 s; User-Agent and
+  `charset` variants make no difference.
+- **Terms**: `robots.txt` `Allow: /`.
+
+**Built**: `etfHoldingsCapital.ts` (session: 1 list + 1 call per fund; fund page link
+`/etf/product/detail/<fundNo>/portfolio`); `capitalSource`; `HoldingsSource.sourceUrl` may be async;
+issuer union adds `capital`, 群益 `supported: true`. **Futures-led funds** (decision 7): validation
+accepts a day with no stocks when futures exist (rows whole, weight ≠ 0); the sync writes it (only a
+day with neither stocks nor futures is `no-stocks`); the tab draws 期貨曝險 bars on a scale of at least
+100 % with a 100 % mark instead of the stock charts. Bond rows refuse the day (not parsed yet).
+
+**Caught on DEV, not by tests** (both fixed with regression tests on real shapes): (1) the list parser
+read `data` as an array — the unit-test fake was a hand-built array, so every Capital fund ended
+`fetch-failed` on DEV; the fake is now the real `etf/list` response. (2) The web normalizer dropped a
+day with no stocks, so 00685L showed 「格式對不上」 in the preview; a producer→consumer test on the real
+00685L data now covers it. Also: one Capital call stalled once → per-call 3 s an attempt inside 7 s
+(room for one retry, was 6 s / 7 s); `app_log` `detail` was `{}` because `_shared/log.ts` keeps an
+allowlist — now `ticker` / `code` / `hint` / `ymd`.
+
+DEV (branch deploy `stock-report` v23 `36539ca3b4bd…`): 00919 file deleted then recreated by the sync
+(40 holdings), 00685L written, 0050 / 0056 / 009828 unchanged, 3.4 s.
+
 ## Tests
 
 Edge: parser against the 10/12 fixture; each validation rule fails once, the fixture passes;
