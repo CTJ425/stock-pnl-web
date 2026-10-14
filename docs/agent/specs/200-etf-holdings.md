@@ -155,6 +155,36 @@ be notional, so a fund-size denominator could top 100 %) → futures table. Figu
 not inside the bars (white text on the light-theme yellow failed contrast). Identity colours
 `--chart-c1..3`; never `--up` / `--down`. The 「顯示全部」 button is gone (the disclosure replaces it).
 
+## Expansion to other ETFs — decisions (2026-10-14 09:42:18 Asia/Taipei, user interview)
+
+PROD on 2026-10-14 had 10 ETF codes in transactions/watchlist across 7 issuers: held 0050 (元大),
+009828 中信台日韓PCB (中信, also watched); sold out 0056 (元大), 00919 + 00685L (群益), 00403A +
+00981A (統一, active), 00878 (國泰), 00936 (台新), 009816 (凱基).
+
+1. **Which ETFs**: every ETF code that any user has *ever traded* or watches, computed by the schedule
+   each run (not a fixed list); only codes whose issuer has a parser are fetched.
+2. **Issuers**: one at a time, each with its own Phase 0 (endpoint, whole-fund vs basket, Edge
+   reachability, publish time, terms). Order: 中信 (009828, held) → 群益 → 統一 → 國泰 → 台新 → 凱基.
+   元大 0056 needs no new parser.
+3. **Phase 0 failure** (Edge blocked, no machine-readable data, PDF only): stop and ask the user —
+   do not pick a workaround (Actions, PDF parsing, paid source) alone.
+4. **Terms**: record robots.txt and terms per issuer in Phase 0; stop only on an explicit ban of
+   republishing / automated retrieval. Source and official link always shown.
+5. **New code**: no on-demand fetch; it appears after the next scheduled run.
+6. **Unsupported issuer**: the 成分股 tab *is* shown, with 「這檔的投信（…）成分股資料尚未串接」 and the
+   official link. This replaces the 0050-only rule "unsupported codes get no tab" — the tab now
+   appears for any ETF code (starts with `00`), data or not.
+7. **One shared screen that adapts**: a 市場分布 bar (sum of published weights by market) when
+   holdings span two or more markets (009828); for leveraged / futures-led funds (00685L) the main
+   chart becomes an 曝險 bar list over fund size that may exceed 100 %, with a plain-language note,
+   instead of the 100 % concentration bar.
+8. **Delivery**: one issuer per release. Release 1 = automatic list + 尚未串接 state + 元大 0056 +
+   中信 009828; then one release per further issuer, each with tests and `route:reviewer`.
+
+Open (decide during build, not asked): contract fields for market / currency of foreign holdings
+(schema bump if needed); per-type validation rules replacing the 0050-only `ETF_0050_RULES`; the
+request budget inside the 60 s `market-data-daily` phase once 10+ ETFs are fetched.
+
 ## Tests
 
 Edge: parser against the 10/12 fixture; each validation rule fails once, the fixture passes;
