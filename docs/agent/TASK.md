@@ -13,7 +13,7 @@
 
 - 2026-09-27: every task opened before Task 170 (167, 166, 165, 164, 160, 159, 158, 144, 85, 76, the quote-yahoo data source, 132/133) was moved verbatim to `TASK_ARCHIVE.md` → `## Archived 2026-09-27 —— unfinished tasks before Task 170 (user request)`. Their open items are **not** done; `grep` that section before picking any of them up again.
 - 2026-10-12: dormant unfinished Tasks 188, 178, 179, 181 moved verbatim to `TASK_ARCHIVE.md` → `## Archived 2026-10-12 09:39:05 Asia/Taipei —— dormant unfinished tasks …`. Their open items are **not** done.
-- Released: **0.10.39** (`main` = `dev` at `346c17b`).
+- Released: **0.10.40** (`main` = `dev` at `5834599`).
 - Front end deploys from `main` via Cloudflare Pages; Edge Functions and DDL never travel with a push (see CLAUDE.md § Release workflow).
 
 ## 📋 Active Tasks
@@ -25,7 +25,8 @@
 - **Spec**: docs/agent/specs/200-etf-holdings.md (Phase 0 findings, contract, review fixes). Continues Task 129.
 - **Done**: Phase 0 (Yuanta `PCF/Daily` JSON bridge; reachable from DEV Edge); Edge sync on `generate-market-data` + `sync-etf-holdings`; 成分股 tab for 0050; `route:reviewer` pass (1 BLOCKER + 10 RISK, 10 fixed, 1 accepted in spec); 0.10.39-dev.1. Charts-first redesign (/impeccable shape, user-approved) as 0.10.39-dev.2. Released 0.10.39 (item 3) — full text in `PROGRESS.md`.
 1. Terms of use for republishing Yuanta's data: no terms page found (robots `Allow: /`) — ⏳ user to check the site footer
-2. Other ETFs — scope decided 2026-10-14 09:42:18 (spec § Expansion): all ever-traded/watched ETFs, issuer by issuer (中信 → 群益 → 統一 → 國泰 → 台新 → 凱基), one release per issuer; release 1 = auto list + 尚未串接 tab + 0056 + 009828 — reviewed by session 2 (6 RISK fixed) as 0.10.40-dev.2, merged to `dev`, DEV deployed. Release 2 (群益 00919 / 00685L + 期貨曝險 view) reviewed by session 2 (1 BLOCKER + 6 RISK fixed) as 0.10.40-dev.4, merged to `dev`, DEV deployed — ⏳ PROD with the next release; next issuer 統一
+2. Other ETFs — scope decided 2026-10-14 09:42:18 (spec § Expansion): all ever-traded/watched ETFs, issuer by issuer (中信 → 群益 → 統一 → 國泰 → 台新 → 凱基), one release per issuer; release 1 = auto list + 尚未串接 tab + 0056 + 009828 — reviewed by session 2 (6 RISK fixed) as 0.10.40-dev.2, merged to `dev`, DEV deployed. Release 2 (群益 00919 / 00685L + 期貨曝險 view) reviewed by session 2 (1 BLOCKER + 6 RISK fixed), released as 0.10.40 (PROD Edge + Pages); next issuer 統一 — ⏳
+5. **Budget order starves CTBC on a busy run** — PROD 2026-10-14: 009828 (held + watched) came last, CTBC's worst case before its session is 21 s, so with ~6 s spent it was `skippedForBudget`; the next run (others unchanged) wrote it. Order the universe by relevance (currently held / watched first) or shrink the CTBC session worst case — ⏳
 4. Row links to constituents were dropped: 個股分析 only opens held/watched stocks. Opening any TW ticker there would bring them back — ⏳ user, optional
 
 ### Task 199: Stock detail — 近一年總覽 row and a range-return trend chart (design stage)
