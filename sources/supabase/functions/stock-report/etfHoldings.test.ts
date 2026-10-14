@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_HOLDINGS_RULES,
   ETF_0050_RULES,
   appendHoldingsDay,
   expectedLatestTradeDate,
@@ -101,6 +102,38 @@ describe('validateHoldingsDay', () => {
 
   it('tells holdings apart by market + code: a Tokyo and a Taiwan listing may share a code', () => {
     expect(fails((d) => { d.stocks[5] = { ...d.stocks[5], code: d.stocks[4].code, market: 'JP' } })).toEqual({ ok: true })
+  })
+
+  it('refuses a stock fund whose response lost its stocks (review BLOCKER): tiny futures are no proof', () => {
+    const d = day1012()
+    d.stocks = []
+    d.assets = null
+    d.futures = [{ code: 'TX', name: '臺股期貨', contracts: 276, weight: 0.42, month: '202610' }]
+    expect(validateHoldingsDay(d, DEFAULT_HOLDINGS_RULES, '20261013')).toEqual({ ok: false, rule: 'stock-count' })
+  })
+
+  it('accepts a futures-led day only with futures carrying the fund, inverse included', () => {
+    const d = day1012()
+    d.stocks = []
+    d.assets = null
+    d.futures = [{ code: 'TX', name: '臺股期貨', contracts: 100, weight: -98.5, month: '202610' }]
+    expect(validateHoldingsDay(d, DEFAULT_HOLDINGS_RULES, '20261013')).toEqual({ ok: true })
+  })
+
+  it('allows the 2-decimal NAV rounding of a low-priced fund (review RISK 1)', () => {
+    const d = day1012()
+    d.stocks = []
+    d.assets = null
+    d.futures = [{ code: 'TX', name: '臺股期貨', contracts: 100, weight: 200, month: '202610' }]
+    // A true NAV of 8.005 published as 8.01: nav × units misses the total by 0.0625 % — over the old
+    // flat 0.05 %, inside the rounding bound 0.006 / 8.01 = 0.075 %.
+    d.navPerUnit = 8.01
+    d.unitsOutstanding = 1_000_000
+    d.navTotal = 8_005_000
+    d.fundSize = d.navTotal
+    expect(validateHoldingsDay(d, DEFAULT_HOLDINGS_RULES, '20261013')).toEqual({ ok: true })
+    d.navTotal = 7_990_000 // 0.25 % off: a real mismatch still fails
+    expect(validateHoldingsDay(d, DEFAULT_HOLDINGS_RULES, '20261013')).toEqual({ ok: false, rule: 'nav-identity' })
   })
 
   it('fails a trade date after today', () => {

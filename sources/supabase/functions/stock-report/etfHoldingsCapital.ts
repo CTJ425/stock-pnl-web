@@ -13,7 +13,8 @@
  * Weights are over NAV (00919: stocks 99.58 % + futures 0.42 % = 100 %). There are no NT$ totals per
  * asset class (only margin / cash / payable lines), so `assets` is null, as for CTBC.
  */
-import type { EtfHoldingsDay, EtfHoldingsFuture, EtfHoldingsStock } from './etfHoldings.ts'
+import type { EtfHoldingsFuture, EtfHoldingsStock } from './etfHoldings.ts'
+import type { ParsedHoldings } from './etfHoldingsSync.ts'
 
 export const CAPITAL_API = 'https://www.capitalfund.com.tw/CFWeb/api/'
 
@@ -37,30 +38,47 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 /** 'TX202610' → 'TX'; '台指期202610' → '台指期'. */
 const stripMonth = (s: string, month: string): string => (month && s.endsWith(month) ? s.slice(0, -month.length) : s).trim()
 
-/** The fund's name and day from `etf/buyback` `data`, or null when it is not that shape. */
-export function parseCapitalHoldings(data: unknown): { fundName: string; day: EtfHoldingsDay } | null {
+/** A list field: missing or null reads as empty; any other non-array is a malformed response. */
+function listOf(v: unknown): unknown[] | null {
+  if (v === undefined || v === null) return []
+  return Array.isArray(v) ? v : null
+}
+
+/** A Taiwan stock code: 4–6 digits, optionally one trailing letter (00919's holdings, 2881 …). */
+const TW_CODE = /^\d{4,6}[A-Z]?$/
+
+/**
+ * The fund's name and day from `etf/buyback` `data`; `{ unsupported }` for a well-formed fund this
+ * parser has no screen for (bond rows, a non-TWD fund, foreign stock codes); null when malformed.
+ */
+export function parseCapitalHoldings(data: unknown): ParsedHoldings | null {
   const d = obj(data)
   const pcf = obj(d?.pcf)
-  if (!pcf || !Array.isArray(d?.stocks) || !Array.isArray(d?.futures)) return null
-  // Bond rows are a holding type this parser has not seen; refuse rather than drop them silently.
-  if (Array.isArray(d.bonds) && d.bonds.length > 0) return null
+  const stockRows = listOf(d?.stocks)
+  const futureRows = listOf(d?.futures)
+  const bondRows = listOf(d?.bonds)
+  if (!pcf || !stockRows || !futureRows || !bondRows) return null
+  // Bonds and foreign funds: not parsed yet — skipped quietly, never dropped silently into a wrong day.
+  if (bondRows.length > 0) return { unsupported: 'bonds' }
+  if (typeof pcf.dollar === 'string' && pcf.dollar !== 'TWD') return { unsupported: 'currency' }
 
   const date = typeof pcf.date2 === 'string' ? pcf.date2 : ''
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
   if (![pcf.nav, pcf.totUnit, pcf.pUnit].every(isNum)) return null
 
   const stocks: EtfHoldingsStock[] = []
-  for (const s of d.stocks) {
+  for (const s of stockRows) {
     const o = obj(s)
     if (!o || typeof o.stocNo !== 'string' || typeof o.stocName !== 'string' || !isNum(o.weight) || !isNum(o.share)) {
       return null
     }
+    if (!TW_CODE.test(o.stocNo.trim())) return { unsupported: 'foreign-stock' }
     stocks.push({ code: o.stocNo.trim(), name: o.stocName.trim(), shares: o.share, weight: o.weight, market: 'TW' })
   }
   stocks.sort((a, b) => b.weight - a.weight)
 
   const futures: EtfHoldingsFuture[] = []
-  for (const f of d.futures) {
+  for (const f of futureRows) {
     const o = obj(f)
     if (!o || !isNum(o.weight) || !isNum(o.lot)) return null
     const month = typeof o.txDate === 'string' ? o.txDate.trim() : ''

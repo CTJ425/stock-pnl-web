@@ -4,12 +4,18 @@ import { DEFAULT_HOLDINGS_RULES, validateHoldingsDay } from './etfHoldings.ts'
 import { CAPITAL_00685L_20261013, CAPITAL_00919_20261013, CAPITAL_LIST_20261014 } from './etfHoldingsCapital.fixture.ts'
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
+/** The parsed day; fails the test when the parser answered null or `{ unsupported }`. */
+function parsed(raw: unknown) {
+  const p = parseCapitalHoldings(raw)
+  if (!p || 'unsupported' in p) throw new Error(`not a day: ${JSON.stringify(p)}`)
+  return p
+}
 
 describe('parseCapitalHoldings', () => {
   // Expected values: Capital's own 00919 / 00685L 「投資組合」 data for trade date 2026-10-13, read
   // 2026-10-14 (docs/agent/specs/200-etf-holdings.md § Release 2).
   it('reads 00919 as published, trade date from date2 (date1 is the announcement date)', () => {
-    const p = parseCapitalHoldings(clone(CAPITAL_00919_20261013))!
+    const p = parsed(clone(CAPITAL_00919_20261013))
     expect(p.fundName).toBe('群益台灣精選高息ETF基金')
     const d = p.day
     expect(d.tradeDate).toBe('2026-10-13')
@@ -25,7 +31,7 @@ describe('parseCapitalHoldings', () => {
   })
 
   it('reads 00685L as a futures-led day: no stocks, 台指期 at 200.94 %', () => {
-    const d = parseCapitalHoldings(clone(CAPITAL_00685L_20261013))!.day
+    const d = parsed(clone(CAPITAL_00685L_20261013)).day
     expect(d.stocks).toEqual([])
     expect(d.futures).toEqual([{ code: 'TX', name: '台指期', contracts: 15_866, weight: 200.9432, month: '202610' }])
     expect(d.navPerUnit).toBe(12.93)
@@ -37,9 +43,29 @@ describe('parseCapitalHoldings', () => {
     ['no pcf', { stocks: [], futures: [] }],
     ['a bad date2', (() => { const r = clone(CAPITAL_00919_20261013); r.pcf.date2 = '2026/10/13'; return r })()],
     ['a stock without weight', (() => { const r = clone(CAPITAL_00919_20261013) as { stocks: Array<Record<string, unknown>> }; delete r.stocks[3].weight; return r })()],
-    ['bond rows it does not parse yet', { ...clone(CAPITAL_00919_20261013), bonds: [{ x: 1 }] }],
+    ['stocks that are not a list', { ...clone(CAPITAL_00919_20261013), stocks: 'x' }],
   ])('returns null for %s', (_l, raw) => {
     expect(parseCapitalHoldings(raw)).toBeNull()
+  })
+})
+
+describe('parseCapitalHoldings: funds it has no screen for (review RISK 4–6)', () => {
+  it('skips bond, foreign-currency and foreign-stock funds quietly instead of failing them', () => {
+    expect(parseCapitalHoldings({ ...clone(CAPITAL_00919_20261013), bonds: [{ x: 1 }] })).toEqual({ unsupported: 'bonds' })
+    const usd = clone(CAPITAL_00919_20261013)
+    usd.pcf.dollar = 'USD'
+    expect(parseCapitalHoldings(usd)).toEqual({ unsupported: 'currency' })
+    const us = clone(CAPITAL_00919_20261013)
+    us.stocks[0].stocNo = 'AAPL US'
+    expect(parseCapitalHoldings(us)).toEqual({ unsupported: 'foreign-stock' })
+  })
+
+  it('reads a missing or null futures list as empty', () => {
+    const r = clone(CAPITAL_00919_20261013) as Record<string, unknown>
+    r.futures = null
+    expect(parsed(r).day.futures).toEqual([])
+    delete r.futures
+    expect(parsed(r).day.futures).toEqual([])
   })
 })
 

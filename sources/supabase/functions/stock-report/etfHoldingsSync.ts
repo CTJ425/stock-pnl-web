@@ -42,8 +42,14 @@ export interface HoldingsSource {
   fetch: (etf: string, todayYmd: string) => Promise<unknown | null>
   /** Longest the next `fetch` can take, so the round never starts one it cannot finish. */
   worstCaseMs: () => number
-  parse: (raw: unknown) => { fundName: string; day: EtfHoldingsDay } | null
+  parse: (raw: unknown) => ParsedHoldings | null
 }
+
+/**
+ * A parsed day, or a well-formed response holding something no screen exists for yet (bonds, a
+ * foreign-currency fund) — skipped quietly, unlike a malformed response (null → parse-failed).
+ */
+export type ParsedHoldings = { fundName: string; day: EtfHoldingsDay } | { unsupported: string }
 
 /**
  * Per-call budgets the index.ts fetchers pass to `fetchWithRetry`: 3 s an attempt inside 7 s, so a
@@ -112,6 +118,7 @@ export type EtfHoldingsReason =
   | 'invalid'
   | 'stale'
   | 'no-stocks'
+  | 'unsupported-holdings'
   | 'upload-failed'
   | 'error'
 
@@ -167,6 +174,9 @@ export async function syncEtfHoldings(
     if (raw === null) return out({ synced: false, tradeDate: newest?.tradeDate ?? null, reason: 'fetch-failed' })
     const parsed = source.parse(raw)
     if (!parsed) return out({ synced: false, tradeDate: newest?.tradeDate ?? null, reason: 'parse-failed' })
+    if ('unsupported' in parsed) {
+      return out({ synced: false, tradeDate: newest?.tradeDate ?? null, reason: 'unsupported-holdings', rule: parsed.unsupported })
+    }
     const { day, fundName } = parsed
     // A fund with neither stocks nor futures (a bond fund) has no screen yet (spec § Expansion 7):
     // skipped — not a failure that would turn every run red. Futures-led funds are written.

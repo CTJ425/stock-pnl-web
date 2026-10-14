@@ -273,6 +273,22 @@ allowlist — now `ticker` / `code` / `hint` / `ymd`.
 DEV (branch deploy `stock-report` v23 `36539ca3b4bd…`): 00919 file deleted then recreated by the sync
 (40 holdings), 00685L written, 0050 / 0056 / 009828 unchanged, 3.4 s.
 
+### Release 2 review (session 2 via herdr, 2026-10-14 11:29:36 Asia/Taipei)
+
+Review-only agent `pr-reviewer` on PR #2: 1 BLOCKER, 6 RISK, 4 NIT; all checked, none false.
+- **BLOCKER fixed**: "no stocks + some futures" was taken as futures-led, so a truncated stock-fund
+  response (00919 with only its 0.42 % futures line) would be written and could replace a complete
+  day. Now `_shared/etfShape.ts` `isFuturesLed`: |futures| ≥ 90 % and > stocks, shared by the Edge
+  validation and the tab; anything else with no stocks fails `stock-count` and is not written.
+- RISK fixed: NAV tolerance `max(0.05 %, 0.006 / navPerUnit)` (2-decimal rounding of low-priced funds);
+  00631L-style 1 stock + futures uses the exposure view (same predicate) with a stock-position
+  disclosure; inverse lines get `--chart-c3` and a 「反向」 tag; copy no longer calls the excess "倍數",
+  a sum is shown only for several lines and labelled 本站相加; Capital non-TWD / foreign codes / bond
+  rows → `unsupported-holdings` (quiet skip, not a failure); null / missing lists read as empty.
+- NIT fixed: futures React keys carry the index. Not changed: the 3 s attempt timeout also covers
+  reading the body (responses are a few KB); month format other than `YYYYMM` only affects the code
+  label; Storage read/write time is still outside the 25 s budget (as in release 1).
+
 ## Tests
 
 Edge: parser against the 10/12 fixture; each validation rule fails once, the fixture passes;

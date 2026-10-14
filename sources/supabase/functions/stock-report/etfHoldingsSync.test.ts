@@ -249,9 +249,19 @@ describe('syncEtfUniverse', () => {
 })
 
 describe('funds that hold no stocks', () => {
+  it('refuses a stock fund whose response lost its stocks, and keeps the stored day (review BLOCKER)', async () => {
+    const cut = clone(YUANTA_0050_20261012)
+    cut.FundWeights.StockWeights = []
+    const h = harness({ stored: fileWith(day('2026-10-08')), response: cut, now: EVENING })
+    const r = await syncEtfHoldings('0056', h.source, DEFAULT_HOLDINGS_RULES, h.deps)
+    expect(r).toMatchObject({ synced: false, reason: 'invalid', rule: 'stock-count' })
+    expect(h.uploads).toEqual([])
+  })
+
   it('writes a futures-led fund (leveraged) instead of skipping it', async () => {
     const lev = clone(YUANTA_0050_20261012)
     lev.FundWeights.StockWeights = []
+    lev.FundWeights.FutureWeights = [{ code: 'TX', ym: '202610', name: '臺股期貨', weights: 150.2, qty: 900 }]
     const h = harness({ response: lev, now: EVENING })
     const r = await syncEtfHoldings('00631L', h.source, DEFAULT_HOLDINGS_RULES, h.deps)
     expect(r.synced).toBe(true)

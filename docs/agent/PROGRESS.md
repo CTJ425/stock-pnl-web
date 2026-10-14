@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: **Task 200 expansion release 2** — 群益 00919 / 00685L and the futures-exposure view; branch `feature/etf-holdings-r2` (0.10.40-dev.3).
-- Status: ✅ `main` = 0.10.39 (PROD); `dev` = 0.10.40-dev.2 (release 1); DEV Edge runs release 2 (`36539ca3b4bd…`); PR pending review.
-- Timestamp: 2026-10-14 11:18:46 Asia/Taipei
+- Action: **Task 200 expansion release 2** — 群益 00919 / 00685L and the futures-exposure view; merged to `dev` as 0.10.40-dev.4.
+- Status: ✅ `main` = 0.10.39 (PROD); `dev` = 0.10.40-dev.4 (releases 1 + 2, reviewed); DEV Edge `83c63180826c…`.
+- Timestamp: 2026-10-14 11:29:36 Asia/Taipei
 
 ---
 
@@ -13,6 +13,7 @@
 - **Done**: Capital source + session, futures-led validation / sync / 期貨曝險 view, per-call 3 s / 7 s, log detail on allowlisted keys.
 - **Verified**: `npm test` 3,218 / 7 skipped; build, `typecheck:edge`, oxlint, impeccable detect. DEV: 00919 recreated, 00685L written, others unchanged. Preview (temporary, deleted) 00685L desktop light + 390 px dark, 00919 desktop: no errors / overflow.
 - **Caught on DEV**: list parser read the wrong level (test fake was a hand-built array); web dropped no-stock days. Both fixed with tests on the real response shapes. Process slip: a `git stash` used for a red/green check also stashed the user's own `CLAUDE.md` edit — `stash pop` restored it, verified (`git diff --stat`, `docs/agents/` intact, empty stash list); not to be repeated.
+- **Review by session 2** (PR #2): 1 BLOCKER (truncated stock response written as futures-led) + 6 RISK + 4 NIT, all verified; BLOCKER, 6 RISK and 1 NIT fixed as 0.10.40-dev.4 (spec § Release 2 review). Gates: `npm test` 3,226 / 7 skipped, build, `typecheck:edge`, oxlint, detect. DEV `stock-report` v24 `83c63180826c…`: 00919 and 00685L deleted and recreated by the sync, others unchanged.
 - **Not verified**: Capital and CTBC same-day publish times; the tab logged in.
 
 ## 📅 Log: 2026-10-14 10:11:38 Asia/Taipei (Task 200 expansion release 1, 0.10.40-dev.1)

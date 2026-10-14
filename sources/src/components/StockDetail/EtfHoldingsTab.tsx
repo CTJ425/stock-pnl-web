@@ -15,6 +15,7 @@ import {
   type EtfHoldingsData,
 } from '../../services/etfHoldingsProxy'
 import { ChartLegend } from '../Charts/ChartLegend'
+import { isFuturesLed } from '../../../supabase/functions/_shared/etfShape.ts'
 import {
   HOLDINGS_TOP_N,
   assetSegments,
@@ -150,10 +151,13 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
   const markets = marketSegments(day.stocks)
   const assetSegs = assetSegments(day.assets)
   const issuerLabel = ISSUER_LABEL[data.issuer] ?? issuer?.label ?? '投信'
-  // Leveraged / inverse funds hold futures, not stocks (00685L: 台指期 at ~200 %): the stock charts
-  // have nothing to show, so the futures exposure is the main chart instead (spec § Expansion 7).
-  const futuresLed = day.stocks.length === 0 && day.futures.length > 0
+  // Leveraged / inverse funds are carried by futures (00685L: 台指期 at ~200 %; 00631L: one stock plus
+  // futures): the futures exposure is the main chart (spec § Expansion 7). Same rule as the Edge
+  // validation (_shared/etfShape), so the screen matches what was allowed to be written.
+  const futuresLed = isFuturesLed(day.stocks.map((s) => s.weight), day.futures.map((f) => f.weight))
+  // Only shown when there is more than one futures line; a single line shows its published weight.
   const futuresSum = Math.round(day.futures.reduce((a, f) => a + f.weight, 0) * 100) / 100
+  const anyInverse = day.futures.some((f) => f.weight < 0)
   // One scale for every bar, never below 100 % so the 100 % mark is always on the track.
   const exposureScale = Math.max(100, ...day.futures.map((f) => Math.abs(f.weight)))
 
@@ -207,18 +211,20 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
             <span className="source-tag">占基金的權重，可以超過 100%</span>
           </div>
           <p className="hint etfh-exposure-note">
-            這檔以期貨為主（槓桿或反向型），沒有持有個股。期貨權重合計 {formatWeight(futuresSum)}
-            {futuresSum > 100 ? '，超過 100% 的部分就是放大的倍數。' : '。'}
+            這檔以期貨為主（槓桿或反向型）{day.stocks.length === 0 ? '，沒有持有個股' : ''}。
+            {day.futures.length > 1 ? `期貨權重合計 ${formatWeight(futuresSum)}（本站相加）。` : ''}
+            權重超過 100% 代表期貨部位比基金規模還大（槓桿）{anyInverse ? '；負的權重代表反向，看跌時獲利' : ''}。
           </p>
           <ol className="etfh-bars" aria-label="期貨曝險權重">
-            {day.futures.map((f) => (
-              <li key={`${f.code}-${f.month}`} className="etfh-bar-row">
+            {day.futures.map((f, i) => (
+              <li key={`${f.code}-${f.month}-${i}`} className="etfh-bar-row">
                 <span className="etfh-bar-name">
                   {f.name ?? f.code} <span className="hint">{formatContractMonth(f.month)}</span>
+                  {f.weight < 0 && <span className="tag etfh-inverse">反向</span>}
                 </span>
                 <span className="etfh-bar-track etfh-bar-track-scaled" aria-hidden="true">
                   <span
-                    className="etfh-bar-fill"
+                    className={f.weight < 0 ? 'etfh-bar-fill etfh-bar-fill-inverse' : 'etfh-bar-fill'}
                     style={{ width: `${(Math.abs(f.weight) / exposureScale) * 100}%` }}
                   />
                   <span className="etfh-bar-mark" style={{ left: `${(100 / exposureScale) * 100}%` }} title="100%" />
@@ -228,6 +234,33 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
             ))}
           </ol>
           <p className="hint etfh-exposure-scale">直線標示 100%：長條超過直線的部分，就是超過基金規模的曝險。</p>
+          {day.stocks.length > 0 && (
+            <details className="chart-more">
+              <summary>看股票部位（{day.stocks.length} 檔）</summary>
+              <div className="table-scroll">
+                <table className="data-table etfh-stocks" aria-label="股票部位">
+                  <thead>
+                    <tr>
+                      <th scope="col">股票</th>
+                      <th scope="col" className="num etfh-shares">股數</th>
+                      <th scope="col" className="num">權重</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {day.stocks.map((s) => (
+                      <tr key={`${s.market}:${s.code}`}>
+                        <td>
+                          {s.name} <span className="hint">{s.code}</span>
+                        </td>
+                        <td className="num etfh-shares">{formatInt(s.shares)}</td>
+                        <td className="num">{formatWeight(s.weight)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
         </section>
       )}
 
@@ -394,8 +427,8 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
                 </tr>
               </thead>
               <tbody>
-                {day.futures.map((f) => (
-                  <tr key={`${f.code}-${f.month}`}>
+                {day.futures.map((f, i) => (
+                  <tr key={`${f.code}-${f.month}-${i}`}>
                     <td>
                       {f.name ?? f.code} <span className="hint">{f.code}</span>
                     </td>
@@ -412,7 +445,8 @@ export function EtfHoldingsTab({ etf, name, reloadKey = 0 }: EtfHoldingsTabProps
 
       {futuresLed ? (
         <p className="hint etfh-foot">
-          權重是{issuerLabel}公布的各部位占基金的比率；期貨權重合計可以超過 100%。本站未重新計算任何權重。
+          權重是{issuerLabel}公布的各部位占基金的比率，期貨權重可以超過 100%。
+          {day.futures.length > 1 ? '「合計」是本站把公布的權重相加；' : ''}本站未重新計算任何單一權重。
         </p>
       ) : (
       <p className="hint etfh-foot">

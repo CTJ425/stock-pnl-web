@@ -1762,3 +1762,12 @@ details.chart-more[open] > summary {
 .etfh-exposure-scale {
   margin-top: var(--sp-03);
 }
+
+/* An inverse futures line (negative weight): another identity hue, never the market red / green. */
+.etfh-bar-fill-inverse {
+  background: var(--chart-c3);
+}
+
+.etfh-inverse {
+  margin-left: var(--sp-02);
+}

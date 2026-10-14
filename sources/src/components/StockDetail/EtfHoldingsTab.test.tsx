@@ -158,12 +158,42 @@ describe('EtfHoldingsTab', () => {
     const { container } = render(<EtfHoldingsTab etf="00685L" name="群益臺灣加權正2" />)
     const bars = await screen.findByRole('list', { name: '期貨曝險權重' })
     expect(within(bars).getByText('200.94%')).toBeTruthy()
-    expect(container.textContent).toContain('期貨權重合計 200.94%，超過 100% 的部分就是放大的倍數。')
+    expect(container.textContent).toContain('權重超過 100% 代表期貨部位比基金規模還大（槓桿）')
+    // One futures line: its published weight is shown, nothing is summed.
+    expect(container.textContent).not.toContain('合計')
     // The bar fills the track (scale = the largest weight); the 100 % mark sits just under half way.
     expect((container.querySelector('.etfh-bar-fill') as HTMLElement).style.width).toBe('100%')
     expect((container.querySelector('.etfh-bar-mark') as HTMLElement).style.left).toMatch(/^49\.7/)
     expect(screen.queryByRole('img', { name: /持股集中度/ })).toBeNull()
     expect(screen.queryByRole('list', { name: /前 \d+ 大持股權重/ })).toBeNull()
     expect(screen.getAllByText(/群益投信公布/).length).toBeGreaterThan(0)
+  })
+
+  it('marks an inverse futures line and keeps a 1-stock + futures fund (00631L) on the exposure view', async () => {
+    const mixed = day({
+      stocks: [{ code: '2330', name: '台積電', shares: 1000, weight: 3.2, market: 'TW' }],
+      futures: [
+        { code: 'TX', name: '臺股期貨', contracts: 900, weight: 150.4, month: '202610' },
+        { code: 'TX', name: '臺股期貨', contracts: 10, weight: -1.1, month: '202611' },
+      ],
+      assets: null,
+      publishedAt: null,
+    })
+    fetchEtfHoldings.mockResolvedValue({ kind: 'ok', data: { ...ok(mixed).data, etf: '00631L' } })
+    const { container } = render(<EtfHoldingsTab etf="00631L" name="元大台灣50正2" />)
+    await screen.findByRole('list', { name: '期貨曝險權重' })
+    expect(screen.queryByRole('img', { name: /持股集中度/ })).toBeNull()
+    expect(container.textContent).toContain('期貨權重合計 149.30%（本站相加）')
+    expect(container.textContent).toContain('負的權重代表反向')
+    expect(screen.getByText('反向')).toBeTruthy()
+    expect(container.querySelectorAll('.etfh-bar-fill-inverse')).toHaveLength(1)
+    expect(screen.getByText('看股票部位（1 檔）')).toBeTruthy()
+  })
+
+  it('keeps a stock fund with a small futures hedge on the stock charts', async () => {
+    fetchEtfHoldings.mockResolvedValue(ok(day()))
+    render(<EtfHoldingsTab etf="0050" name="元大台灣50" />)
+    expect(await screen.findByRole('img', { name: /持股集中度/ })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: '期貨曝險權重' })).toBeNull()
   })
 })

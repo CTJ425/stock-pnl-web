@@ -14,6 +14,8 @@
  * arithmetic below only checks that a response is whole before it may replace a good one.
  */
 
+import { isFuturesLed } from '../_shared/etfShape.ts'
+
 export const ETF_HOLDINGS_SCHEMA = 1
 /** Trading days kept per ETF; the screen uses the newest only, the rest is for a later day-over-day view. */
 export const ETF_HOLDINGS_MAX_DAYS = 20
@@ -161,8 +163,12 @@ export const HOLDINGS_RULES_BY_ETF: Record<string, HoldingsRules> = { '0050': ET
 
 export const rulesFor = (etf: string): HoldingsRules => HOLDINGS_RULES_BY_ETF[etf] ?? DEFAULT_HOLDINGS_RULES
 
-/** NAV per unit is rounded to 2 decimals; on 2026-10-12 nav × units missed totalav by 0.0027 %. */
-const NAV_IDENTITY_TOLERANCE = 0.0005
+/**
+ * NAV per unit is published to 2 decimals, so nav × units can miss the total by up to 0.005 / nav —
+ * 0.003 % for 0050 at ~200 (2026-10-12: 0.0027 %), but 0.04 % for 00685L at 12.93 and more below 10.
+ * The tolerance is that rounding bound with a margin, never tighter than 0.05 %.
+ */
+const navIdentityTolerance = (navPerUnit: number): number => Math.max(0.0005, 0.006 / navPerUnit)
 /** Percentage points; on 2026-10-12 the weight sum missed stock / fundsize by 0.02 pp. */
 const STOCK_WEIGHT_TOLERANCE_PP = 0.5
 
@@ -180,15 +186,22 @@ export function validateHoldingsDay(day: EtfHoldingsDay, rules: HoldingsRules, t
   if (!(day.navTotal > 0 && day.navPerUnit > 0 && day.unitsOutstanding > 0 && day.fundSize > 0)) {
     return { ok: false, rule: 'nav-positive' }
   }
-  if (Math.abs((day.navPerUnit * day.unitsOutstanding) / day.navTotal - 1) > NAV_IDENTITY_TOLERANCE) {
+  if (Math.abs((day.navPerUnit * day.unitsOutstanding) / day.navTotal - 1) > navIdentityTolerance(day.navPerUnit)) {
     return { ok: false, rule: 'nav-identity' }
   }
 
-  // A futures-led fund (leveraged / inverse: 00685L holds 台指期 at ~200 % and no stocks) has no stock
-  // list to check; its futures rows must be whole instead. Weights can exceed 100 % by design.
-  if (day.stocks.length === 0 && day.futures.length > 0 && rules.mustInclude.length === 0) {
+  // A futures-led fund (leveraged / inverse: 00685L holds 台指期 at ~200 % and no stocks) is checked on
+  // its futures, which may exceed 100 % by design. It must *prove* it is futures-led (_shared/etfShape):
+  // a stock fund whose response lost its stocks falls through to `stock-count` and is refused.
+  if (rules.mustInclude.length === 0 && isFuturesLed(day.stocks.map((s) => s.weight), day.futures.map((f) => f.weight))) {
     if (!day.futures.every((f) => f.code !== '' && Number.isFinite(f.contracts) && Number.isFinite(f.weight) && f.weight !== 0)) {
       return { ok: false, rule: 'futures-row' }
+    }
+    if (new Set(day.stocks.map((s) => `${s.market}:${s.code}`)).size !== day.stocks.length) {
+      return { ok: false, rule: 'stock-duplicate' }
+    }
+    if (!day.stocks.every((s) => s.code !== '' && Number.isFinite(s.shares) && s.shares > 0 && s.weight > 0)) {
+      return { ok: false, rule: 'stock-row' }
     }
     return { ok: true }
   }
