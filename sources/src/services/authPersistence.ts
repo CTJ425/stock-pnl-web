@@ -65,6 +65,23 @@ export function clearPersistence() {
   writeMeta(null)
 }
 
+/**
+ * A sign-in that left for Google and came back with an error leaves its choice behind with no
+ * session to go with it, and the next session (say, from an email link) would inherit it. Drop
+ * the choice only when no session is stored, so a signed-in tab keeps its own.
+ */
+export function clearChoiceWithoutSession() {
+  const hasSession = (storage: () => Storage) =>
+    safe(() => {
+      const s = storage()
+      for (let i = 0; i < s.length; i++) {
+        if (/^sb-.+-auth-token/.test(s.key(i) ?? '')) return true
+      }
+      return false
+    }, true)
+  if (!hasSession(() => localStorage) && !hasSession(() => sessionStorage)) clearPersistence()
+}
+
 /** True once a remembered login has outlived its 7 days. */
 export function isRememberExpired(now: number = Date.now()): boolean {
   const meta = readMeta()

@@ -5,6 +5,7 @@ import {
   PERSIST_META_KEY,
   REMEMBER_DAYS,
   authStorage,
+  clearChoiceWithoutSession,
   clearPersistence,
   expireRemembered,
   isRememberExpired,
@@ -160,5 +161,24 @@ describe('authPersistence', () => {
       isRememberExpired()
     }).not.toThrow()
     vi.restoreAllMocks()
+  })
+
+  it('P12: a choice left by a failed Google round trip is dropped when no session exists', () => {
+    setRemember(false)
+    clearChoiceWithoutSession()
+    expect(localStorage.getItem(PERSIST_META_KEY)).toBeNull()
+  })
+
+  it('P13: a signed-in tab keeps its choice, wherever its session is stored', () => {
+    setRemember(false)
+    sessionStorage.setItem(KEY, 'S')
+    clearChoiceWithoutSession()
+    expect(localStorage.getItem(PERSIST_META_KEY)).toBe('session')
+
+    sessionStorage.clear()
+    setRemember(true)
+    localStorage.setItem(KEY, 'S')
+    clearChoiceWithoutSession()
+    expect(localStorage.getItem(PERSIST_META_KEY)).toBe(String(T0 + REMEMBER_DAYS * DAY))
   })
 })

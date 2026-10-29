@@ -1,5 +1,14 @@
 # Progress Log Archive (PROGRESS_ARCHIVE.md)
 
+## 📅 Log: 2026-10-14 11:18:46 Asia/Taipei (Task 200 expansion release 2, 0.10.40-dev.3)
+- **Ask**: 「幫我做下一家投信，且全部完成再和我回報，如果需要異動到supabase 我都授權給你，但是都先在dev進行驗證」.
+- **Phase 0 (群益)**: passed — `CFWeb/api/etf/buyback` is the whole fund; Edge reachable. Details: spec § Release 2.
+- **Done**: Capital source + session, futures-led validation / sync / 期貨曝險 view, per-call 3 s / 7 s, log detail on allowlisted keys.
+- **Verified**: `npm test` 3,218 / 7 skipped; build, `typecheck:edge`, oxlint, impeccable detect. DEV: 00919 recreated, 00685L written, others unchanged. Preview (temporary, deleted) 00685L desktop light + 390 px dark, 00919 desktop: no errors / overflow.
+- **Caught on DEV**: list parser read the wrong level (test fake was a hand-built array); web dropped no-stock days. Both fixed with tests on the real response shapes. Process slip: a `git stash` used for a red/green check also stashed the user's own `CLAUDE.md` edit — `stash pop` restored it, verified (`git diff --stat`, `docs/agents/` intact, empty stash list); not to be repeated.
+- **Review by session 2** (PR #2): 1 BLOCKER (truncated stock response written as futures-led) + 6 RISK + 4 NIT, all verified; BLOCKER, 6 RISK and 1 NIT fixed as 0.10.40-dev.4 (spec § Release 2 review). Gates: `npm test` 3,226 / 7 skipped, build, `typecheck:edge`, oxlint, detect. DEV `stock-report` v24 `83c63180826c…`: 00919 and 00685L deleted and recreated by the sync, others unchanged.
+- **Not verified**: Capital and CTBC same-day publish times; the tab logged in.
+
 ## 📅 Log: 2026-10-14 10:11:38 Asia/Taipei (Task 200 expansion release 1, 0.10.40-dev.1)
 - **Ask**: /grill-me on other ETFs (decisions in spec § Expansion), then 「開始中信 009828 的探勘…完成之後，把相關的PR使用 /herdr 交給 session 2 並且請進行code review，並給你建議，但是要禁止他直接改，接著交由你繼續完成相關任務」.
 - **Phase 0 (CTBC)**: passed — SPA API found in the bundle; raw curl failed until the token was URL-encoded; Edge 3/3 via a throwaway DEV function (deleted). Details: spec § Release 1.

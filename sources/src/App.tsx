@@ -6,7 +6,7 @@ import { AppShell } from './components/AppShell'
 import { initialAuthNotice } from './services/supabase'
 
 /**
- * Signup confirmation redirects the browser back with the result in the URL hash, which the
+ * Signup confirmation and Google sign-in redirect the browser back with the result in the URL, which the
  * Supabase client consumes before this component ever renders (see services/supabase.ts).
  * Shown above both branches below: an expired link leaves the user logged out.
  */
@@ -17,7 +17,7 @@ function AuthRedirectBanner() {
   const { className, text } =
     initialAuthNotice.kind === 'signup-confirmed'
       ? { className: 'notice notice-ok', text: '信箱驗證成功，歡迎使用。' }
-      : { className: 'notice notice-error', text: `驗證連結無效或已過期：${initialAuthNotice.message}` }
+      : { className: 'notice notice-error', text: `登入或信箱驗證沒有完成：${initialAuthNotice.message}` }
 
   return (
     <div className={className}>
@@ -42,20 +42,19 @@ function AppInner() {
     )
   }
 
-  if (!user) {
-    return (
-      <>
-        <AuthRedirectBanner />
-        <AuthPage />
-      </>
-    )
-  }
-
+  // One banner above both branches: rendered inside each, signing in remounted it and brought
+  // back a notice the user had already closed.
   return (
-    <WorkspaceProvider>
+    <>
       <AuthRedirectBanner />
-      <AppShell />
-    </WorkspaceProvider>
+      {user ? (
+        <WorkspaceProvider>
+          <AppShell />
+        </WorkspaceProvider>
+      ) : (
+        <AuthPage />
+      )}
+    </>
   )
 }
 

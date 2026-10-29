@@ -47,6 +47,53 @@
   text-decoration: underline;
 }
 
+/* "或" rule between the email form and the Google button. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-04);
+  margin: var(--sp-05) 0;
+  color: var(--ink-secondary);
+  font-size: var(--type-body-01);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--cds-border-subtle);
+}
+
+/* Google's sign-in button: its own neutral fill, outline and four-color mark, per Google's
+ * branding guidelines, so it does not take this site's accent. Dark is the default theme here. */
+.btn.btn-google {
+  width: 100%;
+  border-color: #8e918f;
+  background: #131314;
+  color: #e3e3e3;
+  font-weight: 500;
+}
+
+.btn.btn-google:hover {
+  border-color: #8e918f;
+  background: #1e1f20;
+}
+
+:root[data-theme='light'] .btn.btn-google {
+  border-color: #747775;
+  background: #ffffff;
+  color: #1f1f1f;
+}
+
+:root[data-theme='light'] .btn.btn-google:hover {
+  background: #f2f2f2;
+}
+
+.btn.btn-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Password input with the show/hide toggle sitting inside its right edge. */
 .password-input {
   position: relative;

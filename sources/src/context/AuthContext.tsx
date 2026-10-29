@@ -1,6 +1,6 @@
 /**
  * Login status management:
- * - Supabase mode: email/password registration and login, maintaining session
+ * - Supabase mode: email/password registration and login, or Google sign-in; maintaining session
  * - Local mode (no Supabase is set): no need to log in, enter directly as the local user
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
@@ -19,6 +19,8 @@ const EXPIRY_CHECK_MS = 60_000
 export interface AuthUser {
   id: string
   email: string
+  /** False for an account that only signs in with Google: it has no password to change. */
+  hasPassword: boolean
 }
 
 export interface AuthState {
@@ -33,6 +35,11 @@ export interface AuthState {
    * browser; false keeps it only until the browser is closed.
    */
   signIn: (email: string, password: string, remember?: boolean) => Promise<string | null>
+  /**
+   * Leaves the page for Google's sign-in and comes back with the session in the URL. Returns an
+   * error message only when the redirect could not start; `remember` works as in signIn.
+   */
+  signInWithGoogle: (remember?: boolean) => Promise<string | null>
   /** Returns an error message; null on success. If mailbox verification is enabled for the project, a prompt message string (not an error) will be returned.*/
   signUp: (email: string, password: string) => Promise<string | null>
   /** Send password reset email; return error message, success is null*/
@@ -57,7 +64,19 @@ export interface AuthState {
   authVersion: number
 }
 
-const LOCAL_USER: AuthUser = { id: 'local-user', email: '本機模式（資料存於此瀏覽器）' }
+const LOCAL_USER: AuthUser = { id: 'local-user', email: '本機模式（資料存於此瀏覽器）', hasPassword: false }
+
+type SessionUser = { id: string; email?: string | null; app_metadata?: { providers?: unknown } }
+
+/**
+ * `providers` lists every identity linked to the account; 'email' means it has a password. A
+ * Google sign-in whose verified address matches an existing account is linked to it, so that
+ * account keeps 'email'. Without the list (older sessions), assume a password as before.
+ */
+function hasPasswordIdentity(u: SessionUser): boolean {
+  const providers = u.app_metadata?.providers
+  return !Array.isArray(providers) || providers.includes('email')
+}
 
 const AuthContext = createContext<AuthState | null>(null)
 
@@ -68,11 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authVersion, setAuthVersion] = useState(0)
 
   // Use the same object when the content does not change: token refresh (such as switching back to paging) should not trigger downstream effect reloading
-  const applyUser = useCallback((u: { id: string; email?: string | null } | null | undefined) => {
+  const applyUser = useCallback((u: SessionUser | null | undefined) => {
     setUser((prev) => {
       if (!u) return null
       const email = u.email ?? ''
-      return prev && prev.id === u.id && prev.email === email ? prev : { id: u.id, email }
+      const hasPassword = hasPasswordIdentity(u)
+      return prev && prev.id === u.id && prev.email === email && prev.hasPassword === hasPassword
+        ? prev
+        : { id: u.id, email, hasPassword }
     })
   }, [])
 
@@ -136,6 +158,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return error ? error.message : null
   }, [])
 
+  const signInWithGoogle = useCallback(async (remember = true) => {
+    if (!supabase) return null
+    // Set before leaving: the session is written to this storage when the redirect comes back.
+    setRemember(remember)
+    // Back to the current site, as with the email links; it must be in Supabase's Redirect URLs.
+    const redirectTo = window.location.origin + window.location.pathname
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    })
+    if (error) clearPersistence()
+    return error ? error.message : null
+  }, [])
+
   const signUp = useCallback(async (email: string, password: string) => {
     if (!supabase) return null
     // Send the confirmation link back to the current site. Without this option Supabase falls
@@ -163,7 +199,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updatePassword = useCallback(async (password: string) => {
     if (!supabase) return null
     const { error } = await supabase.auth.updateUser({ password })
-    if (!error) setRecovery(false)
+    if (!error) {
+      setRecovery(false)
+      // A Google-only account that sets a password through 忘記密碼 now has one, whether or not
+      // the returned `providers` lists 'email' yet.
+      setUser((prev) => (prev && !prev.hasPassword ? { ...prev, hasPassword: true } : prev))
+    }
     return error ? error.message : null
   }, [])
 
@@ -202,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       recovery,
       signIn,
+      signInWithGoogle,
       signUp,
       resetPassword,
       updatePassword,
@@ -215,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       recovery,
       signIn,
+      signInWithGoogle,
       signUp,
       resetPassword,
       updatePassword,

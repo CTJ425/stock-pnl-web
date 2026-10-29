@@ -198,18 +198,21 @@ export function UserMenu({
                   <MessageCircle size={14} />
                   <span>Discord 通知設定</span>
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="hmenu-item"
-                  onClick={() => {
-                    close()
-                    setShowChangePassword(true)
-                  }}
-                >
-                  <KeyRound size={14} />
-                  <span>變更密碼</span>
-                </button>
+                {/* A Google-only account has no current password to confirm. */}
+                {user?.hasPassword && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="hmenu-item"
+                    onClick={() => {
+                      close()
+                      setShowChangePassword(true)
+                    }}
+                  >
+                    <KeyRound size={14} />
+                    <span>變更密碼</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   role="menuitem"
