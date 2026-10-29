@@ -19,11 +19,10 @@
 ## 📋 Active Tasks
 
 ### Task 201: Google sign-in
-- **Status**: 🔄 IN PROGRESS (0.10.41-dev.1 on `dev`, DEV only)
+- **Status**: 🔄 IN PROGRESS (released 0.10.41; follow-ups below)
 - **Agent**: Claude
-- **Timestamp**: 2026-10-29 11:50:36 Asia/Taipei
-- **Done**: Google OAuth client (web app) + Supabase Google provider and Redirect URLs on DEV and PROD (user, 2026-10-29); `signInWithGoogle` + login-page button; Google-only accounts hide 變更密碼; failed-redirect URL cleanup; review by session 2 (herdr, agy) — RISK 1–3 and NIT 5 fixed.
-1. Log in with a real Google account on DEV (`dev.stock-pnl-web.pages.dev`) and confirm data / 變更密碼 visibility — ⏳ user
+- **Timestamp**: 2026-10-29 13:41:16 Asia/Taipei
+- **Done**: items 1 (user logged in with Google on DEV); released 0.10.41 (PROD Pages verified). Google OAuth client (web app) + Supabase Google provider and Redirect URLs on DEV and PROD (user, 2026-10-29); `signInWithGoogle` + login-page button; Google-only accounts hide 變更密碼; failed-redirect URL cleanup; review by session 2 (herdr, agy) — RISK 1–3 and NIT 5 fixed.
 2. PROD Redirect URLs still allow `http://localhost:5173-5175/**` and `https://*.stock-pnl-web.pages.dev/**`; with the implicit flow a PROD token can be sent there. Narrow PROD to `https://stock-pnl-web.pages.dev/**` (review RISK 4) — ⏳ user decision
 3. Unverified: whether GoTrue adds 'email' to `app_metadata.providers` after a Google-only user sets a password via 忘記密碼; the UI flips `hasPassword` locally, but after a reload it may be hidden again — ⏳
 4. Manual identity linking (`linkIdentity`) in account settings not built; needs Supabase "Manual linking" enabled — ⏳ optional
