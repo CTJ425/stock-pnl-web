@@ -496,6 +496,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   justify-content: center;
   padding: 6vh var(--sp-05) var(--sp-05);
   overflow-y: auto;
+  overscroll-behavior: contain;
   animation: fade-in var(--cds-dur-slow) var(--cds-ease-entrance);
 }
 

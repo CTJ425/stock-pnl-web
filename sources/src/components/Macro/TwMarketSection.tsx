@@ -333,7 +333,7 @@ export function TwMarketSection({
   }, [load, initialMarket])
 
   const latest = market ? market.days[market.days.length - 1] ?? null : null
-  const latestInst = market ? [...market.days].reverse().find((d) => d.institutional) ?? null : null
+  const latestInst = market ? market.days.findLast((d) => d.institutional) ?? null : null
   const recentInstDays = market
     ? (market.days ?? [])
         .filter((d) => d.institutional !== null && d.institutional !== undefined)
@@ -577,7 +577,7 @@ export function TwMarketSection({
               </tr>
             </thead>
             <tbody>
-              {[...turnoverDiffs].reverse().map((d) => (
+              {turnoverDiffs.toReversed().map((d) => (
                 <tr key={d.date}>
                   <td>{shortDate(d.date)}</td>
                   <td
@@ -800,7 +800,7 @@ export function TwMarketSection({
               </tr>
             </thead>
             <tbody>
-              {[...instDays].reverse().map((d) => (
+              {instDays.toReversed().map((d) => (
                 <tr key={d.date}>
                   <td>{shortDate(d.date)}</td>
                   {UNITS.map((u) => {

@@ -376,7 +376,7 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...instDays].reverse().map((d, dRevIdx) => {
+                  {instDays.toReversed().map((d, dRevIdx) => {
                     const originalIdx = instDays.length - 1 - dRevIdx
                     return (
                       <tr key={d.date}>
@@ -581,7 +581,7 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
                   )}
                 </thead>
                 <tbody>
-                  {[...marginDays].reverse().map((d) => {
+                  {marginDays.toReversed().map((d) => {
                     const m = d.margin
                     return (
                       <tr key={d.date}>

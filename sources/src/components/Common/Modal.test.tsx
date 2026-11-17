@@ -86,4 +86,36 @@ describe('Modal focus management', () => {
 
     expect(document.activeElement).toBe(opener)
   })
+
+  it('sets inert on #root while open and removes it on unmount', () => {
+    const root = document.createElement('div')
+    root.id = 'root'
+    document.body.appendChild(root)
+
+    const view = renderModal()
+    expect(root.hasAttribute('inert')).toBe(true)
+
+    view.unmount()
+    expect(root.hasAttribute('inert')).toBe(false)
+  })
+
+  it('ignores Escape when a nested control has already called preventDefault()', () => {
+    const onClose = vi.fn()
+    render(
+      <Modal title="測試對話框" onClose={onClose}>
+        <button
+          type="button"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') e.preventDefault()
+          }}
+        >
+          子選單觸發鈕
+        </button>
+      </Modal>,
+    )
+    const btn = screen.getByRole('button', { name: '子選單觸發鈕' })
+    btn.focus()
+    fireEvent.keyDown(btn, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

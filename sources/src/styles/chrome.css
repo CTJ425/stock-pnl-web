@@ -632,20 +632,22 @@ a.hmenu-item {
 }
 
 /* ---------- Scroll ----------*/
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--scroll-thumb);
-  border-radius: 0;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 0;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 /* ---------- Top of page single line protection ----------

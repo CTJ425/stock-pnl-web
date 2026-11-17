@@ -137,14 +137,21 @@ export function AuthPage() {
             <label htmlFor="auth-email">電子信箱</label>
             <input
               id="auth-email"
+              name="email"
               type="email"
               autoComplete="email"
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+              aria-describedby={mode === 'reset' ? 'auth-email-hint' : undefined}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
             />
             {mode === 'reset' && (
-              <div className="field-hint">輸入註冊時使用的信箱，我們會寄送重設密碼連結給你</div>
+              <div id="auth-email-hint" className="field-hint">
+                輸入註冊時使用的信箱，我們會寄送重設密碼連結給你
+              </div>
             )}
           </div>
           {mode !== 'reset' && (
@@ -162,13 +169,15 @@ export function AuthPage() {
               <label className="check-row" htmlFor="auth-remember">
                 <input
                   id="auth-remember"
+                  name="remember"
                   type="checkbox"
+                  aria-describedby="auth-remember-hint"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
                 保持登入 {REMEMBER_DAYS} 天
               </label>
-              <div className="field-hint">
+              <div id="auth-remember-hint" className="field-hint">
                 {remember
                   ? `只在這個瀏覽器有效，${REMEMBER_DAYS} 天後需重新登入`
                   : '不勾選時，關閉瀏覽器後需重新登入'}
@@ -194,21 +203,21 @@ export function AuthPage() {
           {mode === 'signin' && (
             <>
               還沒有帳號？
-              <button onClick={() => switchMode('signup')}>立即註冊</button>
+              <button type="button" onClick={() => switchMode('signup')}>立即註冊</button>
               ・
-              <button onClick={() => switchMode('reset')}>忘記密碼？</button>
+              <button type="button" onClick={() => switchMode('reset')}>忘記密碼？</button>
             </>
           )}
           {mode === 'signup' && (
             <>
               已經有帳號？
-              <button onClick={() => switchMode('signin')}>返回登入</button>
+              <button type="button" onClick={() => switchMode('signin')}>返回登入</button>
             </>
           )}
           {mode === 'reset' && (
             <>
               想起密碼了？
-              <button onClick={() => switchMode('signin')}>返回登入</button>
+              <button type="button" onClick={() => switchMode('signin')}>返回登入</button>
             </>
           )}
         </div>

@@ -40,4 +40,40 @@ describe('AppShell page identity', () => {
     expect(buttons[0].closest('.app-header')).toBeTruthy()
     expect(container.querySelector('.fab')).toBeNull()
   })
+
+  it('provides a skip link that moves focus to the page h1 without changing window.location.hash', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '#/transactions')
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    const skipLink = screen.getByRole('link', { name: '跳至主要內容' })
+    await user.click(skipLink)
+    const h1 = screen.getByRole('heading', { level: 1, name: '交易紀錄' })
+    expect(document.activeElement).toBe(h1)
+    expect(window.location.hash).toBe('#/transactions')
+  })
+
+  it('supports ArrowDown/ArrowUp/Home/End keyboard navigation in HeaderMenu', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    const wsTrigger = await screen.findByRole('button', { name: /^工作區：/ })
+    wsTrigger.focus()
+    await user.keyboard('{ArrowDown}')
+
+    const menu = await screen.findByRole('menu', { name: '工作區選單' })
+    const items = Array.from(menu.querySelectorAll<HTMLElement>('[role^="menuitem"]'))
+    expect(document.activeElement).toBe(items[0])
+
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(items[1])
+
+    await user.keyboard('{End}')
+    expect(document.activeElement).toBe(items[items.length - 1])
+
+    await user.keyboard('{Home}')
+    expect(document.activeElement).toBe(items[0])
+  })
 })

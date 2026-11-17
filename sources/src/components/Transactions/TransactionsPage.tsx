@@ -155,7 +155,7 @@ export function TransactionsPage() {
 
   const sorted = useMemo(() => {
     const sign = sort.dir === 'asc' ? 1 : -1
-    return filtered.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
+    return filtered.toSorted((a, b) => sign * compareTx(a, b, sort.key))
   }, [filtered, sort])
 
   // The number of transactions that are visible and checked
@@ -224,11 +224,7 @@ export function TransactionsPage() {
   }
 
   const handleExport = () => {
-    const csv = transactionsToCsv(
-      transactions
-        .slice()
-        .sort(compareTxOrder),
-    )
+    const csv = transactionsToCsv(transactions.toSorted(compareTxOrder))
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -299,7 +295,7 @@ export function TransactionsPage() {
             刪除選取（{visibleSelectedCount}）
           </button>
         )}
-        <div className="search-box">
+        <div className="search-box" role="search">
           <Search size={15} className="search-icon" />
           <input
             type="text"
@@ -308,6 +304,9 @@ export function TransactionsPage() {
             placeholder="搜尋代號或名稱"
             aria-label="搜尋交易"
             className="search-input"
+            spellCheck={false}
+            autoCapitalize="none"
+            autoCorrect="off"
           />
           {searchQuery && (
             <button

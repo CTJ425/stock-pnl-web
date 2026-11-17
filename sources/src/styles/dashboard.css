@@ -166,6 +166,7 @@
 }
 
 .stmt-pct {
+  display: inline-block;
   margin-left: var(--sp-03);
   font-size: var(--type-body-02);
   font-weight: 600;

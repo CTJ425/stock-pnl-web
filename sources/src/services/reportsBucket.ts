@@ -69,6 +69,6 @@ export async function downloadReportsJson<T>(path: string): Promise<T | null> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logClient('error', 'downloadReportsJson', message, { path })
-    throw new Error(`downloadReportsJson(${path}): ${message}`)
+    throw new Error(`downloadReportsJson(${path}): ${message}`, { cause: err })
   }
 }

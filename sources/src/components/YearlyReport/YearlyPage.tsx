@@ -475,7 +475,7 @@ export function YearlyPage() {
         **not** filtered, so putting the search above them would read as if it narrowed them too.
       */}
       <div className="section" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div className="search-box">
+        <div className="search-box" role="search">
           <Search size={15} className="search-icon" />
           <input
             type="text"
@@ -484,6 +484,9 @@ export function YearlyPage() {
             placeholder="搜尋代號或名稱"
             aria-label="搜尋年度收益的股票"
             className="search-input"
+            spellCheck={false}
+            autoCapitalize="none"
+            autoCorrect="off"
           />
           {query && (
             <button

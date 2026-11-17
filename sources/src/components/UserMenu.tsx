@@ -113,6 +113,16 @@ export function UserMenu({
     return () => mq.removeEventListener('change', onChange)
   }, [pref])
 
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'stock-pnl-web/theme' || e.key === null) {
+        setPref(getThemePref())
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   const cycleTheme = () => {
     const next = THEME_ORDER[(THEME_ORDER.indexOf(pref) + 1) % THEME_ORDER.length]
     setPref(next)
@@ -145,12 +155,12 @@ export function UserMenu({
             <div className="hmenu-head">
               {isLocal ? '資料儲存於此瀏覽器，未連線 Supabase' : email}
             </div>
-            <div className="hmenu-sep" />
+            <div className="hmenu-sep" role="separator" />
             <button type="button" role="menuitem" className="hmenu-item" onClick={cycleTheme}>
               <ThemeIcon size={14} />
               <span>外觀：{THEME_LABEL[pref]}</span>
             </button>
-            <div className="hmenu-sep" />
+            <div className="hmenu-sep" role="separator" />
             {/*
               Hiding the admin console is **housekeeping in the interface, not a security boundary** —— the real
               gate is `assertAdmin` in the Edge Function plus RLS on the tables (anything the frontend hides can
@@ -185,7 +195,7 @@ export function UserMenu({
             </a>
             {!isLocal && (
               <>
-                <div className="hmenu-sep" />
+                <div className="hmenu-sep" role="separator" />
                 <button
                   type="button"
                   role="menuitem"

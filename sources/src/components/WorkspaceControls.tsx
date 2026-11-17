@@ -115,7 +115,7 @@ export function WorkspaceControls() {
                 <span>{w.name}</span>
               </button>
             ))}
-            <div className="hmenu-sep" />
+            <div className="hmenu-sep" role="separator" />
             <button
               type="button"
               role="menuitem"
@@ -152,7 +152,7 @@ export function WorkspaceControls() {
               <Percent size={14} />
               <span>手續費設定</span>
             </button>
-            <div className="hmenu-sep" />
+            <div className="hmenu-sep" role="separator" />
             <button
               type="button"
               role="menuitem"

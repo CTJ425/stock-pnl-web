@@ -61,7 +61,7 @@ function dayChangePct(row: HoldingRow): number | null {
  */
 function sortRows(rows: HoldingRow[]): HoldingRow[] {
   const byNull = (v: number | null) => (v === null ? -Infinity : v)
-  return [...rows].sort((a, b) => byNull(b.mktVal) - byNull(a.mktVal))
+  return rows.toSorted((a, b) => byNull(b.mktVal) - byNull(a.mktVal))
 }
 
 /** Sell legs' realized P&L by transaction id, for the trade list under a row. */
@@ -495,7 +495,7 @@ export function HoldingsLedger({
 
   const tradesByKey = useMemo(() => {
     const map = new Map<string, Transaction[]>()
-    const sorted = [...transactions].sort((a, b) => a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at))
+    const sorted = transactions.toSorted((a, b) => a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at))
     for (const t of sorted) {
       const key = `${t.market}:${t.ticker}`
       const list = map.get(key)

@@ -28,6 +28,7 @@ export function PasswordField({
       <div className="password-input">
         <input
           id={id}
+          name={id}
           type={shown ? 'text' : 'password'}
           autoComplete={autoComplete}
           autoFocus={autoFocus}

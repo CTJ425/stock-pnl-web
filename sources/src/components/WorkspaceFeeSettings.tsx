@@ -409,7 +409,7 @@ export function WorkspaceFeeSettings({
             <div className="fee-history">
               <h3>費率變更紀錄</h3>
               <ul>
-                {[...history].reverse().map((seg) => (
+                {history.toReversed().map((seg) => (
                   <li key={seg.from}>
                     <span className="fee-history-from">{seg.from} 起</span>
                     <span className="fee-history-rate">

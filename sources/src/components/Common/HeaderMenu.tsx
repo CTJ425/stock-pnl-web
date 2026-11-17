@@ -10,7 +10,9 @@
  * And its style was deleted as dead CSS in 0.6.6.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { FocusEvent, ReactNode } from 'react'
+import type { FocusEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+
+const MENU_ITEM_SELECTOR = '[role^="menuitem"]:not([disabled]):not([aria-disabled="true"])'
 
 export function HeaderMenu({
   triggerLabel,
@@ -36,14 +38,26 @@ export function HeaderMenu({
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  const pendingFocusRef = useRef<'first' | 'last' | null>(null)
 
   useEffect(() => {
     if (!open) return
+    if (pendingFocusRef.current && popRef.current) {
+      const items = Array.from(popRef.current.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR))
+      if (items.length > 0) {
+        const target = pendingFocusRef.current === 'last' ? items[items.length - 1] : items[0]
+        target.focus()
+      }
+      pendingFocusRef.current = null
+    }
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
       setOpen(false)
       // The focus must be returned to the trigger button, otherwise the keyboard user will drop to the document after pressing Esc.
       triggerRef.current?.focus()
@@ -66,8 +80,37 @@ export function HeaderMenu({
     setOpen(false)
   }
 
+  const handleKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        pendingFocusRef.current = e.key === 'ArrowUp' ? 'last' : 'first'
+        setOpen(true)
+      }
+      return
+    }
+    const pop = popRef.current
+    if (!pop) return
+    const items = Array.from(pop.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR))
+    if (items.length === 0) return
+    e.preventDefault()
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    let next = 0
+    if (e.key === 'Home') {
+      next = 0
+    } else if (e.key === 'End') {
+      next = items.length - 1
+    } else if (current < 0) {
+      next = e.key === 'ArrowUp' ? items.length - 1 : 0
+    } else {
+      next = (current + (e.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length
+    }
+    items[next].focus()
+  }
+
   return (
-    <div className="hmenu" ref={wrapRef} onBlur={handleFocusOut}>
+    <div className="hmenu" ref={wrapRef} onBlur={handleFocusOut} onKeyDown={handleKeyDown}>
       <button
         ref={triggerRef}
         type="button"
@@ -82,6 +125,7 @@ export function HeaderMenu({
       </button>
       {open && (
         <div
+          ref={popRef}
           className={popClass ? `hmenu-pop ${popClass}` : 'hmenu-pop'}
           role="menu"
           aria-label={menuLabel}

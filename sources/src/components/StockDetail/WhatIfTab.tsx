@@ -68,7 +68,7 @@ function PriceScale({
             style={{ left: `${Math.min(pos(sell.price), pos(breakEven))}%`, width: `${Math.abs(pos(sell.price) - pos(breakEven))}%` }}
           />
         )}
-        {[...points].sort((a, b) => a.price - b.price).map((p, i) => (
+        {points.toSorted((a, b) => a.price - b.price).map((p, i) => (
           <span
             key={p.kind}
             className={`whatif-scale-mark whatif-scale-mark--${p.kind} ${i % 2 ? 'is-below' : 'is-above'}${

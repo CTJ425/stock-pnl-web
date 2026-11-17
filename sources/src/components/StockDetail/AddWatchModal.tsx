@@ -88,7 +88,7 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
       <p>
         {watched.length}/{WATCHLIST_MAX}
       </p>
-      <div className="search-box">
+      <div className="search-box" role="search">
         <Search size={15} className="search-icon" />
         <input
           type="text"
@@ -97,6 +97,9 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
           placeholder="輸入股票代號或名稱"
           aria-label="搜尋股票"
           className="search-input"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
           autoFocus
         />
       </div>

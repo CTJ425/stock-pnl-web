@@ -212,7 +212,7 @@ export function TechnicalTab({
     : view.volumeRows.slice(0, VOLUME_ROWS_COLLAPSED)
 
   // Calculations for volume table & footers (chronological: oldest to newest)
-  const chronoRows = [...view.volumeRows].reverse()
+  const chronoRows = view.volumeRows.toReversed()
   const volumeSeries = chronoRows.map((r) => r.volume)
   const maxVolume = Math.max(0, ...volumeSeries)
   const avgVolume =

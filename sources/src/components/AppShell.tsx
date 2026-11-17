@@ -265,6 +265,16 @@ export function AppShell() {
       <ToastProvider>
         <ConfirmProvider>
           <header className="app-header">
+            <a
+              href="#main-content"
+              className="skip-link"
+              onClick={(e) => {
+                e.preventDefault()
+                document.getElementById('main-content')?.focus()
+              }}
+            >
+              跳至主要內容
+            </a>
             <div className="app-header-inner">
               <div className="brand">
                 <BrandMark />
@@ -302,7 +312,9 @@ export function AppShell() {
           </header>
 
           <main className="container">
-            <h1 className="sr-only">{viewLabel(view)}</h1>
+            <h1 id="main-content" tabIndex={-1} className="sr-only">
+              {viewLabel(view)}
+            </h1>
             {error && (
               <div className="notice notice-error section" role="alert">
                 {error}

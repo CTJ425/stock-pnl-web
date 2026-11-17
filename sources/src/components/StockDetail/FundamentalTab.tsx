@@ -233,7 +233,7 @@ export function FundamentalTab({ fundamental, loading, error = false }: Fundamen
 
   const { valuation, revenueMonths, profitQuarters, notes } = fundamental
   // Presented from new to old (the files are presented from old to new to facilitate batch merging)
-  const months = [...revenueMonths].reverse()
+  const months = revenueMonths.toReversed()
 
   /*
     12 months means about 39px per slot, while "2026/06" needs about 48px —— labelling every one overlaps.
@@ -242,7 +242,7 @@ export function FundamentalTab({ fundamental, loading, error = false }: Fundamen
   const revenueLabelIndices = revenueMonths
     .map((_, i) => i)
     .filter((i) => revenueMonths.length <= 8 || i % 2 === 0)
-  const quarters = [...profitQuarters].reverse()
+  const quarters = profitQuarters.toReversed()
   const latestQuarter = quarters[0] ?? null
   /*
     EPS and the ratios come from different sources (ratios refresh nightly, EPS only arrives when a quarterly

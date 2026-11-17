@@ -20,16 +20,20 @@ export function Modal({ title, onClose, children, wide, disableBackdropClose }: 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Focus management: move focus into the dialog on open, trap Tab/Shift+Tab
-  // inside it while open, and restore the previously focused element on close.
+  // Focus management: move focus into the dialog on open, mark the background #root inert so
+  // assistive tech cannot walk outside the modal, trap Tab/Shift+Tab inside it, and restore focus on close.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null
+    const rootEl = document.getElementById('root')
+    if (rootEl) rootEl.setAttribute('inert', '')
+
     const dialog = dialogRef.current
     if (dialog) {
       const focusable = dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
@@ -70,6 +74,9 @@ export function Modal({ title, onClose, children, wide, disableBackdropClose }: 
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
+      if (rootEl && document.querySelectorAll('.modal-overlay').length === 0) {
+        rootEl.removeAttribute('inert')
+      }
       previouslyFocused?.focus()
     }
   }, [])
@@ -93,7 +100,7 @@ export function Modal({ title, onClose, children, wide, disableBackdropClose }: 
       >
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="modal-close" onClick={onClose} aria-label="關閉">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="關閉">
             <X size={18} />
           </button>
         </div>

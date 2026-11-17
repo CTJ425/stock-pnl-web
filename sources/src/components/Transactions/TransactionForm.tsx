@@ -830,6 +830,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           ref={tickerInputRef}
           value={ticker}
           autoComplete="off"
+          spellCheck={false}
+          autoCapitalize="characters"
+          autoCorrect="off"
           placeholder={isSpotSell ? '點選或輸入代號（將列出庫存持股）' : '輸入代號會自動帶出名稱'}
           aria-invalid={fieldErrors.ticker ? 'true' : undefined}
           aria-describedby={fieldErrors.ticker ? 'tx-ticker-error' : undefined}
@@ -857,7 +860,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           </p>
         )}
         {isSpotSell && showTickerHoldings && (
-          <div className="suggestions" data-testid="ticker-holdings-dropdown">
+          <div className="suggestions" role="listbox" aria-label="庫存持股" data-testid="ticker-holdings-dropdown">
             {filteredTickerHoldings.length === 0 ? (
               <div className="suggestion-empty">
                 {activeHoldings.length === 0 ? '目前帳戶無持股' : '庫存中無匹配代號'}
@@ -866,6 +869,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               filteredTickerHoldings.map((item) => (
                 <div
                   key={item.key}
+                  role="option"
                   className="suggestion-item"
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -884,7 +888,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           </div>
         )}
         {isShortCover && showTickerHoldings && (
-          <div className="suggestions" data-testid="ticker-shorts-dropdown">
+          <div className="suggestions" role="listbox" aria-label="空單部位" data-testid="ticker-shorts-dropdown">
             {filteredTickerShorts.length === 0 ? (
               <div className="suggestion-empty">
                 {activeShorts.length === 0 ? '目前帳戶無空單' : '空單中無匹配代號'}
@@ -893,6 +897,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               filteredTickerShorts.map((item) => (
                 <div
                   key={item.key}
+                  role="option"
                   className="suggestion-item"
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -926,6 +931,8 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           id="tx-name"
           value={name}
           autoComplete="off"
+          spellCheck={false}
+          autoCorrect="off"
           placeholder={isSpotSell ? '點選或輸入名稱（將列出庫存持股）' : '輸入中文名稱可模糊搜尋（如：台積）'}
           onFocus={() => {
             if (isSpotSell) setShowNameHoldings(true)
@@ -946,7 +953,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           }}
         />
         {isSpotSell && showNameHoldings && (
-          <div className="suggestions" data-testid="name-holdings-dropdown">
+          <div className="suggestions" role="listbox" aria-label="庫存持股" data-testid="name-holdings-dropdown">
             {filteredNameHoldings.length === 0 ? (
               <div className="suggestion-empty">
                 {activeHoldings.length === 0 ? '目前帳戶無持股' : '庫存中無匹配股票'}
@@ -955,6 +962,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               filteredNameHoldings.map((item) => (
                 <div
                   key={item.key}
+                  role="option"
                   className="suggestion-item"
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -973,7 +981,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           </div>
         )}
         {!isSpotSell && (searching || suggestions !== null) && (
-          <div className="suggestions">
+          <div className="suggestions" role="listbox" aria-label="搜尋結果">
             {searching ? (
               <div
                 className="suggestion-loading"
@@ -993,6 +1001,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               suggestions!.map((item) => (
                 <div
                   key={`${item.market}:${item.symbol}`}
+                  role="option"
                   className="suggestion-item"
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -1085,6 +1094,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             inputMode="decimal"
             step="any"
             min="0"
+            aria-describedby="tx-fee-rate-hint"
             value={feeRate}
             onChange={(e) => {
               feeRateManual.current = true
@@ -1097,7 +1107,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           {market === 'TPE' && feeRateHint.warning && (
             <span className="fee-rate-warning">{feeRateHint.warning}</span>
           )}
-          <div className="field-hint" data-testid="fee-rate-hint">
+          <div id="tx-fee-rate-hint" className="field-hint" data-testid="fee-rate-hint">
             原價 0.001425、6.5 折 0.00092625、3 折 0.0004275；只套用在這筆交易，不會更動工作區的預設值
           </div>
         </div>
@@ -1110,13 +1120,14 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               inputMode="decimal"
               step="any"
               min="0"
+              aria-describedby="tx-min-fee-hint"
               value={minFee}
               onChange={(e) => {
                 minFeeTyped.current[minFeeUnit] = e.target.value
                 setMinFee(e.target.value)
               }}
             />
-            <div className="field-hint">
+            <div id="tx-min-fee-hint" className="field-hint">
               手續費最低收這麼多（{minFeeUnit === 'whole' ? '整股常見 20 元' : '零股常見 1 元'}）；費率填 0 就不套用
             </div>
           </div>
@@ -1133,6 +1144,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 type="number"
                 step="any"
                 min="0"
+                aria-describedby="tx-tax-rate-hint"
                 value={taxRate}
                 onChange={(e) => {
                   taxRateManual.current = true
@@ -1156,7 +1168,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 {!TAX_PRESET_VALUES.includes(taxRate) && <option value="custom">自訂</option>}
               </select>
             </div>
-            <div className="field-hint">
+            <div id="tx-tax-rate-hint" className="field-hint">
               只有台股賣出才收；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅。當沖降稅只適用股票（0.15%），ETF 當沖仍是 0.1%
             </div>
           </div>

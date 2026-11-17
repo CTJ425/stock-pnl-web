@@ -218,7 +218,7 @@ async function main() {
 
   if (options.all) {
     // Process from oldest to newest so newest ends up at top
-    targetVersions = [...allVersions].reverse();
+    targetVersions = allVersions.toReversed();
   } else if (options.version) {
     const found = allVersions.find(v => v.version === options.version);
     if (!found) {
