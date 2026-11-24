@@ -1,14 +1,14 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: **0.10.43-dev.1** — Fix TWSE MIS limit-up/limit-down locked quotes (`0.0000` market orders) + `.quote-limit-badge` CSS, `IntradayChart` `1d` limit lines, and ETF tick size in `priceLimits`.
-- Status: ✅ `dev` working tree (`0.10.43-dev.1`), all local gates + EGM post-impl audit PASS; DEV Edge `stock-price` v17 deployed (`verify_jwt: true`, `ezbr_sha256` `14b5ca2a6d60…`).
-- Timestamp: 2026-11-24 09:57:00 Asia/Taipei
+- Action: **Release 0.10.43** — Fix TWSE MIS limit-up/limit-down locked quotes (`0.0000` market orders) + `.quote-limit-badge` CSS, `IntradayChart` `1d` limit lines, and ETF tick size in `priceLimits`.
+- Status: ✅ `main` = `dev` = 0.10.43; Edge `stock-price` deployed to DEV & PROD (`ezbr_sha256` `14b5ca2a6d60…`, `verify_jwt: true`).
+- Timestamp: 2026-11-24 10:03:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-11-24 09:44:00 Asia/Taipei (0.10.43-dev.1, limit-up quote parsing & display fixes)
-- **Ask**: 「目前此codebase如果該股票漲停，在顯示上就會有點問題…目前看到漲停的 跌幅都沒有資料，導致限價跟未時間損益都不對」 → 「好，直接幫我進行調整，其中需用到 /modern-web-guidance /egm 等相關skill進行 spec 、reviwer，且直接和我說結果與相關驗證」.
+## 📅 Log: 2026-11-24 10:03:00 Asia/Taipei (release 0.10.43, limit-up quote parsing & display fixes)
+- **Ask**: 「目前此codebase如果該股票漲停，在顯示上就會有點問題…目前看到漲停的 跌幅都沒有資料，導致限價跟未時間損益都不對」 → 「好，直接幫我進行調整，其中需用到 /modern-web-guidance /egm 等相關skill進行 spec 、reviwer，且直接和我說結果與相關驗證」 → 「版本號碼進行調整，然後先幫我commit&push到dev去」 → 「幫我直接合併到main 然後直接上線」。
 - **Spec & EGM Review**: Created `docs/agent/specs/limit-up-quote-and-display.md` after two parallel EGM Goldfish passes (`egm-codebase-details`, `egm-design`, `egm-zoom-out`). Captured live TWSE MIS payload for locked limit-up `2330` (`z: "-"`, `b: "0.0000_2230.0000_..."`, `a: "-"`, `u: "2230.0000"`, `y: "2030.0000"`, `trade: { z: "2230.0000" }`).
 - **Done**:
   - `sources/supabase/functions/stock-price/misParse.ts`: added `parseBook()` (skipping empty tokens and `'-'`) and updated `pickPrice()` precedence: `row.z` → BUG-045/EP-01 time guards → `!trial && volume !== 0 && row.trade?.z` → `bid.firstPositive` (skips `"0.0000"` market orders) → `!trial` lock inference (100% market-order bid → `row.u`; no-bid + market-ask or `ask[0] === w` → `row.w`) → `row.y`. Preserved `price_cache` schema (no DDL migration per YAGNI).
