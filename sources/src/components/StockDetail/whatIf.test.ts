@@ -411,6 +411,11 @@ describe('priceLimits（DT-02/03：昨收 ±10% 取到升降單位）', () => {
     expect(priceLimits(0)).toBeNull()
     expect(priceLimits(Number.NaN)).toBeNull()
   })
+
+  it('ETF（00 開頭）使用 0.01／0.05 升降單位', () => {
+    expect(priceLimits(51.35, '0050')).toEqual({ limitUp: 56.45, limitDown: 46.22 })
+    expect(priceLimits(185.15, '0050')).toEqual({ limitUp: 203.65, limitDown: 166.65 })
+  })
 })
 
 describe('averageDown（攤平試算）', () => {

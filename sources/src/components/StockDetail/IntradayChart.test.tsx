@@ -242,3 +242,54 @@ describe('changeLabel（走勢圖 tooltip 的漲跌標籤，AUDIT-14）', () => 
     expect(changeLabel(101, null)).toBeNull()
   })
 })
+
+describe('IntradayChart — 漲跌停參考線範圍（DT-03）', () => {
+  beforeEach(cleanup)
+
+  const dashedReferenceLines = () =>
+    [...document.querySelectorAll('svg line')].filter((l) => l.getAttribute('stroke-dasharray') === '4 4')
+
+  it('台股 1d 區間碰及漲停時畫出漲跌停參考線', () => {
+    const limitUpSeries = seriesOf([2030, 2230], [1000, 2000], 2030)
+    render(
+      <IntradayChart
+        series={limitUpSeries}
+        loading={false}
+        range="1d"
+        onRangeChange={vi.fn()}
+        market="TPE"
+        ticker="2330"
+      />,
+    )
+    // 1 baseline (昨收) + 2 limit lines (漲停、跌停)
+    expect(dashedReferenceLines()).toHaveLength(3)
+  })
+
+  it('台股非 1d 區間（如 5d / 1m）只保留昨收基準線，不畫當日漲跌停參考線', () => {
+    const multiDay = seriesOf([2030, 2250], [1000, 2000], 2030)
+    render(
+      <IntradayChart
+        series={multiDay}
+        loading={false}
+        range="5d"
+        onRangeChange={vi.fn()}
+        market="TPE"
+        ticker="2330"
+      />,
+    )
+    expect(dashedReferenceLines()).toHaveLength(1)
+
+    cleanup()
+    render(
+      <IntradayChart
+        series={multiDay}
+        loading={false}
+        range="1m"
+        onRangeChange={vi.fn()}
+        market="TPE"
+        ticker="2330"
+      />,
+    )
+    expect(dashedReferenceLines()).toHaveLength(1)
+  })
+})

@@ -1,11 +1,21 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: **Release 0.10.42** — Frontend modernization (`modern-web-guidance`): theme FOUC prevention, modal `inert` + scroll containment, `HeaderMenu` arrow-key navigation, form autofill/a11y hints, and ES2023 array/error APIs.
-- Status: ✅ `main` = `dev` = 0.10.42; no Edge / DDL change.
-- Timestamp: 2026-11-17 12:55:00 Asia/Taipei
+- Action: **0.10.43-dev.1** — Fix TWSE MIS limit-up/limit-down locked quotes (`0.0000` market orders) + `.quote-limit-badge` CSS, `IntradayChart` `1d` limit lines, and ETF tick size in `priceLimits`.
+- Status: ✅ `dev` working tree (`0.10.43-dev.1`), all local gates + EGM post-impl audit PASS; DEV Edge `stock-price` v17 deployed (`verify_jwt: true`, `ezbr_sha256` `14b5ca2a6d60…`).
+- Timestamp: 2026-11-24 09:57:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-11-24 09:44:00 Asia/Taipei (0.10.43-dev.1, limit-up quote parsing & display fixes)
+- **Ask**: 「目前此codebase如果該股票漲停，在顯示上就會有點問題…目前看到漲停的 跌幅都沒有資料，導致限價跟未時間損益都不對」 → 「好，直接幫我進行調整，其中需用到 /modern-web-guidance /egm 等相關skill進行 spec 、reviwer，且直接和我說結果與相關驗證」.
+- **Spec & EGM Review**: Created `docs/agent/specs/limit-up-quote-and-display.md` after two parallel EGM Goldfish passes (`egm-codebase-details`, `egm-design`, `egm-zoom-out`). Captured live TWSE MIS payload for locked limit-up `2330` (`z: "-"`, `b: "0.0000_2230.0000_..."`, `a: "-"`, `u: "2230.0000"`, `y: "2030.0000"`, `trade: { z: "2230.0000" }`).
+- **Done**:
+  - `sources/supabase/functions/stock-price/misParse.ts`: added `parseBook()` (skipping empty tokens and `'-'`) and updated `pickPrice()` precedence: `row.z` → BUG-045/EP-01 time guards → `!trial && volume !== 0 && row.trade?.z` → `bid.firstPositive` (skips `"0.0000"` market orders) → `!trial` lock inference (100% market-order bid → `row.u`; no-bid + market-ask or `ask[0] === w` → `row.w`) → `row.y`. Preserved `price_cache` schema (no DDL migration per YAGNI).
+  - `sources/src/styles/stock-detail.css`: fixed `.quote-limit-badge` (`padding: 3px 6px`, `margin-bottom: 4px`, `line-height: 1.2`, `white-space: nowrap`, `text-box: trim-both cap alphabetic` per `modern-web-guidance` `precise-text-alignment`).
+  - `sources/src/components/StockDetail/whatIf.ts`, `QuoteTab.tsx`, `IntradayChart.tsx`: unified `tickSizeFor(price, ticker?)` for `00*` ETFs, suppressed `漲停`/`跌停` badge during `quote.trial`, and restricted `IntradayChart` `limits` lines to `market === 'TPE' && range === '1d'`.
+  - Synced 5 version files to `0.10.43-dev.1` and added unit tests in `misParse.test.ts`, `whatIf.test.ts`, `QuoteTab.test.tsx`, `IntradayChart.test.tsx`.
+- **Verified**: `npm test` 3,257 passed / 7 skipped (194+1 files), `npm run build`, `npm run typecheck:edge`, EGM post-impl audit (`VERDICT: PASS`). DEV Edge `stock-price` deployed (`accmczhrqsilzrtyhyxa`, v17, `ACTIVE`, `verify_jwt: true`, `ezbr_sha256` `14b5ca2a6d60f1d633ca9e5560e92180929f79278c4de483758e6eeacc49243a`).
 
 ## 📅 Log: 2026-11-17 12:55:00 Asia/Taipei (release 0.10.42, modern-web-guidance frontend review & modernization)
 - **Ask**: 「請使用 modern-web-guidance 幫我review此專案的HTML或是前端等相關功能有沒有可以改善的部分?」 → 「都依照你的建議進行調整，且自己進行過smoke、E2E驗證後沒問題，就直接幫我commit & push 到 main」.
@@ -16,12 +26,3 @@
   - **Forms & Search** (`forms`, `autofill-sign-in-form`, `autofill-sign-up-form`): `AuthPage.tsx` and `PasswordField.tsx` add `name`, `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`, `aria-describedby` links, and explicit `type="button"` on mode switchers; `TransactionForm.tsx` adds `role="listbox"` / `role="option"` on suggestion dropdowns and `aria-describedby` on fee/tax hints; search wrappers in `TransactionsPage.tsx`, `YearlyPage.tsx`, and `AddWatchModal.tsx` add `role="search"` and disable spellcheck/autocorrect.
   - **ES2023 JS APIs** (`js/copying-array-methods`, `js/error-cause`): replaced shallow-copy `.sort()` / `.reverse()` / `.reverse().find()` with `.toSorted()`, `.toReversed()`, and `.findLast()` across 9 frontend components + `sync-github-releases.cjs` (keeping `timeline.ts` `MapIterator` spread), and added `{ cause: err }` to `appLog.ts` and `reportsBucket.ts`.
 - **Verified**: `npm test` 3,246 passed / 7 skipped (including new tests in `Modal.test.tsx` and `AppShell.a11y.test.tsx`), `npm run build`, `npm run typecheck:edge`, `legacy-scan`, and Playwright Chromium E2E across `AuthPage` and native mode at 1280px and 390px (light/dark, zero console/page errors, zero overflow).
-
-## 📅 Log: 2026-10-29 13:41:16 Asia/Taipei (release 0.10.41)
-- **Ask**: 「一樣在做最後檢查，也使用 /herdr 讓隔壁session檢查 如果沒問題就直接合併到main」.
-- **DEV fix by the user**: Google login on DEV first landed on `localhost` — DEV `site_url` was `http://localhost:5173/` and `uri_allow_list` lacked `https://dev.stock-pnl-web.pages.dev/**` (read via Management API). User added it; Google login on the DEV site then worked (DEV `auth.users`: the account with providers `['google']`).
-- **Final review** (session 2, `agy`, read-only): `VERDICT: MERGE OK`; all four fixes verified; one NIT = TASK 201 item 3.
-- **Gates**: `npm test` 3,242 / 7 skipped, build, `typecheck:edge`. CI on `main` green, Sync GitHub Releases green.
-- **Release**: `9b1eeef release: 0.10.41` (CHANGELOG heading finalized before the push), `main` fast-forwarded from `5834599`, `dev` = `main`. Release 0.10.41 body = the CHANGELOG entry.
-- **PROD**: live `index-CLEIkI6h.js` contains 「使用 Google 帳戶」; Playwright click on PROD → `accounts.google.com` with redirect_uri = PROD `/auth/v1/callback`.
-- **Not verified**: a completed Google login on PROD (needs the user's account).

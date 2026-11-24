@@ -587,9 +587,13 @@
   align-items: center;
   font-size: var(--type-label-01);
   font-weight: 700;
-  padding: 1px 6px 8px;
+  line-height: 1.2;
+  white-space: nowrap;
+  padding: 3px 6px;
+  margin-bottom: 4px;
   border: 1px solid currentColor;
   border-radius: var(--radius-sm);
+  text-box: trim-both cap alphabetic;
 }
 
 /* 試撮 (08:30–09:00, 13:25–13:30): MIS's price is a simulated match, not a trade. */

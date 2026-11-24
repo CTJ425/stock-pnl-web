@@ -338,3 +338,181 @@ describe('交易時間無法解析時不得用買一價（Task 166 EP-01）', ()
     expect(quote.price).toBe(604)
   })
 })
+
+describe('漲跌停鎖死與市價單（0.0000）委買委賣解析', () => {
+  it('真實 2330 漲停鎖死回應（z 為 - 且 b[0] 為市價單 0.0000）取漲停價而非退回昨收', () => {
+    const data = {
+      msgArray: [
+        {
+          c: '2330',
+          n: '台積電',
+          y: '2030.0000',
+          u: '2230.0000',
+          w: '1830.0000',
+          o: '2230.0000',
+          h: '2230.0000',
+          l: '2230.0000',
+          z: '-',
+          a: '-',
+          b: '0.0000_2230.0000_2225.0000_2220.0000_2215.0000_',
+          t: '09:26:00',
+          d: '20261124',
+          v: '5216',
+          ip: '0',
+          trade: { t: '09:25:50', v: 1, z: '2230.0000', ft: 20 },
+        },
+      ],
+    }
+    const [quote] = parseMisResponse(data)
+    expect(quote.price).toBe(2230)
+    expect(quote.prevClose).toBe(2030)
+  })
+
+  it('無 trade 欄位時，跳過買單市價單 0.0000 取第一檔正數委買價', () => {
+    const data = {
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '0.0000_2230.0000_2225.0000_',
+          a: '-',
+          y: '2030.0000',
+          u: '2230.0000',
+          t: '09:26:00',
+          v: '5216',
+        },
+      ],
+    }
+    const [quote] = parseMisResponse(data)
+    expect(quote.price).toBe(2230)
+  })
+
+  it('委買全為市價單 0.0000 且無委賣時（純市價買單漲停鎖死），採用漲停價 u', () => {
+    const data = {
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '0.0000_',
+          a: '-',
+          y: '2030.0000',
+          u: '2230.0000',
+          w: '1830.0000',
+          t: '09:26:00',
+          v: '0',
+          ip: '0',
+        },
+      ],
+    }
+    const [quote] = parseMisResponse(data)
+    expect(quote.price).toBe(2230)
+  })
+
+  it('跌停鎖死（無買單、賣盤為市價單 0.0000 或鎖在跌停價 w）取跌停價而非退回昨收', () => {
+    const withMarketAsk = parseMisResponse({
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '-',
+          a: '0.0000_1830.0000_',
+          y: '2030.0000',
+          w: '1830.0000',
+          t: '09:26:00',
+          v: '100',
+        },
+      ],
+    })
+    expect(withMarketAsk[0].price).toBe(1830)
+
+    const limitAskOnly = parseMisResponse({
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '-',
+          a: '1830.0000_1835.0000_',
+          y: '2030.0000',
+          w: '1830.0000',
+          t: '09:26:00',
+          v: '100',
+        },
+      ],
+    })
+    expect(limitAskOnly[0].price).toBe(1830)
+  })
+
+  it('冷門股無買單且賣單未鎖在跌停價 w 時，不得拿賣價當現價，應退回昨收 y', () => {
+    const data = {
+      msgArray: [
+        {
+          c: '9999',
+          z: '-',
+          b: '-',
+          a: '10.95_11.00_',
+          y: '10.00',
+          w: '9.00',
+          t: '09:26:00',
+          v: '0',
+        },
+      ],
+    }
+    const [quote] = parseMisResponse(data)
+    expect(quote.price).toBe(10)
+  })
+
+  it('試撮階段（ip=1）或零成交（v=0）不採信 trade.z，試撮亦不套用 u/w 推算', () => {
+    const trialRes = parseMisResponse({
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '0.0000_',
+          a: '-',
+          y: '2030.0000',
+          u: '2230.0000',
+          t: '08:45:00',
+          v: '0',
+          ip: '1',
+          trade: { z: '2050.0000' },
+        },
+      ],
+    })
+    expect(trialRes[0].price).toBe(2030)
+
+    const zeroVol = parseMisResponse({
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '2100.0000_',
+          a: '-',
+          y: '2030.0000',
+          t: '09:01:00',
+          v: '0',
+          ip: '0',
+          trade: { z: '2050.0000' },
+        },
+      ],
+    })
+    expect(zeroVol[0].price).toBe(2100)
+  })
+
+  it('收盤後（t >= 13:30:00）若 z 為 "-"，即使有 trade.z 仍守住 BUG-045 回傳空陣列交由 Yahoo', () => {
+    const data = {
+      msgArray: [
+        {
+          c: '2330',
+          z: '-',
+          b: '0.0000_2230.0000_',
+          y: '2030.0000',
+          u: '2230.0000',
+          t: '13:30:00',
+          v: '5216',
+          trade: { z: '2230.0000' },
+        },
+      ],
+    }
+    expect(parseMisResponse(data)).toEqual([])
+  })
+})

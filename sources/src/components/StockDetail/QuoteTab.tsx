@@ -268,7 +268,8 @@ export function QuoteTab({
   const category = getStockCategory(ticker, name, quote.industry)
 
   // DT-02: TW-only 漲停/跌停 badge, from the same ±10% 昨收 band the chart's reference lines use.
-  const limits = market === 'TPE' ? priceLimits(quote.prevClose) : null
+  // Suppressed during trial matching (`quote.trial`) so pre-open/pre-close simulated bids do not emit a limit badge.
+  const limits = market === 'TPE' && !quote.trial ? priceLimits(quote.prevClose, ticker) : null
   const limitState =
     limits && roundPrice(quote.price) === limits.limitUp
       ? 'up'

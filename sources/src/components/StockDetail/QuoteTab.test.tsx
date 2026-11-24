@@ -301,6 +301,27 @@ describe('QuoteTab', () => {
     expect(badge).toBeTruthy()
     expect(badge?.textContent).toBe('半導體')
   })
+
+  it('漲停時顯示「漲停」徽章，試撮期間不顯示，ETF 依 0.05 跳動單位判定', () => {
+    const { container } = show({ ...closedQuote, price: 2230, prevClose: 2030 })
+    const badge = container.querySelector('.quote-limit-badge')
+    expect(badge?.textContent).toBe('漲停')
+    expect(badge?.className).toContain('pnl-up')
+
+    cleanup()
+    const trialRes = show({ ...closedQuote, price: 2230, prevClose: 2030, trial: true })
+    expect(trialRes.container.querySelector('.quote-limit-badge')).toBeNull()
+
+    cleanup()
+    const etfRes = render(
+      <QuoteTab
+        quote={{ ...closedQuote, price: 56.45, prevClose: 51.35 }}
+        ticker="0050"
+        name="元大台灣50"
+      />,
+    )
+    expect(etfRes.container.querySelector('.quote-limit-badge')?.textContent).toBe('漲停')
+  })
 })
 
 describe('quoteMeta', () => {

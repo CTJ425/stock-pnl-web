@@ -6,6 +6,17 @@
 
 ---
 
+### Bug ID: BUG-121 — Limit-up / limit-down locked TW quotes fall back to `prevClose` (0.00% change, wrong current price & unrealized P&L) + display defects
+- **Date**: 2026-11-24, fixed in `0.10.43-dev.1`
+- **Symptom**: When a TW stock locks at limit-up, its price falls back to `prevClose` (showing 0.00% change, wrong current price, and wrong unrealized P&L). On StockDetail, `.quote-limit-badge` also rendered a distorted pill with `8px` internal bottom padding, `IntradayChart` drew daily `±10%` lines on non-`1d` ranges, `priceLimits` missed `00*` ETF ticks, and `QuoteTab` showed `漲停` during trial matching.
+- **Evidence**: Live TWSE MIS response for `2330` at `09:26:00` (`2026-11-24`): `z: "-"`, `a: "-"`, `b: "0.0000_2230.0000_..."`, `y: "2030.0000"`, `u: "2230.0000"`, `trade: { z: "2230.0000" }`. `"0.0000"` is MIS's market-order sentinel; `pickPrice` rejected `b[0]` (`<= 0`) and fell back to `row.y`.
+- **Fix**:
+  1. `sources/supabase/functions/stock-price/misParse.ts`: added `parseBook()` and updated `pickPrice()` precedence (`z` → BUG-045/EP-01 time guards → `!trial && volume !== 0 && trade.z` → `bid.firstPositive` → `!trial` `u`/`w` lock inference → `y`).
+  2. `sources/src/styles/stock-detail.css`: fixed `.quote-limit-badge` (`padding: 3px 6px`, `margin-bottom: 4px`, `line-height: 1.2`, `white-space: nowrap`, `text-box: trim-both cap alphabetic`).
+  3. `sources/src/components/StockDetail/whatIf.ts`, `QuoteTab.tsx`, `IntradayChart.tsx`: shared ETF-aware `tickSizeFor(price, ticker?)`, suppressed limit badge when `quote.trial`, and restricted chart limit lines to `range === '1d'`.
+- **Verification**: `npm test` 3,257 passed / 7 skipped, `npm run build`, `npm run typecheck:edge` all green; EGM post-impl audit `VERDICT: PASS`; DEV Edge `stock-price` deployed (v17, `verify_jwt: true`, `ezbr_sha256` `14b5ca2a6d60f1d633ca9e5560e92180929f79278c4de483758e6eeacc49243a`).
+- **Status**: ✅ FIXED (`0.10.43-dev.1`, deployed to DEV; PROD pending release).
+
 ### Bug ID: BUG-120 — 「加入觀察」 often shows 「台股清單載入失敗」: TWSE OpenAPI outlasts the Edge timeout
 - **Date**: 2026-10-13, fixed in 0.10.38 (reported by the user: 「這功能為什麼很常失敗」)
 - **Symptom**: the add-to-watch modal, stock search and name lookups fail with 「台股清單載入失敗」, mostly in trading hours.

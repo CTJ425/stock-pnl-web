@@ -77,11 +77,13 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
 
 /**
  * TWSE tick size for a price band (NT$) — the same bands the exchange uses to validate order
- * prices. No table like this existed anywhere in the repo before DT-02/DT-03 (grep
- * `limitUp|漲停|tickSize` came back empty), so it lives here rather than duplicating a second
- * one elsewhere.
+ * prices. ETFs (code starting `00`) have only two bands: under NT$50 the tick is 0.01, from 50
+ * up it is 0.05 (臺灣證券交易所營業細則, 升降單位; checked 2026-10-07). Everything else uses
+ * the stock bands. The 1,000+ band moving from 5 to 1 was approved 2026-08-25 but is not in
+ * force before 2027-07, so it is not applied here.
  */
-function tickSizeFor(price: number): number {
+function tickSizeFor(price: number, ticker?: string): number {
+  if (ticker?.startsWith('00')) return price < 50 ? 0.01 : 0.05
   if (price < 10) return 0.01
   if (price < 50) return 0.05
   if (price < 100) return 0.1
@@ -91,14 +93,11 @@ function tickSizeFor(price: number): number {
 }
 
 /**
- * Nearest price an order can actually be placed at. ETFs (code starting `00`) have only two
- * bands — under NT$50 the tick is 0.01, from 50 up it is 0.05 (臺灣證券交易所營業細則, 升降單位;
- * checked 2026-10-07). Everything else uses the stock bands above. The 1,000+ band moving from
- * 5 to 1 was approved 2026-08-25 but is not in force before 2027-07, so it is not applied here.
+ * Nearest price an order can actually be placed at.
  */
 export function snapToTick(price: number, ticker: string): number {
   if (!(Number.isFinite(price) && price > 0)) return price
-  const tick = ticker.startsWith('00') ? (price < 50 ? 0.01 : 0.05) : tickSizeFor(price)
+  const tick = tickSizeFor(price, ticker)
   return roundPrice(Math.round(price / tick + 1e-9) * tick)
 }
 
@@ -111,13 +110,15 @@ export interface PriceLimits {
  * TW daily price limit band: ±10% of 昨收, rounded to the exchange's tick size (DT-02's quote
  * badge, DT-03's chart reference lines). Null when there is no usable 昨收 to compute it from.
  */
-export function priceLimits(prevClose: number | null): PriceLimits | null {
+export function priceLimits(prevClose: number | null, ticker?: string): PriceLimits | null {
   if (prevClose === null || !Number.isFinite(prevClose) || prevClose <= 0) return null
   const rawUp = prevClose * 1.1
   const rawDown = prevClose * 0.9
+  const upTick = tickSizeFor(rawUp, ticker)
+  const downTick = tickSizeFor(rawDown, ticker)
   // 1e-9 absorbs float noise (e.g. 54.99999999 / 0.1) so an exact tick is not pushed one step inward.
-  const limitUp = Math.floor(rawUp / tickSizeFor(rawUp) + 1e-9) * tickSizeFor(rawUp)
-  const limitDown = Math.ceil(rawDown / tickSizeFor(rawDown) - 1e-9) * tickSizeFor(rawDown)
+  const limitUp = Math.floor(rawUp / upTick + 1e-9) * upTick
+  const limitDown = Math.ceil(rawDown / downTick - 1e-9) * downTick
   return { limitUp: roundPrice(limitUp), limitDown: roundPrice(limitDown) }
 }
 

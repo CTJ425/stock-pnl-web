@@ -136,8 +136,37 @@ export function toIndustry(value: unknown): string | null {
   return null
 }
 
+interface ParsedBook {
+  firstPositive: number | null
+  hasMarketOrder: boolean
+}
+
 /**
- * The transaction price is reduced: z (transaction) → b first level (buy one) → y (yesterday’s closing, including after-hours / no transaction yet).
+ * Parses an underscore-delimited MIS 5-level order book string (`b` or `a`).
+ * TWSE encodes market orders (市價委託) as `"0.0000"` ahead of limit orders, and appends a
+ * trailing `'_'`. Empty tokens and `'-'` are skipped so `Number('') === 0` is never mistaken for
+ * a market order.
+ */
+function parseBook(value: unknown): ParsedBook {
+  let firstPositive: number | null = null
+  let hasMarketOrder = false
+  for (const raw of String(value ?? '').split('_')) {
+    const s = raw.trim()
+    if (s === '' || s === '-') continue
+    const n = Number(s.replace(/,/g, ''))
+    if (!Number.isFinite(n)) continue
+    if (n === 0) {
+      hasMarketOrder = true
+    } else if (n > 0 && firstPositive === null) {
+      firstPositive = n
+    }
+  }
+  return { firstPositive, hasMarketOrder }
+}
+
+/**
+ * The transaction price is reduced: z (transaction) → intraday trade.z → first positive bid
+ * (skipping `"0.0000"` market orders) → locked limit-up/down (`u`/`w`) → y (yesterday’s closing).
  *
  * The measured z is often '-' (the snapshot of this endpoint does not necessarily have the last traded price), so buying one price is the norm rather than the exception.
  * The step back to buy one (rather than sell one or mid-price) is deliberate: the market value / unrealized profit and loss semantics on this page are
@@ -163,8 +192,34 @@ function pickPrice(row: Record<string, unknown>): number | null {
      */
     return toPrice(row.y)
   }
-  const firstBid = toPrice(String(row.b ?? '').split('_')[0])
-  if (firstBid !== null) return firstBid
+
+  const trial = String(row.ip ?? '').trim() === '1'
+  const volume = toCount(row.v)
+  if (!trial && volume !== 0 && typeof row.trade === 'object' && row.trade !== null) {
+    const tradeLast = toPrice((row.trade as Record<string, unknown>).z)
+    if (tradeLast !== null) return tradeLast
+  }
+
+  const bid = parseBook(row.b)
+  if (bid.firstPositive !== null) return bid.firstPositive
+
+  if (!trial) {
+    const ask = parseBook(row.a)
+    // 100% market-order limit-up lock: only `"0.0000"` bids remain and asks are empty.
+    if (bid.hasMarketOrder && ask.firstPositive === null && !ask.hasMarketOrder) {
+      const limitUp = toPrice(row.u)
+      if (limitUp !== null) return limitUp
+    }
+    // Limit-down lock: bids are empty and asks are market-sell or locked at `w`.
+    // Never blindly accept a non-limit-down ask on an illiquid stock with no bids.
+    if (!bid.hasMarketOrder) {
+      const limitDown = toPrice(row.w)
+      if (limitDown !== null && (ask.hasMarketOrder || ask.firstPositive === limitDown)) {
+        return limitDown
+      }
+    }
+  }
+
   return toPrice(row.y)
 }
 

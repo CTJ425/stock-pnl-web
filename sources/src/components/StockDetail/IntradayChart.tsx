@@ -160,8 +160,8 @@ export function IntradayChart<R extends TrendRange>({
     return `快取於 ${timeFmt.format(d)}`
   }, [effectiveSeries])
   const limits = useMemo(
-    () => (market === 'TPE' ? priceLimits(prevClose) : null),
-    [market, prevClose],
+    () => (market === 'TPE' && range === '1d' ? priceLimits(prevClose, ticker) : null),
+    [market, range, prevClose, ticker],
   )
   const intraday = isIntradayRange(range)
   /**
